@@ -16,8 +16,8 @@ public class ClojureCompile : MonoBehaviour {
 
 	    Debug.Log("Compiling " + cljName);
 	    Debug.Log(Compiler.CompileVar);
-
 	    Compiler.CompileVar.invoke(Symbol.intern(cljName));
+	    Debug.Log("Done Compiling " + cljName);
 	    // PureClojureBehaviour p = new PureClojureBehaviour();
 	    // Debug.Log(p.GetType().BaseType);
 	    // p.Start();
