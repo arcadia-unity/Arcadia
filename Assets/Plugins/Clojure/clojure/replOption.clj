@@ -1,5 +1,6 @@
 (ns clojure.unityRepl
-  (:refer-clojure :exclude [with-bindings]))
+  (:refer-clojure :exclude [with-bindings])
+  (:require [clojure.main :as main]))
 
 (defn env-map []
   {:*ns* *ns*
@@ -21,10 +22,8 @@
    ;;          :*e *3
    })
 
-(defn update-repl-env [a]
-  (swap! a #(merge % (env-map))))
-
-(def repl-env (doto (atom {}) (update-repl-env)))
+(defn update-repl-env [repl-env]
+  (swap! repl-env #(merge % (env-map))))
 
 (defn eval-in-ns
   ([namespace frm]
@@ -76,5 +75,14 @@
      frm
      repl-env)))
 
+(def default-repl-env (doto (atom {}) (update-repl-env)))
+
 (defn repl-eval-string [s]
-  (repl-eval repl-env (load-string (str "'" s))))
+  ;; this probably isn't the right place for general exception handling, figure out something better
+  (try
+    (repl-eval default-repl-env (load-string (str "'" s)))
+    (catch Exception e
+      ;; and this definitely isn't how to handle *err* (see clojure.main/repl-caught):
+      (with-out-str
+        (binding [*err* *out*]
+          (main/repl-caught e))))))
