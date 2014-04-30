@@ -22,8 +22,10 @@ public class ClojureRepl : EditorWindow {
     input = GUILayout.TextField(input, 200);
 
     if(GUILayout.Button("Run!")) {
-      RT.load("clojure.core");
-      stringToEdit += RT.var("clojure.core", "load-string").invoke(input) + "\n";
+      // RT.load("clojure.core");
+      // stringToEdit += RT.var("clojure.core", "load-string").invoke(input) + "\n";
+      RT.load("unityRepl");
+      stringToEdit += RT.var("unityRepl", "repl-eval-string").invoke(input) + "\n";
     }
   }
 }
