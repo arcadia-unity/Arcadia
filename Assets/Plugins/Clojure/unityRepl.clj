@@ -1,4 +1,4 @@
-(ns clojure.unityRepl
+(ns unityRepl
   (:refer-clojure :exclude [with-bindings])
   (:require [clojure.main :as main]))
 
@@ -27,20 +27,20 @@
 
 (defn eval-in-ns
   ([namespace frm]
-     (let [ns0 *ns*]
+     (let [old-ns *ns*
+           p (promise)]
        (in-ns namespace)
-       (let [p (promise)]
-         (deliver p (eval frm))
-         (in-ns (ns-name ns0))
-         @p)))
+       (deliver p (eval frm))
+       (in-ns (ns-name old-ns))
+       @p))
   ([namespace frm repl-env]
-     (let [ns0 *ns*]
+     (let [old-ns *ns*
+           p (promise)]
        (in-ns namespace)
-       (let [p (promise)]
-         (deliver p (eval frm))
-         (clojure.unityRepl/update-repl-env repl-env)
-         (in-ns (ns-name ns0))
-         @p))))
+       (deliver p (eval frm))
+       (clojure.unityRepl/update-repl-env repl-env)
+       (in-ns (ns-name old-ns))
+       @p)))
 
 (defmacro with-bindings
   "Executes body in the context of thread-local bindings for several vars
@@ -77,12 +77,17 @@
 
 (def default-repl-env (doto (atom {}) (update-repl-env)))
 
+;; OK so far, here's the kludgey function:
+
 (defn repl-eval-string [s]
-  ;; this probably isn't the right place for general exception handling, figure out something better
-  (try
-    (repl-eval default-repl-env (load-string (str "'" s)))
-    (catch Exception e
-      ;; and this definitely isn't how to handle *err* (see clojure.main/repl-caught):
-      (with-out-str
-        (binding [*err* *out*]
-          (main/repl-caught e))))))
+  ;; this probably isn't the right place for general
+  ;;  exception handling, figure out something better
+  @(future
+     (try
+       (repl-eval default-repl-env (load-string (str "'" s)))
+       (catch Exception e
+         ;; and this definitely isn't how to handle 
+         ;; *err* (see clojure.main/repl-caught):
+         (with-out-str
+           (binding [*err* *out*]
+             (main/repl-caught e)))))))
