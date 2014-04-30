@@ -77,17 +77,5 @@
 
 (def default-repl-env (doto (atom {}) (update-repl-env)))
 
-;; OK so far, here's the kludgey function:
-
 (defn repl-eval-string [s]
-  ;; this probably isn't the right place for general
-  ;;  exception handling, figure out something better
-  @(future
-     (try
-       (repl-eval default-repl-env (load-string (str "'" s)))
-       (catch Exception e
-         ;; and this definitely isn't how to handle 
-         ;; *err* (see clojure.main/repl-caught):
-         (with-out-str
-           (binding [*err* *out*]
-             (main/repl-caught e)))))))
+  @(future (repl-eval default-repl-env (load-string (str "'" s)))))
