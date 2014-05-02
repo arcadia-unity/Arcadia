@@ -48,7 +48,7 @@
   [repl-env & body]
   `(let [re# ~repl-env]
      (when (not (instance? clojure.lang.Atom re#))
-       (throw (IllegalArgumentException. "repl-env must be an atom")))
+       (throw (ArgumentException. "repl-env must be an atom")))
      (binding [*ns* (:*ns* @re#)
                *warn-on-reflection* (:*warn-on-reflection* @re#)
                *math-context* (:*math-context* @re#)
