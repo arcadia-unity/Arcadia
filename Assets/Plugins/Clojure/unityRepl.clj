@@ -38,7 +38,7 @@
            p (promise)]
        (in-ns namespace)
        (deliver p (eval frm))
-       (clojure.unityRepl/update-repl-env repl-env)
+       (update-repl-env repl-env)
        (in-ns (ns-name old-ns))
        @p)))
 
