@@ -1,14 +1,12 @@
 ﻿using UnityEngine;
 using UnityEditor;
 using clojure.lang;
+using System.Collections.Generic;
 
 public class ClojureRepl : EditorWindow {
-  string myString = "Hello World";
-  bool groupEnabled;
-  bool myBool = true;
-  float myFloat = 1.23f;
-  string stringToEdit = "Clojure REPL v0.1 (sexant)\n";
+  string output = "Clojure REPL v0.1 (sexant)\n";
   string input = "";
+  List<string> history = new List<string>();
 
   [MenuItem ("Window/Clojure REPL")]
   static void Init () {
@@ -16,16 +14,16 @@ public class ClojureRepl : EditorWindow {
   }
   
   void OnGUI () {
-    GUILayout.TextArea(stringToEdit, 200);
-
-    GUI.SetNextControlName("replInput");
+    GUILayout.TextArea(output, 200);
     input = GUILayout.TextField(input, 200);
 
-    if(GUILayout.Button("Run!")) {
-      // RT.load("clojure.core");
-      // stringToEdit += RT.var("clojure.core", "load-string").invoke(input) + "\n";
+    Event e = Event.current;
+    if (e.type == EventType.KeyDown && e.character == '\n') {
+      
+    } else if (e.type == EventType.KeyDown && e.character == '\n') {
       RT.load("unityRepl");
-      stringToEdit += RT.var("unityRepl", "repl-eval-string").invoke(input) + "\n";
+      output += input + "\n ==> " + RT.var("unityRepl", "repl-eval-string").invoke(input) + "\n";
+      input = "";
     }
   }
 }
