@@ -78,4 +78,4 @@
 (def default-repl-env (doto (atom {}) (update-repl-env)))
 
 (defn repl-eval-string [s]
-  @(future (repl-eval default-repl-env (load-string (str "'" s)))))
+  (repl-eval default-repl-env (read-string (str "(do " s ")"))))
