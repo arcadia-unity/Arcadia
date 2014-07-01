@@ -38,7 +38,7 @@
            p (promise)]
        (in-ns namespace)
        (deliver p (eval frm))
-       (clojure.unityRepl/update-repl-env repl-env)
+       (update-repl-env repl-env)
        (in-ns (ns-name old-ns))
        @p)))
 
@@ -48,7 +48,7 @@
   [repl-env & body]
   `(let [re# ~repl-env]
      (when (not (instance? clojure.lang.Atom re#))
-       (throw (IllegalArgumentException. "repl-env must be an atom")))
+       (throw (ArgumentException. "repl-env must be an atom")))
      (binding [*ns* (:*ns* @re#)
                *warn-on-reflection* (:*warn-on-reflection* @re#)
                *math-context* (:*math-context* @re#)
@@ -78,5 +78,4 @@
 (def default-repl-env (doto (atom {}) (update-repl-env)))
 
 (defn repl-eval-string [s]
-  @(future (repl-eval default-repl-env (load-string (str "'" s)))))
-
+  (repl-eval default-repl-env (read-string (str "(do " s ")"))))

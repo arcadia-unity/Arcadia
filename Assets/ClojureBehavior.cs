@@ -6,6 +6,7 @@ using clojure.lang;
 
 public class ClojureBehavior : MonoBehaviour {
 	public string path; // "clojure/moves"
+	public bool[] someBools;
 
 	Var updatefn;
 
