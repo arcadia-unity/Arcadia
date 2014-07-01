@@ -29,9 +29,9 @@
   :extends UnityEngine.MonoBehaviour
   :methods [
     [Update [] void]
-    [Start [] void]
-    ])
-(defn Moves-Setup [this]
+    [Start [] void]])
+
+(defn Moves-Start [this]
   (Debug/Log "whatever")
   ;; (let [gos (seq (Enumerable/Where (GameObject/FindGameObjectsWithTag "sprite") (fn [go] (= "left" (.. go name)))))] (Debug/Log (count gos)))
   )
@@ -48,3 +48,39 @@
     (do
       (set! (.. this (AddComponent GUIText) text) "Believe in your dreams")
       (.. this (AddComponent ParticleSystem) (Play)))))
+
+
+(gen-class
+  :name PureClojureUnity.DeclareNothing
+  :prefix "DeclareNothing-"
+  :main false
+  :extends UnityEngine.MonoBehaviour)
+
+(defn DeclareNothing-Start [this]
+  (Debug/Log "DeclareNothing"))
+
+(defn DeclareNothing-Update [this]
+  (if (.shouldPrint this)
+    (Debug/Log (str "DeclareNothing Update " (.name this)))))
+
+(gen-class
+  :name PureClojureUnity.DeclareSomething
+  :prefix "DeclareSomething-"
+  :main false
+  :extends UnityEngine.MonoBehaviour
+  :methods [
+    [Start [] void]])
+
+(defn DeclareSomething-Start [this]
+  (Debug/Log "DeclareSomething"))
+
+(gen-class
+  :name PureClojureUnity.SubclassDummy
+  :prefix "DeclareSomething-"
+  :main false
+  :extends UnityEngine.DummyClass)
+
+
+
+(deftype ThisWasDefTyped
+  [])

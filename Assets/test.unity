@@ -124,6 +124,59 @@ SpriteRenderer:
   m_SortingLayerID: 0
   m_Sprite: {fileID: 21300000, guid: 91762b479dc9b40dbbe391bba3fcb184, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
+--- !u!1 &548028704
+GameObject:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 0}
+  serializedVersion: 4
+  m_Component:
+  - 4: {fileID: 548028705}
+  - 65: {fileID: 548028707}
+  - 114: {fileID: 548028706}
+  m_Layer: 0
+  m_Name: Hello
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &548028705
+Transform:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 0}
+  m_GameObject: {fileID: 548028704}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -.894030571, y: -.0558719635, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_Children: []
+  m_Father: {fileID: 0}
+--- !u!114 &548028706
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 0}
+  m_GameObject: {fileID: 548028704}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f2a4e0b41b7864c5d8f35b702b464e6a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  nameSpace: PlainClojureShit
+  prefix: 
+--- !u!65 &548028707
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 0}
+  m_GameObject: {fileID: 548028704}
+  m_Material: {fileID: 0}
+  m_IsTrigger: 0
+  m_Enabled: 1
+  serializedVersion: 2
+  m_Size: {x: 24.6000004, y: 12.6000004, z: 1}
+  m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &1385753084
 GameObject:
   m_ObjectHideFlags: 0
@@ -283,6 +336,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   path: clojure/moves
+  someBools: 
 --- !u!114 &1701955932
 MonoBehaviour:
   m_ObjectHideFlags: 0
