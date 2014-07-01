@@ -20,7 +20,7 @@ class ClojureAssetPostprocessor : AssetPostprocessor {
         Debug.Log("Compiling " + cljNameSpace + "...");
 
         Var.pushThreadBindings(RT.map(
-            Compiler.CompilePathVar, "/Users/nasser/Scratch/sexant/Assets/Plugins/Clojure/",
+            Compiler.CompilePathVar, "/Users/timothygardner/code/clojure-unity/Assets/Plugins/Clojure/",
             // Compiler.CompilePathVar, "/Users/nasser/Scratch/sexant/Assets/",
             RT.WarnOnReflectionVar, false,
             RT.UncheckedMathVar, false,
