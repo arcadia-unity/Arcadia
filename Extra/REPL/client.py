@@ -55,8 +55,6 @@ class ReplClient(asyncore.dispatcher):
         msg = self.to_send.pop()
         sendable_msg = qwik_encode(msg[:self.chunk_size])
         rest_msg = msg[self.chunk_size:]
-        if not bool(rest_msg):
-            sendable_msg += "\x04"
         sent = self.send(sendable_msg)
         if bool(rest_msg):
             self.to_send.appendleft(rest_msg)
