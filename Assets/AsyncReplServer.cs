@@ -1,4 +1,5 @@
-﻿using System;
+﻿using UnityEngine;
+using System;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -22,9 +23,13 @@ public class AsynchronousSocketListener {
 
     // Thread signal.
     public ManualResetEvent allDone = new ManualResetEvent(false);
-    public StateObject state;
 
-    public AsynchronousSocketListener() {
+    Socket listener;
+    volatile bool running = false;
+
+    public void StopListening() {
+        running = false;
+        listener.Close();
     }
 
     public void StartListening() {
@@ -39,7 +44,7 @@ public class AsynchronousSocketListener {
         IPEndPoint localEndPoint = new IPEndPoint(ipAddress, 11000);
 
         // Create a TCP/IP socket.
-        Socket listener = new Socket(AddressFamily.InterNetwork,
+        listener = new Socket(AddressFamily.InterNetwork,
             SocketType.Stream, ProtocolType.Tcp );
 
         // Bind the socket to the local endpoint and listen for incoming connections.
@@ -47,14 +52,15 @@ public class AsynchronousSocketListener {
             listener.Bind(localEndPoint);
             listener.Listen(100);
 
-            while (true) {
+            running = true;
+            while (running) {
                 // Set the event to nonsignaled state.
                 allDone.Reset();
 
                 // Start an asynchronous socket to listen for connections.
-                Console.WriteLine("Waiting for a connection...");
+                Debug.Log("Waiting for a connection...");
                 listener.BeginAccept( 
-                    new AsyncCallback(AcceptCallback),
+                    AcceptCallback,
                     listener );
 
                 // Wait until a connection is made before continuing.
@@ -62,12 +68,8 @@ public class AsynchronousSocketListener {
             }
 
         } catch (Exception e) {
-            Console.WriteLine(e.ToString());
+            Debug.Log(e.ToString());
         }
-
-        Console.WriteLine("\nPress ENTER to continue...");
-        Console.Read();
-        
     }
 
     public void AcceptCallback(IAsyncResult ar) {
@@ -79,7 +81,7 @@ public class AsynchronousSocketListener {
         Socket handler = listener.EndAccept(ar);
 
         // Create the state object.
-        state = new StateObject();
+        StateObject state = new StateObject();
         state.workSocket = handler;
         handler.BeginReceive( state.buffer, 0, StateObject.BufferSize, 0,
             new AsyncCallback(ReadCallback), state);
@@ -107,15 +109,13 @@ public class AsynchronousSocketListener {
             if (content.IndexOf("\x04") > -1) {
                 // All the data has been read from the 
                 // client. Display it on the console.
-                OnGetData(content.Substring(0, content.Length - 2 /* ask kangaroo about this */), content.Length - 1, state);
+                OnGetData(content.Substring(0, content.Length - 1), content.Length - 1, state);
 
-                // Console.WriteLine("Read {0} bytes from socket. \n Data : {1}", content.Length, content );
-                // Echo the data back to the client.
                 // Send(handler, content);
             } else {
                 // Not all data received. Get more.
                 handler.BeginReceive(state.buffer, 0, StateObject.BufferSize, 0,
-                new AsyncCallback(ReadCallback), state);
+                ReadCallback, state);
             }
         }
     }
@@ -126,7 +126,7 @@ public class AsynchronousSocketListener {
 
         // Begin sending the data to the remote device.
         handler.BeginSend(byteData, 0, byteData.Length, 0,
-            new AsyncCallback(SendCallback), handler);
+            SendCallback, handler);
     }
 
     private void SendCallback(IAsyncResult ar) {
@@ -136,13 +136,13 @@ public class AsynchronousSocketListener {
 
             // Complete sending the data to the remote device.
             int bytesSent = handler.EndSend(ar);
-            Console.WriteLine("Sent {0} bytes to client.", bytesSent);
+            Debug.Log(String.Format("Sent {0} bytes to client.", bytesSent));
 
             handler.Shutdown(SocketShutdown.Both);
             handler.Close();
 
         } catch (Exception e) {
-            Console.WriteLine(e.ToString());
+            Debug.Log(e.ToString());
         }
     }
 }
