@@ -80,7 +80,7 @@ class ReplClient(asyncore.dispatcher):
 def get_input():
     incoming = []
     sys.stdout.write('-->')
-    while((not incoming) or incoming[-1][-1]=='\n'):
+    while((not incoming) or (0 < len(incoming[-1]) and incoming[-1][-1]=='\n')):
         incoming.append(sys.stdin.readline())
     return "".join(incoming)
 
