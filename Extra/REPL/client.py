@@ -77,11 +77,19 @@ class ReplClient(asyncore.dispatcher):
         self.to_send.append(msg)
 
 
+def get_input():
+    incoming = []
+    sys.stdout.write('-->')
+    while((not incoming) or incoming[-1][-1]=='\n'):
+        incoming.append(sys.stdin.readline())
+    return "".join(incoming)
 
 if __name__ == '__main__':
-    import socket 
+    import socket
+    print "starting"
+    # tcp_ip = '192.168.1.112' # or whatever
+    tcp_ip = '192.168.1.142'
 
-    tcp_ip = '192.168.1.112' # or whatever
     tcp_port = 11000
     buffer_size = 1024
 
@@ -92,7 +100,7 @@ if __name__ == '__main__':
     address = (tcp_ip, tcp_port)
 
     while(True):
-        some_input = raw_input('--> ')
+        some_input = get_input()
         client = ReplClient(tcp_ip, tcp_port, message=some_input, chunk_size=buffer_size)
         asyncore.loop()
 
