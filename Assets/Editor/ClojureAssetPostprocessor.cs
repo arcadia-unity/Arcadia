@@ -22,7 +22,7 @@ class ClojureAssetPostprocessor : AssetPostprocessor {
         Debug.Log("Data path is " + Application.dataPath + "...");
         Debug.Log("Compile path is " + Path.Combine(Application.dataPath, pathInAssets) + "...");
 
-        string cljNameSpace = String.Join(".", path.Remove(path.Length - 4, 4).Split(Path.DirectorySeparatorChar).Skip(rootLength).ToArray());
+        string cljNameSpace = String.Join(".", path.Remove(path.Length - 4, 4).Split(Path.DirectorySeparatorChar).Skip(rootLength).ToArray()).Replace("_", "-");
 
         Debug.Log("Compiling " + cljNameSpace + "...");
 

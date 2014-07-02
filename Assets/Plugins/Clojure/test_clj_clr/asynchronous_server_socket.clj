@@ -207,31 +207,30 @@
   (reset! kill-switch false)
   (let [^IPEndPoint local-end-point (get-local-end-point)
         ^Socket listener (get-listener)]
-    (try
-      (doto listener
-        (.Bind local-end-point)
-        (.Listen 100))
 
-      (while (not @kill-switch) ;;supposed to be infinitish.
-        ;; kill-switch is probably a huge async/comms problem, since
-        ;; it doesn't clean anything up. A couple ways to ensure clean-up
-        ;; occur to me, but let's get it working first.
+    (doto listener
+      (.Bind local-end-point)
+      (.Listen 100))
 
-        (swap! start-listening-loops inc)
-        
-        (.Reset all-done)
-        (swap! our-stuff
-          #(conj %
-            (format "local end point: %s \n Waiting for connection..."
-              local-end-point)))
-        (begin-accept listener)
-        (.WaitOne all-done)) ;; this is mysterious to me; does it block? who?
+    (while (not @kill-switch) ;;supposed to be infinitish.
+      ;; kill-switch is probably a huge async/comms problem, since
+      ;; it doesn't clean anything up. A couple ways to ensure clean-up
+      ;; occur to me, but let's get it working first.
 
-      (catch Exception e
-        (println (.ToString e))))
-    (println "\nPress ENTER to continue...")
-    (println "now I guess I need to tell it to continue somehow")
-    (println "see loc 65 in example")))
+      (swap! start-listening-loops inc)
+      
+      (.Reset all-done)
+      (swap! our-stuff
+        #(conj %
+          (format "local end point: %s \n Waiting for connection..."
+            local-end-point)))
+      (begin-accept listener)
+      (.WaitOne all-done)) ;; this is mysterious to me; does it block? who?
+
+    ;; (println "\nPress ENTER to continue...")
+    ;; (println "now I guess I need to tell it to continue somehow")
+    ;; (println "see loc 65 in example")
+    ))
 
 (defn stop-listening []
   (reset! kill-switch true)
