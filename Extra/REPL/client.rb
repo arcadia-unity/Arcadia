@@ -8,7 +8,7 @@ while true
   print "--> "
   input = $stdin.gets.strip
   s.write input + "\x04"
-  puts s.recv 1024
+  puts s.recv(1024).gsub "\x04", ""
 end
 
 at_exit do
