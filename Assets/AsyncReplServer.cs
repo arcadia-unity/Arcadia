@@ -41,14 +41,14 @@ public class AsynchronousSocketListener {
         listener.Close();
     }
 
-    public void StartListening(int port=11000) {
+    public void StartListening(int port=11211) {
         // Data buffer for incoming data.
         byte[] bytes = new Byte[1024];
 
         // Establish the local endpoint for the socket.
         // The DNS name of the computer
         // running the listener is "host.contoso.com".
-        IPHostEntry ipHostInfo = Dns.Resolve(Dns.GetHostName());
+        IPHostEntry ipHostInfo = Dns.GetHostEntry("localhost");
         IPAddress ipAddress = ipHostInfo.AddressList[0];
         IPEndPoint localEndPoint = new IPEndPoint(ipAddress, port);
 
@@ -120,6 +120,7 @@ public class AsynchronousSocketListener {
                 if(lastEOT != -1) {
                     // found EOT, process each chunk and remove from state
                     foreach(string chunk in content.Substring(0, lastEOT).Split(new char[] { '\x04' })) {
+                        Debug.Log(chunk);
                         if(chunk.Length == 0) continue;
                         OnGetData(chunk, chunk.Length, state.workSocket);
                     }
