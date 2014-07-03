@@ -2,6 +2,7 @@
 using UnityEditor;
 using clojure.lang;
 using System.Net;
+using System.Text;
 using System.Net.Sockets;
 using System.Collections.Generic;
 using System.Threading;
@@ -17,7 +18,7 @@ public class AsyncReplWindow : EditorWindow {
     }
   }
 
-  string output = "Clojure Async REPL v0.1 (sexant)\n";
+  string output = "Clojure Async REPL v0.1\n";
   Queue<CodeAndSocket> incomingLines = new Queue<CodeAndSocket>();
   AsynchronousSocketListener listener;
   Thread thread;
@@ -32,18 +33,21 @@ public class AsyncReplWindow : EditorWindow {
     RT.load("unityRepl");
     listener = new AsynchronousSocketListener();
     listener.OnGetData += GetData;
+
     thread = new Thread(() => listener.StartListening());
     thread.Start();
   }
 
-  void GetData(string code, int length, StateObject state) {
-    incomingLines.Enqueue(new CodeAndSocket(code, state.workSocket));
+  void GetData(string code, int length, Socket socket) {
+    incomingLines.Enqueue(new CodeAndSocket(code, socket));
   }
 
   void OnDestroy() {
-    listener.OnGetData -= GetData;
-    listener.StopListening();
-    thread.Join();
+    if(listener != null) {
+      listener.OnGetData -= GetData;
+      listener.StopListening();
+      thread.Join();
+    }
   }
 
   void OnGUI () {
@@ -57,13 +61,12 @@ public class AsyncReplWindow : EditorWindow {
       Socket socket = cas.socket;
 
       var result = RT.var("unityRepl", "repl-eval-string").invoke(line);
-      Debug.Log(result);
-      if(result != null)
-        listener.Send(socket, result.ToString() + "\x04");
-      else
-        listener.Send(socket, "nil\x04");
 
-      output += line + "\n";      
+      byte[] byteData = Encoding.ASCII.GetBytes((result == null ? "nil" : result.ToString()) + "\x04");
+      socket.BeginSend(byteData, 0, byteData.Length, 0, (ar)=>{}, socket);
+
+      output += "==> " + line + "\n" + result + "\n";
+      Repaint();
     }
   }
 }
