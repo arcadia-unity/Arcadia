@@ -52,6 +52,10 @@ public class AsyncReplWindow : EditorWindow {
   }
 
   void OnGUI () {
+    if(GUILayout.Button("Write")) {
+      System.Console.Write("Hello!");
+    }
+
     GUILayout.TextArea(output, 500);
   }
 
@@ -62,11 +66,11 @@ public class AsyncReplWindow : EditorWindow {
       Socket socket = cas.socket;
 
       try {
-        var result = RT.var("unityRepl", "repl-eval-string").invoke(line);
+        var result = RT.var("unityRepl", "repl-eval-string").invoke(line, new AsyncReplTextWriter(socket));
         byte[] byteData = Encoding.ASCII.GetBytes((result == null ? "nil" : result.ToString()) + "\x04");
         socket.BeginSend(byteData, 0, byteData.Length, 0, (ar) => Debug.Log("Sent " + socket.EndSend(ar) + " bytes"), socket);
 
-        output += "==> " + line + "\n" + result + "\n";
+        output = "==> " + line + "\n" + result + "\n";
         Repaint();
       } catch(System.Exception e) {
         Debug.LogException(e);
@@ -75,5 +79,26 @@ public class AsyncReplWindow : EditorWindow {
 
       }
     }
+  }
+}
+
+
+public class AsyncReplTextWriter : System.IO.TextWriter {
+  Socket socket;
+  public AsyncReplTextWriter(Socket s) {
+    socket = s;
+  }
+
+  public override void Write(string value) {
+    base.Write(value);
+
+    byte[] byteData = Encoding.ASCII.GetBytes((value == null ? "nil" : value.ToString()));
+    socket.BeginSend(byteData, 0, byteData.Length, 0, (ar) => Debug.Log("Sent " + socket.EndSend(ar) + " bytes"), socket);
+
+    Debug.Log(value);
+  }
+
+  public override Encoding Encoding {
+    get { return System.Text.Encoding.ASCII; }
   }
 }

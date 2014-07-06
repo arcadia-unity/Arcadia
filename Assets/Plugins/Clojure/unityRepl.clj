@@ -68,14 +68,18 @@
                ]
        ~@body)))
 
-(defn repl-eval [repl-env frm]
+(defn repl-eval-print [repl-env frm]
   (with-bindings repl-env
-    (eval-in-ns
-     (ns-name *ns*)
-     frm
-     repl-env)))
+    (print
+      (eval-in-ns
+       (ns-name *ns*)
+       frm
+       repl-env))))
 
 (def default-repl-env (doto (atom {}) (update-repl-env)))
 
-(defn repl-eval-string [s]
-  (repl-eval default-repl-env (read-string (str "(do " s ")"))))
+(defn repl-eval-string 
+  ([s] (repl-eval-string s *out*))
+  ([s out]
+    (binding [*out* out]
+      (repl-eval-print default-repl-env (read-string (str "(do " s ")"))))))
