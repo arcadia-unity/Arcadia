@@ -61,14 +61,19 @@ public class AsyncReplWindow : EditorWindow {
       string line = cas.code;
       Socket socket = cas.socket;
 
-      var result = RT.var("unityRepl", "repl-eval-string").invoke(line);
-      Debug.Log("Result: " + result);
+      try {
+        var result = RT.var("unityRepl", "repl-eval-string").invoke(line);
+        byte[] byteData = Encoding.ASCII.GetBytes((result == null ? "nil" : result.ToString()) + "\x04");
+        socket.BeginSend(byteData, 0, byteData.Length, 0, (ar) => Debug.Log("Sent " + socket.EndSend(ar) + " bytes"), socket);
 
-      byte[] byteData = Encoding.ASCII.GetBytes((result == null ? "nil" : result.ToString()) + "\x04");
-      socket.BeginSend(byteData, 0, byteData.Length, 0, (ar) => Debug.Log("Sent " + socket.EndSend(ar) + " bytes"), socket);
+        output += "==> " + line + "\n" + result + "\n";
+        Repaint();
+      } catch(System.Exception e) {
+        Debug.LogException(e);
+        byte[] byteData = Encoding.ASCII.GetBytes(e.ToString() + "\x04");
+        socket.BeginSend(byteData, 0, byteData.Length, 0, (ar) => Debug.Log("Sent " + socket.EndSend(ar) + " bytes"), socket);
 
-      output += "==> " + line + "\n" + result + "\n";
-      Repaint();
+      }
     }
   }
 }

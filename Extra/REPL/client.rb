@@ -1,6 +1,6 @@
 require "socket"
 
-s = TCPSocket.new ARGV.first, ARGV.last.to_i
+s = TCPSocket.new "localhost", 11211
 
 $/ = "\x04"
 
