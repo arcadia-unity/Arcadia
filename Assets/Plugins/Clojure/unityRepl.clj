@@ -70,11 +70,12 @@
 
 (defn repl-eval-print [repl-env frm]
   (with-bindings repl-env
-    (print
-      (eval-in-ns
-       (ns-name *ns*)
-       frm
-       repl-env))))
+    (with-out-str
+      (print
+        (eval-in-ns
+          (ns-name *ns*)
+          frm
+          repl-env)))))
 
 (def default-repl-env (doto (atom {}) (update-repl-env)))
 
