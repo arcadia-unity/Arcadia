@@ -16,13 +16,13 @@
 (defn PathFollower-init [] [[] (into-array System.Object (vec (repeatedly 1000 #(Vector3. (rand-int 30) (rand-int 18) 0))))])
 
 (defn PathFollower-Update [^UnityEngine.Component self]
-  (let [^UnityEngine.Component this self
-        t (long (Time/get_time))
+  (let [t (long (Time/get_time))
         tf (float (Time/get_time))
-        ^objects ary (.state this)
+        ^objects ary (.state self)
         ^object current-pos (aget ary t)
         ^object next-pos (aget ary (+ 1 t))
-        ^UnityEngine.Transform transform (.GetComponent ^UnityEngine.Component this ^Type Transform)]
+        ^System.Type trt UnityEngine.Transform
+        ^UnityEngine.Transform transform (.GetComponent self trt)]
 
     (.set_localPosition transform
       (Vector3/Lerp
