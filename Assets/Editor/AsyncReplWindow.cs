@@ -18,8 +18,9 @@ public class AsyncReplWindow : EditorWindow {
     }
   }
 
-  string output = "Clojure Async REPL v0.1 (sexant)\n";
-  Queue<CodeAndSocket> incomingLines = new Queue<CodeAndSocket>();
+  string output = "";
+  Queue<Socket> updatedSockets = new Queue<Socket>();
+  Dictionary<Socket, string> socketCode = new Dictionary<Socket, string>();
   AsynchronousSocketListener listener;
   Thread thread;
 
@@ -40,7 +41,11 @@ public class AsyncReplWindow : EditorWindow {
   }
 
   void GetData(string code, int length, Socket socket) {
-    incomingLines.Enqueue(new CodeAndSocket(code, socket));
+    if(!socketCode.ContainsKey(socket))
+      socketCode[socket] = "";
+
+    socketCode[socket] += code;
+    updatedSockets.Enqueue(socket);
   }
 
   void OnDestroy() {
@@ -60,23 +65,30 @@ public class AsyncReplWindow : EditorWindow {
   }
 
   void Update() {
-    while(incomingLines.Count > 0) {
-      CodeAndSocket cas = incomingLines.Dequeue();
-      string line = cas.code;
-      Socket socket = cas.socket;
+    while(updatedSockets.Count > 0) {
+      Socket socket = updatedSockets.Dequeue();
+      if(!socketCode.ContainsKey(socket))
+        continue;
+      string code = socketCode[socket];
 
       try {
-        var result = RT.var("unityRepl", "repl-eval-string").invoke(line, new AsyncReplTextWriter(socket));
-        byte[] byteData = Encoding.ASCII.GetBytes((result == null ? "nil" : result.ToString()) + "\x04");
+        var result = RT.var("unityRepl", "repl-eval-string").invoke(code, new AsyncReplTextWriter(socket));
+        byte[] byteData = Encoding.ASCII.GetBytes(System.Convert.ToString(result));
         socket.BeginSend(byteData, 0, byteData.Length, 0, (ar) => Debug.Log("Sent " + socket.EndSend(ar) + " bytes"), socket);
 
-        output = "==> " + line + "\n" + result + "\n";
+        output = "--> " + code + "\n" + result + "\n";
         Repaint();
+        socketCode.Remove(socket);
+
+      } catch(System.IO.EndOfStreamException e) {
+        Debug.Log("Incomplete! " + code);
+
       } catch(System.Exception e) {
         Debug.LogException(e);
+        socketCode.Remove(socket);
+
         byte[] byteData = Encoding.ASCII.GetBytes(e.ToString() + "\x04");
         socket.BeginSend(byteData, 0, byteData.Length, 0, (ar) => Debug.Log("Sent " + socket.EndSend(ar) + " bytes"), socket);
-
       }
     }
   }

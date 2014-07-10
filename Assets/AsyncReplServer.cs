@@ -115,17 +115,8 @@ public class AsynchronousSocketListener {
                     state.buffer,0,bytesRead));
 
                 content = state.sb.ToString();
-                int lastEOT = content.LastIndexOf("\x04");
-                if(lastEOT != -1) {
-                    // found EOT, process each chunk and remove from state
-                    foreach(string chunk in content.Substring(0, lastEOT).Split(new char[] { '\x04' })) {
-                        Debug.Log(chunk);
-                        if(chunk.Length == 0) continue;
-                        OnGetData(chunk, chunk.Length, state.workSocket);
-                    }
-
-                    state.sb.Remove(0, lastEOT);
-                }
+                OnGetData(content, content.Length, state.workSocket);
+                state.sb.Remove(0, content.Length);
 
                 // always get more data
                 handler.BeginReceive(state.buffer, 0, StateObject.BufferSize, 0,

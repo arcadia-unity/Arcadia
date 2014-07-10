@@ -1,25 +1,35 @@
 require "socket"
+require "io/wait"
 
-s = TCPSocket.new "localhost", 11211
+$s = TCPSocket.new "localhost", 11211
 
-puts "Clojure Unity\n\n"
+def repl_print wait=0.1, strip_nil=false
+  if $s.wait(wait)
+    out = $s.recv($s.nread)
+    puts strip_nil ? out.gsub(/\s*nil$/, "\n\n") : out
+    $prompt = "--> "
+  else
+    $prompt = "... "
+  end
+end
 
-$/ = "\x04"
+$s.write DATA.read.strip
+repl_print 0.5, true
 
 while true
-  print "--> "
+  print $prompt
   $stdout.flush
-  input = $stdin.gets.strip
-  s.write input + "\x04"
-
-  out = s.recv(1024)
-  while out[-1] != "\x04"
-    out += s.recv(1024)
-  end
-
-  puts out.gsub "\x04", ""
+  input = $stdin.gets
+  $s.write input
+  repl_print
 end
 
 at_exit do
-  s.close
+  $s.close
 end
+
+__END__
+(println "Clojure Unity REPL")
+(println (str "Clojure " (clojure-version)))
+(println (str "Unity " (UnityEditorInternal.InternalEditorUtility/GetFullUnityVersion)))
+(println (str "Mono " (.Invoke (.GetMethod Mono.Runtime "GetDisplayName" (enum-or BindingFlags/NonPublic BindingFlags/Static)) nil nil)))
