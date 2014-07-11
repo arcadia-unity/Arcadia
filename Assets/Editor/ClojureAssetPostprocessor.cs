@@ -18,25 +18,25 @@ class ClojureAssetPostprocessor : AssetPostprocessor {
       if(path.StartsWith(Path.Combine("Assets", pathInAssets)) && path.EndsWith(".clj")) {
         int rootLength = Path.Combine("Assets", pathInAssets).Split(Path.DirectorySeparatorChar).Count();
 
-        Debug.Log("Path is " + path + "...");
-        Debug.Log("Data path is " + Application.dataPath + "...");
-        Debug.Log("Compile path is " + Path.Combine(Application.dataPath, pathInAssets) + "...");
-
         string cljNameSpace = String.Join(".", path.Remove(path.Length - 4, 4).Split(Path.DirectorySeparatorChar).Skip(rootLength).ToArray()).Replace("_", "-");
 
         Debug.Log("Compiling " + cljNameSpace + "...");
 
-        Var.pushThreadBindings(RT.map(
-            Compiler.CompilePathVar, Path.Combine(Application.dataPath, pathInAssets),
-            RT.WarnOnReflectionVar, false,
-            RT.UncheckedMathVar, false,
-            Compiler.CompilerOptionsVar, null
-        ));
+        try {
+            Var.pushThreadBindings(RT.map(
+                Compiler.CompilePathVar, Path.Combine(Application.dataPath, pathInAssets),
+                RT.WarnOnReflectionVar, false,
+                RT.UncheckedMathVar, false,
+                Compiler.CompilerOptionsVar, null
+            ));
 
-        Compiler.CompileVar.invoke(Symbol.intern(cljNameSpace));
-        AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
+            Compiler.CompileVar.invoke(Symbol.intern(cljNameSpace));
+            AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
 
-        Debug.Log("OK");
+            Debug.Log("OK");
+        } catch(Exception e) {
+            Debug.LogException(e);
+        }
 
       }
     }
