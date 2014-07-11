@@ -185,6 +185,13 @@
         :reflection-type
         (:members (apply-kw qwik-reflect x opts))))))
 
+(defn summarize-methods [x]
+  (->> x
+    qwik-members
+    :methods
+    (sort-by :name)
+    (map (juxt :name :parameter-types :return-type))))
+
 ;; basic map ops ------------------------------------------
 
 (defn submap?
