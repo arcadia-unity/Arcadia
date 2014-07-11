@@ -65,5 +65,6 @@
                            (throw
                              (System.IO.EndOfStreamException. "Keep typing, u krzy maven!!!"))
                            (throw e))))]
-         (doseq [f frms]
-           (repl-eval-print default-repl-env f))))))
+         (last
+           (map #(repl-eval-print default-repl-env #)
+             frms))))))
