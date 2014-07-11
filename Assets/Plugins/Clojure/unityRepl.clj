@@ -11,36 +11,12 @@
    :*print-level* *print-level*
    :*data-readers* *data-readers*
    :*default-data-reader-fn* *default-data-reader-fn*
-   ;; :*compile-path* (or (Environment/GetEnvironmentVariable "CLOJURE_COMPILE_PATH") ".") ;;;(System/getProperty "clojure.compile.path" "classes")
-                    
    :*command-line-args* *command-line-args*
    :*unchecked-math* *unchecked-math*
-   :*assert* *assert*
-   ;;          :*1 *1
-   ;;          :*2 *2
-   ;;          :*3 *3
-   ;;          :*e *3
-   })
+   :*assert* *assert*})
 
 (defn update-repl-env [repl-env]
   (swap! repl-env #(merge % (env-map))))
-
-(defn eval-in-ns
-  ([namespace frm]
-     (let [old-ns *ns*
-           p (promise)]
-       (in-ns namespace)
-       (deliver p (eval frm))
-       (in-ns (ns-name old-ns))
-       @p))
-  ([namespace frm repl-env]
-     (let [old-ns *ns*
-           p (promise)]
-       (in-ns namespace)
-       (deliver p (eval frm))
-       (update-repl-env repl-env)
-       (in-ns (ns-name old-ns))
-       @p)))
 
 (defmacro with-bindings
   "Executes body in the context of thread-local bindings for several vars
@@ -59,23 +35,16 @@
                *default-data-reader-fn* (:*default-data-reader-fn* @re#)
                *command-line-args* (:*command-line-args* @re#)
                *unchecked-math* (:*unchecked-math* @re#)
-               *assert* (:*assert* @re#)
-               ;; *compile-path* (System/getProperty "clojure.compile.path" "classes")
-               ;; *1 (:*1 @re#)
-               ;; *2 (:*2 @re#)
-               ;; *3 (:*3 @re#)
-               ;; *e (:*3 @re#)
-               ]
+               *assert* (:*assert* @re#)]
        ~@body)))
 
 (defn repl-eval-print [repl-env frm]
   (with-bindings repl-env
     (with-out-str
       (print
-        (eval-in-ns
-          (ns-name *ns*)
-          frm
-          repl-env)))))
+        (let [res (eval frm)]
+          (update-repl-env repl-env)
+          res)))))
 
 (def default-repl-env (doto (atom {}) (update-repl-env)))
 
@@ -83,4 +52,5 @@
   ([s] (repl-eval-string s *out*))
   ([s out]
     (binding [*out* out]
-      (repl-eval-print default-repl-env (read-string (str "(do " s ")"))))))
+      (repl-eval-print default-repl-env
+        (read-string (str s))))))

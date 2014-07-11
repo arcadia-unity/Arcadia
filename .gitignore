@@ -41,3 +41,7 @@ Thumbs.db
 # /Assets/Plugins/Clojure/AHappyNamespaceUnity.clj.dll.meta
 # /Assets/Plugins/Clojure/AHappyNamespaceUnity.clj.meta
 # /Assets/Plugins/Clojure/unityRepl.clj.meta
+/Assets/PathFollower.unity.meta
+/Assets/PathFollowerCSharp.cs.meta
+/Assets/Plugins/Clojure/PathFollowerUnity.clj.meta
+/Assets/Plugins/Clojure/test_clj_clr/utils.clj.meta
