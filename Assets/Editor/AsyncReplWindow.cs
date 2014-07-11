@@ -88,7 +88,7 @@ public class AsyncReplWindow : EditorWindow {
         Debug.LogException(e);
         socketCode.Remove(socket);
 
-        byte[] byteData = Encoding.ASCII.GetBytes(e.ToString() + "\x04");
+        byte[] byteData = Encoding.ASCII.GetBytes(e.ToString());
         socket.BeginSend(byteData, 0, byteData.Length, 0, (ar) => Debug.Log("Sent " + socket.EndSend(ar) + " bytes"), socket);
       }
     }
