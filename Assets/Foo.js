@@ -2,6 +2,10 @@
 var running : boolean = true;
 
 
+function invoke() {
+  return "hey there";
+}
+
 function Start () {
 
 }
