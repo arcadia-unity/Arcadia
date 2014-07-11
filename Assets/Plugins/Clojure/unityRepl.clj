@@ -48,9 +48,22 @@
 
 (def default-repl-env (doto (atom {}) (update-repl-env)))
 
+(defn incomplete-form-exception? [x]
+  (or
+    (instance? System.IO.EndOfStreamException x)
+    (and (instance? System.ArgumentException x)
+      (re-find #"System.ArgumentException: Unmatched delimiter:"
+        (.Message x)))))
+
 (defn repl-eval-string 
   ([s] (repl-eval-string s *out*))
   ([s out]
-    (binding [*out* out]
-      (repl-eval-print default-repl-env
-        (read-string (str s))))))
+     (binding [*out* out]
+       (let [frms (try (load-string (str "'[" s "]"))
+                       (catch Exception e
+                         (if (incomplete-form-exception? e)
+                           (throw
+                             (System.IO.EndOfStreamException. "Keep typing, u krzy maven!!!"))
+                           (throw e))))]
+         (doseq [f frms]
+           (repl-eval-print default-repl-env f))))))
