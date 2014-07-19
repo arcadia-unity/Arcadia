@@ -41,10 +41,11 @@
 (defn repl-eval-print [repl-env frm]
   (with-bindings repl-env
     (with-out-str
-      (print
-        (let [res (eval frm)]
-          (update-repl-env repl-env)
-          res)))))
+      (binding [*err* *out*] ;; not sure about this
+        (print
+          (let [res (eval frm)]
+            (update-repl-env repl-env)
+            res))))))
 
 (def default-repl-env (doto (atom {}) (update-repl-env)))
 
