@@ -32,6 +32,11 @@ public class AsyncReplWindow : EditorWindow {
   }
 
   public void StartListening() {
+	  if (listener != null){
+      Debug.Log("listener: " + listener.ToString());
+      } else {
+      Debug.Log("listener == null");
+      }
     OnDestroy();
     
     RT.load("unityRepl");
@@ -53,9 +58,9 @@ public class AsyncReplWindow : EditorWindow {
 
   void OnDestroy() {
     if(listener != null) {
-      listener.OnGetData -= GetData;
+      // listener.OnGetData -= GetData;
       listener.StopListening();
-      thread.Join();
+      // thread.Join();
     }
   }
 

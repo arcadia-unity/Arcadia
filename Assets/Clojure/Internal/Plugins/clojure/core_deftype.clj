@@ -411,17 +411,17 @@
        :implements ~interfaces 
        ~@methods)))
 
-(defn- emit-other-deftype* 
-  "Do not use this directly - use other-deftype"
+(defn- emit-defscript* 
+  "Do not use this directly - use defscript"
   [tagname name fields interfaces methods]
   (let [classname (with-meta (symbol (str (namespace-munge *ns*) "." name)) (meta name))
         interfaces (conj interfaces 'clojure.lang.IType)]
-    `(other-deftype* ~tagname ~classname ~fields 
+    `(defscript* ~tagname ~classname ~fields 
        :implements ~interfaces 
        ~@methods)))
 
-(defmacro other-deftype
-  "(other-deftype name [fields*]  options* specs*)
+(defmacro defscript
+  "(defscript name [fields*]  options* specs*)
   
   Currently there are no options.
 
@@ -479,7 +479,7 @@
   that the field names __meta and __extmap are currently reserved and
   should not be used when defining your own types.
 
-  Given (other-deftype TypeName ...), a factory function called ->TypeName
+  Given (defscript TypeName ...), a factory function called ->TypeName
   will be defined, taking positional parameters for the fields"
   {:added "1.2"
    :arglists '([name [& fields] & opts+specs])}
@@ -494,7 +494,7 @@
         fields (vec (map #(with-meta % nil) fields))
 		[field-args over] (split-at 20 fields)]
     `(let []
-       ~(emit-other-deftype* name gname (vec hinted-fields) (vec interfaces) methods)
+       ~(emit-defscript* name gname (vec hinted-fields) (vec interfaces) methods)
        (import ~classname)
        ~(build-positional-factory gname classname fields)
 	   ~classname)))
