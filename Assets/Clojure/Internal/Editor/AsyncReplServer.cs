@@ -76,9 +76,9 @@ public class AsynchronousSocketListener {
             }
 
         } catch(ThreadAbortException e) {
-            listener.OnGetData -= GetData;
-            listener.StopListening();
-            thread.Join();
+            //listener.OnGetData -= GetData;
+            //listener.StopListening();
+            //thread.Join();
 
         } catch (Exception e) {
             Debug.Log(e.ToString());
