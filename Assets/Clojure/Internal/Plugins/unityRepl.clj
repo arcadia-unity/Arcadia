@@ -25,18 +25,19 @@
   `(let [re# ~repl-env]
      (when (not (instance? clojure.lang.Atom re#))
        (throw (ArgumentException. "repl-env must be an atom")))
-     (binding [*ns* (:*ns* @re#)
-               *warn-on-reflection* (:*warn-on-reflection* @re#)
-               *math-context* (:*math-context* @re#)
-               *print-meta* (:*print-meta* @re#)
-               *print-length* (:*print-length* @re#)
-               *print-level* (:*print-level* @re#)
-               *data-readers* (:*data-readers* @re#)
-               *default-data-reader-fn* (:*default-data-reader-fn* @re#)
-               *command-line-args* (:*command-line-args* @re#)
-               *unchecked-math* (:*unchecked-math* @re#)
-               *assert* (:*assert* @re#)]
-       ~@body)))
+     (let [e @re#]
+       (binding [*ns* (:*ns* e)
+                 *warn-on-reflection* (:*warn-on-reflection* e)
+                 *math-context* (:*math-context* e)
+                 *print-meta* (:*print-meta* e)
+                 *print-length* (:*print-length* e)
+                 *print-level* (:*print-level* e)
+                 *data-readers* (:*data-readers* e)
+                 *default-data-reader-fn* (:*default-data-reader-fn* e)
+                 *command-line-args* (:*command-line-args* e)
+                 *unchecked-math* (:*unchecked-math* e)
+                 *assert* (:*assert* e)]
+         ~@body))))
 
 (defn repl-eval-print [repl-env frm]
   (with-bindings repl-env
