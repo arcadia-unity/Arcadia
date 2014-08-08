@@ -47,7 +47,9 @@
             (update-repl-env repl-env)
             res))))))
 
-(def default-repl-env (doto (atom {}) (update-repl-env)))
+(def default-repl-env
+  (binding [*ns* (find-ns 'user)]
+    (doto (atom {}) (unityRepl/update-repl-env))))
 
 (defn repl-eval-string 
   ([s] (repl-eval-string s *out*))
