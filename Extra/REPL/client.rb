@@ -29,7 +29,7 @@ at_exit do
 end
 
 __END__
-(do (println "Clojure Unity REPL")
-    (println (str "Clojure " (clojure-version)))
-    (println (str "Unity " (UnityEditorInternal.InternalEditorUtility/GetFullUnityVersion)))
-    (println (str "Mono " (.Invoke (.GetMethod Mono.Runtime "GetDisplayName" (enum-or BindingFlags/NonPublic BindingFlags/Static)) nil nil))))
+(do (println "; Clojure Unity REPL")
+    (println (str "; Clojure " (clojure-version)))
+    (println (str "; Unity " (UnityEditorInternal.InternalEditorUtility/GetFullUnityVersion)))
+    (println (str "; Mono " (.Invoke (.GetMethod Mono.Runtime "GetDisplayName" (enum-or BindingFlags/NonPublic BindingFlags/Static)) nil nil))))

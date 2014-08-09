@@ -33,11 +33,12 @@ public class AsynchronousSocketListener {
     // Thread signal.
     public ManualResetEvent allDone = new ManualResetEvent(false);
 
-    Socket listener;
+    public Socket listener;
     volatile bool running = false;
 
     public void StopListening() {
         running = false;
+
         listener.Close();
     }
 
@@ -120,7 +121,8 @@ public class AsynchronousSocketListener {
                     state.buffer,0,bytesRead));
 
                 content = state.sb.ToString();
-                OnGetData(content, content.Length, state.workSocket);
+                if(OnGetData != null)
+                    OnGetData(content, content.Length, state.workSocket);
                 state.sb.Remove(0, content.Length);
 
                 // always get more data
