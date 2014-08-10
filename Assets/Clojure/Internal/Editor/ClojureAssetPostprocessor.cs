@@ -9,15 +9,20 @@ using clojure.lang;
 class ClojureAssetPostprocessor : AssetPostprocessor {
     static public string pathInAssets = "Clojure/Scripts";
 
+    static public void SetupLoadPath() {
+        System.Environment.SetEnvironmentVariable("CLOJURE_LOAD_PATH", Path.Combine(System.Environment.CurrentDirectory, Path.Combine("Assets", pathInAssets)));
+        Debug.Log(System.Environment.GetEnvironmentVariable("CLOJURE_LOAD_PATH"));
+    }
+
     static public void OnPostprocessAllAssets(
+
                         String[] importedAssets,
                         String[] deletedAssets,
                         String[] movedAssets,
                         String[] movedFromAssetPaths) {
 
-    System.Environment.SetEnvironmentVariable("CLOJURE_LOAD_PATH", Path.Combine(System.Environment.CurrentDirectory, Path.Combine("Assets", pathInAssets)));
-    Debug.Log(System.Environment.GetEnvironmentVariable("CLOJURE_LOAD_PATH"));
-
+    SetupLoadPath();
+        
     foreach(string path in importedAssets.Concat(movedAssets)) {
       if(path.StartsWith(Path.Combine("Assets", pathInAssets)) && path.EndsWith(".clj")) {
         int rootLength = Path.Combine("Assets", pathInAssets).Split(Path.DirectorySeparatorChar).Count();
