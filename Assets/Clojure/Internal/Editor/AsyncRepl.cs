@@ -114,6 +114,8 @@ public class AsyncRepl {
       string code = socketCode[socket];
 
       try {
+        ClojureAssetPostprocessor.SetupLoadPath(); // TODO this is sloppy and should be moved
+
         var result = RT.var("unityRepl", "repl-eval-string").invoke(code, new AsyncReplTextWriter(socket));
         byte[] byteData = Encoding.ASCII.GetBytes(System.Convert.ToString(result));
         socket.BeginSend(byteData, 0, byteData.Length, 0, (ar) => { }, socket);
