@@ -23,21 +23,25 @@
 (defn constructors [x & opts]
   (->> (apply reflect x opts)
     :members
-    (filter #(= :constructor (:type %)))))
+    (filter #(= :constructor (:type %)))
+    (sort-by :name)))
 
 (defn methods [x & opts]
   (->> (apply reflect x opts)
     :members
-    (filter #(= :method (:type %)))))
+    (filter #(= :method (:type %)))
+    (sort-by :name)))
 
 (defn fields [x & opts]
   (->> (apply reflect x opts)
     :members
-    (filter #(= :field (:type %)))))
+    (filter #(= :field (:type %)))
+    (sort-by :name)))
 
 (defn properties [x & opts]
   (->> (apply reflect x opts)
     :members
-    (filter #(= :property (:type %)))))
+    (filter #(= :property (:type %)))
+    (sort-by :name)))
 
 
