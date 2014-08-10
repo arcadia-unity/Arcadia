@@ -211,8 +211,7 @@
 (deftype ClrReflector [a]
   Reflector
   (do-reflect [_ typeref]
-    (let [cls (or (clojure.lang.RT/classForName (typename typeref))
-                typeref)] ; This is a seemingly-necessary change from standard clojure-clr
+    (let [cls (clojure.lang.RT/classForName (typename typeref))]
       {:bases (not-empty (set (map typesym (bases cls))))
        :flags (parse-attributes (.Attributes cls) class-flags)
        :members (set/union (declared-fields cls)
