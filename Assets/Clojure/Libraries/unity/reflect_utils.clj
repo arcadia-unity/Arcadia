@@ -1,7 +1,7 @@
-(ns clj-unity.reflect-utils
+(ns unity.reflect-utils
   (:refer-clojure :exclude [methods])
   (:require
-   ;;[clj-unity.seq-utils :as su]
+   ;;[unity.seq-utils :as su]
    [clojure.reflect :as reflect]
    [clojure.walk :as walk])
   (:import [clojure.reflect Constructor Method Field Property]))
