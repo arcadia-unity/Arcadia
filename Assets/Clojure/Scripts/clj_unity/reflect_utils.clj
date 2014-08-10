@@ -7,8 +7,11 @@
            ClrReflector]))
 
 (defn reflection-transform [x]
-  (if-let [t (#{Constructor Method Field Property} (type x))]
-    (into {:type t} (seq x))
+  (if-let [t ({Constructor :constructor
+               Method :method
+               Field :field
+               Property :property} (type x))]
+    (apply hash-map :type t (seq x))
     x))
 
 (defn reflect [x & opts]
@@ -16,3 +19,25 @@
     reflection-transform
     (apply reflect/reflect x
       opts)))
+
+(defn constructors [x & opts]
+  (->> (apply reflect x opts)
+    :members
+    (filter #(= :constructor (:type %)))))
+
+(defn methods [x & opts]
+  (->> (apply reflect x opts)
+    :members
+    (filter #(= :method (:type %)))))
+
+(defn fields [x & opts]
+  (->> (apply reflect x opts)
+    :members
+    (filter #(= :field (:type %)))))
+
+(defn properties [x & opts]
+  (->> (apply reflect x opts)
+    :members
+    (filter #(= :property (:type %)))))
+
+
