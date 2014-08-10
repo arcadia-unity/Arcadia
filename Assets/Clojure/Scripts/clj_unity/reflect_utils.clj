@@ -1,17 +1,17 @@
 (ns clj-unity.reflect-utils
-  (require
-    ;;[clj-unity.seq-utils :as su]
-    [clojure.reflect :as reflect]
-    [clojure.walk :as walk])
-  (import [clojure.reflect Constructor Method Field Property
-           ClrReflector]))
+  (:refer-clojure :exclude [methods])
+  (:require
+   ;;[clj-unity.seq-utils :as su]
+   [clojure.reflect :as reflect]
+   [clojure.walk :as walk])
+  (:import [clojure.reflect Constructor Method Field Property]))
 
 (defn reflection-transform [x]
   (if-let [t ({Constructor :constructor
                Method :method
                Field :field
                Property :property} (type x))]
-    (apply hash-map :type t (seq x))
+    (into {:type t} (seq x))
     x))
 
 (defn reflect [x & opts]
