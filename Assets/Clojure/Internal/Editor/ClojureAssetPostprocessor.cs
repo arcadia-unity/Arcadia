@@ -7,10 +7,13 @@ using System.Linq;
 using clojure.lang;
 
 class ClojureAssetPostprocessor : AssetPostprocessor {
-    static public string pathInAssets = "Clojure/Scripts";
+    static public string pathToScripts = "Clojure/Scripts";
+    static public string pathToLibraries = "Clojure/Libraries";
 
     static public void SetupLoadPath() {
-        System.Environment.SetEnvironmentVariable("CLOJURE_LOAD_PATH", Path.Combine(System.Environment.CurrentDirectory, Path.Combine("Assets", pathInAssets)));
+        System.Environment.SetEnvironmentVariable("CLOJURE_LOAD_PATH",
+            Path.Combine(System.Environment.CurrentDirectory, Path.Combine("Assets", pathToScripts)) + ":" + 
+            Path.Combine(System.Environment.CurrentDirectory, Path.Combine("Assets", pathToLibraries)));
         Debug.Log(System.Environment.GetEnvironmentVariable("CLOJURE_LOAD_PATH"));
     }
 
@@ -24,8 +27,8 @@ class ClojureAssetPostprocessor : AssetPostprocessor {
     SetupLoadPath();
         
     foreach(string path in importedAssets.Concat(movedAssets)) {
-      if(path.StartsWith(Path.Combine("Assets", pathInAssets)) && path.EndsWith(".clj")) {
-        int rootLength = Path.Combine("Assets", pathInAssets).Split(Path.DirectorySeparatorChar).Count();
+      if(path.StartsWith(Path.Combine("Assets", pathToScripts)) && path.EndsWith(".clj")) {
+        int rootLength = Path.Combine("Assets", pathToScripts).Split(Path.DirectorySeparatorChar).Count();
 
         string cljNameSpace = String.Join(".", path.Remove(path.Length - 4, 4).Split(Path.DirectorySeparatorChar).Skip(rootLength).ToArray()).Replace("_", "-");
 
@@ -33,7 +36,7 @@ class ClojureAssetPostprocessor : AssetPostprocessor {
 
         try {
             Var.pushThreadBindings(RT.map(
-                Compiler.CompilePathVar, Path.Combine(Application.dataPath, pathInAssets),
+                Compiler.CompilePathVar, Path.Combine(Application.dataPath, pathToScripts),
                 RT.WarnOnReflectionVar, false,
                 RT.UncheckedMathVar, false,
                 Compiler.CompilerOptionsVar, null

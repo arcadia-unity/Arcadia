@@ -1,4 +1,4 @@
-(ns clj-unity.interop
+(ns unity.interop
   (:import [UnityEngine GameObject]))
 
 ;; namespace for essential unity interop conveniences.

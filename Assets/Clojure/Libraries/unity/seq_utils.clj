@@ -1,4 +1,4 @@
-(ns clj-unity.seq-utils)
+(ns unity.seq-utils)
 
 (defn seqable? [x]
   "Based on RT.cs, clojure.core/cast, clojure.core/instance. Uncertain whether it works in all cases"
