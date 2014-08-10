@@ -21,6 +21,11 @@
     (into {:type t} (seq x))
     x))
 
+(defn reflect [x & opts]
+  (walk/prewalk
+    reflection-transform
+    (apply reflect/reflect x opts)))
+
 (defn member-getter-fn [member-type]
   (fn [x & opts]
     (->> (apply reflect x opts)
