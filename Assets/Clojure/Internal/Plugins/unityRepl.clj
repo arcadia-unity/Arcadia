@@ -48,7 +48,7 @@
   (with-bindings repl-env
     (with-out-str
       (binding [*err* *out*] ;; not sure about this
-        (print
+        (prn
           (let [res (eval
                       `(do ~(when-let [inj (seq @injections)] (cons 'do inj))
                            ~frm))]
