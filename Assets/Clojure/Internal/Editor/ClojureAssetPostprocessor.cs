@@ -7,28 +7,41 @@ using System.Linq;
 using clojure.lang;
 
 class ClojureAssetPostprocessor : AssetPostprocessor {
-    static public string pathToScripts = "Clojure/Scripts";
-    static public string pathToLibraries = "Clojure/Libraries";
+    static public string[] CompilationRoots = new [] {
+        "Assets/Clojure/Scripts",
+        "Assets/Clojure/Libraries",
+        "Assets/Clojure/Internal/Plugins",
+    };
+
+    static public string pathToAssemblies = "Library/ScriptAssemblies";
 
     static public void SetupLoadPath() {
-        System.Environment.SetEnvironmentVariable("CLOJURE_LOAD_PATH",
-            Path.Combine(System.Environment.CurrentDirectory, Path.Combine("Assets", pathToScripts)) + ":" + 
-            Path.Combine(System.Environment.CurrentDirectory, Path.Combine("Assets", pathToLibraries)));
+        string loadPath = Path.Combine(System.Environment.CurrentDirectory, pathToAssemblies);
+        foreach(string path in CompilationRoots) {
+            loadPath += ":" + path;
+        }
+
+        System.Environment.SetEnvironmentVariable("CLOJURE_LOAD_PATH", loadPath);
         Debug.Log(System.Environment.GetEnvironmentVariable("CLOJURE_LOAD_PATH"));
     }
 
     static public void OnPostprocessAllAssets(
-
                         String[] importedAssets,
                         String[] deletedAssets,
                         String[] movedAssets,
                         String[] movedFromAssetPaths) {
 
+    // dont need to be doing this every 
     SetupLoadPath();
-        
-    foreach(string path in importedAssets.Concat(movedAssets)) {
-      if(path.StartsWith(Path.Combine("Assets", pathToScripts)) && path.EndsWith(".clj")) {
-        int rootLength = Path.Combine("Assets", pathToScripts).Split(Path.DirectorySeparatorChar).Count();
+    
+    // only consider imported assets
+    foreach(string path in importedAssets) {
+        Debug.Log(path);
+
+      // compile only if asset is a .clj file and on a compilation root
+      if(path.EndsWith(".clj") && CompilationRoots.Any(r => path.Contains(r))) {
+        string root = CompilationRoots.Where(r => path.Contains(r)).Single();
+        int rootLength = root.Split(Path.DirectorySeparatorChar).Count();
 
         string cljNameSpace = String.Join(".", path.Remove(path.Length - 4, 4).Split(Path.DirectorySeparatorChar).Skip(rootLength).ToArray()).Replace("_", "-");
 
@@ -36,7 +49,7 @@ class ClojureAssetPostprocessor : AssetPostprocessor {
 
         try {
             Var.pushThreadBindings(RT.map(
-                Compiler.CompilePathVar, Path.Combine(Application.dataPath, pathToScripts),
+                Compiler.CompilePathVar, Path.Combine(System.Environment.CurrentDirectory, pathToAssemblies),
                 RT.WarnOnReflectionVar, false,
                 RT.UncheckedMathVar, false,
                 Compiler.CompilerOptionsVar, null
