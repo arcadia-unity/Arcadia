@@ -2,9 +2,9 @@ Clojure Unity
 =============
 The integration of the Clojure Programming Language with the Unity 3D game engine.
 
-Status
-------
-Clojure Unity is still in development. It works well, but is still subject to change as we stabalize it. Building large or high-stakes projects with it is probably a bad idea.
+Status (Important!)
+-------------------
+Clojure Unity is under development, and should not be used for real projects yet. The remainder of this file is mostly for our own reference. More to come.
 
 Usage
 -----
