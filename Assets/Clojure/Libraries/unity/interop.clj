@@ -37,11 +37,9 @@
       (type-name? t) (resolve t))))
 
 (defn type-of-reference [x env]
-  (if (contains? env x) ; local?
-    (type-of-local-reference x env)
-    (or
-      (tag-type x) ; tagged symbol
-      (tag-type (resolve x))))) ; reference to tagged var, or whatever
+  (or (tag-type x) ; tagged symbol
+      (when (contains? env x) (type-of-local-reference x env)) ; local
+      (tag-type (resolve x)))) ; reference to tagged var, or whatever 
 
 ;; really ought to be testing for arity as well
 (defn type-has-method? [t mth]
