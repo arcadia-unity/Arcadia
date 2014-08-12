@@ -92,9 +92,8 @@
 ;; hm, how do you automate reflection tests?
 ;; binding *err* is possible but also gross
 
-(test/deftest get-component
+(test/deftest get-component-test
   (test/is
     (with-new-object ob
       (instance? UnityEngine.Transform
         (get-component ob UnityEngine.Transform)))))
-
