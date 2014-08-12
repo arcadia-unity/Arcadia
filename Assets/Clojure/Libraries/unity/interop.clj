@@ -1,4 +1,3 @@
-
 (ns unity.interop
   (:require
    [unity.reflect-utils :as ru]
@@ -38,16 +37,18 @@
       (type-name? t) (resolve t))))
 
 (defn type-of-reference [x env]
-  (if (contains? env x)
+  (if (contains? env x) ; local?
     (type-of-local-reference x env)
-    (tag-type x)))
+    (or
+      (tag-type x) ; tagged symbol
+      (tag-type (resolve x))))) ; reference to tagged var, or whatever
 
 ;; really ought to be testing for arity as well
 (defn type-has-method? [t mth]
   (in? (symbol mth) (map :name (ru/methods t))))
 
 ;; maybe we should be passing full method sigs around rather than
-;; method names. Also maybe this should accomodate types that
+;; method names. Also maybe this should accommodate types that
 ;; everything extends, if such types exist
 (defn known-implementer-reference? [x method-name env] 
   (boolean
@@ -67,12 +68,16 @@
     :else
     `(.GetComponent ~obj ~t)))
 
+;; sadly I'm not sure this will actually warn us at runtime; I think
+;; the reflection warning occurs when we compile get-component, not
+;; when we run it. Perhaps we need another flag (that can be disabled)
+;; for runtime reflection?
 (defn get-component
   {:inline (fn [obj t]
              (list 'unity.interop/get-component* obj t))
    :inline-arities #{2}}
-  [obj, t]
-  :bla)
+  [obj t]
+  (.GetComponent obj t))
 
 ;; ==================================================
 ;; tests 
