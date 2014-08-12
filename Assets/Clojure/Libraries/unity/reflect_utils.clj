@@ -28,12 +28,13 @@
 
 (defn member-getter-fn [member-type]
   (fn [x & opts]
-    (->> (apply reflect x opts)
+    (->> (apply reflect/reflect x opts)
       :members
-      (filter #(= member-type (:type %)))
-      (sort-by :name))))
+      (filter #(instance? member-type %))
+      (sort-by :name)
+      (map reflection-transform))))
 
-(def constructors (member-getter-fn :constructor))
-(def methods      (member-getter-fn :method))
-(def fields       (member-getter-fn :fields))
-(def properties   (member-getter-fn :properties))
+(def constructors (member-getter-fn Constructor))
+(def methods      (member-getter-fn Method))
+(def fields       (member-getter-fn Field))
+(def properties   (member-getter-fn Property))
