@@ -52,10 +52,22 @@
     (when-let [tor (type-of-reference x env)]
       (type-has-method? tor method-name))))
 
+(defn raise-args [[head & rst]]
+  (let [gsyms (repeatedly (count rst) gensym)]
+    `(let [~@(interleave gsyms rst)]
+       ~(cons head gsyms))))
+
+(defn raise-non-symbol-args [[head & rst]]
+  (let [bndgs (zipmap 
+                (remove symbol? rst)
+                (repeatedly gensym))]
+    `(let [~@(mapcat reverse bndgs)]
+       ~(cons head (replace bndgs rst)))))
+
 (defmacro get-component* [obj t]
-  (if-not (symbol? obj) ;; shouldn't have to do this
-    `(let [obj# ~obj]
-       (unity.interop/get-component* obj# ~t))
+  (if (not-every? symbol? [obj t])
+    (raise-non-symbol-args
+      (list 'unity.interop/get-component* obj t))
     (cond
       (contains? &env t)
       `(.GetComponent ~obj ~t)
