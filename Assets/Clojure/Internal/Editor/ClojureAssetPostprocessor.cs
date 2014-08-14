@@ -13,7 +13,7 @@ class ClojureAssetPostprocessor : AssetPostprocessor {
         "Assets/Clojure/Internal/Plugins",
     };
 
-    static public string pathToAssemblies = "Library/ScriptAssemblies";
+    static public string pathToAssemblies = "Assets/Clojure/Compiled";
 
     static public void SetupLoadPath() {
         string loadPath = Path.Combine(System.Environment.CurrentDirectory, pathToAssemblies);
