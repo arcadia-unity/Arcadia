@@ -53,17 +53,19 @@
       (type-has-method? tor method-name))))
 
 (defmacro get-component* [obj t]
-  (cond
-    (contains? &env t)
-    `(.GetComponent ~obj ~t)
+  (let [failurecase `(let [t# ~t]
+                       (.GetComponent ~obj t#))]
+    (cond
+      (contains? &env t)
+      failurecase
 
-    (and
-      (known-implementer-reference? obj 'GetComponent &env)
-      (type-name? t))
-    `(.GetComponent ~obj (~'type-args ~t))
+      (and
+        (known-implementer-reference? obj 'GetComponent &env)
+        (type-name? t))
+      `(.GetComponent ~obj (~'type-args ~t))
 
-    :else
-    `(.GetComponent ~obj ~t)))
+      :else
+      failurecase)))
 
 ;; sadly I'm not sure this will actually warn us at runtime; I think
 ;; the reflection warning occurs when we compile get-component, not
