@@ -2,10 +2,9 @@
   (:refer-clojure :exclude [with-bindings])
   (:require [clojure.main :as main]))
 
-
 (def
-  ^{:doc "injections should be a collection of forms, or nil. The forms in injections are evaluated prior to each evaluation of a form in the REPL. Note that this is kind of dangerous, you can get yourself in a place that's hard to back out of."}
-  injections (atom nil :validator (fn [x] (or (nil? x) (coll? x)))))
+  ^{:doc "The form in injection is evaluated prior to each evaluation of a form in the REPL, in a try-catch."}
+  injection (atom nil))
 
 (defn env-map []
   {:*ns* *ns*
@@ -50,7 +49,8 @@
       (binding [*err* *out*] ;; not sure about this
         (prn
           (let [res (eval
-                      `(do ~(when-let [inj (seq @injections)] (cons 'do inj))
+                      `(do ~(when-let [inj @injection]
+                              `(try ~inj (catch Exception e# e#)))
                            ~frm))]
             (update-repl-env repl-env)
             res))))))
