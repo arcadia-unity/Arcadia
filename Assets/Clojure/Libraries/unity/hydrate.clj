@@ -8,7 +8,7 @@
             Transform]))
 
 (defn specload-fn
-  [& key-transforms]
+  [key-transforms]
   (let [trns (mapv vec (partition 2 key-transforms))]
     (fn [csym specsym]
       (reduce
@@ -18,6 +18,38 @@
             c))
         csym
         trns))))
+
+(defn hydrater-fn [^System.MonoType type, specload]
+  (fn [^GameObject obj, spec]
+    (specload
+      (.AddComponent obj type)
+      spec)))
+
+(def component-hydration-dispatch
+  (atom default-hydration-dispatch
+    :validator (fn [m] (and (map? m)))))
+
+(def default-tag-type-table
+  {:transform Transform})
+
+(declare default-component-hydration-dispatch)
+
+(def tag-type-table
+  (atom default-tag-type-table))
+
+(defn hydrate-component [obj tag spec]
+  (when-let [chd @component-hydration-dispatch
+             f (or (chd tag)
+                 (chd (@tag-type-table tag)))]
+    (f obj spec)))
+
+(defn hydrate-GameObject [obj]
+  (reduce-kv
+    hydrate-component
+    (init-GameObject obj)
+    (component-data obj)))
+
+;; ------------------------------------------------------
 
 (defmacro setter
   ([type field] `(qwik-setter ~type ~field hydrate))
@@ -46,36 +78,37 @@
 
 (def transform-specload
   (specload-fn
-    :local-position     (setter Transform localPosition v3)
-    :local-rotation     (setter Transform localRotation quat)
-    :local-scale        (setter Transform localScale v3)
-    :local-euler-angles (setter Transform eulerAngles v3)
-    :euler-angles       (setter Transform eulerAngles v3)
-    :position           (setter Transform position v3)
-    :forward            (setter Transform forward v3)
-    :right              (setter Transform right v3)
-    :up                 (setter Transform up v3)))
+    [:local-position     (setter Transform localPosition v3)
+     :local-rotation     (setter Transform localRotation quat)
+     :local-scale        (setter Transform localScale v3)
+     :local-euler-angles (setter Transform eulerAngles v3)
+     :euler-angles       (setter Transform eulerAngles v3)
+     :position           (setter Transform position v3)
+     :forward            (setter Transform forward v3)
+     :right              (setter Transform right v3)
+     :up                 (setter Transform up v3)]))
 
-(defn hydrate-Transform ^Transform
-  [^GameObject obj, spec]
-  (transform-specload
-    (.AddComponent obj Transform)
-    spec))
+(def collider-specloadspec ;; fnd bttr nm
+  [:attachedRigidbody (setter Transform RigidBody)
+   :bounds            ()
+   :enabled           ()
+   :isTrigger         
+   :material
+   :sharedMaterial])
+
+(def collider-specload
+  (specload-fn collider-specloadspec))
+
+(def boxcollider-specloadspec
+  (concat
+    collider-specloadspec
+    [:center (setter BoxCollider center v3)
+     :size   (setter BoxCollider size v3)]))
+
+(def boxcollider-specload
+  (specload-fn boxcollider-specloadspec))
 
 (def default-component-hydration-dispatch
-  {:transform hydrate-transform
-   Transform hydrate-Transform})
-
-(def component-hydration-dispatch
-  (atom default-hydration-dispatch
-    :validator (fn [m] (and (map? m)))))
-
-(defn hydrate-component [obj tag spec]
-  (when-let [f (@component-hydration-dispatch tag)]
-    (f obj spec)))
-
-(defn hydrate-GameObject [obj]
-  (reduce-kv
-    hydrate-component
-    (init-GameObject obj)
-    (component-data obj)))
+  {Transform   (hydrater-fn Transform #'transform-specload)
+   Collider    (hydrater-fn Collider #'collider-specload)
+   BoxCollider (hydrater-fn BoxCollider #'boxcollider-specload)})
