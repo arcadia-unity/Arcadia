@@ -7,6 +7,8 @@
             Vector4
             Transform]))
 
+;; could easily be a more principled way to do this using Unity's serialization format or whatever
+
 (defn specload-fn
   [key-transforms]
   (let [trns (mapv vec (partition 2 key-transforms))]
@@ -29,10 +31,9 @@
   (atom default-hydration-dispatch
     :validator (fn [m] (and (map? m)))))
 
-(def default-tag-type-table
-  {:transform Transform})
-
-(declare default-component-hydration-dispatch)
+(declare
+  default-tag-type-table
+  default-component-hydration-dispatch)
 
 (def tag-type-table
   (atom default-tag-type-table))
@@ -112,3 +113,8 @@
   {Transform   (hydrater-fn Transform #'transform-specload)
    Collider    (hydrater-fn Collider #'collider-specload)
    BoxCollider (hydrater-fn BoxCollider #'boxcollider-specload)})
+
+(def default-tag-type-table
+  {:transform Transform
+   :collider Collider
+   :boxcollider BoxCollider})
