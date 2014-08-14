@@ -39,7 +39,7 @@
 (defn type-of-reference [x env]
   (or (tag-type x) ; tagged symbol
       (when (contains? env x) (type-of-local-reference x env)) ; local
-      (tag-type (resolve x)))) ; reference to tagged var, or whatever 
+      (when (symbol? x) (tag-type (resolve x))))) ; reference to tagged var, or whatever 
 
 ;; really ought to be testing for arity as well
 (defn type-has-method? [t mth]
@@ -47,7 +47,7 @@
 
 ;; maybe we should be passing full method sigs around rather than
 ;; method names. 
-(defn known-implementer-reference? [x method-name env] 
+(defn known-implementer-reference? [x method-name env]
   (boolean
     (when-let [tor (type-of-reference x env)]
       (type-has-method? tor method-name))))
