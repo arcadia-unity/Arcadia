@@ -7,11 +7,15 @@
             Vector4
             Transform]))
 
+
 (defprotocol IHydrate
   (hydrate [this]))
 
 (defprotocol IHydrateComponent
-  (hydrate-component [this obj]))
+  (hydrate-component [this obj type-tag]))
+
+(defprotocol IGameObject
+  (component-data [this]))
 
 ;; maybe this is a bad idea
 (extend-protocol IHydrate
@@ -78,7 +82,8 @@
     spec))
 
 (def default-component-hydration-dispatch
-  {:transform hydrate-transform})
+  {:transform hydrate-transform
+   Transform hydrate-Transform})
 
 (def component-hydration-dispatch
   (atom default-hydration-dispatch
@@ -86,6 +91,19 @@
 
 (extend-protocol IHydrateComponent
   clojure.lang.MapEquivalence
-  (hydrate-component [this, obj]
-    (when-let [t (:type this)]
-      ((@component-hydration-dispatch t) obj this))))
+  (hydrate-component [this, obj, type-tag]
+    ((@component-hydration-dispatch type-tag) obj this)))
+
+(extend-protocol IGameObject
+  clojure.lang.MapEquivalence
+  (hydrate-component [this, obj, type-tag]
+    ((@component-hydration-dispatch type-tag) obj this)))
+
+;; maybe this should be IHydrateGameObject?
+(extend-protocol IHydrate
+  clojure.lang.MapEquivalence
+  (hydrate [this]
+    (reduce
+      #(hydrate-component this %)
+      (init-gameobject this)
+      (component-data this))))
