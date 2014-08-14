@@ -35,12 +35,13 @@
         csym
         trns))))
 
-;; janky sugar, strictly internal convenience
-(defmacro qwik-setter [type field field-hydrater]
-  (let [csym (with-meta (gensym) {:tag type})]
-    `(fn [~csym v#]
-       (set! (. ~csym field)
-         (~field-hydrater v#)))))
+(defmacro setter
+  ([type field] `(qwik-setter ~type ~field hydrate))
+  ([type field field-hydrater]
+     (let [csym (with-meta (gensym) {:tag type})]
+       `(fn [~csym v#]
+          (set! (. ~csym field)
+            (~field-hydrater v#))))))
 
 (defn hydrate-Vector3 [x]
   (cond
@@ -49,16 +50,16 @@
 (def transform-specload
   (specload-fn 
     :local-position
-    (qwik-setter Transform localPosition hydrate-Vector3)
+    (setter Transform localPosition)
 
     :local-rotation
-    (qwik-setter Transform localRotation hydrate-Vector3)
+    (setter Transform localRotation)
 
     :local-scale
-    (qwik-setter Transform localScale hydrate-Vector3)
+    (setter Transform localScale)
     
     :euler-angles
-    (qwik-setter Transform eulerAngles hydrate-Vector3)))
+    (setter Transform eulerAngles)))
 
 (defn hydrate-Transform ^Transform
   [^GameObject obj, spec]
