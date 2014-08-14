@@ -7,25 +7,6 @@
             Vector4
             Transform]))
 
-
-(defprotocol IHydrate
-  (hydrate [this]))
-
-(defprotocol IHydrateComponent
-  (hydrate-component [this obj type-tag]))
-
-(defprotocol IGameObject
-  (component-data [this]))
-
-;; maybe this is a bad idea
-(extend-protocol IHydrate
-  clojure.lang.PersistentVector
-  (hydrate [v]
-    (case (count v)
-      2 (let [[x y] v] (Vector3. x y ))
-      3 (let [[x y z] v] (Vector3. x y z))
-      4 (let [[x y z w] v] (Vector3. x y z w)))))
-
 (defn specload-fn
   [& key-transforms]
   (let [trns (mapv vec (partition 2 key-transforms))]
@@ -89,21 +70,12 @@
   (atom default-hydration-dispatch
     :validator (fn [m] (and (map? m)))))
 
-(extend-protocol IHydrateComponent
-  clojure.lang.MapEquivalence
-  (hydrate-component [this, obj, type-tag]
-    ((@component-hydration-dispatch type-tag) obj this)))
+(defn hydrate-component [obj tag spec]
+  (when-let [f (@component-hydration-dispatch tag)]
+    (f obj spec)))
 
-(extend-protocol IGameObject
-  clojure.lang.MapEquivalence
-  (hydrate-component [this, obj, type-tag]
-    ((@component-hydration-dispatch type-tag) obj this)))
-
-;; maybe this should be IHydrateGameObject?
-(extend-protocol IHydrate
-  clojure.lang.MapEquivalence
-  (hydrate [this]
-    (reduce
-      #(hydrate-component this %)
-      (init-gameobject this)
-      (component-data this))))
+(defn hydrate-GameObject [obj]
+  (reduce-kv
+    hydrate-component
+    (init-GameObject obj)
+    (component-data obj)))
