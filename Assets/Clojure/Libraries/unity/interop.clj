@@ -53,17 +53,21 @@
       (type-has-method? tor method-name))))
 
 (defmacro get-component* [obj t]
-  (cond
-    (contains? &env t)
-    `(.GetComponent ~obj ~t)
+  (if-not (symbol? obj) ;; shouldn't have to do this
+    `(let [obj# ~obj]
+       (unity.interop/get-component* obj# ~t))
+    (cond
+      (contains? &env t)
+      `(.GetComponent ~obj ~t)
 
-    (and
-      (known-implementer-reference? obj 'GetComponent &env)
-      (type-name? t))
-    `(.GetComponent ~obj (~'type-args ~t))
 
-    :else
-    `(.GetComponent ~obj ~t)))
+      (and
+        (known-implementer-reference? obj 'GetComponent &env)
+        (type-name? t))
+      `(.GetComponent ~obj (~'type-args ~t))
+
+      :else
+      `(.GetComponent ~obj ~t))))
 
 ;; sadly I'm not sure this will actually warn us at runtime; I think
 ;; the reflection warning occurs when we compile get-component, not
