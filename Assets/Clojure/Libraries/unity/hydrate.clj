@@ -7,7 +7,9 @@
             Vector4
             Transform]))
 
-;; could easily be a more principled way to do this using Unity's serialization format or whatever
+;; everything here is stupid, shouldn't be typing this out by hand.
+;; scan the unity api and assemble all the necessary hydration stuff
+;; automatically like a civilized human being
 
 (defn specload-fn
   [key-transforms]
