@@ -65,7 +65,7 @@
                   {:tag typ})
         skcs (setter-key-clauses targsym typ vsym)
         fn-inner-name (symbol (str "setter-fn-for-" typ))]
-    `(fn ~fn-inner-name ~[targsym [ksym vsym]] 
+    `(fn ~fn-inner-name ~[targsym ksym vsym] 
        (case ~ksym
          ~@skcs
          ~targsym))))
@@ -73,18 +73,18 @@
 (defn prepare-spec [spec]
   (dissoc spec :type))
 
-(defn generate-setter-form [^System.MonoType typ]
+(defn setter-form [^System.MonoType typ]
   (let [targsym  (with-meta (gensym "setter-target") {:tag typ})
         specsym  (gensym "spec")
         sr       (setter-reducing-fn-form typ)]
     `(fn [~targsym spec#]
-       (reduce
+       (reduce-kv
          ~sr
          ~targsym
          (unity.hydrate/prepare-spec spec#)))))
 
 (defn generate-setter [typ]
-  (eval (generate-setter-form type)))
+  (eval (setter-form type)))
 
 (defn all-component-types []
   (->>
@@ -102,8 +102,19 @@
 
 (comment ;; this works well, but each type takes about 500
          ;; milliseconds, and there are 80 built-in component types
-         ;; alone. hrm.
+         ;; alone. hrm. would it be that slow if we did it as a macro?
   (refresh-component-setter-database))
+
+(defmacro refresh-component-setter-database-as-a-macro
+  ([& [n]]
+     (let [types (if (or (not n) (= n :all))
+                   (all-component-types)
+                   (take n (all-component-types)))
+           sfs   (map generate-setter-form types)]
+       `(let [ts# [~@types]]
+          (reset! unity.hydrate/component-setter-database ;; GOT to fix backquote!!
+            (zipmap [~@types]
+              [~@sfs]))))))
 
 (comment
   (defn set-members [c spec]
@@ -111,3 +122,5 @@
 
   (defn hydrate-component [^GameObject obj, spec]
     (set-members (initialize-component obj, spec) spec)))
+
+
