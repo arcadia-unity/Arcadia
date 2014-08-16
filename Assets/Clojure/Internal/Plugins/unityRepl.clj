@@ -48,10 +48,15 @@
     (with-out-str
       (binding [*err* *out*] ;; not sure about this
         (prn
-          (let [res (eval
-                      `(do ~(when-let [inj @injection]
-                              `(try ~inj (catch Exception e# e#)))
-                           ~frm))]
+          (let [res (eval 
+                      `(do
+                         ~(when-let [inj @injection]
+                            `(try ~inj
+                                  (catch Exception e#
+                                    (do
+                                      (println e#)
+                                      (reset! injection nil)))))
+                         ~frm))]
             (update-repl-env repl-env)
             res))))))
 

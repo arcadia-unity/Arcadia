@@ -7,9 +7,8 @@
            [System.Reflection Assembly]
            System.AppDomain))
 
-;; everything here is stupid, shouldn't be typing this out by hand.
-;; scan the unity api and assemble all the necessary hydration stuff
-;; automatically like a civilized human being
+;; BUG: !!!BACKQUOTE IS BROKEN!!! but maybe that's because our repl is broken?
+;; BUG: case doesn't work for types!
 
 ;; first pass via reflection
 
@@ -18,6 +17,8 @@
 (defmacro cast-as [x type]
   (let [xsym (with-meta (gensym "caster_") {:tag type})]
     `(let [~xsym ~x] ~xsym)))
+
+;; seem to be fucking up backquoted macro references?
 
 (defn camels-to-hyphens [s]
   (string/replace s #"([a-z])([A-Z])" "$1-$2"))
@@ -51,32 +52,37 @@
   (let [valsym (with-meta (gensym) {:tag typ})]
     (apply concat
       (for [{n :name, :as setable} (setables typ)
-            :let [st (type-for-setable setable)]
+            :let [styp (type-for-setable setable)]
             k  (keys-for-setable setable)]
         `[~k (set! (. ~targsym ~n) 
-               (cast-as ~vsym ~typ))]))))
+               (unity.hydrate/cast-as ~vsym ~styp))]))))
 
-;; BUG: case doesn't work for types!
+
 (defn setter-reducing-fn-form [^System.MonoType typ]
-  (let [ksym (gensym "spec-key")
-        vsym (gensym "spec-val")
-        targsym (gensym "targ")
-        skcs (setter-key-clauses targsym typ vsym)]
-    `(fn [targ# [~ksym ~vsym]] 
+  (let [ksym (gensym "spec-key_")
+        vsym (gensym "spec-val_")
+        targsym (with-meta (gensym "targ")
+                  {:tag typ})
+        skcs (setter-key-clauses targsym typ vsym)
+        fn-inner-name (symbol (str "setter-fn-for-" typ))]
+    `(fn ~fn-inner-name [~targsym [~ksym ~vsym]] 
        (case ~ksym
-         ~@setter-key-clauses))))
+         ~@skcs))))
 
-(defn generate-setter [^System.MonoType t]
-  (let [targsym  (with-meta (gensym "setter-target") {:tag type})
+(defn prepare-spec [spec]
+  (dissoc spec :type))
+
+(defn generate-setter [^System.MonoType typ]
+  (let [targsym  (with-meta (gensym "setter-target") {:tag typ})
         specsym  (gensym "spec")
         ;;pipeline (setter-pipeline-form t targsym specsym)
-        sr       (setter-reducing-fn-form t targsym)]
+        sr       (setter-reducing-fn-form typ)]
     (eval
       `(fn [~targsym spec#]
          (reduce
            ~sr
            ~targsym
-           (prepare-spec spec#))))))
+           (unity.hydrate/prepare-spec spec#))))))
 
 (defn all-component-types []
   (->>
@@ -84,8 +90,9 @@
     (mapcat #(.GetTypes %))
     (filter #(isa? % UnityEngine.Component))))
 
-(defn set-members [c spec]
-  ((setter spec) c spec))
+(comment
+  (defn set-members [c spec]
+    ((setter spec) c spec))
 
-(defn hydrate-component [^GameObject obj, spec]
-  (set-members (initialize-component obj, spec) spec))
+  (defn hydrate-component [^GameObject obj, spec]
+    (set-members (initialize-component obj, spec) spec)))
