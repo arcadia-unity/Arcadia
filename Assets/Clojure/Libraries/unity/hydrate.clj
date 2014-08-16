@@ -73,16 +73,18 @@
 (defn prepare-spec [spec]
   (dissoc spec :type))
 
-(defn generate-setter [^System.MonoType typ]
+(defn generate-setter-form [^System.MonoType typ]
   (let [targsym  (with-meta (gensym "setter-target") {:tag typ})
         specsym  (gensym "spec")
         sr       (setter-reducing-fn-form typ)]
-    (eval
-      `(fn [~targsym spec#]
-         (reduce
-           ~sr
-           ~targsym
-           (unity.hydrate/prepare-spec spec#))))))
+    `(fn [~targsym spec#]
+       (reduce
+         ~sr
+         ~targsym
+         (unity.hydrate/prepare-spec spec#)))))
+
+(defn generate-setter [typ]
+  (eval (generate-setter-form type)))
 
 (defn all-component-types []
   (->>
@@ -98,7 +100,9 @@
     (reset! component-setter-database
       (zipmap types (map generate-setter types)))))
 
-(comment
+(comment ;; this works well, but each type takes about 500
+         ;; milliseconds, and there are 80 built-in component types
+         ;; alone. hrm.
   (refresh-component-setter-database))
 
 (comment
