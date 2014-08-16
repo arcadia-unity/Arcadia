@@ -65,9 +65,10 @@
                   {:tag typ})
         skcs (setter-key-clauses targsym typ vsym)
         fn-inner-name (symbol (str "setter-fn-for-" typ))]
-    `(fn ~fn-inner-name [~targsym [~ksym ~vsym]] 
+    `(fn ~fn-inner-name ~[targsym [ksym vsym]] 
        (case ~ksym
-         ~@skcs))))
+         ~@skcs
+         ~targsym))))
 
 (defn prepare-spec [spec]
   (dissoc spec :type))
@@ -75,7 +76,6 @@
 (defn generate-setter [^System.MonoType typ]
   (let [targsym  (with-meta (gensym "setter-target") {:tag typ})
         specsym  (gensym "spec")
-        ;;pipeline (setter-pipeline-form t targsym specsym)
         sr       (setter-reducing-fn-form typ)]
     (eval
       `(fn [~targsym spec#]
@@ -89,6 +89,17 @@
     (.GetAssemblies AppDomain/CurrentDomain)
     (mapcat #(.GetTypes %))
     (filter #(isa? % UnityEngine.Component))))
+
+(def component-setter-database
+  (atom {} :validator map?))
+
+(defn refresh-component-setter-database []
+  (let [types (all-component-types)]
+    (reset! component-setter-database
+      (zipmap types (map generate-setter types)))))
+
+(comment
+  (refresh-component-setter-database))
 
 (comment
   (defn set-members [c spec]
