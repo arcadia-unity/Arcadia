@@ -8,8 +8,6 @@
            System.AppDomain))
 
 ;; BUG: !!!BACKQUOTE IS BROKEN!!! but maybe that's because our repl is broken?
-;; BUG: case doesn't work for types!
-
 ;; first pass via reflection
 
 ;; setter things take a component and a spec and set things for them.
@@ -104,17 +102,24 @@
          ;; milliseconds, and there are 80 built-in component types
          ;; alone. hrm. would it be that slow if we did it as a macro?
   (refresh-component-setter-database))
+;;; fdf
 
 (defmacro refresh-component-setter-database-as-a-macro
   ([& [n]]
      (let [types (if (or (not n) (= n :all))
                    (all-component-types)
                    (take n (all-component-types)))
-           sfs   (map generate-setter-form types)]
+           sfs   (map setter-form types)]
        `(let [ts# [~@types]]
           (reset! unity.hydrate/component-setter-database ;; GOT to fix backquote!!
             (zipmap [~@types]
               [~@sfs]))))))
+
+(defn register-component [type]
+  (let [s (generate-setter type)]
+    (swap! component-setter-database ;; maybe it should be an agent
+      (fn [db]
+        (assoc db type s)))))
 
 (comment
   (defn set-members [c spec]
