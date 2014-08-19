@@ -2,6 +2,7 @@
   (:require [unity.map-utils :as mu]
             [unity.seq-utils :as su]
             [unity.reflect-utils :as ru]
+            [unity.hydration-forms :as hf]
             [clojure.string :as string])
   (:import UnityEditor.AssetDatabase
            [System.Reflection Assembly]
@@ -21,12 +22,15 @@
 (defn camels-to-hyphens [s]
   (string/replace s #"([a-z])([A-Z])" "$1-$2"))
 
+(defn nice-keyword [s]
+  (keyword (string/lower-case (camels-to-hyphens s))))
+
 ;; generate more if you feel it worth testing for
 (defn keys-for-setable [{n :name}]
-  [(keyword (string/lower-case (camels-to-hyphens (name n))))])
+  [(nice-keyword (name n))])
 
-(defn type-for-setable [{typ :type}]
-  typ) ;; good enough for now
+(defn type-for-setable [sm]
+  (:type sm)) ;; good enough for now
 
 (defn setable-properties [typ]
   (ru/properties typ))
@@ -45,23 +49,27 @@
     (setable-properties typ)
     (setable-fields typ)))
 
+(defn hydration-form [hdb, typ, vsym]
+  (if-let [[_ form-fn] (find (:hydration-form-fns hdb) typ)]
+    (form-fn hdb vsym)
+    `(unity.hydrate/cast-as ~vsym ~typ)))
+
 ;; insert converters etc here if you feel like it
-(defn setter-key-clauses [targsym typ vsym]
+(defn setter-key-clauses [hdb, targsym typ vsym]
   (let [valsym (with-meta (gensym) {:tag typ})]
     (apply concat
       (for [{n :name, :as setable} (setables typ)
-            :let [styp (type-for-setable setable)]
+            :let [styp (type-for-setable setable)
+                  hf (hydration-form hdb styp vsym)]
             k  (keys-for-setable setable)]
-        `[~k (set! (. ~targsym ~n) 
-               (unity.hydrate/cast-as ~vsym ~styp))]))))
+        `[~k (set! (. ~targsym ~n) ~hf)]))))
 
-
-(defn setter-reducing-fn-form [^System.MonoType typ]
+(defn setter-reducing-fn-form [hdb, ^System.MonoType typ]
   (let [ksym (gensym "spec-key_")
         vsym (gensym "spec-val_")
         targsym (with-meta (gensym "targ")
                   {:tag typ})
-        skcs (setter-key-clauses targsym typ vsym)
+        skcs (setter-key-clauses targsym hdb typ vsym)
         fn-inner-name (symbol (str "setter-fn-for-" typ))]
     `(fn ~fn-inner-name ~[targsym ksym vsym] 
        (case ~ksym
@@ -71,18 +79,18 @@
 (defn prepare-spec [spec]
   (dissoc spec :type))
 
-(defn setter-form [^System.MonoType typ]
+(defn setter-form [hdb, ^System.MonoType typ]
   (let [targsym  (with-meta (gensym "setter-target") {:tag typ})
         specsym  (gensym "spec")
-        sr       (setter-reducing-fn-form typ)]
+        sr       (setter-reducing-fn-form hdb typ)]
     `(fn [~targsym spec#]
        (reduce-kv
          ~sr
          ~targsym
          (unity.hydrate/prepare-spec spec#)))))
 
-(defn generate-setter [typ]
-  (eval (setter-form type)))
+(defn generate-setter [hdb type]
+  (eval (setter-form hdb type)))
 
 (defn all-component-types []
   (->>
@@ -90,13 +98,48 @@
     (mapcat #(.GetTypes %))
     (filter #(isa? % UnityEngine.Component))))
 
+(defn key-for-type [^System.MonoType t] ;; hope this works
+  (nice-keyword (.Name t)))
+
+(defn expand-map-to-type-kws [m] ;; bit particular
+  (merge m (mu/map-keys m key-for-type)))
+
+(defn default-component-setter-database []
+  ;; potentially bit of a bootstrapping issue here; stuart sierra's
+  ;; component lib would be nice
+  (let [m0 {:hydration-setters {} 
+            :hydration-form-fns {}}]
+    (-> m0
+      (assoc m0
+        :hydration-setters
+        (expand-map-to-type-kws
+          (let [vsym (gensym "vsym_")]
+            (mu/map-vals
+              hf/default-misc-hydration-form-fns
+              (fn [ffn] ;; won't be fast. find a macro or something to do this?
+                (let [hf (ffn m0 vsym)]
+                  (eval `(fn [~vsym] ~hf)))))))
+        
+        :hydration-form-fns
+        hf/default-misc-hydration-form-fns))))
+
 (def component-setter-database
-  (atom {} :validator map?))
+  (atom (default-component-setter-database)
+    :validator (fn [m]
+                 (and
+                   (map? m)
+                   (contains? m :hydration-setters)
+                   (contains? m :hydration-form-fns)))))
 
 (defn refresh-component-setter-database []
-  (let [types (all-component-types)]
-    (reset! component-setter-database
-      (zipmap types (map generate-setter types)))))
+  (let [types (all-component-types)
+        cm (expand-map-to-type-kws
+             (zipmap types (map generate-setter types)))]
+    (swap! component-setter-database
+      (fn [db]
+        (update-in db [:hydration-setters]
+          (fn [hs]
+            (merge hs cm)))))))
 
 (comment ;; this works well, but each type takes about 500
          ;; milliseconds, and there are 80 built-in component types
@@ -110,16 +153,23 @@
                    (all-component-types)
                    (take n (all-component-types)))
            sfs   (map setter-form types)]
-       `(let [ts# [~@types]]
-          (reset! unity.hydrate/component-setter-database ;; GOT to fix backquote!!
-            (zipmap [~@types]
-              [~@sfs]))))))
+       `(let [cm# (unity.hydrate/expand-map-to-type-kws
+                    (zipmap [~@types]
+                      [~@sfs]))]
+          (swap! unity.hydrate/component-setter-database ;; GOT to fix backquote!!
+            (fn [db]
+              (update-in db [:hydration-setters]
+                (fn [hs]
+                  (merge hs cm#)))))))))
 
 (defn register-component [type]
-  (let [s (generate-setter type)]
+  (let [sm (expand-map-to-type-kws
+             {type (generate-setter component-setter-database type)})]
     (swap! component-setter-database ;; maybe it should be an agent
       (fn [db]
-        (assoc db type s)))))
+        (update-in db [:hydration-setters]
+          (fn [hs]
+            (merge hs sm)))))))
 
 (comment
   (defn set-members [c spec]
@@ -127,5 +177,3 @@
 
   (defn hydrate-component [^GameObject obj, spec]
     (set-members (initialize-component obj, spec) spec)))
-
-
