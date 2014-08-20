@@ -3,7 +3,8 @@
   (:require
    ;;[unity.seq-utils :as su]
    [clojure.reflect :as reflect]
-   [clojure.walk :as walk])
+   [clojure.walk :as walk]
+   [clojure.pprint])
   (:import [clojure.reflect Constructor Method Field Property]))
 
 ;;; This library is motivated by a preference for persistent maps over
