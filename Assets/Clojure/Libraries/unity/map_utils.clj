@@ -1,4 +1,5 @@
-(ns unity.map-utils)
+(ns unity.map-utils
+  (:require clojure.set))
 
 ;;; perhaps this doesn't belong in unity.*, however there are some
 ;;; missing functions (like submap?) whose absence drives me so
