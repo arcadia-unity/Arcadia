@@ -76,6 +76,10 @@
 (defn remove-vals [m pred]
   (filter-vals m (complement pred)))
 
+(defn merge-in [m1 p m2]
+  (if-let [[k & ks] (seq p)] 
+    (assoc m1 k (merge-in (get m1 k) ks m2))
+    (merge m1 m2)))
 
 ;;; better names? there's doubtless some superior category-theoretical
 ;;; way to talk about this, if anyone knows it I'm all ears
