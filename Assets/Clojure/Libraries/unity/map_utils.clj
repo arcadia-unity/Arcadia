@@ -103,3 +103,21 @@
   "Groups keys in m by values and maps them to values."
   [m]
   (clojure.set/map-invert (vk-biject m)))
+
+
+
+;; ============================================================
+;; predicates
+;; ============================================================
+
+(defn every-key? [m pred]
+  (every? pred (keys m)))
+
+(defn every-val? [m pred]
+  (every? pred (vals m)))
+
+(defn some-key [m pred]
+  (some pred (keys m)))
+
+(defn some-val [m pred]
+  (some pred (vals m)))

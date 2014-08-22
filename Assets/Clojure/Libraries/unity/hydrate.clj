@@ -2,7 +2,8 @@
   (:require [unity.map-utils :as mu]
             [unity.seq-utils :as su]
             [unity.reflect-utils :as ru]
-            [clojure.string :as string])
+            [clojure.string :as string]
+            [clojure.set :as sets])
   (:import UnityEditor.AssetDatabase
            [System.Reflection Assembly]
            System.AppDomain))
@@ -12,8 +13,6 @@
 (defmacro cast-as [x type]
   (let [xsym (with-meta (gensym "caster_") {:tag type})]
     `(let [~xsym ~x] ~xsym)))
-
-;; seem to be fucking up backquoted macro references?
 
 (defn camels-to-hyphens [s]
   (string/replace s #"([a-z])([A-Z])" "$1-$2"))
@@ -47,6 +46,14 @@
               (str "Expects symbol or type, instead (type t) = "
                 (type x))))))
 
+;; boy schema would be nice
+(defn valid-hdb? [hdb]
+  (and
+    (when-let [hffs (:hydration-form-fns hdb)]
+      (every? (some-fn symbol? map?) (keys hffs)))
+    (when-let [sts (:setters hdb)]
+      (every? (some-fn symbol? map?) (keys sts)))))
+ 
 (defn keyword-for-type [t]
   (nice-keyword
     (.name ^System.MonoType
@@ -59,8 +66,19 @@
 (defn type-for-setable [{typ :type}]
   typ) ;; good enough for now
 
+(defn extract-property [{:keys [declaring-class
+                                name]}]
+  (first
+    (filter
+      (fn [p] (= (.Name p) (clojure.core/name name)))
+      (.GetProperties ^System.MonoType (resolve declaring-class)))))
+
 (defn setable-properties [typ]
-  (ru/properties (ensure-type typ)))
+  (filter
+    #(and
+       (extract-property %) ;; this is a cop-out, isolate circumstances in which this would return nil later
+       (.CanWrite (extract-property %)))
+    (ru/properties (ensure-type typ))))
 
 (defn setable-fields [typ]
   (->> typ
@@ -78,17 +96,19 @@
 (defn setables [typ]
   (dedup-by :name
     (concat
-      (setable-properties typ)
-      (setable-fields typ))))
+      (setable-fields typ)
+      (setable-properties typ))))
 
 (defn hydration-form [hdb type vsym]
   (assert (symbol? type))
+  (assert (valid-hdb? hdb))
   (if-let [hff (get-in hdb [:hydration-form-fns type])]
     (hff vsym)
     `(cast-as ~vsym ~type)))
 
 ;; insert converters etc here if you feel like it
 (defn setter-key-clauses [hdb targsym typ vsym]
+  (assert (valid-hdb? hdb))
   (let [valsym (with-meta (gensym) {:tag typ})]
     (apply concat
       (for [{n :name, :as setable} (setables typ)
@@ -98,6 +118,7 @@
         `[~k (set! (. ~targsym ~n) ~vhyd)]))))
 
 (defn setter-reducing-fn-form [hdb ^System.MonoType typ]
+  (assert (valid-hdb? hdb))
   (let [ksym (gensym "spec-key_")
         vsym (gensym "spec-val_")
         targsym (with-meta (gensym "targ")
@@ -110,6 +131,7 @@
          ~targsym))))
 
 (defn setter-form [hdb typ]
+  (assert (valid-hdb? hdb))
   (let [typ      (ensure-type-symbol typ)
         targsym  (with-meta (gensym "setter-target") {:tag typ})
         specsym  (gensym "spec")
@@ -121,6 +143,7 @@
          spec#))))
 
 (defn generate-setter [hdb type]
+  (assert (valid-hdb? hdb))
   (eval (setter-form hdb type)))
 
 (defn all-component-types []
@@ -138,19 +161,17 @@
       (mu/filter-keys type?)
       (mu/map-keys keyword-for-type))))
 
-(defn build-setters [hydration-form-fns types]
+(defn build-setters [hdb types]
   (expand-map-to-type-kws
     (zipmap types
-      (map #(generate-setter hydration-form-fns %)
+      (map #(generate-setter hdb %)
         types))))
 
-(defn build-hydration-database [{hffs :hydration-form-fns
-                                 strs :setters
-                                 :or {hffs {}
-                                      strs {}}
-                                 :as hdb0},
-                                types]
-  (mu/merge-in hdb0 (build-setters hffs types)))
+(defn build-hydration-database [hdb, types]
+  (assert (valid-hdb? hdb))
+  (assert (every? symbol? types))
+  (mu/merge-in hdb [:setters]
+    (build-setters hdb types)))
 
 (defn refresh-hydration-database []
   (swap! hydration-database
@@ -163,17 +184,6 @@
          ;; alone. hrm. would it be that slow if we did it as a macro?
   (refresh-hydration-database))
 ;;; fdf
-
-(defmacro refresh-hydration-database-as-a-macro
-  ([& [n]]
-     (let [types (if (or (not n) (= n :all))
-                   (all-component-types)
-                   (take n (all-component-types)))
-           sfs   (map setter-form types)]
-       `(let [ts# [~@types]]
-          (reset! hydration-database 
-            (zipmap [~@types]
-              [~@sfs]))))))
 
 (defn register-component [type]
   (let [s (generate-setter type)]
@@ -227,14 +237,42 @@
   (atom
     {:hydration-form-fns
      (->
-       `{UnityEngine.Vector2    vec2-hyd
-         UnityEngine.Vector3    vec3-hyd
-         UnityEngine.Vector4    vec4-hyd
-         UnityEngine.Quaternion quat-hyd}
+       `{;; UnityEngine.Vector2    vec2-hyd
+         ;; UnityEngine.Vector3    vec3-hyd
+         ;; UnityEngine.Vector4    vec4-hyd
+         ;; UnityEngine.Quaternion quat-hyd
+         }
        (mu/map-vals
          (fn [fsym]
            (fn [vsym]
              `(~fsym ~vsym)))))
-     :setters {}}))
+     :setters {}}
+    :validator valid-hdb?))
 
+(defmacro refresh-hydration-database-as-a-macro []
+  (do (refresh-hydration-database)
+      nil))
+
+
+(def eval-counter-extreme
+  (atom []))
+
+
+(defmacro eval-extreme-macro []
+  (do
+    (swap! eval-counter-extreme
+      #(conj % :eval-extreme-macro))
+      nil))
+
+(defn eval-extreme-fn []
+  (do
+    (swap! eval-counter-extreme
+      #(conj % :eval-extreme-fn))
+      nil))
+
+(eval-extreme-macro)
+
+(eval-extreme-fn)
+
+;;(refresh-hydration-database)
 
