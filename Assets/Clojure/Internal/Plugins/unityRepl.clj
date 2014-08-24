@@ -2,6 +2,10 @@
   (:refer-clojure :exclude [with-bindings])
   (:require [clojure.main :as main]))
 
+(def
+  ^{:doc "The form in injection is evaluated prior to each evaluation of a form in the REPL, in a try-catch."}
+  injection (atom nil))
+
 (defn env-map []
   {:*ns* *ns*
    :*warn-on-reflection* *warn-on-reflection*
@@ -39,14 +43,18 @@
                  *assert* (:*assert* e#)]
          ~@body))))
 
-(defn repl-eval-print [repl-env frm]
+(defn repl-eval-print [repl-env s]
   (with-bindings repl-env
-    (with-out-str
-      (binding [*err* *out*] ;; not sure about this
-        (print
-          (let [res (eval frm)]
-            (update-repl-env repl-env)
-            res))))))
+    (let [frm (read-string s)] ;; need some stuff in here about read-eval maybe
+      (with-out-str
+        (binding [*err* *out*] ;; not sure about this
+          (prn
+            (let [res (eval
+                        `(do ~(when-let [inj @injection]
+                                `(try ~inj (catch Exception e# e#)))
+                             ~frm))]
+              (update-repl-env repl-env)
+              res)))))))
 
 (def default-repl-env
   (binding [*ns* (find-ns 'user)]
@@ -56,4 +64,4 @@
   ([s] (repl-eval-string s *out*))
   ([s out]
      (binding [*out* out]
-       (repl-eval-print default-repl-env (read-string s)))))
+       (repl-eval-print default-repl-env s))))
