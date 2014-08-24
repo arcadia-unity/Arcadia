@@ -1,3 +1,4 @@
+
 (ns unity.hydrate
   (:require [unity.map-utils :as mu]
             [unity.seq-utils :as su]
@@ -46,18 +47,28 @@
               (str "Expects symbol or type, instead (type t) = "
                 (type x))))))
 
+(defn component-type-symbol? [x]
+  (boolean
+    (and (type-symbol? x)
+      (isa? (resolve x)
+        UnityEngine.Component))))
+
 ;; boy schema would be nice
 (defn valid-hdb? [hdb]
   (and
     (when-let [hffs (:hydration-form-fns hdb)]
-      (every? (some-fn symbol? map?) (keys hffs)))
+      (every? (some-fn symbol? keyword?) (keys hffs)))
     (when-let [sts (:setters hdb)]
-      (every? (some-fn symbol? map?) (keys sts)))))
+      (every? (some-fn symbol? keyword?) (keys sts)))))
  
 (defn keyword-for-type [t]
   (nice-keyword
-    (.name ^System.MonoType
+    (.Name ^System.MonoType
       (ensure-type t))))
+
+(defn keyword-for-type-symbol [ts]
+  (assert (type-symbol? ts))
+  (keyword-for-type ts))
 
 ;; generate more if you feel it worth testing for
 (defn keys-for-setable [{n :name}]
@@ -115,7 +126,7 @@
             :let [styp (type-for-setable setable)
                   vhyd (hydration-form hdb styp vsym)]
             k  (keys-for-setable setable)]
-        `[~k (set! (. ~targsym ~n) ~vhyd)]))))
+        `[~k (set! (. ~targsym ~n) (cast-as ~vhyd typ))]))))
 
 (defn setter-reducing-fn-form [hdb ^System.MonoType typ]
   (assert (valid-hdb? hdb))
@@ -155,13 +166,20 @@
 (defn all-component-type-symbols []
   (map type-symbol (all-component-types)))
 
+(defn type-symbol? [x]
+  (boolean
+    (and (symbol? x)
+      (when-let [y (resolve x)]
+        (type? y)))))
+
 (defn expand-map-to-type-kws [m]
   (merge m
     (-> m
-      (mu/filter-keys type?)
-      (mu/map-keys keyword-for-type))))
+      (mu/filter-keys type-symbol?)
+      (mu/map-keys keyword-for-type-symbol))))
 
 (defn build-setters [hdb types]
+  (assert (valid-hdb? hdb))
   (expand-map-to-type-kws
     (zipmap types
       (map #(generate-setter hdb %)
@@ -191,16 +209,47 @@
       (fn [db]
         (assoc db type s)))))
 
-(comment
-  (defn set-members [c spec]
-    ((setter spec) c spec))
+;; ============================================================
+;; core hydraters
+;; ============================================================
 
-  (defn hydrate-component [^GameObject obj, spec]
-    (set-members (initialize-component obj, spec) spec)))
+(defn hydraters
+  ([] (hydraters @hydration-database))
+  ([hdb] (:hydraters hdb)))
+
+(defn init-game-obj ^UnityEngine.GameObject [spec]
+  (let [{:keys [name]} spec]
+    (if name
+      (UnityEngine.GameObject. ^String name)
+      (UnityEngine.GameObject.))))
+
+(defn hydration-type-symbol [hdb x]
+  ((:type-flags-to-type-symbols hdb) x))
+
+(defn component-hydration-type-symbol [k]
+  (if (component-type-symbol?
+        (hydration-type-symbol k))
+    ht
+    nil))
+
+;; need a map from keywords to type-symbols etc
+(defn game-object-hydrater [spec]
+  (let [obj (init-game-obj spec)
+        hs (hydraters)]
+    (reduce-kv
+      (fn [_, k, cspec]
+        (when-let [t (component-hydration-type-symbol k)]
+          ((hs t)
+           (init-component obj cspec)
+           cspec)))
+      nil
+      spec)
+    obj))
 
 ;; ============================================================
 ;; some other setter defs
 ;; ============================================================
+
 
 ;; vector things
 (defmacro def-vectorish-hydrater [name type field-args]
@@ -230,6 +279,28 @@
 (def-vectorish-hydrater quat-hyd, UnityEngine.Quaternion, [x y z w])
 
 ;; ============================================================
+;; hydrate
+;; ============================================================
+
+(defn get-type-flag [x]
+  (cond
+    (map? x)    (:type x)
+    (vector? x) (case (count x) ;; this is stupid
+                  2 'UnityEngine.Vector2
+                  3 'UnityEngine.Vector3
+                  4 'UnityEngine.Vector4
+                  nil)))
+
+(defn hydrate ;; this should have a hdb argument :-(
+  ([spec] (hydrate spec (get-type-flag spec)))
+  ([spec type-flag]
+     (when-let [hdr ((hydraters)
+                     (hydration-type-symbol
+                       @hydration-database
+                       type-flag))]
+       (hdr spec))))
+
+;; ============================================================
 ;; the hydration database itself
 ;; ============================================================
 
@@ -237,7 +308,8 @@
   (atom
     {:hydration-form-fns
      (->
-       `{;; UnityEngine.Vector2    vec2-hyd
+       `{UnityEngine.GameObject    game-object-hydrater
+         ;; UnityEngine.Vector2    vec2-hyd
          ;; UnityEngine.Vector3    vec3-hyd
          ;; UnityEngine.Vector4    vec4-hyd
          ;; UnityEngine.Quaternion quat-hyd
@@ -248,31 +320,78 @@
              `(~fsym ~vsym)))))
      :setters {}}
     :validator valid-hdb?))
+ 
+;; (defmacro refresh-hydration-database-as-a-macro
+;;   ([] `(refresh-hydration-database-as-a-macro
+;;          ~(vec (take 3 (all-component-type-symbols)))))
+;;   ([type-symbols]
+;;      (assert (coll? type-symbols))
+;;      (assert (every? type-symbol? type-symbols))
+;;      (let [hdb       @hydration-database
+;;            sfs       (zipmap type-symbols
+;;                        (map #(setter-form hdb %)
+;;                          type-symbols))
+;;            vsym   (gensym "vsym_")
+;;            hforms (zipmap
+;;                     (map (fn [ts] `(quote ~ts)) type-symbols)
+;;                     (for [t type-symbols]
+;;                       (if-let [hffn (get-in hdb [:hydration-form-fns t])]
+;;                         `(fn ~(with-meta [vsym] {:tag t})
+;;                            ~(hffn vsym))
+;;                         (if-let []
+;;                           ))))]
+;;        `(swap! hydration-database
+;;           (fn [hdb#]
+;;             (merge-in hdb# [:hydraters]
+;;               (expand-map-to-type-kws
+;;                 ~hforms)))))))
 
-(defmacro refresh-hydration-database-as-a-macro []
-  (do (refresh-hydration-database)
-      nil))
 
 
-(def eval-counter-extreme
-  (atom []))
+(defn component-hydrater-form-fn [hdb type-symbol]
+  (let [targsym  (with-meta (gensym "setter-target") {:tag type-symbol})
+        specsym  (gensym "spec")
+        sr       (setter-reducing-fn-form hdb type-symbol)]
+    `(fn [^UnityEngine.GameObject obj#, spec#]
+       (let [~targsym (.AddComponent obj# ~type-symbol)]
+         (reduce-kv
+           ~sr
+           ~targsym
+           spec#)))))
+
+(defn hydrater-form [hdb type-symbol]
+  (assert type-symbol? type-symbol)
+  (assert valid-hdb? hdb)
+  (cond ;; lot of redundancy here, don't like it
+    (get-in hdb [:hydration-form-fns type-symbol])
+    (let [vsym (gensym)]
+      `(fn [~vsym]
+         ~(hydration-form hdb type-symbol vsym)))
+    
+    (component-type-symbol? type-symbol)
+    (component-hydrater-form-fn hdb type-symbol)
+
+    :else
+    'identity))
+
+(defmacro refresh-hydration-database-as-a-macro
+  ([] `(refresh-hydration-database-as-a-macro
+         ~(vec (take 3 (all-component-type-symbols)))))
+  ([type-symbols]
+     (assert (coll? type-symbols))
+     (assert (every? type-symbol? type-symbols))
+     (let [hdb @hydration-database
+           hfm (zipmap
+                 (map (fn [ts] `(quote ~ts))
+                   type-symbols)
+                 (map #(hydrater-form hdb %)
+                   type-symbols))]
+       `(swap! hydration-database
+          (fn [hdb#]
+            (mu/merge-in hdb# [:hydraters]
+              ~hfm))))))
 
 
-(defmacro eval-extreme-macro []
-  (do
-    (swap! eval-counter-extreme
-      #(conj % :eval-extreme-macro))
-      nil))
-
-(defn eval-extreme-fn []
-  (do
-    (swap! eval-counter-extreme
-      #(conj % :eval-extreme-fn))
-      nil))
-
-(eval-extreme-macro)
-
-(eval-extreme-fn)
-
-;;(refresh-hydration-database)
+(comment
+  (refresh-hydration-database-as-a-macro))
 
