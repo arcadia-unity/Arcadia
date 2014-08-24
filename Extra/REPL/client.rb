@@ -2,26 +2,40 @@ require "socket"
 require "io/wait"
 
 $s = TCPSocket.new "localhost", 11211
+$input = ""
 
-def repl_print wait=0.1, strip_nil=false
-  if $s.wait(wait)
-    out = $s.recv($s.nread)
-    puts strip_nil ? out.gsub(/\s*nil$/, "\n\n") : out
-    $prompt = "--> "
-  else
-    $prompt = "... "
-  end
+def balanced? str
+  s = str.clone
+  s.gsub! /[^\(\)\[\]\{\}]/, ""
+  until s.gsub!(/\(\)|\[\]|\{\}/, "").nil?; end
+  s.empty?
+end
+
+def repl_print strip_nil=false
+  $s.wait
+  out = $s.recv($s.nread)
+  puts strip_nil ? out.gsub(/\s*nil$/, "\n\n") : out
+  $prompt = "--> "
+  $input = ""
 end
 
 $s.write DATA.read.strip
-repl_print 0.5, true
+repl_print true
 
 while true
-  print $prompt
-  $stdout.flush
-  input = $stdin.gets
-  $s.write input
-  repl_print
+  if $prompt
+    print $prompt 
+    $stdout.flush
+  end
+  
+  $input += $stdin.gets
+
+  if balanced?($input)
+    $s.write $input
+    repl_print
+  else
+    $prompt = false
+  end
 end
 
 at_exit do
