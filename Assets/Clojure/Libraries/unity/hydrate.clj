@@ -1,4 +1,3 @@
-
 (ns unity.hydrate
   (:require [unity.map-utils :as mu]
             [unity.seq-utils :as su]
@@ -56,6 +55,9 @@
 ;; boy schema would be nice
 (defn valid-hdb? [hdb]
   (and
+    (map? (:type-flags-to-type-symbols hdb))
+    (when-let [hs (:hydraters hdb)]
+      (every? type-symbol? (keys hs)))
     (when-let [hffs (:hydration-form-fns hdb)]
       (every? (some-fn symbol? keyword?) (keys hffs)))
     (when-let [sts (:setters hdb)]
@@ -77,11 +79,13 @@
 (defn type-for-setable [{typ :type}]
   typ) ;; good enough for now
 
+;; TYPE HINT this
 (defn extract-property [{:keys [declaring-class
                                 name]}]
   (first
     (filter
-      (fn [p] (= (.Name p) (clojure.core/name name)))
+      (fn [^System.Reflection.PropertyInfo p]
+        (= (.Name p) (clojure.core/name name)))
       (.GetProperties ^System.MonoType (resolve declaring-class)))))
 
 (defn setable-properties [typ]
@@ -226,11 +230,14 @@
 (defn hydration-type-symbol [hdb x]
   ((:type-flags-to-type-symbols hdb) x))
 
+(defn init-component [^UnityEngine.GameObject obj, type-symbol]
+  (.AddComponent obj ^String (name type-symbol)))
+
 (defn component-hydration-type-symbol [k]
-  (if (component-type-symbol?
-        (hydration-type-symbol k))
-    ht
-    nil))
+  (let [ht (hydration-type-symbol k)]
+    (if (component-type-symbol? ht)
+      ht
+      nil)))
 
 ;; need a map from keywords to type-symbols etc
 (defn game-object-hydrater [spec]
@@ -240,7 +247,7 @@
       (fn [_, k, cspec]
         (when-let [t (component-hydration-type-symbol k)]
           ((hs t)
-           (init-component obj cspec)
+           (init-component obj t)
            cspec)))
       nil
       spec)
@@ -305,7 +312,7 @@
 ;; ============================================================
 
 (def hydration-database
-  (atom
+  (atom 
     {:hydration-form-fns
      (->
        `{UnityEngine.GameObject    game-object-hydrater
@@ -318,7 +325,9 @@
          (fn [fsym]
            (fn [vsym]
              `(~fsym ~vsym)))))
-     :setters {}}
+     ;; :setters {}
+     :hydraters {}
+     :type-flags-to-type-symbols {}}
     :validator valid-hdb?))
  
 ;; (defmacro refresh-hydration-database-as-a-macro
