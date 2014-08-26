@@ -25,9 +25,7 @@
   Type
   (typename
    [t]
-   (if-let [n (.FullName t)]
-     n
-     (.Name t))))
+    (.FullName t)))
 
 (defn- typesym
   "Given a typeref, create a legal Clojure symbol version of the
@@ -208,16 +206,17 @@
         property->map
         (.GetProperties (cast Type cls) basic-binding-flags))))
 
+
 (deftype ClrReflector [a]
   Reflector
   (do-reflect [_ typeref]
-    (let [cls (clojure.lang.RT/classForName (typename typeref))]
-      {:bases (not-empty (set (map typesym (bases cls))))
-       :flags (parse-attributes (.Attributes cls) class-flags)
-       :members (set/union (declared-fields cls)
-                  (declared-properties cls)
-                  (declared-methods cls)
-                  (declared-constructors cls))})))
+           (let [cls (clojure.lang.RT/classForName (typename typeref))]
+             {:bases (not-empty (set (map typesym (bases cls))))
+              :flags (parse-attributes (.Attributes cls) class-flags)
+              :members (set/union (declared-fields cls)
+			                      (declared-properties cls)
+                                  (declared-methods cls)
+                                  (declared-constructors cls))})))
 
 (def ^:private default-reflector
      (ClrReflector. nil))
