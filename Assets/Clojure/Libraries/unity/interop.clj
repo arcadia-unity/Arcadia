@@ -39,7 +39,7 @@
 (defn type-of-reference [x env]
   (or (tag-type x) ; tagged symbol
       (when (contains? env x) (type-of-local-reference x env)) ; local
-      (tag-type (resolve x)))) ; reference to tagged var, or whatever 
+      (when (symbol? x) (tag-type (resolve x))))) ; reference to tagged var, or whatever 
 
 ;; really ought to be testing for arity as well
 (defn type-has-method? [t mth]
@@ -47,23 +47,39 @@
 
 ;; maybe we should be passing full method sigs around rather than
 ;; method names. 
-(defn known-implementer-reference? [x method-name env] 
+(defn known-implementer-reference? [x method-name env]
   (boolean
     (when-let [tor (type-of-reference x env)]
       (type-has-method? tor method-name))))
 
+(defn raise-args [[head & rst]]
+  (let [gsyms (repeatedly (count rst) gensym)]
+    `(let [~@(interleave gsyms rst)]
+       ~(cons head gsyms))))
+
+(defn raise-non-symbol-args [[head & rst]]
+  (let [bndgs (zipmap 
+                (remove symbol? rst)
+                (repeatedly gensym))]
+    `(let [~@(mapcat reverse bndgs)]
+       ~(cons head (replace bndgs rst)))))
+
 (defmacro get-component* [obj t]
-  (cond
-    (contains? &env t)
-    `(.GetComponent ~obj ~t)
+  (if (not-every? symbol? [obj t])
+    (raise-non-symbol-args
+      (list 'unity.interop/get-component* obj t))
+    (cond
+      (contains? &env t)
+      `(.GetComponent ~obj ~t)
 
-    (and
-      (known-implementer-reference? obj 'GetComponent &env)
-      (type-name? t))
-    `(.GetComponent ~obj (~'type-args ~t))
 
-    :else
-    `(.GetComponent ~obj ~t)))
+      (and
+        (known-implementer-reference? obj 'GetComponent &env)
+        (type-name? t))
+      `(.GetComponent ~obj (~'type-args ~t))
+
+      :else
+      `(.GetComponent ~obj ~t))))
 
 ;; sadly I'm not sure this will actually warn us at runtime; I think
 ;; the reflection warning occurs when we compile get-component, not
