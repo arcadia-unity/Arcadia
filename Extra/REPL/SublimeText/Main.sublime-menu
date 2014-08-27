@@ -1,0 +1,33 @@
+[
+     {
+        "id": "tools",
+        "children":
+        [{
+            "caption": "SublimeREPL",
+            "mnemonic": "r",
+            "id": "SublimeREPL",
+            "children":
+            [
+                {"id": "Clojure",
+                 "children":[
+                    {"command": "repl_open", 
+                     "caption": "Unity",
+                     "id": "repl_clojure_unity",
+                     "args": {
+                        "type": "subprocess",
+                        "encoding": "utf8",
+                        "cmd": [
+                            "ruby",
+                            "${packages}/SublimeREPL/config/Clojure/Unity/repl.rb",
+                            "$editor"
+                        ],
+                        "cwd": "$file_path",
+                        "syntax": "Packages/Clojure/Clojure.tmLanguage",
+                        "external_id": "clojure"
+                        }
+                    }]
+                }
+            ]  
+        }]
+    }
+]
