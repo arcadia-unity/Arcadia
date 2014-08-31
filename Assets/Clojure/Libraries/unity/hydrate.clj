@@ -37,6 +37,12 @@
 (defn type-symbol [^System.MonoType t]
   (symbol (.FullName t)))
 
+(defn type-symbol? [x]
+  (boolean
+    (and (symbol? x)
+      (when-let [y (resolve x)]
+        (type? y)))))
+ 
 (defn ensure-type-symbol [x]
   (cond
     (symbol? x) x
@@ -170,11 +176,18 @@
 (defn all-component-type-symbols []
   (map type-symbol (all-component-types)))
 
-(defn type-symbol? [x]
-  (boolean
-    (and (symbol? x)
-      (when-let [y (resolve x)]
-        (type? y)))))
+(defn all-value-types []
+  (->>
+    (.GetAssemblies AppDomain/CurrentDomain)
+    (mapcat
+      (fn [^System.AppDomain ad]
+        (.GetTypes ad)))
+    (filter
+      (fn [^System.MonoType t]
+        (.IsValueType t)))))
+
+(defn all-value-type-symbols []
+  (map type-symbol (all-value-types)))
 
 (defn expand-map-to-type-kws [m]
   (merge m
@@ -298,37 +311,37 @@
                   4 'UnityEngine.Vector4
                   nil)))
 
-(defn hydrate ;; this should have a hdb argument :-(
-  ([spec] (hydrate spec (get-type-flag spec)))
-  ([spec type-flag]
-     (when-let [hdr ((hydraters)
-                     (hydration-type-symbol
-                       @hydration-database
-                       type-flag))]
-       (hdr spec))))
+;; (defn hydrate ;; this should have a hdb argument :-(
+;;   ([spec] (hydrate spec (get-type-flag spec)))
+;;   ([spec type-flag]
+;;      (when-let [hdr ((hydraters)
+;;                      (hydration-type-symbol
+;;                        @hydration-database
+;;                        type-flag))]
+;;        (hdr spec))))
 
 ;; ============================================================
 ;; the hydration database itself
 ;; ============================================================
 
-(def hydration-database
-  (atom 
-    {:hydration-form-fns
-     (->
-       `{UnityEngine.GameObject    game-object-hydrater
-         ;; UnityEngine.Vector2    vec2-hyd
-         ;; UnityEngine.Vector3    vec3-hyd
-         ;; UnityEngine.Vector4    vec4-hyd
-         ;; UnityEngine.Quaternion quat-hyd
-         }
-       (mu/map-vals
-         (fn [fsym]
-           (fn [vsym]
-             `(~fsym ~vsym)))))
-     ;; :setters {}
-     :hydraters {}
-     :type-flags-to-type-symbols {}}
-    :validator valid-hdb?))
+;; (def hydration-database
+;;   (atom 
+;;     {:hydration-form-fns
+;;      (->
+;;        `{UnityEngine.GameObject    game-object-hydrater
+;;          ;; UnityEngine.Vector2    vec2-hyd
+;;          ;; UnityEngine.Vector3    vec3-hyd
+;;          ;; UnityEngine.Vector4    vec4-hyd
+;;          ;; UnityEngine.Quaternion quat-hyd
+;;          }
+;;        (mu/map-vals
+;;          (fn [fsym]
+;;            (fn [vsym]
+;;              `(~fsym ~vsym)))))
+;;      ;; :setters {}
+;;      :hydraters {}
+;;      :type-flags-to-type-symbols {}}
+;;     :validator valid-hdb?))
  
 ;; (defmacro refresh-hydration-database-as-a-macro
 ;;   ([] `(refresh-hydration-database-as-a-macro
@@ -354,8 +367,6 @@
 ;;             (merge-in hdb# [:hydraters]
 ;;               (expand-map-to-type-kws
 ;;                 ~hforms)))))))
-
-
 
 (defn component-hydrater-form-fn [hdb type-symbol]
   (let [targsym  (with-meta (gensym "setter-target") {:tag type-symbol})
@@ -400,7 +411,247 @@
             (mu/merge-in hdb# [:hydraters]
               ~hfm))))))
 
-
 (comment
   (refresh-hydration-database-as-a-macro))
+;; ============================================================
+;; ============================================================
+;; second attempt
+;; ============================================================
+;; ============================================================
 
+
+;; ============================================================
+;; populater forms
+;; ============================================================
+
+(defn populater-key-clauses [targsym typ vsym]
+  (assert (type-symbol? typ))
+  (let [valsym (with-meta (gensym) {:tag typ})]
+    (apply concat
+      (for [{n :name, :as setable} (setables (ensure-type typ))
+            :let [styp (type-for-setable setable)]
+            k  (keys-for-setable setable)]
+        `[~k (set! (. ~targsym ~n)
+               (-> (hydrate ~vsym ~typ)
+                 (cast-as ~typ)))]))))
+
+(defn populater-reducing-fn-form [typ]
+  (assert (type-symbol? typ))
+  (let [ksym (gensym "spec-key_")
+        vsym (gensym "spec-val_")
+        targsym (with-meta (gensym "targ_") {:tag typ})
+        skcs (populater-key-clauses targsym typ vsym)
+        fn-inner-name (symbol (str "populater-fn-for_" typ))]
+    `(fn ~fn-inner-name ~[targsym ksym vsym] 
+       (case ~ksym
+         ~@skcs
+         ~targsym))))
+
+(defn populater-form [typ]
+  (assert (type-symbol? typ))
+  (let [targsym  (with-meta (gensym "populater-target_") {:tag typ})
+        specsym  (gensym "spec_")
+        sr       (populater-reducing-fn-form typ)]
+    `(fn [~targsym spec#]
+       (reduce-kv
+         ~sr
+         ~targsym
+         spec#))))
+
+;; ============================================================
+;; hydrater-forms
+;; ============================================================
+
+(defn hydrater-key-clauses [targsym typ vsym]
+  (assert (type-symbol? typ))
+  (let [valsym (with-meta (gensym) {:tag typ})]
+    (apply concat
+      (for [{n :name, :as setable} (setables (ensure-type typ))
+            :let [styp (type-for-setable setable)]
+            k  (keys-for-setable setable)]
+        `[~k (set! (. ~targsym ~n)
+               (-> (hydrate ~vsym ~typ)
+                 (cast-as ~typ)))]))))
+
+(defn hydrater-reducing-fn-form [typ]
+  (assert (type-symbol? typ))
+  (let [ksym (gensym "spec-key_")
+        vsym (gensym "spec-val_")
+        targsym (with-meta (gensym "targ_") {:tag typ})
+        skcs (hydrater-key-clauses targsym typ vsym)
+        fn-inner-name (symbol (str "hydrater-fn-for-" typ))]
+    `(fn ~fn-inner-name ~[targsym ksym vsym] 
+       (case ~ksym
+         ~@skcs
+         ~targsym))))
+
+(defn constructors-spec [type]
+  (assert (type? type))
+  (set (map :parameter-types (ru/constructors type))))
+
+;; janky + reflective 4 now
+(defn constructor-application-count-clauses [typ cvsym cspec]
+  ;; cspec should be:
+  ;; #{[type...]...}
+  (assert (type-symbol? typ))
+  (let [arities (set (map count cspec))
+        dstrsyms (take (max arities)
+                   (repeatedly gensym))]
+    (apply concat
+      (for [cnt arities
+            :let [args (vec (take cnt dstrsyms))]]
+        [cnt
+         `(let [~args ~cvsym]
+            (new ~typ ~@args))]))))
+
+;; can make the following more optimal if it becomes an issue
+(defn constructor-application-form [typ cvsym cspec]
+  (assert (symbol? cvsym))
+  (let [capkc (constructor-application-count-clauses typ cvsym cspec)]
+    `(case (count ~cvsym)
+       ~@capkc
+       (throw
+         (Exception.
+           "Unsupported constructor arity")))))
+
+(defn hydrater-init-form [typ specsym cspec]
+  (assert (type-symbol? typ))
+  (assert (symbol? specsym))
+  (let [cvsym  (gensym "constructor-vec_")
+        capf   (constructor-application-form typ cvsym cspec)]
+    `(if-let [~cvsym (constructor-vec ~specsym)]
+       ~capf
+       ~(if (some #(= 0 (count %)) cspec) 
+          `(new ~typ)
+          `(throw
+             (Exception. 
+               "hydration init requires constructor-vec")))))) ;; find some better exception class
+
+(defn hydrater-form [typ]
+  (assert (type-symbol? typ))
+  (let [specsym  (gensym "spec_")
+        cspec    (constructors-spec (ensure-type typ))
+        sr       (hydrater-reducing-fn-form typ)
+        initf    (hydrater-init-form typ specsym cspec)
+        initsym  (with-meta (gensym "hydrater-target_") {:tag typ})
+        capf     (constructor-application-form typ specsym cspec)]
+    `(fn [~specsym]
+       (cond
+         (instance? ~typ ~specsym)
+         ~specsym
+
+         (vector? ~specsym)
+         ~capf
+
+         (map? specsym)
+         (let [~initsym ~initf]
+           (reduce-kv
+             ~sr
+             ~initsym
+             ~specsym))
+
+         :else
+         (Throw (Exception. "Unsupported hydration spec"))))))
+
+(defn resolve-type-flag [k]
+  ((:type-flags-to-type-symbols
+    @hydration-database)
+   k))
+
+(defn hydrate-game-object ^UnityEngine.GameObject [spec]
+  (let [^UnityEngine.GameObject obj (GameObject.)]
+    (reduce-kv
+      (fn [_ k v]
+        (when-let [^UnityEngine.GameObject t (resolve-type-flag k)]
+          (.AddComponent obj t)))
+      nil
+      (dissoc :type spec))))
+
+
+;; ============================================================
+;; establish database
+;; ============================================================
+
+(defmacro establish-component-populaters-mac [hdb]
+  (let [cts   (all-component-type-symbols)
+        cpfs  (map populater-form cts)
+        cpfmf (zipmap cts cpfs)]
+    `(let [hdb# ~hdb
+           cpfm# ~cpfmf]
+       (mu/merge-in hdb# [:populaters] cpfm#))))
+
+(defmacro establish-value-type-populaters-mac [hdb]
+  (let [vts   (all-value-type-symbols)
+        vpfs  (map populater-form vts)
+        vpfmf (zipmap vts vpfs)]
+    `(let [hdb# ~hdb
+           vpfm# ~vpfmf]
+       (mu/merge-in hdb# [:populaters] vpfm#))))
+
+(defmacro establish-value-type-hydraters-mac [hdb]
+  (let [vts   (all-value-type-symbols)
+        vpfs  (map hydrater-form vts)
+        vpfmf (zipmap vts vpfs)]
+    `(let [hdb# ~hdb
+           vpfm# ~vpfmf]
+       (mu/merge-in hdb# [:populaters] vpfm#))))
+
+(defn establish-type-flags [hdb]
+  ;; put something here 
+  hdb)
+
+;; mathematica isn't picking this up for some horrible reason
+(def default-hydration-database
+  (->
+    {:populaters {}
+     :hydraters {UnityEngine.GameObject hydrate-game-object}
+     :type-flags->types {}}
+    establish-component-populaters-mac
+;;    establish-value-type-populaters-mac 
+;;   establish-value-type-hydraters-mac
+;;   establish-type-flags
+    ))
+
+(def hydration-database
+  (atom default-hydration-database))
+
+;; ============================================================
+;; runtime hydration & configuration
+;; ============================================================
+
+(defn get-hydrate-type-flag [spec]
+  (cond
+    (map? spec)
+    (or
+      (:type spec)
+      UnityEngine.GameObject)
+
+    (vector? spec)
+    (case (count spec) ;; this is still stupid
+      2 UnityEngine.Vector2
+      3 UnityEngine.Vector3
+      4 UnityEngine.Vector4)
+
+    :else
+    (type spec)))
+
+(defn get-populate-type-flag [inst spec] ;; fadfdafasfdafxcz
+  (type inst))
+
+(defn hydrate
+  ([spec]
+     (hydrate spec 
+       (get-hydrate-type-flag spec)))
+  ([spec, type-flag]
+     (let [t (resolve-type-flag type-flag)
+           hfn (get (@hydration-database :hydraters) t)]
+       (hfn spec))))
+
+(defn populate!
+  ([inst spec]
+     (populate! inst spec
+       (get-populate-type-flag inst spec)))
+  ([inst spec type-flag]
+     (let [t (resolve-type-flag type-flag)
+           cfn (get (@hydration-database :configurers) t)]
+       (cfn inst spec))))
