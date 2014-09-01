@@ -8,7 +8,7 @@
            [System.Reflection Assembly]
            System.AppDomain))
 
-(declare hydration-database)
+(declare hydration-database hydrate)
 
 (defmacro cast-as [x type]
   (let [xsym (with-meta (gensym "caster_") {:tag type})]
@@ -432,8 +432,8 @@
             :let [styp (type-for-setable setable)]
             k  (keys-for-setable setable)]
         `[~k (set! (. ~targsym ~n)
-               (-> (hydrate ~vsym ~typ)
-                 (cast-as ~typ)))]))))
+               (-> (populate! ~vsym ~styp)
+                 (cast-as ~styp)))]))))
 
 (defn populater-reducing-fn-form [typ]
   (assert (type-symbol? typ))
@@ -470,8 +470,8 @@
             :let [styp (type-for-setable setable)]
             k  (keys-for-setable setable)]
         `[~k (set! (. ~targsym ~n)
-               (-> (hydrate ~vsym ~typ)
-                 (cast-as ~typ)))]))))
+               (cast-as (hydrate ~vsym ~styp)
+                 ~styp))]))))
 
 (defn hydrater-reducing-fn-form [typ]
   (assert (type-symbol? typ))
@@ -489,7 +489,8 @@
   (assert (type? type))
   (set (map :parameter-types (ru/constructors type))))
 
-;; janky + reflective 4 now
+;; janky + reflective 4 now. Need something to disambiguate dispatch
+;; by argument type rather than arity
 (defn constructor-application-count-clauses [typ cvsym cspec]
   ;; cspec should be:
   ;; #{[type...]...}
@@ -527,6 +528,7 @@
              (Exception. 
                "hydration init requires constructor-vec")))))) ;; find some better exception class
 
+;; some of the tests here feel redundant with those in hydrate
 (defn hydrater-form [typ]
   (assert (type-symbol? typ))
   (let [specsym  (gensym "spec_")
@@ -551,39 +553,54 @@
              ~specsym))
 
          :else
-         (Throw (Exception. "Unsupported hydration spec"))))))
+         (throw (Exception. "Unsupported hydration spec"))))))
 
-(defn resolve-type-flag [k]
-  ((:type-flags-to-type-symbols
-    @hydration-database)
-   k))
+(defn resolve-type-flag [tf]
+  (if (type? tf)
+    tf
+    ((:type-flags->types @hydration-database) tf)))
 
+;; need to expand this for non-component game object members
+;; also need to use constructor logic if that's a thing
 (defn hydrate-game-object ^UnityEngine.GameObject [spec]
-  (let [^UnityEngine.GameObject obj (GameObject.)]
-    (reduce-kv
-      (fn [_ k v]
-        (when-let [^UnityEngine.GameObject t (resolve-type-flag k)]
-          (.AddComponent obj t)))
-      nil
-      (dissoc :type spec))))
-
+  (reduce-kv
+    (fn [^UnityEngine.GameObject obj, k, v]
+      (when-let [^System.MonoType t (resolve-type-flag k)]
+        (.AddComponent obj t))
+      obj)
+    (if-let [n (:name spec)]
+      (UnityEngine.GameObject. n)
+      (UnityEngine.GameObject.))
+    spec))
 
 ;; ============================================================
 ;; establish database
 ;; ============================================================
 
+(defn populater-form-macro-map [tsyms]
+  (->> tsyms
+    (map (juxt
+           identity
+           #(try ;; total hack. Problem with reflect and UnityEngine.Component
+              (populater-form %)
+              (catch Exception e nil))))
+    (filter second)
+    (into {})))
+
 (defmacro establish-component-populaters-mac [hdb]
-  (let [cts   (all-component-type-symbols)
-        cpfs  (map populater-form cts)
-        cpfmf (zipmap cts cpfs)]
+  (let [cpfmf  (->>
+                 ;;(all-component-type-symbols)
+                 '[UnityEngine.Transform]
+                 populater-form-macro-map)]
     `(let [hdb# ~hdb
            cpfm# ~cpfmf]
        (mu/merge-in hdb# [:populaters] cpfm#))))
 
 (defmacro establish-value-type-populaters-mac [hdb]
-  (let [vts   (all-value-type-symbols)
-        vpfs  (map populater-form vts)
-        vpfmf (zipmap vts vpfs)]
+  (let [vpfmf   (->>
+                  ;;(all-value-type-symbols)
+                  '[UnityEngine.Vector3] 
+                  populater-form-macro-map)]
     `(let [hdb# ~hdb
            vpfm# ~vpfmf]
        (mu/merge-in hdb# [:populaters] vpfm#))))
@@ -607,16 +624,16 @@
      :hydraters {UnityEngine.GameObject hydrate-game-object}
      :type-flags->types {}}
     establish-component-populaters-mac
-;;    establish-value-type-populaters-mac 
-;;   establish-value-type-hydraters-mac
-;;   establish-type-flags
+    establish-value-type-populaters-mac 
+    ;;   establish-value-type-hydraters-mac
+    establish-type-flags
     ))
 
 (def hydration-database
   (atom default-hydration-database))
 
 ;; ============================================================
-;; runtime hydration & configuration
+;; runtime hydration & population
 ;; ============================================================
 
 (defn get-hydrate-type-flag [spec]
@@ -627,31 +644,40 @@
       UnityEngine.GameObject)
 
     (vector? spec)
-    (case (count spec) ;; this is still stupid
+    (case (count spec)
       2 UnityEngine.Vector2
       3 UnityEngine.Vector3
-      4 UnityEngine.Vector4)
-
-    :else
-    (type spec)))
-
-(defn get-populate-type-flag [inst spec] ;; fadfdafasfdafxcz
-  (type inst))
+      4 UnityEngine.Vector4)))
 
 (defn hydrate
   ([spec]
-     (hydrate spec 
-       (get-hydrate-type-flag spec)))
+     (hydrate spec (get-hydrate-type-flag spec)))
   ([spec, type-flag]
-     (let [t (resolve-type-flag type-flag)
-           hfn (get (@hydration-database :hydraters) t)]
-       (hfn spec))))
+     (if type-flag
+       (if-let [t (resolve-type-flag type-flag)]
+         (if (or (vector? spec) (map? spec))
+           (if-let [hfn (get (@hydration-database :hydraters) t)]
+             (hfn spec)
+             (throw (Exception. (str "No hydrater found for type " t))))
+           (if (instance? t spec)
+             spec
+             (throw (Exception. (str "spec neither vector, map, nor instance of type " t)))))
+         (throw (Exception. (str "No type found for type-flag " type-flag))))
+       spec)))
+
+(defn get-populate-type-flag [inst spec]
+  (if (map? spec)
+    (or (:type spec) (type inst))
+    (type inst)))
 
 (defn populate!
   ([inst spec]
      (populate! inst spec
        (get-populate-type-flag inst spec)))
-  ([inst spec type-flag]
-     (let [t (resolve-type-flag type-flag)
-           cfn (get (@hydration-database :configurers) t)]
-       (cfn inst spec))))
+  ([inst spec type-flag]     
+     (let [t (resolve-type-flag type-flag)]
+       (if-let [cfn (get (@hydration-database :populaters) t)]
+         (cfn inst spec)
+         (throw Exception.
+           (str "No populater found for type-flag "
+             type-flag))))))

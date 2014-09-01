@@ -33,10 +33,6 @@
       (filter #(instance? member-type %))
       (sort-by :name)
       (map reflection-transform))))
- 
-;; TODO: AOT isn't working correctly here for some reason, might have
-;; something to do with changes to deftype stuff. In a moment rewind
-;; and see if problem still there (shoudln't be).
 
 (defmacro def-member-getter-fn [name member-type]
   `(defn ~name [x# & opts#]
