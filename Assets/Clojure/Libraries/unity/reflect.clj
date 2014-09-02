@@ -1,4 +1,4 @@
-(ns unity.reflect-utils
+(ns unity.reflect
   (:refer-clojure :exclude [methods])
   (:require
    [clojure.reflect :as reflect]

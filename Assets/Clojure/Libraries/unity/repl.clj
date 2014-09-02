@@ -1,4 +1,4 @@
-(ns unityRepl
+(ns unity.repl
   (:refer-clojure :exclude [with-bindings])
   (:require [clojure.main :as main]))
 
@@ -58,7 +58,7 @@
 
 (def default-repl-env
   (binding [*ns* (find-ns 'user)]
-    (doto (atom {}) (unityRepl/update-repl-env))))
+    (doto (atom {}) (unity.repl/update-repl-env))))
 
 (defn repl-eval-string 
   ([s] (repl-eval-string s *out*))
