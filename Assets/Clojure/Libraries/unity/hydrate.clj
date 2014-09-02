@@ -63,18 +63,23 @@
         (= (.Name p) (clojure.core/name name)))
       (.GetProperties ^System.MonoType (resolve declaring-class)))))
 
+;; need: also scan ancestors in when getting fields,
+;; properties. currently some stupid reflection bug.
+
 (defn setable-properties [typ]
   (filter
     #(and
        (extract-property %) ; this is a cop-out, isolate circumstances
                             ; in which this would return nil later
        (.CanWrite (extract-property %)))
-    (ru/properties (ensure-type typ))))
+    (ru/properties (ensure-type typ) ; :ancestors true ; FIX THIS
+      )))
 
 (defn setable-fields [typ]
   (->> typ
     ensure-type
-    ru/fields
+    (ru/fields (ensure-type typ) ; :ancestors true ; FIX THIS
+      )
     (filter
       (fn [{fs :flags}]
         (and
@@ -272,10 +277,8 @@
     tf
     ((:type-flags->types @hydration-database) tf)))
 
-;; need to expand this for non-component game object members
-;; also need to use constructor logic if that's a thing
-;; basically make this match API of hydrater-form
-(defn hydrate-game-object ^UnityEngine.GameObject [spec]
+(defn populate-game-object! ^UnityEngine.GameObject
+  [^UnityEngine.GameObject gob spec]
   (reduce-kv
     (fn [^UnityEngine.GameObject obj, k, v]
       (when-let [^System.MonoType t (resolve-type-flag k)]
@@ -286,10 +289,19 @@
                   (.AddComponent obj t))]
           (populate! c v t)))
       obj)
+    gob
+    spec))
+
+;; need to expand this for non-component game object members
+;; also need to use constructor logic if that's a thing
+;; basically make this match API of hydrater-form
+(defn hydrate-game-object ^UnityEngine.GameObject [spec]
+  (populate-game-object!
     (if-let [^String n (:name spec)]
       (UnityEngine.GameObject. n)
       (UnityEngine.GameObject.))
     spec))
+
 
 ;; ============================================================
 ;; establish database
@@ -309,7 +321,7 @@
 (defmacro establish-component-populaters-mac [hdb]
   (let [cpfmf  (->>
                  (all-component-type-symbols)
-                 ;; '[UnityEngine.Transform]
+                 ;;'[UnityEngine.Transform]
                  (form-macro-map populater-form))]
     `(let [hdb# ~hdb
            cpfm# ~cpfmf]
@@ -317,16 +329,17 @@
 
 (defmacro establish-value-type-populaters-mac [hdb]
   (let [vpfmf   (->>
-                  ;;(all-value-type-symbols) ;; thousands
+                  ;;(all-value-type-symbols) ;; 231
                   '[UnityEngine.Vector3] 
                   (form-macro-map populater-form))]
     `(let [hdb# ~hdb
            vpfm# ~vpfmf]
        (mu/merge-in hdb# [:populaters] vpfm#))))
 
+;; probably faster compile if you consolidate with populaters
 (defmacro establish-value-type-hydraters-mac [hdb]
   (let [vpfmf (->>
-                ;; (all-value-type-symbols) ;; thousands
+                ;; (all-value-type-symbols) ;; 231
                 '[UnityEngine.Vector3]
                 (form-macro-map hydrater-form))]
     `(let [hdb# ~hdb
@@ -348,7 +361,7 @@
 ;; mathematica isn't picking this up for some horrible reason
 (def default-hydration-database
   (->
-    {:populaters {}
+    {:populaters {UnityEngine.GameObject #'populate-game-object!}
      :hydraters {UnityEngine.GameObject #'hydrate-game-object}
      :type-flags->types {}}
     establish-component-populaters-mac
