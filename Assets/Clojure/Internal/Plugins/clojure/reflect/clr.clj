@@ -25,7 +25,9 @@
   Type
   (typename
    [t]
-    (.FullName t)))
+   (if-let [n (.FullName t)]
+     n
+     (.Name t))))
 
 (defn- typesym
   "Given a typeref, create a legal Clojure symbol version of the
