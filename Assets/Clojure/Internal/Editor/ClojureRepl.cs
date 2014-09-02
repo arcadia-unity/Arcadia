@@ -14,7 +14,7 @@ public class ClojureRepl : EditorWindow {
   [MenuItem ("Window/Clojure REPL")]
   static void Init () {
     ClojureRepl window = (ClojureRepl)EditorWindow.GetWindow (typeof (ClojureRepl));
-    RT.load("unityRepl");
+    RT.load("unity.repl");
   }
   
   void OnGUI () {
@@ -78,7 +78,7 @@ public class ClojureRepl : EditorWindow {
 
     Event e = Event.current;
     if (e.type == EventType.KeyDown && e.character == '\n') {
-      var result = RT.var("unityRepl", "repl-eval-string").invoke(input);
+      var result = RT.var("unity.repl", "repl-eval-string").invoke(input);
       Debug.Log("REPL result should be: " + result);
 
       output += input;
