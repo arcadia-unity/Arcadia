@@ -5,7 +5,7 @@
             [clojure.string :as string]
             [clojure.set :as sets])
   (:import UnityEditor.AssetDatabase
-           [System.Reflection Assembly]
+           [System.Reflection Assembly AssemblyName]
            System.AppDomain))
 
 (declare hydration-database hydrate populate!)
@@ -53,9 +53,8 @@
   [(nice-keyword n)])
 
 (defn type-for-setable [{typ :type}]
-  typ) ;; good enough for now
+  typ) ; good enough for now
 
-;; TYPE HINT this
 (defn extract-property [{:keys [declaring-class
                                 name]}]
   (first
@@ -91,32 +90,42 @@
       (setable-fields typ)
       (setable-properties typ))))
 
-(defn all-component-types []
-  (->>
-    (.GetAssemblies AppDomain/CurrentDomain)
-    (mapcat #(.GetTypes %))
-    (filter #(isa? % UnityEngine.Component))))
+(defn load-assembly
+  "Takes string or AssemblyName, returns corresponding Assembly"
+  [assembly-name]
+  (let [^AssemblyName an
+        (cond
+          (instance? AssemblyName assembly-name)
+          assembly-name
+          
+          (string? assembly-name)
+          (AssemblyName. (cast-as assembly-name String))
+          
+          :else
+          (throw (Exception. "Expects AssemblyName or string")))]
+    (System.Reflection.Assembly/Load an)))
+
+(defn all-component-types
+  ([] (all-component-types [(load-assembly "UnityEngine")]))
+  ([assems]
+     (for [^Assembly assem assems
+           ^System.MonoType t (.GetTypes assem)
+           :when (isa? t UnityEngine.Component)]
+       t)))
 
 (defn all-component-type-symbols []
   (map type-symbol (all-component-types)))
 
-(defn all-value-types []
-  (->>
-    (.GetAssemblies AppDomain/CurrentDomain)
-    (mapcat
-      (fn [^System.AppDomain ad]
-        (.GetTypes ad)))
-    (filter
-      (fn [^System.MonoType t]
-        (.IsValueType t)))))
+(defn all-value-types
+  ([] (all-value-types [(load-assembly "UnityEngine")]))
+  ([assems]
+     (for [^Assembly assem assems
+           ^System.MonoType t (.GetTypes assem)
+           :when (.IsValueType t)]
+       t)))
 
 (defn all-value-type-symbols []
   (map type-symbol (all-value-types)))
-
-(comment ;; this works well, but each type takes about 500
-         ;; milliseconds, and there are 80 built-in component types
-         ;; alone. hrm. would it be that slow if we did it as a macro?
-  (refresh-hydration-database))
 
 ;; ============================================================
 ;; populater forms
@@ -191,9 +200,9 @@
 
 ;; janky + reflective 4 now. Need something to disambiguate dispatch
 ;; by argument type rather than arity
-(defn constructor-application-count-clauses [typ cvsym cspec]
-  ;; cspec should be:
-  ;; #{[type...]...}
+(defn constructor-application-count-clauses
+  " cspec should be: #{[type...]...}"
+  [typ cvsym cspec]
   (assert (type-symbol? typ))
   (let [arities (set (map count cspec))
         dstrsyms (take (apply max arities)
@@ -263,7 +272,6 @@
     tf
     ((:type-flags->types @hydration-database) tf)))
 
-
 ;; need to expand this for non-component game object members
 ;; also need to use constructor logic if that's a thing
 ;; basically make this match API of hydrater-form
@@ -272,7 +280,7 @@
     (fn [^UnityEngine.GameObject obj, k, v]
       (when-let [^System.MonoType t (resolve-type-flag k)]
         ;; do something more general if types besides Transform
-        ;; have same prob:
+        ;; have same problem:
         (let [c (if (= UnityEngine.Transform t)
                   (.GetComponent obj t)
                   (.AddComponent obj t))]
@@ -289,18 +297,19 @@
 
 (defn form-macro-map [f tsyms]
   (->> tsyms
-    (map (juxt
-           identity
-           #(try ;; total hack. Problem with reflect and UnityEngine.Component
-              (f %)
-              (catch Exception e nil))))
+    (map
+      (fn [tsym]
+        [tsym,
+         (try ;; total hack. Problem with reflect and UnityEngine.Component
+           (f tsym)
+           (catch Exception e nil))]))
     (filter second)
     (into {})))
 
 (defmacro establish-component-populaters-mac [hdb]
   (let [cpfmf  (->>
-                 ;;(all-component-type-symbols)
-                 '[UnityEngine.Transform]
+                 (all-component-type-symbols)
+                 ;; '[UnityEngine.Transform]
                  (form-macro-map populater-form))]
     `(let [hdb# ~hdb
            cpfm# ~cpfmf]
