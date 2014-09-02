@@ -1,4 +1,4 @@
-(ns unity.map-utils
+(ns unity.internal.map-utils
   (:require clojure.set))
 
 ;;; perhaps this doesn't belong in unity.*, however there are some
