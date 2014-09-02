@@ -31,6 +31,13 @@ class ClojureAssetPostprocessor : AssetPostprocessor {
                         String[] movedAssets,
                         String[] movedFromAssetPaths) {
 
+        if(!ClojureConfiguration.AutoCompile) {
+            foreach(string path in importedAssets) {
+                Debug.Log("Ignoring " + path);
+            }
+            return;
+        }
+
     // dont need to be doing this every 
     SetupLoadPath();
     
