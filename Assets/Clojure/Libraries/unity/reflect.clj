@@ -46,11 +46,3 @@
 (def-member-getter-fn methods clojure.reflect.Method)
 (def-member-getter-fn fields clojure.reflect.Field)
 (def-member-getter-fn properties clojure.reflect.Property)
-
-(defmacro def-member-getter-fn [name member-type]
-  `(defn ~name [x# & opts#]
-     (->> (apply reflect/reflect x# opts#)
-       :members
-       (filter #(instance? ~member-type %))
-       (sort-by :name)
-       (map reflection-transform))))

@@ -1,7 +1,7 @@
 (ns unity.hydrate
-  (:require [unity.map-utils :as mu]
-            [unity.seq-utils :as su]
-            [unity.reflect-utils :as ru]
+  (:require [unity.internal.map-utils :as mu]
+            [unity.internal.seq-utils :as su]
+            [unity.reflect :as ru]
             [clojure.string :as string]
             [clojure.set :as sets])
   (:import UnityEditor.AssetDatabase
@@ -72,13 +72,13 @@
        (extract-property %) ; this is a cop-out, isolate circumstances
                             ; in which this would return nil later
        (.CanWrite (extract-property %)))
-    (ru/properties (ensure-type typ) ; :ancestors true ; FIX THIS
+    (r/properties (ensure-type typ) ; :ancestors true ; FIX THIS
       )))
 
 (defn setable-fields [typ]
   (->> typ
     ensure-type
-    (ru/fields (ensure-type typ) ; :ancestors true ; FIX THIS
+    (r/fields (ensure-type typ) ; :ancestors true ; FIX THIS
       )
     (filter
       (fn [{fs :flags}]
@@ -201,7 +201,7 @@
 
 (defn constructors-spec [type]
   (assert (type? type))
-  (set (map :parameter-types (ru/constructors type))))
+  (set (map :parameter-types (r/constructors type))))
 
 ;; janky + reflective 4 now. Need something to disambiguate dispatch
 ;; by argument type rather than arity
