@@ -1,7 +1,7 @@
 (ns unity.hydrate
   (:require [unity.internal.map-utils :as mu]
             [unity.internal.seq-utils :as su]
-            [unity.reflect :as ru]
+            [unity.reflect :as r]
             [clojure.string :as string]
             [clojure.set :as sets])
   (:import UnityEditor.AssetDatabase
@@ -55,31 +55,27 @@
 (defn type-for-setable [{typ :type}]
   typ) ; good enough for now
 
-(defn extract-property [{:keys [declaring-class
-                                name]}]
+(defn extract-property
+  ^System.Reflection.PropertyInfo
+  [{:keys [declaring-class name]}]
   (first
     (filter
       (fn [^System.Reflection.PropertyInfo p]
         (= (.Name p) (clojure.core/name name)))
       (.GetProperties ^System.MonoType (resolve declaring-class)))))
 
-;; need: also scan ancestors in when getting fields,
-;; properties. currently some stupid reflection bug.
-
 (defn setable-properties [typ]
-  (filter
-    #(and
-       (extract-property %) ; this is a cop-out, isolate circumstances
-                            ; in which this would return nil later
-       (.CanWrite (extract-property %)))
-    (r/properties (ensure-type typ) ; :ancestors true ; FIX THIS
-      )))
+  (->>
+    (r/properties (ensure-type typ) :ancestors true)
+    (filter
+      #(and
+         (extract-property %) ; this is a cop-out, isolate circumstances
+                              ; in which this would return nil later
+         (.CanWrite (extract-property %))))))
 
 (defn setable-fields [typ]
-  (->> typ
-    ensure-type
-    (r/fields (ensure-type typ) ; :ancestors true ; FIX THIS
-      )
+  (->> 
+    (r/fields (ensure-type typ) :ancestors true)
     (filter
       (fn [{fs :flags}]
         (and
@@ -277,17 +273,23 @@
     tf
     ((:type-flags->types @hydration-database) tf)))
 
-(defn populate-game-object! ^UnityEngine.GameObject
+
+(defn- populate-game-object! ^UnityEngine.GameObject
   [^UnityEngine.GameObject gob spec]
   (reduce-kv
-    (fn [^UnityEngine.GameObject obj, k, v]
+    (fn [^UnityEngine.GameObject obj, k, vspecs]
       (when-let [^System.MonoType t (resolve-type-flag k)]
-        ;; do something more general if types besides Transform
-        ;; have same problem:
-        (let [c (if (= UnityEngine.Transform t)
+        (if (= UnityEngine.Transform t)
+          (doseq [cspec vspecs]
+            (let [c (if (= UnityEngine.Transform t))
                   (.GetComponent obj t)
-                  (.AddComponent obj t))]
-          (populate! c v t)))
+                  (.AddComponent obj t)]
+              (populate! c cspec t)))
+          (doseq [cspec vspecs]
+            (let [c 
+                  (.GetComponent obj t)
+                  (.AddComponent obj t)]
+              (populate! c cspec t)))))
       obj)
     gob
     spec))
@@ -320,8 +322,8 @@
 
 (defmacro establish-component-populaters-mac [hdb]
   (let [cpfmf  (->>
-                 (all-component-type-symbols)
-                 ;;'[UnityEngine.Transform]
+                 ;; (all-component-type-symbols)
+                 '[UnityEngine.Transform UnityEngine.BoxCollider]
                  (form-macro-map populater-form))]
     `(let [hdb# ~hdb
            cpfm# ~cpfmf]
@@ -408,7 +410,9 @@
     (or (:type spec) (type inst))
     (type inst)))
 
-(defn populate!
+;; populate! api is considered an implementation detail right now, due
+;; to semantic weirdness and in-place mutation being gross anyway
+(defn- populate!
   ([inst spec]
      (populate! inst spec
        (get-populate-type-flag inst spec)))
