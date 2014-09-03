@@ -1,6 +1,10 @@
 (ns unity.repl
   (:refer-clojure :exclude [with-bindings])
-  (:require [clojure.main :as main]))
+  (:require [clojure.main :as main])
+  (:import
+    (UnityEngine Debug)
+    (System.Text UTF8Encoding)
+    ))
 
 (def
   ^{:doc "The form in injection is evaluated prior to each evaluation of a form in the REPL, in a try-catch."}
@@ -65,3 +69,15 @@
   ([s out]
      (binding [*out* out]
        (repl-eval-print default-repl-env s))))
+
+
+(defn start-udp []
+  (let [^UdpClient sock (UdpClient. (IPEndPoint. IPAddress/Any 11211))
+        ^IPEndPoint sender (IPEndPoint. IPAddress/Any 0)
+        ^bytes incomingBytes (.Receive sock (by-ref sender))
+        code (UTF8Encoding/GetString incomingBytes)
+        result (repl-eval-string code)
+        data (UTF8Encoding/GetBytes (str result))]
+          (Debug/Log result)
+          (.Send sock data (.Length data) sender)))
+  

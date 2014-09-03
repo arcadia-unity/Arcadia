@@ -1,8 +1,10 @@
 require "socket"
-require "io/wait"
 
-$s = TCPSocket.new "localhost", 11211
-$input = ""
+$s = UDPSocket.new
+$s.send "(clojure-version)", 0, "localhost", 11211
+puts $s.recv(1024)
+
+__END__
 
 def balanced? str
   s = str.clone
