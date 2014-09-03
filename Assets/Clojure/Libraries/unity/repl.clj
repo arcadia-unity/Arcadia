@@ -2,9 +2,11 @@
   (:refer-clojure :exclude [with-bindings])
   (:require [clojure.main :as main])
   (:import
-    (UnityEngine Debug)
-    (System.Text UTF8Encoding)
-    ))
+    [UnityEngine Debug]
+    [System.Net IPEndPoint IPAddress]
+    [System.Net.Sockets UdpClient]
+    [System.Threading Thread ThreadStart]
+    [System.Text Encoding]))
 
 (def
   ^{:doc "The form in injection is evaluated prior to each evaluation of a form in the REPL, in a try-catch."}
@@ -70,15 +72,22 @@
      (binding [*out* out]
        (repl-eval-print default-repl-env s))))
 
+(defn- udp-repl-listener [^long port]
+  (let [socket (UdpClient. (IPEndPoint. IPAddress/Any port))
+        sender (IPEndPoint. IPAddress/Any 0)
+        incoming-bytes (.Receive socket (by-ref sender))
+        incoming-code (.GetString Encoding/UTF8 incoming-bytes 0 (.Length incoming-bytes))
+        result (repl-eval-string incoming-code)
+        result-bytes (.GetBytes Encoding/UTF8 (str result))]
+          (.Send socket result-bytes (.Length result-bytes) sender)))
 
 (defn start-udp []
   (Debug/Log "Starting UDP REPL...")
-  (comment (let [^UdpClient sock (UdpClient. (IPEndPoint. IPAddress/Any 11211))
-        ^IPEndPoint sender (IPEndPoint. IPAddress/Any 0)
-        ^bytes incomingBytes (.Receive sock (by-ref sender))
-        code (UTF8Encoding/GetString incomingBytes)
-        result (repl-eval-string code)
-        data (UTF8Encoding/GetBytes (str result))]
-          (Debug/Log result)
-          (.Send sock data (.Length data) sender))))
+  (.Start (Thread. (gen-delegate ThreadStart []
+    (udp-repl-listener 11211)))))
   
+
+
+
+
+
