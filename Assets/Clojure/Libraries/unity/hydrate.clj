@@ -281,15 +281,9 @@
       (when-let [^System.MonoType t (resolve-type-flag k)]
         (if (= UnityEngine.Transform t)
           (doseq [cspec vspecs]
-            (let [c (if (= UnityEngine.Transform t))
-                  (.GetComponent obj t)
-                  (.AddComponent obj t)]
-              (populate! c cspec t)))
+            (populate! (.GetComponent obj t) cspec t))
           (doseq [cspec vspecs]
-            (let [c 
-                  (.GetComponent obj t)
-                  (.AddComponent obj t)]
-              (populate! c cspec t)))))
+            (populate! (.AddComponent obj t) cspec t))))
       obj)
     gob
     spec))
