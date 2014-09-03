@@ -161,7 +161,8 @@
   (let [targsym  (with-meta (gensym "populater-target_") {:tag typ})
         specsym  (gensym "spec_")
         sr       (populater-reducing-fn-form typ)]
-    `(fn [~targsym spec#]
+    `(fn ~(symbol (str "populater-fn-for_" typ))
+       [~targsym spec#]
        (reduce-kv
          ~sr
          ~targsym
@@ -188,7 +189,7 @@
         vsym (gensym "spec-val_")
         targsym (with-meta (gensym "targ_") {:tag typ})
         skcs (hydrater-key-clauses targsym typ vsym)
-        fn-inner-name (symbol (str "hydrater-fn-for-" typ))]
+        fn-inner-name (symbol (str "hydrater-reducing-fn-for-" typ))]
     `(fn ~fn-inner-name ~[targsym ksym vsym] 
        (case ~ksym
          ~@skcs
@@ -250,7 +251,8 @@
         initf    (hydrater-init-form typ specsym cspec)
         initsym  (with-meta (gensym "hydrater-target_") {:tag typ})
         capf     (constructor-application-form typ specsym cspec)]
-    `(fn [~specsym]
+    `(fn ~(symbol (str "hydrater-fn-for_" typ))
+       [~specsym]
        (cond
          (instance? ~typ ~specsym)
          ~specsym
@@ -316,8 +318,8 @@
 
 (defmacro establish-component-populaters-mac [hdb]
   (let [cpfmf  (->>
-                 ;; (all-component-type-symbols)
-                 '[UnityEngine.Transform UnityEngine.BoxCollider]
+                 (all-component-type-symbols)
+                 ;;'[UnityEngine.Transform UnityEngine.BoxCollider]
                  (form-macro-map populater-form))]
     `(let [hdb# ~hdb
            cpfm# ~cpfmf]
@@ -325,8 +327,8 @@
 
 (defmacro establish-value-type-populaters-mac [hdb]
   (let [vpfmf   (->>
-                  ;;(all-value-type-symbols) ;; 231
-                  '[UnityEngine.Vector3] 
+                  (all-value-type-symbols) ;; 231
+                  ;;'[UnityEngine.Vector3] 
                   (form-macro-map populater-form))]
     `(let [hdb# ~hdb
            vpfm# ~vpfmf]
@@ -335,8 +337,8 @@
 ;; probably faster compile if you consolidate with populaters
 (defmacro establish-value-type-hydraters-mac [hdb]
   (let [vpfmf (->>
-                ;; (all-value-type-symbols) ;; 231
-                '[UnityEngine.Vector3]
+                (all-value-type-symbols) ;; 231
+                ;;'[UnityEngine.Vector3]
                 (form-macro-map hydrater-form))]
     `(let [hdb# ~hdb
            vpfm# ~vpfmf]
