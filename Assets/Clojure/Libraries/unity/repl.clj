@@ -72,12 +72,13 @@
 
 
 (defn start-udp []
-  (let [^UdpClient sock (UdpClient. (IPEndPoint. IPAddress/Any 11211))
+  (Debug/Log "Starting UDP REPL...")
+  (comment (let [^UdpClient sock (UdpClient. (IPEndPoint. IPAddress/Any 11211))
         ^IPEndPoint sender (IPEndPoint. IPAddress/Any 0)
         ^bytes incomingBytes (.Receive sock (by-ref sender))
         code (UTF8Encoding/GetString incomingBytes)
         result (repl-eval-string code)
         data (UTF8Encoding/GetBytes (str result))]
           (Debug/Log result)
-          (.Send sock data (.Length data) sender)))
+          (.Send sock data (.Length data) sender))))
   
