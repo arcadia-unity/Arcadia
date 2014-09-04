@@ -15,7 +15,7 @@ public class ClojureRepl : EditorWindow {
     ClojureRepl.StartREPL();
   }
 
-  [MenuItem ("Clojure/UDP REPL/Window...")]
+  [MenuItem ("Clojure/REPL/Window...")]
   public static void Init () {
     ClojureRepl window = (ClojureRepl)EditorWindow.GetWindow (typeof (ClojureRepl));
   }
@@ -24,14 +24,14 @@ public class ClojureRepl : EditorWindow {
     RT.var("unity.repl", "eval-queue").invoke();
   }
 
-  [MenuItem ("Clojure/UDP REPL/Start %#r")]
+  [MenuItem ("Clojure/REPL/Start %#r")]
   public static void StartREPL () {
     RT.load("unity.repl");
     RT.var("unity.repl", "start-server").invoke(11211);
     EditorApplication.update += ClojureRepl.Update;
   }
 
-  [MenuItem ("Clojure/UDP REPL/Stop &#r")]
+  [MenuItem ("Clojure/REPL/Stop &#r")]
   public static void StopREPL () {
     RT.var("unity.repl", "stop-server").invoke();
     EditorApplication.update -= ClojureRepl.Update;
