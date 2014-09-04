@@ -1,42 +1,32 @@
+require "io/wait"
 require "socket"
 
+$input = ""
+$input.force_encoding("UTF-8")
 $s = UDPSocket.new
-$s.send "(clojure-version)", 0, "localhost", 11211
-puts $s.recv(1024)
 
-__END__
+def repl_send code, strip_nil=false
+  $s.send code, 0, "localhost", 11211
+  $s.wait
+  out = $s.recv($s.nread)
+  print strip_nil ? out.gsub(/\s*nil$/, "\n") : out
+  $stdout.flush
+end
 
-def balanced? str
-  s = str.clone
+def balanced? code
+  s = code.clone
   s.gsub! /[^\(\)\[\]\{\}]/, ""
   until s.gsub!(/\(\)|\[\]|\{\}/, "").nil?; end
   s.empty?
 end
 
-def repl_print strip_nil=false
-  $s.wait
-  out = $s.recv($s.nread)
-  puts strip_nil ? out.gsub(/\s*nil$/, "\n\n") : out
-  $prompt = "--> "
-  $input = ""
-end
-
-$s.write DATA.read.strip
-repl_print true
+repl_send DATA.read.strip, true
 
 while true
-  if $prompt
-    print $prompt 
-    $stdout.flush
-  end
-  
-  $input += $stdin.gets
-
-  if balanced?($input)
-    $s.write $input
-    repl_print
-  else
-    $prompt = false
+  $input += $stdin.gets.force_encoding("UTF-8")
+  if balanced? $input
+    repl_send $input
+    $input = ""
   end
 end
 

@@ -3,6 +3,8 @@
   (:require [clojure.main :as main])
   (:import
     [UnityEngine Debug]
+    [System.IO EndOfStreamException]
+    [System.Collections Queue]
     [System.Net IPEndPoint IPAddress]
     [System.Net.Sockets UdpClient]
     [System.Threading Thread ThreadStart]
@@ -66,28 +68,45 @@
   (binding [*ns* (find-ns 'user)]
     (doto (atom {}) (unity.repl/update-repl-env))))
 
-(defn repl-eval-string 
+(defn repl-eval-string
   ([s] (repl-eval-string s *out*))
   ([s out]
      (binding [*out* out]
        (repl-eval-print default-repl-env s))))
 
-(defn- udp-repl-listener [^long port]
-  (let [socket (UdpClient. (IPEndPoint. IPAddress/Any port))
-        sender (IPEndPoint. IPAddress/Any 0)
+(def work-queue (Queue/Synchronized (Queue.)))
+(def server-running (atom false))
+
+(defn eval-queue []
+  (while (> (.Count work-queue) 0)
+    (let [[code socket destination] (.Dequeue work-queue)
+          result (try
+                    (repl-eval-string code)
+                  (catch EndOfStreamException e
+                    "")
+                  (catch Exception e
+                    (str e)))
+          bytes (.GetBytes Encoding/UTF8 (str result "\n" (ns-name (:*ns* @default-repl-env)) "=> "))]
+            (.Send socket bytes (.Length bytes) destination))))
+
+(defn- listen-and-block [^UdpClient socket]
+  (let [sender (IPEndPoint. IPAddress/Any 0)
         incoming-bytes (.Receive socket (by-ref sender))
-        incoming-code (.GetString Encoding/UTF8 incoming-bytes 0 (.Length incoming-bytes))
-        result (repl-eval-string incoming-code)
-        result-bytes (.GetBytes Encoding/UTF8 (str result))]
-          (.Send socket result-bytes (.Length result-bytes) sender)))
+        incoming-code (.GetString Encoding/UTF8 incoming-bytes 0 (.Length incoming-bytes))]
+          (.Enqueue work-queue [incoming-code socket sender])))
 
-(defn start-udp []
-  (Debug/Log "Starting UDP REPL...")
-  (.Start (Thread. (gen-delegate ThreadStart []
-    (udp-repl-listener 11211)))))
-  
+(defn start-server [^long port]
+  (if @server-running
+    (throw (Exception. "REPL Already Running"))
+    (do
+      (reset! server-running true)
+      (let [socket (UdpClient. (IPEndPoint. IPAddress/Any port))]
+        (.Start (Thread. (gen-delegate ThreadStart []
+          (Debug/Log "Starting UDP REPL...")
+          (while @server-running
+            (listen-and-block socket))
+          (Debug/Log "Stopping UDP REPL...")
+          (.Close socket))))))))
 
-
-
-
-
+(defn stop-server []
+  (reset! server-running false))
