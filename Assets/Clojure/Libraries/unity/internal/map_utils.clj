@@ -76,6 +76,10 @@
 (defn remove-vals [m pred]
   (filter-vals m (complement pred)))
 
+(defn merge-in [m1 p m2]
+  (if-let [[k & ks] (seq p)] 
+    (assoc m1 k (merge-in (get m1 k {}) ks m2))
+    (merge m1 m2)))
 
 ;;; better names? there's doubtless some superior category-theoretical
 ;;; way to talk about this, if anyone knows it I'm all ears
@@ -99,3 +103,21 @@
   "Groups keys in m by values and maps them to values."
   [m]
   (clojure.set/map-invert (vk-biject m)))
+
+
+
+;; ============================================================
+;; predicates
+;; ============================================================
+
+(defn every-key? [m pred]
+  (every? pred (keys m)))
+
+(defn every-val? [m pred]
+  (every? pred (vals m)))
+
+(defn some-key [m pred]
+  (some pred (keys m)))
+
+(defn some-val [m pred]
+  (some pred (vals m)))

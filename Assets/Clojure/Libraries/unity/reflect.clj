@@ -1,7 +1,6 @@
 (ns unity.reflect
   (:refer-clojure :exclude [methods])
   (:require
-   ;;[unity.seq-utils :as su]
    [clojure.reflect :as reflect]
    [clojure.walk :as walk]
    [clojure.pprint])
@@ -35,39 +34,15 @@
       (sort-by :name)
       (map reflection-transform))))
 
-(def constructors (member-getter-fn Constructor))
-(def methods      (member-getter-fn Method))
-(def fields       (member-getter-fn Field))
-(def properties   (member-getter-fn Property))
-;; hi
-
-(comment 
-  (defn member-printer-fn [member-type rows]
-    (fn [x & opts]
-      (->> (apply reflect/reflect x opts)
-        :members
-        (filter #(instance? member-type %))
-        (sort-by :name)
-        (map reflection-transform)
-        (clojure.pprint/print-table rows))))
-
-  (def print-constructors
-    (member-printer-fn Constructor
-      [:name :return-type :parameter-types]))
-  (def print-methods
-    (member-printer-fn Method))
-  (def print-fields (member-printer-fn Field))
-  (def print-properties (member-printer-fn Property))
-
-  (defn setters [x]
-    (->> x
-      methods
-      (filter
-        (fn [mth]
-          (and
-            (clojure.set/subset?
-              #{:public :special-name}
-              (:flags mth))
-            (re-matches
-              #"^set_.*"
-              (name (:name mth)))))))))
+(defmacro def-member-getter-fn [name member-type]
+  `(defn ~name [x# & opts#]
+     (->> (apply reflect/reflect x# opts#)
+       :members
+       (filter #(instance? ~member-type %))
+       (sort-by :name)
+       (map reflection-transform))))
+ 
+(def-member-getter-fn constructors clojure.reflect.Constructor)
+(def-member-getter-fn methods clojure.reflect.Method)
+(def-member-getter-fn fields clojure.reflect.Field)
+(def-member-getter-fn properties clojure.reflect.Property)

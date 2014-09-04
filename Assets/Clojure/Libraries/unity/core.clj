@@ -1,4 +1,5 @@
 (ns unity.core
+  (:require [unity.reflect :as r])
   (:import [UnityEngine MonoBehaviour]))
 
 ;; ============================================================
@@ -191,7 +192,7 @@
 
 ;; really ought to be testing for arity as well
 (defn type-has-method? [t mth]
-  (in? (symbol mth) (map :name (ru/methods t :ancestors true))))
+  (in? (symbol mth) (map :name (r/methods t :ancestors true))))
 
 ;; maybe we should be passing full method sigs around rather than
 ;; method names. 
