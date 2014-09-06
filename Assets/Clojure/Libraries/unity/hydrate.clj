@@ -4,7 +4,8 @@
             [clojure.string :as string]
             [clojure.set :as sets]
             [clojure.edn :as edn]
-            [clojure.walk])
+            clojure.walk
+            [clojure.clr.io :as io])
   (:import UnityEditor.AssetDatabase
            [System.Reflection Assembly AssemblyName]
            System.AppDomain))
@@ -116,7 +117,10 @@
        t)))
 
 (defn all-component-type-symbols []
-  (map type-symbol (all-component-types)))
+  ;; weirdly, you have to filter. looks redundant but you hit
+  ;; something weird, see problematic_typesyms.edn
+  (filter resolve
+    (map type-symbol (all-component-types))))
 
 (defn all-value-types
   ([] (all-value-types [(load-assembly "UnityEngine")]))
@@ -127,7 +131,8 @@
        t)))
 
 (defn all-value-type-symbols []
-  (map type-symbol (all-value-types)))
+  (filter resolve
+    (map type-symbol (all-value-types))))
 
 ;; ============================================================
 ;; populater forms
@@ -297,7 +302,6 @@
     tf
     ((:type-flags->types @hydration-database) tf)))
 
-
 (defn populate-game-object! ^UnityEngine.GameObject
   [^UnityEngine.GameObject gob spec]
   (reduce-kv
@@ -335,13 +339,12 @@
   "Assets/Clojure/Libraries/unity/setables.edn")
 (def problematic-typesyms-path "Assets/Clojure/Libraries/unity/problematic_typesyms.edn")
 
-
 (defn squirrel-setables-away [typesyms
-                              setables-path
+                              setables-path 
                               problematic-typesyms-path]
   (let [problematic-typesyms (atom [])
         setables-map (clojure.walk/prewalk
-                       (fn [x]
+                       (fn [x] 
                          (if (symbol? x)
                            (name x)
                            x))
@@ -384,21 +387,33 @@
       (slurp setables-path))))
 
 ;; and here's the cake:
+(def setables-cache (atom nil))
+
+(defn refresh-setables-cache []
+  (reset! setables-cache
+    (retrieve-squirreled-setables setables-path)))
+
+(refresh-setables-cache)
 
 (def setables-cache
   (retrieve-squirreled-setables setables-path))
 
 (defn setables-cached [typesym]
-  (setables-cache typesym))
+  (@setables-cache typesym))
+
+(def problem-log (atom []))
 
 (defn form-macro-map [f tsyms ctx]
   (->> tsyms
     (map
       (fn [tsym]
         [tsym,
-         (try ;; total hack. Problem with reflect and UnityEngine.Component
+         (try ;; total hack
            (f tsym ctx)
-           (catch Exception e nil))]))
+           (catch Exception e
+             (do
+               (swap! problem-log conj tsym)
+               nil)))]))
     (filter second)
     (into {})))
 
