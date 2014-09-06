@@ -1,9 +1,10 @@
 (ns unity.hydrate
   (:require [unity.internal.map-utils :as mu]
-            [unity.internal.seq-utils :as su]
             [unity.reflect :as r]
             [clojure.string :as string]
-            [clojure.set :as sets])
+            [clojure.set :as sets]
+            [clojure.edn :as edn]
+            [clojure.walk])
   (:import UnityEditor.AssetDatabase
            [System.Reflection Assembly AssemblyName]
            System.AppDomain))
@@ -132,143 +133,164 @@
 ;; populater forms
 ;; ============================================================
 
-(defn populater-key-clauses [targsym typ vsym]
-  (assert (type-symbol? typ))
-  (let [valsym (with-meta (gensym) {:tag typ})]
+(defn populater-key-clauses
+  [{:keys [setables-fn]
+    :or {setables-fn setables}
+    :as ctx}]
+  (mu/checked-keys [[targsym valsym typesym] ctx]
     (apply concat
-      (for [{n :name, :as setable} (setables (ensure-type typ))
+      (for [{n :name, :as setable} (setables-fn (ensure-type typesym))
             :let [styp (type-for-setable setable)]
             k  (keys-for-setable setable)]
         `[~k (set! (. ~targsym ~n)
-               (cast-as (hydrate ~vsym ~styp)
+               (cast-as (hydrate ~valsym ~styp)
                  ~styp))]))))
 
-(defn populater-reducing-fn-form [typ]
-  (assert (type-symbol? typ))
-  (let [ksym (gensym "spec-key_")
-        vsym (gensym "spec-val_")
-        targsym (with-meta (gensym "targ_") {:tag typ})
-        skcs (populater-key-clauses targsym typ vsym)
-        fn-inner-name (symbol (str "populater-fn-for_" typ))]
-    `(fn ~fn-inner-name ~[targsym ksym vsym] 
-       (case ~ksym
-         ~@skcs
-         ~targsym)
-       ~targsym)))
+(defn populater-reducing-fn-form [ctx]
+  (mu/checked-keys [[typesym] ctx]
+    (let [ksym (gensym "spec-key_")
+          vsym (gensym "spec-val_")
+          targsym (with-meta (gensym "targ_") {:tag typesym})
+          skcs (populater-key-clauses 
+                 (assoc ctx
+                   :targsym targsym,
+                   :valsym vsym))
+          fn-inner-name (symbol (str "populater-fn-for_" typesym))]
+      `(fn ~fn-inner-name ~[targsym ksym vsym] 
+         (case ~ksym
+           ~@skcs
+           ~targsym)
+         ~targsym))))
 
-(defn populater-form [typ]
-  (assert (type-symbol? typ))
-  (let [targsym  (with-meta (gensym "populater-target_") {:tag typ})
-        specsym  (gensym "spec_")
-        sr       (populater-reducing-fn-form typ)]
-    `(fn ~(symbol (str "populater-fn-for_" typ))
-       [~targsym spec#]
-       (reduce-kv
-         ~sr
-         ~targsym
-         spec#))))
+(defn populater-form
+  ([typesym] (populater-form typesym {}))
+  ([typesym ctx]
+     (let [targsym  (with-meta (gensym "populater-target_") {:tag typesym})
+           specsym  (gensym "spec_")
+           sr       (populater-reducing-fn-form
+                      (mu/lit-assoc ctx typesym))]
+       `(fn ~(symbol (str "populater-fn-for_" typesym))
+          [~targsym spec#]
+          (reduce-kv
+            ~sr
+            ~targsym
+            spec#)))))
 
 ;; ============================================================
 ;; hydrater-forms
 ;; ============================================================
 
-(defn hydrater-key-clauses [targsym typ vsym]
-  (assert (type-symbol? typ))
-  (let [valsym (with-meta (gensym) {:tag typ})]
+(defn hydrater-key-clauses
+  [{:keys [setables-fn]
+    :or {setables-fn setables}
+    :as ctx}]
+  (mu/checked-keys [[targsym typesym valsym] ctx]
     (apply concat
-      (for [{n :name, :as setable} (setables (ensure-type typ))
+      (for [{n :name, :as setable} (setables-fn
+                                     (ensure-type typesym))
             :let [styp (type-for-setable setable)]
             k  (keys-for-setable setable)]
         `[~k (set! (. ~targsym ~n)
-               (cast-as (hydrate ~vsym ~styp)
+               (cast-as (hydrate ~valsym ~styp)
                  ~styp))]))))
 
-(defn hydrater-reducing-fn-form [typ]
-  (assert (type-symbol? typ))
-  (let [ksym (gensym "spec-key_")
-        vsym (gensym "spec-val_")
-        targsym (with-meta (gensym "targ_") {:tag typ})
-        skcs (hydrater-key-clauses targsym typ vsym)
-        fn-inner-name (symbol (str "hydrater-reducing-fn-for-" typ))]
-    `(fn ~fn-inner-name ~[targsym ksym vsym] 
-       (case ~ksym
-         ~@skcs
-         ~targsym)
-       ~targsym)))
+(defn hydrater-reducing-fn-form [ctx]
+  (mu/checked-keys [[typesym] ctx]
+    (let [ksym (gensym "spec-key_")
+          valsym (gensym "spec-val_")
+          targsym (with-meta (gensym "targ_") {:tag typesym})
+          skcs (hydrater-key-clauses
+                 (mu/lit-assoc ctx targsym valsym))
+          fn-inner-name (symbol (str "hydrater-reducing-fn-for-" typesym))]
+      `(fn ~fn-inner-name ~[targsym ksym valsym] 
+         (case ~ksym
+           ~@skcs
+           ~targsym)
+         ~targsym))))
 
 (defn constructors-spec [type]
-  (assert (type? type))
   (set (map :parameter-types (r/constructors type))))
 
 ;; janky + reflective 4 now. Need something to disambiguate dispatch
 ;; by argument type rather than arity
 (defn constructor-application-count-clauses
-  " cspec should be: #{[type...]...}"
-  [typ cvsym cspec]
-  (assert (type-symbol? typ))
-  (let [arities (set (map count cspec))
-        dstrsyms (take (apply max arities)
-                   (repeatedly gensym))]
-    (apply concat
-      (for [cnt arities
-            :let [args (vec (take cnt dstrsyms))]]
-        [cnt
-         `(let [~args ~cvsym]
-            (new ~typ ~@args))]))))
+  " ctrspec should be: #{[type...]...}"
+  [ctx]
+  (mu/checked-keys [[typesym cvsym ctrspec] ctx]
+    (let [arities (set (map count ctrspec))
+          dstrsyms (take (apply max arities)
+                     (repeatedly gensym))]
+      (apply concat
+        (for [cnt arities
+              :let [args (vec (take cnt dstrsyms))]]
+          [cnt
+           `(let [~args ~cvsym]
+              (new ~typesym ~@args))])))))
 
 ;; can make the following more optimal if it becomes an issue
-(defn constructor-application-form [typ cvsym cspec]
-  (assert (symbol? cvsym))
-  (let [capkc (constructor-application-count-clauses typ cvsym cspec)]
-    `(case (count ~cvsym)
-       ~@capkc
-       (throw
-         (Exception.
-           "Unsupported constructor arity")))))
+(defn constructor-application-form [ctx]
+  (mu/checked-keys [[cvsym] ctx]
+    (let [capkc (constructor-application-count-clauses ctx)]
+      `(case (count ~cvsym)
+         ~@capkc
+         (throw
+           (Exception.
+             "Unsupported constructor arity"))))))
 
 (defn constructor-vec [m]
   (:constructor m))
 
-(defn hydrater-init-form [typ specsym cspec]
-  (assert (type-symbol? typ))
-  (assert (symbol? specsym))
-  (let [cvsym  (gensym "constructor-vec_")
-        capf   (constructor-application-form typ cvsym cspec)]
-    `(if-let [~cvsym (constructor-vec ~specsym)]
-       ~capf
-       ~(if (some #(= 0 (count %)) cspec) 
-          `(new ~typ)
-          `(throw
-             (Exception. 
-               "hydration init requires constructor-vec")))))) ;; find some better exception class
+(defn hydrater-init-form [ctx]
+  (mu/checked-keys [[typesym specsym ctrspec] ctx]
+    (let [cvsym  (gensym "constructor-vec_")
+          capf   (constructor-application-form
+                   (mu/lit-assoc ctx cvsym))]
+      `(if-let [~cvsym (constructor-vec ~specsym)]
+         ~capf
+         ~(if (some #(= 0 (count %)) ctrspec) 
+            `(new ~typesym)
+            `(throw
+               (Exception. 
+                 "hydration init requires constructor-vec"))))))) ;; find some better exception class
 
 ;; some of the tests here feel redundant with those in hydrate
-(defn hydrater-form [typ]
-  (assert (type-symbol? typ))
-  (let [specsym  (gensym "spec_")
-        cspec    (constructors-spec (ensure-type typ))
-        sr       (hydrater-reducing-fn-form typ)
-        initf    (hydrater-init-form typ specsym cspec)
-        initsym  (with-meta (gensym "hydrater-target_") {:tag typ})
-        capf     (constructor-application-form typ specsym cspec)]
-    `(fn ~(symbol (str "hydrater-fn-for_" typ))
-       [~specsym]
-       (cond
-         (instance? ~typ ~specsym)
-         ~specsym
+(defn hydrater-form
+  ([typesym]
+     (hydrater-form typesym {}))
+  ([typesym
+    {:keys [setables-fn]
+     :or {setables-fn setables}
+     :as ctx0}]
+     (let [ctx      (mu/lit-assoc ctx0 setables-fn)
+           specsym  (gensym "spec_") 
+           ctrspec  (constructors-spec (ensure-type typesym))
+           sr       (hydrater-reducing-fn-form
+                      (mu/lit-assoc ctx typesym setables-fn))
+           initf    (hydrater-init-form
+                      (mu/lit-assoc ctx typesym specsym ctrspec))
+           initsym  (with-meta (gensym "hydrater-target_") {:tag typesym})
+           capf     (constructor-application-form
+                      (mu/lit-assoc
+                        (assoc ctx :cvsym specsym)
+                        typesym specsym ctrspec))]
+       `(fn ~(symbol (str "hydrater-fn-for_" typesym))
+          [~specsym]
+          (cond
+            (instance? ~typesym ~specsym)
+            ~specsym
 
-         (vector? ~specsym)
-         ~capf
+            (vector? ~specsym)
+            ~capf
 
-         (map? ~specsym)
-         (let [~initsym ~initf]
-           (reduce-kv
-             ~sr
-             ~initsym
-             ~specsym))
+            (map? ~specsym)
+            (let [~initsym ~initf]
+              (reduce-kv
+                ~sr
+                ~initsym
+                ~specsym))
 
-         :else
-         (throw (Exception. "Unsupported hydration spec"))))))
+            :else
+            (throw (Exception. "Unsupported hydration spec")))))))
 
 (defn resolve-type-flag [tf]
   (if (type? tf)
@@ -276,7 +298,7 @@
     ((:type-flags->types @hydration-database) tf)))
 
 
-(defn- populate-game-object! ^UnityEngine.GameObject
+(defn populate-game-object! ^UnityEngine.GameObject
   [^UnityEngine.GameObject gob spec]
   (reduce-kv
     (fn [^UnityEngine.GameObject obj, k, vspecs]
@@ -305,41 +327,117 @@
 ;; establish database
 ;; ============================================================
 
-(defn form-macro-map [f tsyms]
+;; ------------------------------------------------------------
+;; qwik and dirty way
+;; ------------------------------------------------------------
+
+(def setables-path
+  "Assets/Clojure/Libraries/unity/setables.edn")
+(def problematic-typesyms-path "Assets/Clojure/Libraries/unity/problematic_typesyms.edn")
+
+
+(defn squirrel-setables-away [typesyms
+                              setables-path
+                              problematic-typesyms-path]
+  (let [problematic-typesyms (atom [])
+        setables-map (clojure.walk/prewalk
+                       (fn [x]
+                         (if (symbol? x)
+                           (name x)
+                           x))
+                       (into {}
+                         (filter second
+                           (for [tsym typesyms]
+                             [tsym,
+                              (try ;; nasty nasty nasty
+                                (vec (setables tsym))
+                                (catch System.ArgumentException e
+                                  (swap! problematic-typesyms conj tsym)
+                                  nil))]))))]
+    (with-open [f (io/output-stream setables-path)]
+      (spit f
+        (pr-str
+          setables-map)))
+    (with-open [f (io/output-stream problematic-typesyms-path)]
+      (spit f
+        (pr-str
+          @problematic-typesyms)))
+    (println "squirreling successful")))
+
+;; then evaluate the following, once, and wait a bit:
+;; (squirrel-setables-away
+;;   (concat
+;;     (all-component-type-symbols)
+;;     (all-value-type-symbols))
+;;   setables-path
+;;   problematic-typesyms-path)
+
+;; then you can retrieve-it like so:
+
+(defn retrieve-squirreled-setables [setables-path]
+  (clojure.walk/prewalk
+    (fn [x]
+      (if (string? x)
+        (symbol x)
+        x))
+    (edn/read-string
+      (slurp setables-path))))
+
+;; and here's the cake:
+
+(def setables-cache
+  (retrieve-squirreled-setables setables-path))
+
+(defn setables-cached [typesym]
+  (setables-cache typesym))
+
+(defn form-macro-map [f tsyms ctx]
   (->> tsyms
     (map
       (fn [tsym]
         [tsym,
          (try ;; total hack. Problem with reflect and UnityEngine.Component
-           (f tsym)
+           (f tsym ctx)
            (catch Exception e nil))]))
     (filter second)
     (into {})))
 
 (defmacro establish-component-populaters-mac [hdb]
-  (let [cpfmf  (->>
-                 (all-component-type-symbols)
-                 ;;'[UnityEngine.Transform UnityEngine.BoxCollider]
-                 (form-macro-map populater-form))]
+  (let [cpfmf (form-macro-map
+                populater-form
+                ;[UnityEngine.Transform UnityEngine.BoxCollider]
+                (all-component-type-symbols)
+                {:setables-fn
+                 setables-cached
+                ;setables
+                 })]
     `(let [hdb# ~hdb
            cpfm# ~cpfmf]
        (mu/merge-in hdb# [:populaters] cpfm#))))
 
 (defmacro establish-value-type-populaters-mac [hdb]
-  (let [vpfmf   (->>
-                  (all-value-type-symbols) ;; 231
-                  ;;'[UnityEngine.Vector3] 
-                  (form-macro-map populater-form))]
+  (let [vpfmf (form-macro-map
+                populater-form
+                ;'[UnityEngine.Vector3] 
+                (all-value-type-symbols)
+                {:setables-fn
+                 setables-cached
+                 ;setables
+                 })]
     `(let [hdb# ~hdb
            vpfm# ~vpfmf]
        (mu/merge-in hdb# [:populaters] vpfm#))))
 
 ;; probably faster compile if you consolidate with populaters
 (defmacro establish-value-type-hydraters-mac [hdb]
-  (let [vpfmf (->>
+  (let [vpfmf (form-macro-map
+                hydrater-form
+                ;'[UnityEngine.Vector3]
                 (all-value-type-symbols) ;; 231
-                ;;'[UnityEngine.Vector3]
-                (form-macro-map hydrater-form))]
+                {:setables-fn
+                 setables-cached
+                 ;setables
+                 })]
     `(let [hdb# ~hdb
            vpfm# ~vpfmf]
        (mu/merge-in hdb# [:hydraters] vpfm#))))
@@ -365,7 +463,8 @@
     establish-component-populaters-mac
     establish-value-type-populaters-mac 
     establish-value-type-hydraters-mac
-    establish-type-flags))
+    establish-type-flags
+    identity))
 
 (def hydration-database
   (atom default-hydration-database))
@@ -406,9 +505,7 @@
     (or (:type spec) (type inst))
     (type inst)))
 
-;; populate! api is considered an implementation detail right now, due
-;; to semantic weirdness and in-place mutation being gross anyway
-(defn- populate!
+(defn populate!
   ([inst spec]
      (populate! inst spec
        (get-populate-type-flag inst spec)))

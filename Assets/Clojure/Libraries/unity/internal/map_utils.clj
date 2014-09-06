@@ -121,3 +121,43 @@
 
 (defn some-val [m pred]
   (some pred (vals m)))
+
+
+;; ============================================================
+;; sharpsmanship
+;; ============================================================
+
+(defmacro lit-map [& syms]
+  (assert (every? symbol? syms))
+  (zipmap (map keyword syms) syms))
+
+(defmacro lit-assoc [m & syms]
+  (assert (every? symbol? syms))
+  `(assoc ~m
+     ~@(interleave
+         (map keyword syms)
+         syms)))
+
+(defmacro checked-keys [bndgs & body]
+  (let [dcls (for [[ks m] (partition 2 bndgs),
+                   :let [msym (gensym "map_")]]
+               (->> ks
+                 (mapcat
+                   (fn [k]
+                     `[~k (if-let [e# (find ~msym ~(keyword k))]
+                            (val e#)
+                            (throw
+                              (Exception.
+                                (str "key " ~(keyword k) " not found"))))]))
+                 (list* msym m)))]
+    `(let [~@(apply concat dcls)]
+       ~@body)))
+
+(defn apply-kv
+  "Terrible, necessary function. Use with APIs employing horrific keyword-arguments pattern. Please do not write such APIs."
+  [f & argsm]
+  (apply f
+    (concat
+      (butlast argsm)
+      (apply concat
+        (last argsm)))))
