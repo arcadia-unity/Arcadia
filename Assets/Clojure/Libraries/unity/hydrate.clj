@@ -87,11 +87,12 @@
 (defn dedup-by [f coll]
   (map peek (vals (group-by f coll))))
 
-(defn setables [typ]
-  (dedup-by :name
-    (concat
-      (setable-fields typ)
-      (setable-properties typ))))
+(defn setables [typesym]
+  (let [t (ensure-type typesym)]
+    (dedup-by :name
+      (concat
+        (setable-fields t)
+        (setable-properties t)))))
 
 (defn load-assembly
   "Takes string or AssemblyName, returns corresponding Assembly"
@@ -138,13 +139,18 @@
 ;; populater forms
 ;; ============================================================
 
+
+(def log (atom nil))
+
 (defn populater-key-clauses
   [{:keys [setables-fn]
     :or {setables-fn setables}
     :as ctx}]
+  (reset! log ctx)
   (mu/checked-keys [[targsym valsym typesym] ctx]
+    (assert (symbol? typesym))
     (apply concat
-      (for [{n :name, :as setable} (setables-fn (ensure-type typesym))
+      (for [{n :name, :as setable} (setables-fn typesym)
             :let [styp (type-for-setable setable)]
             k  (keys-for-setable setable)]
         `[~k (set! (. ~targsym ~n)
@@ -190,9 +196,9 @@
     :or {setables-fn setables}
     :as ctx}]
   (mu/checked-keys [[targsym typesym valsym] ctx]
+    (assert (symbol? typesym))
     (apply concat
-      (for [{n :name, :as setable} (setables-fn
-                                     (ensure-type typesym))
+      (for [{n :name, :as setable} (setables-fn typesym)
             :let [styp (type-for-setable setable)]
             k  (keys-for-setable setable)]
         `[~k (set! (. ~targsym ~n)
@@ -265,7 +271,7 @@
   ([typesym
     {:keys [setables-fn]
      :or {setables-fn setables}
-     :as ctx0}]
+     :as ctx0}]     
      (let [ctx      (mu/lit-assoc ctx0 setables-fn)
            specsym  (gensym "spec_") 
            ctrspec  (constructors-spec (ensure-type typesym))
@@ -387,19 +393,24 @@
       (slurp setables-path))))
 
 ;; and here's the cake:
-(def setables-cache (atom nil))
+(def setables-cache
+  (atom nil))
 
 (defn refresh-setables-cache []
   (reset! setables-cache
     (retrieve-squirreled-setables setables-path)))
 
+;; when stable, make this disappear at runtime with some macro stuff
 (refresh-setables-cache)
 
-(def setables-cache
-  (retrieve-squirreled-setables setables-path))
-
-(defn setables-cached [typesym]
-  (@setables-cache typesym))
+;; should get rid of all this ensure-type nonsense, hard to reason
+;; about what's going on
+(def setables-cached
+  (memoize
+    (fn [typesym]
+      (assert (symbol? typesym))
+      (@setables-cache
+        typesym))))
 
 (def problem-log (atom []))
 
@@ -420,7 +431,7 @@
 (defmacro establish-component-populaters-mac [hdb]
   (let [cpfmf (form-macro-map
                 populater-form
-                ;[UnityEngine.Transform UnityEngine.BoxCollider]
+                ;'[UnityEngine.Transform UnityEngine.BoxCollider]
                 (all-component-type-symbols)
                 {:setables-fn
                  setables-cached
@@ -433,7 +444,7 @@
 (defmacro establish-value-type-populaters-mac [hdb]
   (let [vpfmf (form-macro-map
                 populater-form
-                ;'[UnityEngine.Vector3] 
+                ;[UnityEngine.Vector3] 
                 (all-value-type-symbols)
                 {:setables-fn
                  setables-cached
@@ -447,7 +458,7 @@
 (defmacro establish-value-type-hydraters-mac [hdb]
   (let [vpfmf (form-macro-map
                 hydrater-form
-                ;'[UnityEngine.Vector3]
+                ;[UnityEngine.Vector3]
                 (all-value-type-symbols) ;; 231
                 {:setables-fn
                  setables-cached
