@@ -140,7 +140,6 @@
 ;; populater forms
 ;; ============================================================
 
-
 (defn populater-key-clauses
   [{:keys [setables-fn]
     :or {setables-fn setables}
@@ -350,7 +349,43 @@
 ;; dehydration
 ;; ============================================================
 
+(defn dehydrater-form
+  ([typesym]
+     (dehydrater-form typesym {}))
+  ([typesym
+    {:keys [setables-fn]
+     :or {setables-fn setables}
+     :as ctx0}]     
+     (let [ctx      (mu/lit-assoc ctx0 setables-fn)
+           specsym  (gensym "spec_") 
+           ctrspec  (constructors-spec (ensure-type typesym))
+           sr       (dehydrater-reducing-fn-form
+                      (mu/lit-assoc ctx typesym setables-fn))
+           initf    (hydrater-init-form
+                      (mu/lit-assoc ctx typesym specsym ctrspec))
+           initsym  (with-meta (gensym "hydrater-target_") {:tag typesym})
+           capf     (constructor-application-form
+                      (mu/lit-assoc
+                        (assoc ctx :cvsym specsym)
+                        typesym specsym ctrspec))]
+       `(fn ~(symbol (str "hydrater-fn-for_" typesym))
+          [~specsym]
+          (cond
+            (instance? ~typesym ~specsym)
+            ~specsym
 
+            (vector? ~specsym)
+            ~capf
+
+            (map? ~specsym)
+            (let [~initsym ~initf]
+              (reduce-kv
+                ~sr
+                ~initsym
+                ~specsym))
+
+            :else
+            (throw (Exception. "Unsupported hydration spec")))))))
 
 
 ;; ============================================================
@@ -482,17 +517,35 @@
                  })]
     `(merge ~m ~vhfmf)))
 
+
+(defn establish-component-dehydraters-mac [m]
+  (let [dhm (tsym-map
+              dehydrater-form
+              '[UnityEngine.Transform UnityEngine.BoxCollider]
+              ;(all-component-type-symbols)
+              {:setables-fn setables-cached})]
+    `(merge ~m ~dhm)))
+
 (defn establish-type-flags [hdb]
   ;; put something here
   (let [tks (seq
               (set
                 (concat
                   (keys (:populaters hdb))
-                  (keys (:hydraters hdb)))))]
+                  (keys (:hydraters hdb))
+                  (keys (:dehydraters hdb)))))]
     (update-in hdb [:type-flags->types] merge
-      (zipmap
-        (map keyword-for-type tks)
-        tks))))
+      (zipmap (map keyword-for-type tks) tks))))
+
+(defn establish-inverse-type-flags [hdb]
+  (let [tks (seq
+              (set
+                (concat
+                  (keys (:populaters hdb))
+                  (keys (:hydraters hdb))
+                  (keys (:dehydraters hdb)))))]
+    (update-in hdb [:types->type-flags] merge
+      (zipmap tks (map keyword-for-type tks)))))
 
 ;; ============================================================
 ;; database
@@ -507,6 +560,9 @@
 (def default-value-type-hydraters
   (establish-value-type-hydraters-mac {}))
 
+(def default-component-dehydraters
+  (establish-component-dehydraters-mac {}))
+
 (def default-hydration-database
   (->
     {:populaters {UnityEngine.GameObject #'populate-game-object!}
@@ -515,7 +571,9 @@
     (update-in [:populaters] merge default-component-populaters)
     (update-in [:populaters] merge default-value-type-populaters)
     (update-in [:hydraters] merge default-value-type-hydraters)
-    establish-type-flags))
+    (update-in [:dehydraters] merge default-component-dehydraters)
+    establish-type-flags
+    establish-inverse-type-flags))
 
 (def hydration-database
   (atom default-hydration-database))
