@@ -79,21 +79,38 @@
 
 (defn eval-queue []
   (while (> (.Count work-queue) 0)
-    (let [[code socket destination] (.Dequeue work-queue)
+    (let [[code callback-fn] (.Dequeue work-queue)
           result (try
                     (repl-eval-string code)
                   (catch EndOfStreamException e
                     "")
                   (catch Exception e
-                    (str e)))
-          bytes (.GetBytes Encoding/UTF8 (str result "\n" (ns-name (:*ns* @default-repl-env)) "=> "))]
-            (.Send socket bytes (.Length bytes) destination))))
+                    (str e)))]
+      (callback-fn result))))
 
-(defn- listen-and-block [^UdpClient socket]
-  (let [sender (IPEndPoint. IPAddress/Any 0)
-        incoming-bytes (.Receive socket (by-ref sender))
-        incoming-code (.GetString Encoding/UTF8 incoming-bytes 0 (.Length incoming-bytes))]
-          (.Enqueue work-queue [incoming-code socket sender])))
+
+(let [bytes->str (fn [bytes]
+                   (.GetString Encoding/UTF8
+                               bytes
+                               0
+                               (.Length bytes)))
+      str->bytes (fn [string]
+                   (.GetBytes Encoding/UTF8
+                              string))]
+  (defn- listen-and-block [^UdpClient socket]
+    (let [sender (IPEndPoint. IPAddress/Any 0)
+          incoming-bytes (.Receive socket (by-ref sender))
+          incoming-code (bytes->str incoming-bytes)]
+      (.Enqueue work-queue [incoming-code
+                            (fn [result]
+                              (let [bytes (str->bytes (str result
+                                                           "\n"
+                                                           (ns-name (:*ns* @default-repl-env))
+                                                           "=> "))]
+                                (.Send socket
+                                       bytes
+                                       (.Length bytes)
+                                       sender)))]))))
 
 (defn start-server [^long port]
   (if @server-running
@@ -110,3 +127,16 @@
 
 (defn stop-server []
   (reset! server-running false))
+
+
+(defmacro run-on-main-thread
+  "Run code on unity main thread
+   @TODO figure out a better namespace for this macro
+   @NOTE This macro relies on eval-queue being run in main
+   thread. Currently ClojureRepl.cs takes care of running eval-queue"
+  [& body]
+  (let [result (promise)]
+    (.Enqueue work-queue
+              [(pr-str (cons 'do body))
+               (partial deliver result)])
+    @result))
