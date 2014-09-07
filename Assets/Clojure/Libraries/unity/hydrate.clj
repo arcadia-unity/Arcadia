@@ -8,6 +8,7 @@
             [clojure.clr.io :as io])
   (:import UnityEditor.AssetDatabase
            [System.Reflection Assembly AssemblyName]
+           [UnityEngine GameObject]
            System.AppDomain))
 
 (declare hydration-database hydrate populate!)
@@ -140,13 +141,10 @@
 ;; ============================================================
 
 
-(def log (atom nil))
-
 (defn populater-key-clauses
   [{:keys [setables-fn]
     :or {setables-fn setables}
     :as ctx}]
-  (reset! log ctx)
   (mu/checked-keys [[targsym valsym typesym] ctx]
     (assert (symbol? typesym))
     (apply concat
@@ -308,16 +306,32 @@
     tf
     ((:type-flags->types @hydration-database) tf)))
 
+(declare hydrate-game-object)
+
+(defn hydrate-game-object-children
+  [^UnityEngine.GameObject obj, specs]
+  (let [^UnityEngine.Transform trns (.GetComponent obj UnityEngine.Transform)]
+    (doseq [spec specs]
+      (hydrate-game-object
+        ;; Strictly we should check for type keys too, which is
+        ;; unwieldy enough I wonder if we should deprecate that
+        ;; feature. Upon reflection, yes, we obviously should; stupid
+        ;; to have multiple equivalent key-types, makes data
+        ;; annoyingly ambiguous and difficult to manipulate
+        (mu/assoc-in-mv spec [:transform 0 :parent] trns))))) 
+
 (defn populate-game-object! ^UnityEngine.GameObject
   [^UnityEngine.GameObject gob spec]
   (reduce-kv
     (fn [^UnityEngine.GameObject obj, k, vspecs]
-      (when-let [^System.MonoType t (resolve-type-flag k)]
-        (if (= UnityEngine.Transform t)
-          (doseq [cspec vspecs]
-            (populate! (.GetComponent obj t) cspec t))
-          (doseq [cspec vspecs]
-            (populate! (.AddComponent obj t) cspec t))))
+      (if (= :children k)
+        (hydrate-game-object-children obj vspecs)
+        (when-let [^System.MonoType t (resolve-type-flag k)]
+          (if (= UnityEngine.Transform t)
+            (doseq [cspec vspecs]
+              (populate! (.GetComponent obj t) cspec t))
+            (doseq [cspec vspecs]
+              (populate! (.AddComponent obj t) cspec t)))))
       obj)
     gob
     spec))
@@ -444,7 +458,7 @@
 (defmacro establish-value-type-populaters-mac [hdb]
   (let [vpfmf (form-macro-map
                 populater-form
-                ;[UnityEngine.Vector3] 
+                ;'[UnityEngine.Vector3] 
                 (all-value-type-symbols)
                 {:setables-fn
                  setables-cached
@@ -458,7 +472,7 @@
 (defmacro establish-value-type-hydraters-mac [hdb]
   (let [vpfmf (form-macro-map
                 hydrater-form
-                ;[UnityEngine.Vector3]
+                ;'[UnityEngine.Vector3]
                 (all-value-type-symbols) ;; 231
                 {:setables-fn
                  setables-cached

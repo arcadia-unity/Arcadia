@@ -161,3 +161,13 @@
       (butlast argsm)
       (apply concat
         (last argsm)))))
+
+(defn assoc-in-mv [m [k & ks] v]
+  (if-let [[k2] ks]
+    (assoc m k
+           (assoc-in-mv
+             (get m k
+               (if (number? k2) [] {}))
+             ks
+             v))
+    (assoc m k v)))
