@@ -346,6 +346,12 @@
       (UnityEngine.GameObject.))
     spec))
 
+;; ============================================================
+;; dehydration
+;; ============================================================
+
+
+
 
 ;; ============================================================
 ;; establish database
@@ -428,7 +434,7 @@
 
 (def problem-log (atom []))
 
-(defn form-macro-map [f tsyms ctx]
+(defn tsym-map [f tsyms ctx]
   (->> tsyms
     (map
       (fn [tsym]
@@ -442,45 +448,39 @@
     (filter second)
     (into {})))
 
-(defmacro establish-component-populaters-mac [hdb]
-  (let [cpfmf (form-macro-map
+(defmacro establish-component-populaters-mac [m]
+  (let [cpfmf (tsym-map
                 populater-form
-                ;'[UnityEngine.Transform UnityEngine.BoxCollider]
-                (all-component-type-symbols)
+                '[UnityEngine.Transform UnityEngine.BoxCollider]
+                ;(all-component-type-symbols)
                 {:setables-fn
                  setables-cached
                 ;setables
                  })]
-    `(let [hdb# ~hdb
-           cpfm# ~cpfmf]
-       (mu/merge-in hdb# [:populaters] cpfm#))))
+    `(merge ~m ~cpfmf)))
 
-(defmacro establish-value-type-populaters-mac [hdb]
-  (let [vpfmf (form-macro-map
+(defmacro establish-value-type-populaters-mac [m]
+  (let [vpfmf (tsym-map
                 populater-form
-                ;'[UnityEngine.Vector3] 
-                (all-value-type-symbols)
+                '[UnityEngine.Vector3] 
+                ;(all-value-type-symbols)
                 {:setables-fn
                  setables-cached
                  ;setables
                  })]
-    `(let [hdb# ~hdb
-           vpfm# ~vpfmf]
-       (mu/merge-in hdb# [:populaters] vpfm#))))
+    `(merge ~m ~vpfmf)))
 
 ;; probably faster compile if you consolidate with populaters
-(defmacro establish-value-type-hydraters-mac [hdb]
-  (let [vpfmf (form-macro-map
+(defmacro establish-value-type-hydraters-mac [m]
+  (let [vhfmf (tsym-map
                 hydrater-form
-                ;'[UnityEngine.Vector3]
-                (all-value-type-symbols) ;; 231
+                '[UnityEngine.Vector3]
+                ;(all-value-type-symbols) ;; 231
                 {:setables-fn
                  setables-cached
                  ;setables
                  })]
-    `(let [hdb# ~hdb
-           vpfm# ~vpfmf]
-       (mu/merge-in hdb# [:hydraters] vpfm#))))
+    `(merge ~m ~vhfmf)))
 
 (defn establish-type-flags [hdb]
   ;; put something here
@@ -489,22 +489,33 @@
                 (concat
                   (keys (:populaters hdb))
                   (keys (:hydraters hdb)))))]
-    (mu/merge-in hdb [:type-flags->types]
+    (update-in hdb [:type-flags->types] merge
       (zipmap
         (map keyword-for-type tks)
         tks))))
 
-;; mathematica isn't picking this up for some horrible reason
+;; ============================================================
+;; database
+;; ============================================================
+
+(def default-component-populaters
+  (establish-component-populaters-mac {}))
+
+(def default-value-type-populaters
+  (establish-value-type-populaters-mac {}))
+
+(def default-value-type-hydraters
+  (establish-value-type-hydraters-mac {}))
+
 (def default-hydration-database
   (->
     {:populaters {UnityEngine.GameObject #'populate-game-object!}
      :hydraters {UnityEngine.GameObject #'hydrate-game-object}
      :type-flags->types {}}
-    establish-component-populaters-mac
-    establish-value-type-populaters-mac 
-    establish-value-type-hydraters-mac
-    establish-type-flags
-    identity))
+    (update-in [:populaters] merge default-component-populaters)
+    (update-in [:populaters] merge default-value-type-populaters)
+    (update-in [:hydraters] merge default-value-type-hydraters)
+    establish-type-flags))
 
 (def hydration-database
   (atom default-hydration-database))
