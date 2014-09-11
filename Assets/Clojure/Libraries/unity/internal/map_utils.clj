@@ -76,14 +76,6 @@
 (defn remove-vals [m pred]
   (filter-vals m (complement pred)))
 
-(defn merge-in [m1 p m2]
-  (if-let [[k & ks] (seq p)] 
-    (assoc m1 k (merge-in (get m1 k {}) ks m2))
-    (merge m1 m2)))
-
-;;; better names? there's doubtless some superior category-theoretical
-;;; way to talk about this, if anyone knows it I'm all ears
-
 (defn vk-biject
   "Maps values in m to groups of keys associated with them (in m). Sounder than, and different from, clojure.set/map-invert."
   [m]
@@ -121,3 +113,53 @@
 
 (defn some-val [m pred]
   (some pred (vals m)))
+
+
+;; ============================================================
+;; sharpsmanship
+;; ============================================================
+
+(defmacro lit-map [& syms]
+  (assert (every? symbol? syms))
+  (zipmap (map keyword syms) syms))
+
+(defmacro lit-assoc [m & syms]
+  (assert (every? symbol? syms))
+  `(assoc ~m
+     ~@(interleave
+         (map keyword syms)
+         syms)))
+
+(defmacro checked-keys [bndgs & body]
+  (let [dcls (for [[ks m] (partition 2 bndgs),
+                   :let [msym (gensym "map_")]]
+               (->> ks
+                 (mapcat
+                   (fn [k]
+                     `[~k (if-let [e# (find ~msym ~(keyword k))]
+                            (val e#)
+                            (throw
+                              (Exception.
+                                (str "key " ~(keyword k) " not found"))))]))
+                 (list* msym m)))]
+    `(let [~@(apply concat dcls)]
+       ~@body)))
+
+(defn apply-kv
+  "Terrible, necessary function. Use with APIs employing horrific keyword-arguments pattern. Please do not write such APIs."
+  [f & argsm]
+  (apply f
+    (concat
+      (butlast argsm)
+      (apply concat
+        (last argsm)))))
+
+(defn assoc-in-mv [m [k & ks] v]
+  (if-let [[k2] ks]
+    (assoc m k
+           (assoc-in-mv
+             (get m k
+               (if (number? k2) [] {}))
+             ks
+             v))
+    (assoc m k v)))
