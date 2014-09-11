@@ -448,6 +448,12 @@
       (hydrate-game-object
         (mu/assoc-in-mv spec [:transform 0 :parent] trns)))))
 
+(defn game-object-prepopulate! [^GameObject obj, spec]
+  (if-let [t (first (:transform spec))] ;; obsoletes resolve-type-key
+    (do (populate! (.GetComponent obj UnityEngine.Transform) t)
+        (dissoc spec :transform))
+    spec))
+
 ;; this doesn't work for other properties yet (eg tag, layer, etc)!
 (defn populate-game-object! ^UnityEngine.GameObject
   [^UnityEngine.GameObject gob spec]
@@ -479,7 +485,7 @@
           (new UnityEngine.GameObject G__539 G__540))
       (throw (Exception. "Unsupported constructor arity")))
     (map? spec)
-    (let [^UnityEngine.GameObject hydrater-target_538
+    (let [^UnityEngine.GameObject obj
           (if-let [constructor-vec_535 (constructor-vec spec)]
             (case (count constructor-vec_535)
               0 (let [[] constructor-vec_535]
@@ -489,7 +495,8 @@
               2 (let [[G__536 G__537] constructor-vec_535]
                   (new UnityEngine.GameObject G__536 G__537))
               (throw (Exception. "Unsupported constructor arity")))
-            (new UnityEngine.GameObject))]
+            (new UnityEngine.GameObject))
+          spec' (game-object-prepopulate! obj spec)]
       (reduce-kv
         (fn populater-fn-for_UnityEngine.GameObject
           [^UnityEngine.GameObject obj spec-key spec-val]
@@ -550,8 +557,8 @@
                       (throw (Exception. "Component hydration requires vector")))))
                 obj))
           ^UnityEngine.GameObject obj)
-        ^UnityEngine.GameObject hydrater-target_538
-        spec))
+        obj
+        spec'))
     :else
     (throw (Exception. "Unsupported hydration spec"))))
 
