@@ -12,6 +12,7 @@ using System.Threading;
 public class ClojureRepl : EditorWindow {
   static ClojureRepl() {
     // TODO read from config
+    ClojureAssetPostprocessor.SetupLoadPath();
     ClojureRepl.StartREPL();
   }
 
@@ -26,7 +27,7 @@ public class ClojureRepl : EditorWindow {
 
   [MenuItem ("Clojure/REPL/Start %#r")]
   public static void StartREPL () {
-    RT.load("unity.repl");
+    RT.load("unity/repl");
     RT.var("unity.repl", "start-server").invoke(11211);
     EditorApplication.update += ClojureRepl.Update;
   }
