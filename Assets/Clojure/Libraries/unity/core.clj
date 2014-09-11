@@ -1,5 +1,6 @@
 (ns unity.core
-  (:require [unity.reflect :as r])
+  (:require [unity.reflect :as r]
+            unity.messages)
   (:import [UnityEngine MonoBehaviour]))
 
 ;; ============================================================
@@ -240,3 +241,25 @@
    :inline-arities #{2}}
   [obj t]
   (.GetComponent obj t))
+
+(defmacro defcomponent
+  [name fields & methods] 
+  (require 'unity.messages)
+  `(defscript
+     ~name
+     ;; make all fields mutable
+     ~(vec (map #(vary-meta % assoc :unsynchronized-mutable true) fields))
+     ~@(concat 
+         (let [forms (take-while list? methods)]
+           ;; add protocol declaration for known unity messages
+           (interleave (map #(symbol (str "unity.messages/I" (first %))) forms)
+                       ;; wrap method bodies in typehinted let bindings
+                       (map (fn [[name args & body]]
+                              (list name args
+                                `(let ~(vec (flatten (map (fn [typ arg]
+                                              [(vary-meta arg assoc :tag typ) arg])
+                                            (unity.messages/messages name)
+                                            (drop 1 args))))
+                                   ~@body)))
+                         forms)))
+         (drop-while list? methods))))
