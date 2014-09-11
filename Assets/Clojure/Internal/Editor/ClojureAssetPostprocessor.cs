@@ -40,6 +40,8 @@ class ClojureAssetPostprocessor : AssetPostprocessor {
 
     // dont need to be doing this every 
     SetupLoadPath();
+    RT.load("unity/internal/editor_interop");
+    RT.var("unity.internal.editor-interop", "touch-dlls").invoke(pathToAssemblies);
     
     // only consider imported assets
     foreach(string path in importedAssets) {
@@ -52,7 +54,12 @@ class ClojureAssetPostprocessor : AssetPostprocessor {
 
         string cljNameSpace = String.Join(".", path.Remove(path.Length - 4, 4).Split(Path.DirectorySeparatorChar).Skip(rootLength).ToArray()).Replace("_", "-");
 
-        Debug.Log("Compiling " + cljNameSpace + "...");
+        if(File.Exists(Path.Combine(System.Environment.CurrentDirectory, pathToAssemblies) + "/" + cljNameSpace + ".clj.dll")) {
+            Debug.Log(cljNameSpace + ".clj.dll already exists, skipping");
+            continue;
+        } else {
+            Debug.Log("Compiling " + cljNameSpace + "...");
+        }
 
         try {
             Var.pushThreadBindings(RT.map(
