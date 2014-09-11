@@ -20,9 +20,7 @@
              (drop-while seq? (next s)))
       ret)))
  
-(defn ^{:private true}
-  maybe-destructured
-  [params body]
+(defn- maybe-destructured [params body]
   (if (every? symbol? params)
     (cons params body)
     (loop [params params
@@ -83,7 +81,7 @@
           `(new ~classname ~@field-args)))))
 
 (defn- emit-defclass* 
-  "Do not use this directly - use deftype"
+  "Do not use this directly - use defcomponent"
   [tagname name extends assem fields interfaces methods]
   (assert (and (symbol? extends) (symbol? assem)))
   (let [classname (with-meta
@@ -98,27 +96,6 @@
        :implements ~interfaces 
        ~@methods))) 
 
-;; (defmacro defclass
-;;   {:arglists '([name extends assem [& fields] & opts+specs])}
-;;   [name extends assem [& fields] & opts+specs]
-;;   ;;(validate-fields fields)
-;;   (let [gname name 
-;;         [interfaces methods opts] (parse-opts+specs opts+specs)
-;;         ns-part (namespace-munge *ns*)
-;;         classname (symbol (str ns-part "." gname))
-;;         hinted-fields fields
-;;         fields (vec (map #(with-meta % nil) fields))
-;;         [field-args over] (split-at 20 fields)]
-;;     `(let []
-;;        ~(emit-defclass*
-;;           name gname
-;;           extends
-;;           assem
-;;           (vec hinted-fields) (vec interfaces) methods)
-;;        (import ~classname)
-;;        ~(build-positional-factory gname classname fields)
-;;        ~classname)))
-
 (defn- validate-fields
   ""
   [fields]
@@ -128,8 +105,7 @@
     (when (some specials fields)
       (throw (Exception. (str "The names in " specials " cannot be used as field names for types or records."))))))
 
-(defmacro defscript
-  ;;(validate-fields fields)
+(defmacro ^:private defcomponent*
   [name fields & opts+specs]
   (validate-fields fields)
   (let [gname name 
@@ -151,6 +127,28 @@
        (import ~classname)
        ~(build-positional-factory gname classname fields)
        ~classname)))
+
+(defmacro defcomponent
+  [name fields & methods] 
+  (require 'unity.messages)
+  `(defcomponent*
+     ~name
+     ;; make all fields mutable
+     ~(vec (map #(vary-meta % assoc :unsynchronized-mutable true) fields))
+     ~@(concat 
+         (let [forms (take-while list? methods)]
+           ;; add protocol declaration for known unity messages
+           (interleave (map #(symbol (str "unity.messages/I" (first %))) forms)
+                       ;; wrap method bodies in typehinted let bindings
+                       (map (fn [[name args & body]]
+                              (list name args
+                                `(let ~(vec (flatten (map (fn [typ arg]
+                                              [(vary-meta arg assoc :tag typ) arg])
+                                            (unity.messages/messages name)
+                                            (drop 1 args))))
+                                   ~@body)))
+                         forms)))
+         (drop-while list? methods))))
 
 ;; ============================================================
 ;; interop
@@ -241,25 +239,3 @@
    :inline-arities #{2}}
   [obj t]
   (.GetComponent obj t))
-
-(defmacro defcomponent
-  [name fields & methods] 
-  (require 'unity.messages)
-  `(defscript
-     ~name
-     ;; make all fields mutable
-     ~(vec (map #(vary-meta % assoc :unsynchronized-mutable true) fields))
-     ~@(concat 
-         (let [forms (take-while list? methods)]
-           ;; add protocol declaration for known unity messages
-           (interleave (map #(symbol (str "unity.messages/I" (first %))) forms)
-                       ;; wrap method bodies in typehinted let bindings
-                       (map (fn [[name args & body]]
-                              (list name args
-                                `(let ~(vec (flatten (map (fn [typ arg]
-                                              [(vary-meta arg assoc :tag typ) arg])
-                                            (unity.messages/messages name)
-                                            (drop 1 args))))
-                                   ~@body)))
-                         forms)))
-         (drop-while list? methods))))
