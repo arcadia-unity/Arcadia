@@ -131,12 +131,19 @@
           (throw (Exception. "Expects AssemblyName or string")))]
     (System.Reflection.Assembly/Load an)))
 
+(defn decently-named? [^System.Type t]
+  (boolean
+    (let [flnm (.FullName t)]
+      (not (re-find #"[^a-zA-Z0-9.]" flnm)))))
+
 (defn all-component-types
   ([] (all-component-types [(load-assembly "UnityEngine")]))
   ([assems]
      (for [^Assembly assem assems
            ^System.MonoType t (.GetTypes assem)
-           :when (isa? t UnityEngine.Component)]
+           :when (and
+                   (isa? t UnityEngine.Component)
+                   (decently-named? t))]
        t)))
 
 (defn all-component-type-symbols []
@@ -150,7 +157,9 @@
   ([assems]
      (for [^Assembly assem assems
            ^System.MonoType t (.GetTypes assem)
-           :when (.IsValueType t)]
+           :when (and
+                   (.IsValueType t)
+                   (decently-named? t))]
        t)))
 
 (defn all-value-type-symbols []
@@ -554,7 +563,12 @@
                           (populate! (.GetComponent obj t) cspec t))
                         (doseq [cspec vspecs]
                           (populate! (.AddComponent obj t) cspec t)))
-                      (throw (Exception. "Component hydration requires vector")))))
+                      (throw
+                        (Exception.
+                          (str
+                            "Component hydration for " t
+                            " at spec-key " spec-key
+                            " requires vector"))))))
                 obj))
           ^UnityEngine.GameObject obj)
         obj
@@ -734,22 +748,22 @@
 (defmacro establish-component-populaters-mac [m]
   (let [cpfmf (tsym-map
                 populater-form
-                '[UnityEngine.Transform UnityEngine.BoxCollider]
-                ;(all-component-type-symbols)
+                ;;'[UnityEngine.Transform UnityEngine.BoxCollider]
+                (all-component-type-symbols)
                 {:setables-fn
                  setables-cached
-                ;setables
+                ;;setables
                  })]
     `(merge ~m ~cpfmf)))
 
 (defmacro establish-value-type-populaters-mac [m]
   (let [vpfmf (tsym-map
                 populater-form
-                '[UnityEngine.Vector3] 
-                ;(all-value-type-symbols)
+                ;;'[UnityEngine.Vector3] 
+                (all-value-type-symbols)
                 {:setables-fn
                  setables-cached
-                 ;setables
+                 ;;setables
                  })]
     `(merge ~m ~vpfmf)))
 
@@ -757,11 +771,11 @@
 (defmacro establish-value-type-hydraters-mac [m]
   (let [vhfmf (tsym-map
                 hydrater-form
-                '[UnityEngine.Vector3]
-                ;(all-value-type-symbols) ;; 231
+                ;;'[UnityEngine.Vector3]
+                (all-value-type-symbols) ;; 231
                 {:setables-fn
                  setables-cached
-                 ;setables
+                 ;;setables
                  })]
     `(merge ~m ~vhfmf)))
 
@@ -769,8 +783,8 @@
 (defmacro establish-component-dehydraters-mac [m]
   (let [dhm (tsym-map
               dehydrater-form
-              '[UnityEngine.Transform UnityEngine.BoxCollider]
-              ;(all-component-type-symbols)
+              ;;'[UnityEngine.Transform UnityEngine.BoxCollider]
+              (all-component-type-symbols)
               {:setables-fn setables-cached
                :setables-filter (fn [{:keys [name declaring-class]}]
                                   (if (= declaring-class 'UnityEngine.Transform)
@@ -783,8 +797,8 @@
 (defmacro establish-value-type-dehydraters-mac [m]
   (let [dhm (tsym-map
               dehydrater-form
-              '[UnityEngine.Vector3]
-              ;(all-component-type-symbols)
+              (all-component-type-symbols)
+              ;;'[UnityEngine.Vector3]
               {:setables-fn setables-cached})]
     `(merge ~m ~dhm)))
 
