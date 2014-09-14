@@ -731,29 +731,22 @@
 
 (def problem-log (atom []))
 
-(defn tsym-map-for-mac [f tsyms ctx]
-  (let [kvs (->> tsyms
-              (map
-                (fn [tsym]
-                  [tsym,
-                   (try ;; total hack
-                     (f tsym ctx)
-                     (catch Exception e
-                       (do
-                         (swap! problem-log conj tsym)
-                         nil)))]))
-              (filter second)
-              (mapv
-                (fn [kv]
-                  `(try
-                     ~kv
-                     (catch clojure.lang.Compiler+AssemblyInitializationException e#
-                       nil)))))]
-    `(into {}
-       ~kvs)))
+(defn tsym-map [f tsyms ctx]
+  (->> tsyms
+    (map
+      (fn [tsym]
+        [tsym,
+         (try ;; total hack
+           (f tsym ctx)
+           (catch Exception e
+             (do
+               (swap! problem-log conj tsym)
+               nil)))]))
+    (filter second)
+    (into {})))
 
 (defmacro establish-component-populaters-mac [m]
-  (let [cpfmf (tsym-map-for-mac
+  (let [cpfmf (tsym-map
                 populater-form
                 ;;'[UnityEngine.Transform UnityEngine.BoxCollider]
                 (all-component-type-symbols)
@@ -764,7 +757,7 @@
     `(merge ~m ~cpfmf)))
 
 (defmacro establish-value-type-populaters-mac [m]
-  (let [vpfmf (tsym-map-for-mac
+  (let [vpfmf (tsym-map
                 populater-form
                 ;;'[UnityEngine.Vector3] 
                 (all-value-type-symbols)
@@ -776,7 +769,7 @@
 
 ;; probably faster compile if you consolidate with populaters
 (defmacro establish-value-type-hydraters-mac [m]
-  (let [vhfmf (tsym-map-for-mac
+  (let [vhfmf (tsym-map
                 hydrater-form
                 ;;'[UnityEngine.Vector3]
                 (all-value-type-symbols) ;; 231
@@ -788,7 +781,7 @@
 
 
 (defmacro establish-component-dehydraters-mac [m]
-  (let [dhm (tsym-map-for-mac
+  (let [dhm (tsym-map
               dehydrater-form
               ;;'[UnityEngine.Transform UnityEngine.BoxCollider]
               (all-component-type-symbols)
@@ -802,7 +795,7 @@
     `(merge ~m ~dhm)))
 
 (defmacro establish-value-type-dehydraters-mac [m]
-  (let [dhm (tsym-map-for-mac
+  (let [dhm (tsym-map
               dehydrater-form
               (all-component-type-symbols)
               ;;'[UnityEngine.Vector3]
