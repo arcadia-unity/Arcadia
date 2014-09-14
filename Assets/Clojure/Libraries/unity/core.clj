@@ -105,7 +105,7 @@
     (when (some specials fields)
       (throw (Exception. (str "The names in " specials " cannot be used as field names for types or records."))))))
 
-(defmacro ^:private defcomponent*
+(defmacro defcomponent*
   [name fields & opts+specs]
   (validate-fields fields)
   (let [gname name 
