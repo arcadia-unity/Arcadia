@@ -65,7 +65,8 @@
               res)))))))
 
 (def default-repl-env
-  (binding [*ns* (find-ns 'user)]
+  (binding [*ns* (find-ns 'user)
+            *print-length* 50]
     (doto (atom {}) (unity.repl/update-repl-env))))
 
 (defn repl-eval-string
