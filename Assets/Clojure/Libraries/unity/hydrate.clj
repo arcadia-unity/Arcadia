@@ -90,7 +90,8 @@
         property->map (var-get #'clojure.reflect/property->map)]
     (map (comp r/reflection-transform property->map)
       (filter setable-property?
-        (.GetProperties t)))))
+        (.GetProperties t
+          (enum-or BindingFlags/Instance BindingFlags/Public))))))
 
 (defn setable-field? [^FieldInfo f]
   (boolean
@@ -690,12 +691,13 @@
     (println "squirreling successful")))
 
 ;; then evaluate the following, once, and wait a bit:
-;; (squirrel-setables-away
-;;   (concat
-;;     (all-component-type-symbols)
-;;     (all-value-type-symbols))
-;;   setables-path
-;;   problematic-typesyms-path)
+(binding [*print-length* nil]
+  (squirrel-setables-away
+    (concat
+      (all-component-type-symbols)
+      (all-value-type-symbols))
+    setables-path
+    problematic-typesyms-path))
 ;; time weirdly variable, not sure why
 
 ;; then you can retrieve-it like so:
