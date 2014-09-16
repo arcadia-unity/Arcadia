@@ -691,13 +691,13 @@
     (println "squirreling successful")))
 
 ;; then evaluate the following, once, and wait a bit:
-(binding [*print-length* nil]
-  (squirrel-setables-away
-    (concat
-      (all-component-type-symbols)
-      (all-value-type-symbols))
-    setables-path
-    problematic-typesyms-path))
+;; (binding [*print-length* nil]
+;;   (squirrel-setables-away
+;;     (concat
+;;       (all-component-type-symbols)
+;;       (all-value-type-symbols))
+;;     setables-path
+;;     problematic-typesyms-path))
 ;; time weirdly variable, not sure why
 
 ;; then you can retrieve-it like so:
