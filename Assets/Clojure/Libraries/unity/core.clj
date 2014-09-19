@@ -1,84 +1,46 @@
 (ns unity.core
-  (:require [unity.reflect :as r]
+  (:require [clojure.string :as string]
+            [unity.reflect :as r]
             unity.messages)
-  (:import [UnityEngine MonoBehaviour]))
+  (:import [UnityEngine
+            MonoBehaviour
+            GameObject
+            PrimitiveType]))
 
 ;; ============================================================
-;; defscript 
+;; defcomponent 
 ;; ============================================================
 
-(defn- parse-opts [s]
-  (loop [opts {} [k v & rs :as s] s]
-    (if (keyword? k)
-      (recur (assoc opts k v) rs)
-      [opts s])))
+(defmacro defcomponent
+  "Defines a new component."
+  [name fields & methods] 
+  (require 'unity.messages)
+  `(defcomponent*
+     ~name
+     ;; make all fields mutable
+     ~(vec (map #(vary-meta % assoc :unsynchronized-mutable true) fields))
+     ~@(concat 
+         (let [forms (take-while list? methods)]
+           ;; add protocol declaration for known unity messages
+           (interleave (map #(symbol (str "unity.messages/I" (first %))) forms)
+                       ;; wrap method bodies in typehinted let bindings
+                       (map (fn [[name args & body]]
+                              (list name args
+                                `(let ~(vec (flatten (map (fn [typ arg]
+                                              [(vary-meta arg assoc :tag typ) arg])
+                                            (unity.messages/messages name)
+                                            (drop 1 args))))
+                                   ~@body)))
+                         forms)))
+         (drop-while list? methods))))
 
-(defn- parse-impls [specs]
-  (loop [ret {} s specs]
-    (if (seq s)
-      (recur (assoc ret (first s) (take-while seq? (next s)))
-             (drop-while seq? (next s)))
-      ret)))
- 
-(defn- maybe-destructured [params body]
-  (if (every? symbol? params)
-    (cons params body)
-    (loop [params params
-           new-params []
-           lets []]
-      (if params
-        (if (symbol? (first params))
-          (recur (next params) (conj new-params (first params)) lets)
-          (let [gparam (gensym "p__")]
-            (recur (next params) (conj new-params gparam)
-              (-> lets (conj (first params)) (conj gparam)))))
-        `(~new-params
-           (let ~lets
-             ~@body))))))
+(defmacro defleaked [var]
+  `(def ~(symbol (name var))
+     (var-get (find-var '~var))))
 
-(defn- parse-opts+specs [opts+specs]
-  (let [[opts specs] (parse-opts opts+specs)
-        impls (parse-impls specs)
-        interfaces (-> (map #(if (var? (resolve %)) 
-                               (:on (deref (resolve %)))
-                               %)
-                         (keys impls))
-                     set
-                     (disj 'Object 'java.lang.Object)
-                     vec)
-        methods (map (fn [[name params & body]]
-                       (cons name (maybe-destructured params body)))
-                  (apply concat (vals impls)))]
-    (when-let [bad-opts (seq (remove #{:no-print} (keys opts)))]
-      (throw (ArgumentException. (apply print-str "Unsupported option(s) -" bad-opts)))) ;;; IllegalArgumentException
-    [interfaces methods opts]))
-
-(defn- build-positional-factory
-  "Used to build a positional factory for a given type/record.  Because of the
-  limitation of 20 arguments to Clojure functions, this factory needs to be
-  constructed to deal with more arguments.  It does this by building a straight
-  forward type/record ctor call in the <=20 case, and a call to the same
-  ctor pulling the extra args out of the & overage parameter.  Finally, the
-  arity is constrained to the number of expected fields and an ArityException
-  will be thrown at runtime if the actual arg count does not match."
-  [nom classname fields]
-  (let [fn-name (symbol (str '-> nom))
-        [field-args over] (split-at 20 fields)
-        field-count (count fields)
-        arg-count (count field-args)
-        over-count (count over)
-        docstring (str "Positional factory function for class " classname ".")]
-    `(defn ~fn-name
-       ~docstring
-       [~@field-args ~@(if (seq over) '[& overage] [])]
-       ~(if (seq over)
-          `(if (= (count ~'overage) ~over-count)
-             (new ~classname
-               ~@field-args
-               ~@(for [i (range 0 (count over))]
-                   (list `nth 'overage i)))
-             (throw (clojure.lang.ArityException. (+ ~arg-count (count ~'overage)) (name '~fn-name))))
-          `(new ~classname ~@field-args)))))
+(defleaked clojure.core/validate-fields)
+(defleaked clojure.core/parse-opts+specs)
+(defleaked clojure.core/build-positional-factory)
 
 (defn- emit-defclass* 
   "Do not use this directly - use defcomponent"
@@ -95,15 +57,6 @@
        ~fields 
        :implements ~interfaces 
        ~@methods))) 
-
-(defn- validate-fields
-  ""
-  [fields]
-  (when-not (vector? fields)
-    (throw (Exception. "No fields vector given."))) ;;; AssertionError.
-  (let [specials #{'__meta '__extmap}]
-    (when (some specials fields)
-      (throw (Exception. (str "The names in " specials " cannot be used as field names for types or records."))))))
 
 (defmacro defcomponent*
   [name fields & opts+specs]
@@ -128,84 +81,68 @@
        ~(build-positional-factory gname classname fields)
        ~classname)))
 
-(defmacro defcomponent
-  [name fields & methods] 
-  (require 'unity.messages)
-  `(defcomponent*
-     ~name
-     ;; make all fields mutable
-     ~(vec (map #(vary-meta % assoc :unsynchronized-mutable true) fields))
-     ~@(concat 
-         (let [forms (take-while list? methods)]
-           ;; add protocol declaration for known unity messages
-           (interleave (map #(symbol (str "unity.messages/I" (first %))) forms)
-                       ;; wrap method bodies in typehinted let bindings
-                       (map (fn [[name args & body]]
-                              (list name args
-                                `(let ~(vec (flatten (map (fn [typ arg]
-                                              [(vary-meta arg assoc :tag typ) arg])
-                                            (unity.messages/messages name)
-                                            (drop 1 args))))
-                                   ~@body)))
-                         forms)))
-         (drop-while list? methods))))
-
 ;; ============================================================
-;; interop
+;; get-component
 ;; ============================================================
 
-(defn some-2
+(defn- camels-to-hyphens [s]
+  (string/replace s #"([a-z])([A-Z])" "$1-$2"))
+
+(defn- dedup-by [f coll]
+  (map peek (vals (group-by f coll))))
+
+(defn- some-2
   "Uses reduced, should be faster + less garbage + more general than clojure.core/some"
   [pred coll]
   (reduce #(when (pred %2) (reduced %2)) nil coll))
 
-(defn in? [x coll]
+(defn- in? [x coll]
   (boolean (some-2 #(= x %) coll)))
 
-(defn type-name? [x]
+(defn- type-name? [x]
   (boolean
     (and (symbol? x)
       (when-let [y (resolve x)]
         (instance? System.MonoType y)))))
 
-(defn type-of-local-reference [x env]
+(defn- type-of-local-reference [x env]
   (assert (contains? env x))
   (let [lclb ^clojure.lang.CljCompiler.Ast.LocalBinding (env x)]
     (when (.get_HasClrType lclb)
       (.get_ClrType lclb))))
 
-(defn type? [x]
+(defn- type? [x]
   (instance? System.MonoType x))
 
-(defn tag-type [x]
+(defn- tag-type [x]
   (when-let [t (:tag (meta x))]
     (cond ;; this does seem kind of stupid. Can we really tag things
           ;; with mere symbols as types?
       (type? t) t
       (type-name? t) (resolve t))))
 
-(defn type-of-reference [x env]
+(defn- type-of-reference [x env]
   (or (tag-type x) ; tagged symbol
       (when (contains? env x) (type-of-local-reference x env)) ; local
       (when (symbol? x) (tag-type (resolve x))))) ; reference to tagged var, or whatever 
 
 ;; really ought to be testing for arity as well
-(defn type-has-method? [t mth]
+(defn- type-has-method? [t mth]
   (in? (symbol mth) (map :name (r/methods t :ancestors true))))
 
 ;; maybe we should be passing full method sigs around rather than
 ;; method names. 
-(defn known-implementer-reference? [x method-name env]
+(defn- known-implementer-reference? [x method-name env]
   (boolean
     (when-let [tor (type-of-reference x env)]
       (type-has-method? tor method-name))))
 
-(defn raise-args [[head & rst]]
+(defn- raise-args [[head & rst]]
   (let [gsyms (repeatedly (count rst) gensym)]
     `(let [~@(interleave gsyms rst)]
        ~(cons head gsyms))))
 
-(defn raise-non-symbol-args [[head & rst]]
+(defn- raise-non-symbol-args [[head & rst]]
   (let [bndgs (zipmap 
                 (remove symbol? rst)
                 (repeatedly gensym))]
@@ -215,27 +152,139 @@
 (defmacro get-component* [obj t]
   (if (not-every? symbol? [obj t])
     (raise-non-symbol-args
-      (list 'unity.interop/get-component* obj t))
+      (list 'unity.core/get-component* obj t))
     (cond
       (contains? &env t)
       `(.GetComponent ~obj ~t)
-
-
       (and
         (known-implementer-reference? obj 'GetComponent &env)
         (type-name? t))
       `(.GetComponent ~obj (~'type-args ~t))
-
       :else
       `(.GetComponent ~obj ~t))))
 
-;; sadly I'm not sure this will actually warn us at runtime; I think
-;; the reflection warning occurs when we compile get-component, not
-;; when we run it. Perhaps we need another flag (that can be disabled)
-;; for runtime reflection?
 (defn get-component
-  {:inline (fn [obj t]
-             (list 'unity.interop/get-component* obj t))
+  "Returns the component of Type type if the game object has one attached, nil if it doesn't."
+  {:inline (fn [gameobject type]
+             (list 'unity.core/get-component* gameobject type))
    :inline-arities #{2}}
-  [obj t]
-  (.GetComponent obj t))
+  [gameobject type]
+  (.GetComponent gameobject type))
+
+(comment (defmacro single-typearg-generic [name doc]
+  (let [cljname     (-> name str camels-to-hyphens string/lower-case symbol)
+        macroname   (symbol (str cljname "*"))
+        nsmacroname (symbol (str (.Name *ns*) "/" cljname "*"))]
+    `(do
+       (defmacro ~nsmacroname [obj# t#]
+         (if (not-every? symbol? [obj# t#])
+           (raise-non-symbol-args
+             (list ~nsmacroname obj# t#))
+           (cond
+             (contains? ~'&env t#)
+             (quote (. (unquote obj#) ~name (unquote t#)))
+             (and
+               (known-implementer-reference? obj# (quote ~name) ~'&env)
+               (type-name? t#))
+             (quote (. (unquote obj#) ~name (~'type-args (unquote t#))))
+             :else
+             (quote (. obj# ~name t#)))))
+
+       (defn ~cljname
+          ~doc
+          {:inline (fn [~'gameobject ~'type]
+                     (~nsmacroname
+                        ~'gameobject
+                        ~'type))
+          :inline-arities #{2}}
+          [~'gameobject ~'type]
+          (. ~'gameobject ~name ~'type))))))
+
+(comment (pprint (macroexpand-1 '(single-typearg-generic GetComponentInChildren "foo")))
+(set! *print-meta* true))
+
+(comment (single-typearg-generic GetComponentInChildren "foo"))
+
+;; ============================================================
+;; wrappers
+;; ============================================================
+
+(defmacro defwrapper
+  "Wrap static methods of C# classes"
+  ([class]
+   `(do ~@(map (fn [m]
+          `(defwrapper
+             ~class
+             ~(symbol (.Name m))
+             ~(str "No documentation for " class "/" (.Name m))))
+        (->>
+          (.GetMethods
+            (resolve class)
+            (enum-or BindingFlags/Public BindingFlags/Static))
+          (remove #(or (.IsSpecialName %) (.IsGenericMethod %)))))))
+  ([class method docstring]
+   `(defwrapper
+     ~(symbol (string/lower-case
+                (camels-to-hyphens (str method))))
+     ~class
+     ~method
+     ~docstring))
+  ([name class method docstring & body]
+   `(defn ~name
+      ~docstring
+      ~@(->> (.GetMethods
+               (resolve class)
+               (enum-or BindingFlags/Public BindingFlags/Static))
+             (filter #(= (.Name %) (str method)))
+             (remove #(.IsGenericMethod %))
+             (dedup-by #(.Length (.GetParameters %)))
+             (map (fn [m]
+                    (let [params (map #(symbol (.Name %)) (.GetParameters m))]
+                      (list (vec params)
+                            `(~(symbol (str class "/" method)) ~@params))))))
+      ~@body)))
+
+(defwrapper instantiate UnityEngine.Object Instantiate
+  "Clones the object original and returns the clone."
+  ([^UnityEngine.Object obj ^UnityEngine.Vector3 pos]
+   (UnityEngine.Object/Instantiate obj pos Quaternion/identity)))
+
+(defn create-primitive [prim]
+  (if (= PrimitiveType (type prim))
+    (GameObject/CreatePrimitive prim)
+    (GameObject/CreatePrimitive (case prim
+                                  :sphere   PrimitiveType/Sphere
+                                  :capsule  PrimitiveType/Capsule
+                                  :cylinder PrimitiveType/Cylinder
+                                  :cube     PrimitiveType/Cube
+                                  :plane    PrimitiveType/Plane
+                                  :quad     PrimitiveType/Quad))))
+
+(defwrapper UnityEngine.Object Destroy
+  "Removes a gameobject, component or asset.")
+
+(defwrapper UnityEngine.Object DestroyImmediate
+  "Destroys the object obj immediately. You are strongly recommended to use Destroy instead.")
+
+(defwrapper UnityEngine.Object DontDestroyOnLoad
+  "Makes the object target not be destroyed automatically when loading a new scene.")
+
+(defwrapper object-typed UnityEngine.Object FindObjectOfType
+  "Returns the first active loaded object of Type type.")
+
+(defwrapper objects-typed UnityEngine.Object FindObjectsOfType
+  "Returns a list of all active loaded objects of Type type.")
+
+(defwrapper object-named GameObject Find
+  "Finds a game object by name and returns it.")
+
+(defn objects-named
+  "Finds a game objects by name and returns them."
+  [^System.String name]
+  (->> (objects-typed GameObject) (filter #(= (.name %) name))))
+
+(defwrapper object-tagged GameObject FindWithTag
+  "Returns one active GameObject tagged tag. Returns null if no GameObject was found.")
+
+(defwrapper objects-tagged GameObject FindGameObjectsWithTag
+  "Returns a list of active GameObjects tagged tag. Returns empty array if no GameObject was found.")
