@@ -7,6 +7,9 @@
             GameObject
             PrimitiveType]))
 
+(defn- regex? [x]
+  (instance? System.Text.RegularExpressions.Regex x))
+
 ;; ============================================================
 ;; defcomponent 
 ;; ============================================================
@@ -278,10 +281,54 @@
 (defwrapper object-named GameObject Find
   "Finds a game object by name and returns it.")
 
+(defn- condcast-sym [xsym clauses default]
+  (let [cs (->> clauses
+             (partition 2)
+             (mapcat
+               (fn [[t then]]
+                 `[(instance? ~t ~xsym)
+                   (let [~(with-meta xsym {:tag (resolve t)}) ~xsym]
+                     ~then)])))]
+    (cons 'cond (concat cs default))))
+
+(defn- condcast-nsym [x clauses default]
+  (let [xsym (gensym "xsym_")
+        cs (->> clauses
+             (partition 2)
+             (mapcat
+               (fn [[t then]]
+                 `[(instance? ~t ~xsym) ~then])))]
+    `(let [~xsym ~x]
+       ~(cons 'cond
+          (concat cs default)))))
+
+;; note this takes an optional default value. This macro is potentially
+;; annoying in the case that you want to branch on a supertype, for
+;; instance, but the cast would remove interface information. Use with
+;; this in mind.
+(defmacro condcast [xsym & clauses]
+  (let [[clauses dflt] (if (even? (count clauses))
+                         [clauses nil] 
+                         [(butlast clauses)
+                          [:else (last clauses)]])]
+    (if (symbol? xsym)
+      (condcast-sym xsym clauses dflt)
+      (condcast-nsym xsym clauses dflt))))
+
+;; type-hinting of condcast isn't needed here, but seems a good habit to get into
 (defn objects-named
-  "Finds a game objects by name and returns them."
-  [^System.String name]
-  (->> (objects-typed GameObject) (filter #(= (.name %) name))))
+  "Finds game objects by name. Name can be string or regex."
+  [name]
+  (condcast name 
+    System.String
+    (for [^GameObject obj (objects-typed GameObject)
+          :when (= (.name obj) name)]
+      obj)
+    
+    System.Text.RegularExpressions.Regex
+    (for [^GameObject obj (objects-typed GameObject)
+          :when (re-matches name (.name obj))]
+      obj)))
 
 (defwrapper object-tagged GameObject FindWithTag
   "Returns one active GameObject tagged tag. Returns null if no GameObject was found.")
