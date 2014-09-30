@@ -1,6 +1,7 @@
 (ns unity.repl
   (:refer-clojure :exclude [with-bindings])
-  (:require [clojure.main :as main])
+  (:require [clojure.main :as main]
+            [unity.config :as config])
   (:import
     [UnityEngine Debug]
     [System.IO EndOfStreamException]
@@ -9,10 +10,6 @@
     [System.Net.Sockets UdpClient]
     [System.Threading Thread ThreadStart]
     [System.Text Encoding]))
-
-(def
-  ^{:doc "The form in injection is evaluated prior to each evaluation of a form in the REPL, in a try-catch."}
-  injection (atom nil))
 
 (defn env-map []
   {:*ns* *ns*
@@ -58,7 +55,7 @@
         (binding [*err* *out*] ;; not sure about this
           (prn
             (let [res (eval
-                        `(do ~(when-let [inj @injection]
+                        `(do ~(when-let [inj (read-string (pr-str (:injections @config/config)))]
                                 `(try ~inj (catch Exception e# e#)))
                              ~frm))]
               (update-repl-env repl-env)

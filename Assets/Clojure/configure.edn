@@ -1,0 +1,8 @@
+{:compiler
+ {:load-path
+  ["Assets/Clojure/Scripts"
+   "Assets/Clojure/Libraries"
+   "Assets/Clojure/Internal"],
+  :automatic true,
+  :assemblies "Assets/Clojure/Compiled"},
+ :injections (do (use 'unity.core))}
