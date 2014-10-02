@@ -5,4 +5,5 @@
    "Assets/Clojure/Internal"],
   :automatic true,
   :assemblies "Assets/Clojure/Compiled"},
- :injections (do (use 'unity.core))}
+ :injections (do (use 'unity.core)),
+ :verbose true}
