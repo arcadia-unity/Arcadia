@@ -146,7 +146,8 @@
        ~@body)))
 
 (defn apply-kv
-  "Terrible, necessary function. Use with APIs employing horrific keyword-arguments pattern. Please do not write such APIs."
+  "Terrible, necessary function. Use with APIs employing horrific
+  keyword-arguments pattern. Please do not write such APIs."
   [f & argsm]
   (apply f
     (concat
@@ -164,13 +165,23 @@
              v))
     (assoc m k v)))
 
-(defn soft-assoc
+(defn fill
   ([m k v]
      (if (contains? m k) m (assoc m k v)))
   ([m k v & kvs]
-     (let [ret (soft-assoc m k v)]
+     (let [ret (fill m k v)]
        (if kvs
          (if (next kvs)
            (recur ret (first kvs) (second kvs) (nnext kvs))
            (throw "soft-assoc expects even number of arguments after map/vector, found odd number"))
          ret))))
+
+;; o lord
+
+(defmacro fill-> [m & clauses]
+  (let [msym (gensym "msym_")]
+    `(as-> ~m ~msym
+       ~@(for [[k thn] (partition 2 clauses)]
+           `(if (contains? ~msym ~k)
+              ~msym
+              (assoc ~msym ~k ~thn))))))
