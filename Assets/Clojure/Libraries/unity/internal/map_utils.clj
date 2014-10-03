@@ -163,3 +163,14 @@
              ks
              v))
     (assoc m k v)))
+
+(defn soft-assoc
+  ([m k v]
+     (if (contains? m k) m (assoc m k v)))
+  ([m k v & kvs]
+     (let [ret (soft-assoc m k v)]
+       (if kvs
+         (if (next kvs)
+           (recur ret (first kvs) (second kvs) (nnext kvs))
+           (throw "soft-assoc expects even number of arguments after map/vector, found odd number"))
+         ret))))
