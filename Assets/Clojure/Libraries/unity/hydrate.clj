@@ -305,10 +305,11 @@
 ;;          ~targsym))))
  
 (defn constructors-spec [type]
-  (set
-    (conj 
-      (map :parameter-types (r/constructors type))
-      (when (.IsValueType type) []))))
+  (let [type (ensure-type type)]
+    (set
+      (conj 
+        (map :parameter-types (r/constructors type))
+        (when (.IsValueType type) [])))))
 
 ;; janky + reflective 4 now. Need something to disambiguate dispatch
 ;; by argument type rather than arity
@@ -352,97 +353,61 @@
                (Exception. 
                  "hydration init requires constructor-vec"))))))) ;; find some better exception class
 
-
-;; abomination. clean up after verifying.
 (declare setables-cached)
+
+(defn hydrater-map-clause [ctx]
+  (mu/checked-keys [[specsym typesym] ctx]
+    (let [initsym (with-meta (gensym "hydrater-target_")
+                    {:tag typesym})
+          initf   (hydrater-init-form ctx)
+          sr      (populater-reducing-fn-form ctx)]
+      `(let [~initsym ~initf]
+         (reduce-kv
+           ~sr
+           ~initsym
+           ~specsym)))))
+
+(defn hydrater-form 
+  ([typesym]
+     (hydrater-form typesym {}))
+  ([typesym ctx]
+     (let [specsym (gensym "spec_")
+           ctx     (-> ctx
+                     (mu/fill->
+                       :setables-fn setables
+                       :ctrspec (constructors-spec typesym))
+                     (mu/lit-assoc specsym typesym))]
+       
+       `(fn ~(symbol (str "hydrater-fn-for_" typesym))
+          [~specsym]
+          (cond
+            (instance? ~typesym ~specsym)
+            ~specsym
+
+            (map? ~specsym)
+            ~(hydrater-map-clause ctx)
+
+            (vector? ~specsym)
+            ~(constructor-application-form
+               (assoc ctx :cvsym specsym))
+
+            :else
+            (throw (Exception. "Unsupported hydration spec")))))))
+
 (defn value-hydrater-form
   ([typesym]
      (value-hydrater-form typesym {}))
-  ([typesym
-    {:keys [setables-fn]
-     :or {setables-fn setables-cached}
-     :as ctx0}]
-     (let [ctx      (mu/lit-assoc ctx0 setables-fn)
-           specsym  (gensym "spec_") 
-           ctrspec  (constructors-spec (ensure-type typesym))
-           fields   (map :name (setables-fn typesym))
-           field->setter-sym (get-field->setter-sym fields)
-           setter-inits (get-setter-inits typesym field->setter-sym)
-           sr       (populater-reducing-fn-form
-                      (assoc ctx
-                        :setables-fn setables-fn
-                        :set-clause-fn value-type-set-clause
-                        :typesym typesym
-                        :field->setter-sym field->setter-sym))
-           initf    (hydrater-init-form
-                      (mu/lit-assoc ctx typesym specsym ctrspec))
-           initsym  (with-meta (gensym "hydrater-target_") {:tag typesym})
-           capf     (constructor-application-form
-                      (mu/lit-assoc
-                        (assoc ctx :cvsym specsym)
-                        typesym specsym ctrspec))]
-       `(let [~@setter-inits]
-          (fn ~(symbol (str "hydrater-fn-for_" typesym))
-            [~specsym]
-            (cond
-              (instance? ~typesym ~specsym)
-              ~specsym
-
-              (vector? ~specsym)
-              ~capf
-
-              (map? ~specsym)
-              (let [~initsym ~initf]
-                (reduce-kv
-                  ~sr
-                  ~initsym
-                  ~specsym))
-
-              :else
-              (throw (Exception. "Unsupported hydration spec"))))))))
-
-
-;; some of the tests here feel redundant with those in hydrate
-  
-(defn hydrater-form
-  ([typesym]
-     (hydrater-form typesym {}))
-  ([typesym
-    {:keys [setables-fn]
-     :or {setables-fn setables}
-     :as ctx0}]
-     (let [ctx (mu/lit-assoc ctx0 setables-fn)]
-       (if (.IsValueType (resolve typesym))
-         (value-hydrater-form typesym ctx)
-         (let [specsym  (gensym "spec_") 
-               ctrspec  (constructors-spec (ensure-type typesym))
-               sr       (populater-reducing-fn-form
-                          (mu/lit-assoc ctx typesym setables-fn))
-               initf    (hydrater-init-form
-                          (mu/lit-assoc ctx typesym specsym ctrspec))
-               initsym  (with-meta (gensym "hydrater-target_") {:tag typesym})
-               capf     (constructor-application-form
-                          (mu/lit-assoc
-                            (assoc ctx :cvsym specsym)
-                            typesym specsym ctrspec))]
-           `(fn ~(symbol (str "hydrater-fn-for_" typesym))
-              [~specsym]
-              (cond
-                (instance? ~typesym ~specsym)
-                ~specsym
-
-                (vector? ~specsym)
-                ~capf
-
-                (map? ~specsym)
-                (let [~initsym ~initf]
-                  (reduce-kv
-                    ~sr
-                    ~initsym
-                    ~specsym))
-
-                :else
-                (throw (Exception. "Unsupported hydration spec")))))))))
+  ([typesym ctx]
+     (let [ctx2 (mu/fill-> ctx :setables-fn setables)]
+       (mu/checked-keys [[setables-fn] ctx2]
+         (let [fields            (map :name (setables-fn typesym))
+               field->setter-sym (get-field->setter-sym fields)
+               setter-inits      (get-setter-inits typesym field->setter-sym)
+               ctx3              (assoc ctx2
+                                   :set-clause-fn value-type-set-clause
+                                   :field->setter-sym field->setter-sym)]
+           `(let [~@setter-inits]
+              ~(hydrater-form typesym ctx3)))))))
 
 (defn resolve-type-flag [tf]
   (if (type? tf)
@@ -772,7 +737,7 @@
 ;; probably faster compile if you consolidate with populaters
 (defmacro establish-value-type-hydraters-mac [m]
   (let [vhfmf (tsym-map
-                hydrater-form
+                value-hydrater-form
                 ;;'[UnityEngine.Vector3]
                 (all-value-type-symbols) ;; 231
                 {:setables-fn

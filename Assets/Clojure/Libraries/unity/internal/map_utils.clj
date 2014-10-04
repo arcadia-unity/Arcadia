@@ -1,10 +1,6 @@
 (ns unity.internal.map-utils
   (:require clojure.set))
 
-;;; perhaps this doesn't belong in unity.*, however there are some
-;;; missing functions (like submap?) whose absence drives me so
-;;; bonkers I'm putting them here anyway.
-
 ;;; other ways to do it, should benchmark all of this also could use
 ;;; transients. most maps are small tho. hm. how fast is count on
 ;;; maps? might be some testable inflection point where transient is
@@ -185,3 +181,5 @@
            `(if (contains? ~msym ~k)
               ~msym
               (assoc ~msym ~k ~thn))))))
+
+;; much of this might be condensed into a single alternate destructuring dsl for maps
