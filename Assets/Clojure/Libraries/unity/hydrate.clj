@@ -226,16 +226,6 @@
       (prepopulater-form-fn ctx)
       specsym)))
 
-(defn populater-map-clause [ctx]
-  (mu/checked-keys [[specsym typesym initsym] ctx]
-    (let [sr      (populater-reducing-fn-form ctx)
-          ppf     (prepopulater-form ctx)]
-      `(let [~specsym ~ppf]
-         (reduce-kv
-           ~sr
-           ~initsym
-           ~specsym)))))
-
 (defn populater-reducing-fn-form [ctx]
   (mu/checked-keys [[typesym] ctx]
     (let [keysym   (gensym "spec-key_")
@@ -247,6 +237,16 @@
       `(fn ~fn-inner-name ~[targsym keysym valsym] 
          ~caseform
          ~targsym))))
+
+(defn populater-map-clause [ctx]
+  (mu/checked-keys [[specsym typesym initsym] ctx]
+    (let [sr      (populater-reducing-fn-form ctx)
+          ppf     (prepopulater-form ctx)]
+      `(let [~specsym ~ppf]
+         (reduce-kv
+           ~sr
+           ~initsym
+           ~specsym)))))
 
 (defn get-field->setter-sym [fields]
   (into {}
@@ -688,18 +688,16 @@
               ;;'[UnityEngine.Transform UnityEngine.BoxCollider]
               (all-component-type-symbols)
               {:setables-fn setables-cached
-               :setables-filter (fn [{:keys [name declaring-class]}]
-                                  (if (= declaring-class 'UnityEngine.Transform)
-                                    (and
-                                      (not= name 'parent)
-                                      (not= name 'name))
-                                    true))})]
+               :setables-filter (fn [{:keys [name]}]
+                                  (not
+                                    ('#{parent name tag active hideFlags}
+                                     name)))})]
     `(merge ~m ~dhm)))
 
 (defmacro establish-value-type-dehydraters-mac [m]
   (let [dhm (tsym-map
               dehydrater-form
-              (all-component-type-symbols)
+              (all-value-type-symbols)
               ;;'[UnityEngine.Vector3]
               {:setables-fn setables-cached})]
     `(merge ~m ~dhm)))
@@ -741,8 +739,8 @@
 (def default-component-dehydraters
   (establish-component-dehydraters-mac {}))
 
-(def default-value-type-dehydraters
-  (establish-value-type-dehydraters-mac {}))
+;; (def default-value-type-dehydraters
+;;   (establish-value-type-dehydraters-mac {}))
 
 (def default-hydration-database
   (->
@@ -754,7 +752,7 @@
     (update-in [:populaters] merge default-value-type-populaters)
     (update-in [:hydraters] merge default-value-type-hydraters)
     (update-in [:dehydraters] merge default-component-dehydraters)
-    (update-in [:dehydraters] merge default-value-type-dehydraters)
+    ;;(update-in [:dehydraters] merge default-value-type-dehydraters)
     establish-type-flags
     establish-inverse-type-flags))
 
