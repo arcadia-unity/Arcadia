@@ -203,18 +203,33 @@
                                ~setable-type)))]]
         `[~k  ~cls]))))
 
+(defn prcf-default-case-form [ctx]
+  (if-let [case-default-fn (-> ctx
+                             :populater-form-opts
+                             :reducing-form-opts
+                             :case-default-fn)]
+    (case-default-fn ctx)
+    (mu/checked-keys [[targsym] ctx]
+      targsym)))
+
+(defn populater-reducing-case-form [ctx]
+  (mu/checked-keys [[typesym targsym valsym keysym] ctx]
+    (let [skcs (populater-key-clauses ctx)
+          default-case (prcf-default-case-form ctx)]
+      `(case ~keysym
+         ~@skcs
+         ~default-case))))
+
 (defn populater-reducing-fn-form [ctx]
   (mu/checked-keys [[typesym] ctx]
-    (let [ksym (gensym "spec-key_")
-          valsym (gensym "spec-val_")
-          targsym (with-meta (gensym "targ_") {:tag typesym})
-          skcs (populater-key-clauses 
-                 (mu/lit-assoc ctx targsym, valsym))
+    (let [keysym   (gensym "spec-key_")
+          valsym   (gensym "spec-val_")
+          targsym  (with-meta (gensym "targ_") {:tag typesym})
+          caseform (populater-reducing-case-form
+                     (mu/lit-assoc ctx keysym valsym targsym))
           fn-inner-name (symbol (str "populater-fn-for_" typesym))]
-      `(fn ~fn-inner-name ~[targsym ksym valsym] 
-         (case ~ksym
-           ~@skcs
-           ~targsym)
+      `(fn ~fn-inner-name ~[targsym keysym valsym] 
+         ~caseform
          ~targsym))))
 
 (defn get-field->setter-sym [fields]
@@ -445,6 +460,34 @@
       obj)
     gob
     spec))
+
+(comment
+  (defn game-object-case-default-fn [ctx]
+    (mu/checked-keys [[targsym keysym valsym] ctx]
+      `(do (when-let [^System.MonoType t# (resolve-type-flag ~keysym)]
+             (let [vspecs# ~valsym]
+               (if (vector? vspecs#)
+                 (if (= UnityEngine.Transform t#)
+                   (doseq [cspec# vspecs#]
+                     (populate! (.GetComponent ~targsym t#) cspec# t#))
+                   (doseq [cspec# vspecs#]
+                     (populate! (.AddComponent ~targsym t#) cspec# t#)))
+                 (throw
+                   (Exception.
+                     (str
+                       "Component hydration for " t#
+                       " at spec-key " ~keysym
+                       " requires vector"))))))
+           ~targsym)))
+  
+  (defmacro hydrate-game-object-mac
+    (hydrater-form 'UnityEngine.GameObject
+      {:populater-form-opts
+       {:reducing-form-opts
+        {:case-default-fn game-object-case-default-fn}}}))
+
+  (def hydrate-game-object
+    (hydrate-game-object-mac)))
 
 ;; generated, then tweaked, then inlined. Apologies for the mess.
 (defn hydrate-game-object
