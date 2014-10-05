@@ -220,6 +220,22 @@
          ~@skcs
          ~default-case))))
 
+(defn prepopulater-form [ctx]
+  (mu/checked-keys [[specsym] ctx]
+    (if-let [prepopulater-form-fn (:prepopulater-form-fn ctx)]
+      (prepopulater-form-fn ctx)
+      specsym)))
+
+(defn populater-map-clause [ctx]
+  (mu/checked-keys [[specsym typesym initsym] ctx]
+    (let [sr      (populater-reducing-fn-form ctx)
+          ppf     (prepopulater-form ctx)]
+      `(let [~specsym ~ppf]
+         (reduce-kv
+           ~sr
+           ~initsym
+           ~specsym)))))
+
 (defn populater-reducing-fn-form [ctx]
   (mu/checked-keys [[typesym] ctx]
     (let [keysym   (gensym "spec-key_")
@@ -290,34 +306,6 @@
 ;; ============================================================
 ;; hydrater-forms
 ;; ============================================================
-
-;; (defn hydrater-key-clauses
-;;   [{:keys [setables-fn]
-;;     :or {setables-fn setables}
-;;     :as ctx}]
-;;   (mu/checked-keys [[targsym typesym valsym] ctx]
-;;     (assert (symbol? typesym))
-;;     (apply concat
-;;       (for [{n :name, :as setable} (setables-fn typesym)
-;;             :let [styp (type-for-setable setable)]
-;;             k  (keys-for-setable setable)]
-;;         `[~k (set! (. ~targsym ~n)
-;;                (cast-as (hydrate ~valsym ~styp)
-;;                  ~styp))]))))
-
-;; (defn hydrater-reducing-fn-form [ctx]
-;;   (mu/checked-keys [[typesym] ctx]
-;;     (let [ksym (gensym "spec-key_")
-;;           valsym (gensym "spec-val_")
-;;           targsym (with-meta (gensym "targ_") {:tag typesym})
-;;           skcs (hydrater-key-clauses
-;;                  (mu/lit-assoc ctx targsym valsym))
-;;           fn-inner-name (symbol (str "hydrater-reducing-fn-for-" typesym))]
-;;       `(fn ~fn-inner-name ~[targsym ksym valsym] 
-;;          (case ~ksym
-;;            ~@skcs
-;;            ~targsym)
-;;          ~targsym))))
  
 (defn constructors-spec [type]
   (let [type (ensure-type type)]
@@ -368,19 +356,15 @@
                (Exception. 
                  "hydration init requires constructor-vec"))))))) ;; find some better exception class
 
-(declare setables-cached)
-
 (defn hydrater-map-clause [ctx]
   (mu/checked-keys [[specsym typesym] ctx]
-    (let [initsym (with-meta (gensym "hydrater-target_")
-                    {:tag typesym})
-          initf   (hydrater-init-form ctx)
-          sr      (populater-reducing-fn-form ctx)]
-      `(let [~initsym ~initf]
-         (reduce-kv
-           ~sr
-           ~initsym
-           ~specsym)))))
+    (let [initsym   (with-meta (gensym "hydrater-target_")
+                      {:tag typesym})
+          initf     (hydrater-init-form ctx)
+          pmc       (populater-map-clause
+                      (mu/lit-assoc ctx initsym))]
+      `(let ~[initsym initf]
+         ~pmc))))
 
 (defn hydrater-form 
   ([typesym]
@@ -461,129 +445,37 @@
     gob
     spec))
 
-(comment
-  (defn game-object-case-default-fn [ctx]
-    (mu/checked-keys [[targsym keysym valsym] ctx]
-      `(do (when-let [^System.MonoType t# (resolve-type-flag ~keysym)]
-             (let [vspecs# ~valsym]
-               (if (vector? vspecs#)
-                 (if (= UnityEngine.Transform t#)
-                   (doseq [cspec# vspecs#]
-                     (populate! (.GetComponent ~targsym t#) cspec# t#))
-                   (doseq [cspec# vspecs#]
-                     (populate! (.AddComponent ~targsym t#) cspec# t#)))
-                 (throw
-                   (Exception.
-                     (str
-                       "Component hydration for " t#
-                       " at spec-key " ~keysym
-                       " requires vector"))))))
-           ~targsym)))
-  
-  (defmacro hydrate-game-object-mac
-    (hydrater-form 'UnityEngine.GameObject
-      {:populater-form-opts
-       {:reducing-form-opts
-        {:case-default-fn game-object-case-default-fn}}}))
+(defn game-object-case-default-fn [ctx]
+  (mu/checked-keys [[targsym keysym valsym] ctx]
+    `(do (when-let [^System.MonoType t# (resolve-type-flag ~keysym)]
+           (let [vspecs# ~valsym]
+             (if (vector? vspecs#)
+               (if (= UnityEngine.Transform t#)
+                 (doseq [cspec# vspecs#]
+                   (populate! (.GetComponent ~targsym t#) cspec# t#))
+                 (doseq [cspec# vspecs#]
+                   (populate! (.AddComponent ~targsym t#) cspec# t#)))
+               (throw
+                 (Exception.
+                   (str
+                     "Component hydration for " t#
+                     " at spec-key " ~keysym
+                     " requires vector"))))))
+         ~targsym)))
 
-  (def hydrate-game-object
-    (hydrate-game-object-mac)))
+(defmacro hydrate-game-object-mac []
+  (hydrater-form 'UnityEngine.GameObject
+    {:populater-form-opts
+     {:reducing-form-opts
+      {:case-default-fn game-object-case-default-fn}}
+     
+     :prepopulater-form-fn
+     (fn hydrate-prepopulater-form-fn [ctx]
+       (mu/checked-keys [[initsym specsym] ctx]
+         `(game-object-prepopulate! ~initsym ~specsym)))}))
 
-;; generated, then tweaked, then inlined. Apologies for the mess.
-(defn hydrate-game-object
-  ^UnityEngine.GameObject [spec]
-  (cond
-    (instance? UnityEngine.GameObject spec) spec
-    (vector? spec)
-    (case (count spec)
-      0 (let [[] spec] (new UnityEngine.GameObject))
-      1 (let [[G__539] spec]
-          (new UnityEngine.GameObject G__539))
-      2 (let [[G__539 G__540] spec]
-          (new UnityEngine.GameObject G__539 G__540))
-      (throw (Exception. "Unsupported constructor arity")))
-    (map? spec)
-    (let [^UnityEngine.GameObject obj
-          (if-let [constructor-vec_535 (constructor-vec spec)]
-            (case (count constructor-vec_535)
-              0 (let [[] constructor-vec_535]
-                  (new UnityEngine.GameObject))
-              1 (let [[G__536] constructor-vec_535]
-                  (new UnityEngine.GameObject G__536))
-              2 (let [[G__536 G__537] constructor-vec_535]
-                  (new UnityEngine.GameObject G__536 G__537))
-              (throw (Exception. "Unsupported constructor arity")))
-            (new UnityEngine.GameObject))
-          spec' (game-object-prepopulate! obj spec)]
-      (reduce-kv
-        (fn populater-fn-for_UnityEngine.GameObject
-          [^UnityEngine.GameObject obj spec-key spec-val]
-          (case spec-key
-            :is-static
-            (set!
-              (. ^UnityEngine.GameObject obj isStatic)
-              (cast-as
-                (hydrate spec-val System.Boolean)
-                System.Boolean))
-            
-            :layer
-            (set!
-              (. ^UnityEngine.GameObject obj layer)
-              (cast-as
-                (hydrate spec-val System.Int32)
-                System.Int32))
-            
-            :active
-            (set!
-              (. ^UnityEngine.GameObject obj active)
-              (cast-as
-                (hydrate spec-val System.Boolean)
-                System.Boolean))
-            
-            :tag
-            (set!
-              (. ^UnityEngine.GameObject obj tag)
-              (cast-as
-                (hydrate spec-val System.String)
-                System.String))
-            
-            :name
-            (set!
-              (. ^UnityEngine.GameObject obj name)
-              (cast-as
-                (hydrate spec-val System.String)
-                System.String))
-            
-            :hide-flags
-            (set!
-              (. ^UnityEngine.GameObject obj hideFlags)
-              (cast-as
-                (hydrate spec-val UnityEngine.HideFlags)
-                UnityEngine.HideFlags))
-            
-            :children
-            (hydrate-game-object-children obj spec-val)
-            
-            (do (when-let [^System.MonoType t (resolve-type-flag spec-key)]
-                  (let [vspecs spec-val]
-                    (if (vector? vspecs)
-                      (if (= UnityEngine.Transform t)
-                        (doseq [cspec vspecs]
-                          (populate! (.GetComponent obj t) cspec t))
-                        (doseq [cspec vspecs]
-                          (populate! (.AddComponent obj t) cspec t)))
-                      (throw
-                        (Exception.
-                          (str
-                            "Component hydration for " t
-                            " at spec-key " spec-key
-                            " requires vector"))))))
-                obj))
-          ^UnityEngine.GameObject obj)
-        obj
-        spec'))
-    :else
-    (throw (Exception. "Unsupported hydration spec"))))
+(def hydrate-game-object
+  (hydrate-game-object-mac))
 
 ;; ============================================================
 ;; dehydration
