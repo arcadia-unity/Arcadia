@@ -1,38 +1,19 @@
 (ns unity.core
   (:require [clojure.string :as string]
             [unity.reflect :as r]
+            [unity.internal.map-utils :as mu]
             unity.messages)
   (:import [UnityEngine
             MonoBehaviour
             GameObject
             PrimitiveType]))
 
+(defn- regex? [x]
+  (instance? System.Text.RegularExpressions.Regex x))
+
 ;; ============================================================
 ;; defcomponent 
 ;; ============================================================
-
-(defmacro defcomponent
-  "Defines a new component."
-  [name fields & methods] 
-  (require 'unity.messages)
-  `(defcomponent*
-     ~name
-     ;; make all fields mutable
-     ~(vec (map #(vary-meta % assoc :unsynchronized-mutable true) fields))
-     ~@(concat 
-         (let [forms (take-while list? methods)]
-           ;; add protocol declaration for known unity messages
-           (interleave (map #(symbol (str "unity.messages/I" (first %))) forms)
-                       ;; wrap method bodies in typehinted let bindings
-                       (map (fn [[name args & body]]
-                              (list name args
-                                `(let ~(vec (flatten (map (fn [typ arg]
-                                              [(vary-meta arg assoc :tag typ) arg])
-                                            (unity.messages/messages name)
-                                            (drop 1 args))))
-                                   ~@body)))
-                         forms)))
-         (drop-while list? methods))))
 
 (defmacro defleaked [var]
   `(def ~(symbol (name var))
@@ -56,7 +37,7 @@
        ~extends ~assem
        ~fields 
        :implements ~interfaces 
-       ~@methods))) 
+       ~@methods)))
 
 (defmacro defcomponent*
   [name fields & opts+specs]
@@ -67,7 +48,7 @@
         classname (symbol (str ns-part "." gname))
         hinted-fields fields
         fields (vec (map #(with-meta % nil) fields))
-        [field-args over] (split-at 20 fields)]
+        [field-args over] (split-at 20  fields)]
     `(let []
        ~(emit-defclass*
           name
@@ -81,7 +62,73 @@
        ~(build-positional-factory gname classname fields)
        ~classname)))
 
-;; ============================================================
+;; `(defcomponent*
+;;    ~name
+;;    ;; make all fields mutable
+;;    ~(vec (map #(vary-meta % assoc :unsynchronized-mutable true) fields))
+;;    ~@(concat
+;;        (let [forms (take-while list? methods)]
+;;          ;; add protocol declaration for known unity messages
+;;          (interleave (map #(symbol (str "unity.messages/I" (first %))) forms)
+;;            ;; wrap method bodies in typehinted let bindings
+;;            (map (fn [[name args & body]]
+;;                   (list name args
+;;                     `(let ~(vec (flatten (map (fn [typ arg]
+;;                                                 [(vary-meta arg assoc :tag typ) arg])
+;;                                            (unity.messages/messages name)
+;;                                            (drop 1 args))))
+;;                        ~@body)))
+;;              forms)))
+;;        (drop-while list? methods)))
+
+;; {:keys [protocol]
+;;  {{:keys [name args fntail]} :implementation}}
+
+(defn- normalize-method-implementations [mimpls]
+  (for [[[protocol] impls] (partition 2
+                             (partition-by symbol? mimpls))
+        [name args & fntail] impls]
+    (mu/lit-map protocol name args fntail)))
+
+(defn- find-message-protocol-symbol [s]
+  (symbol (str "unity.messages/I" s)))
+
+(defn- awake-method? [{:keys [name]}]
+  (= name 'Awake))
+
+(defn- normalize-message-implementations [msgimpls]
+  (for [[name args & fntail] msgimpls
+        :let [protocol (find-message-protocol-symbol name)]]
+    (mu/lit-map protocol name args fntail)))
+
+(defn- process-method [{:keys [protocol name args fntail]}]
+  [protocol `(~name ~args ~@fntail)])
+
+(defn- process-awake-method [impl]
+  (process-method
+    (update-in impl [:fntail]
+      #(cons `(require ~(ns-name *ns*)) %))))
+
+(defn- process-defcomponent-method-implementations [mimpls]
+  (let [[msgimpls impls] ((juxt take-while drop-while)
+                          (complement symbol?)
+                          mimpls)]
+    (apply concat
+      (for [impl (concat
+                   (normalize-message-implementations msgimpls)
+                   (normalize-method-implementations impls))]
+        (if (awake-method? impl)
+          (process-awake-method impl)
+          (process-method impl))))))
+
+(defmacro defcomponent
+  "Defines a new component."
+  [name fields & method-impls] 
+  (let [fields2 (mapv #(vary-meta % assoc :unsynchronized-mutable true) fields) ;make all fields mutable
+        method-impls2 (process-defcomponent-method-implementations method-impls)]
+    `(defcomponent* ~name ~fields2 ~@method-impls2)))
+
+ ;; ============================================================
 ;; get-component
 ;; ============================================================
 
@@ -278,10 +325,43 @@
 (defwrapper object-named GameObject Find
   "Finds a game object by name and returns it.")
 
+;; note this takes an optional default value. This macro is potentially
+;; annoying in the case that you want to branch on a supertype, for
+;; instance, but the cast would remove interface information. Use with
+;; this in mind.
+(defmacro condcast [expr xsym & clauses]
+  (let [[clauses default] (if (even? (count clauses))
+                            [clauses nil] 
+                            [(butlast clauses)
+                             [:else (last clauses)]])
+        exprsym (gensym "exprsym_")
+        cs (->> clauses
+             (partition 2)
+             (mapcat
+               (fn [[t then]]
+                 `[(instance? ~t ~exprsym)
+                   (let [~(with-meta xsym {:tag (resolve t)}) ~exprsym]
+                     ~then)])))]
+    `(let [~exprsym ~expr]
+       ~(cons 'cond
+          (concat cs default)))))
+
+;; type-hinting of condcast isn't needed here, but seems a good habit to get into
 (defn objects-named
-  "Finds a game objects by name and returns them."
-  [^System.String name]
-  (->> (objects-typed GameObject) (filter #(= (.name %) name))))
+  "Finds game objects by name. Name can be string or regex."
+  [name]
+  (condcast name name
+    System.String
+    (for [^GameObject obj (objects-typed GameObject)
+          :when (= (.name obj) name)]
+      obj)
+    
+    System.Text.RegularExpressions.Regex
+    (for [^GameObject obj (objects-typed GameObject)
+          :when (re-matches name (.name obj))]
+      obj)
+    
+    (throw (Exception. (str "Expects String or Regex, instead got " (type name))))))
 
 (defwrapper object-tagged GameObject FindWithTag
   "Returns one active GameObject tagged tag. Returns null if no GameObject was found.")
