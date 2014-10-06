@@ -100,10 +100,12 @@
       (reset! server-running true)
       (let [socket (UdpClient. (IPEndPoint. IPAddress/Any port))]
         (.Start (Thread. (gen-delegate ThreadStart []
-          (Debug/Log "Starting UDP REPL...")
+          (if (@config/config :verbose)
+            (Debug/Log "Starting UDP REPL..."))
           (while @server-running
             (listen-and-block socket))
-          (Debug/Log "Stopping UDP REPL...")
+          (if (@config/config :verbose)
+            (Debug/Log "Stopping UDP REPL..."))
           (.Close socket))))))))
 
 (defn stop-server []

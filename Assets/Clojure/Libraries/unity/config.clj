@@ -11,10 +11,17 @@
 
 (def foldouts (atom {}))
 
+(defn value [k]
+  (@config k))
+
+(defn value-in [p]
+  (get-in @config p))
+
 (defn update! [m]
   (reset! config m))
 
 (defn update-from-file! [f]
+  (Debug/Log (str "update-from-file " f))
   (update! (edn/read-string (File/ReadAllText f))))
 
 (declare widgets)

@@ -3,7 +3,7 @@
   ["Assets/Clojure/Scripts"
    "Assets/Clojure/Libraries"
    "Assets/Clojure/Internal"],
-  :automatic true,
+  :automatic false,
   :assemblies "Assets/Clojure/Compiled"},
  :injections (do (use 'unity.core)),
- :verbose true}
+ :verbose false}
