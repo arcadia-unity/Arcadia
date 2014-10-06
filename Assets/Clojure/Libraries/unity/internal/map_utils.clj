@@ -161,6 +161,16 @@
              v))
     (assoc m k v)))
 
+(defn select-paths-mv
+  ([m path]
+     (assoc-in-mv (empty m) path (get-in m path)))
+  ([m path & paths]
+     (loop [bldg (select-paths-mv m path),
+            paths paths]
+       (if-let [[p & rps] (seq paths)]
+         (recur (assoc-in-mv bldg p (get-in m p)), rps)
+         bldg))))
+
 (defn fill
   ([m k v]
      (if (contains? m k) m (assoc m k v)))
