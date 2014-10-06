@@ -107,16 +107,27 @@
 (defn- process-awake-method [impl]
   (process-method
     (update-in impl [:fntail]
-      #(cons `(require ~(ns-name *ns*)) %))))
+      #(cons `(require (quote ~(ns-name *ns*))) %))))
+
+(defn ensure-has-awake [mimpls]
+  (if (some awake-method? mimpls)
+    mimpls
+    (cons {:protocol (find-message-protocol-symbol 'Awake)
+           :name     'Awake
+           :args     '[this]
+           :fntail   nil}
+      mimpls)))
 
 (defn- process-defcomponent-method-implementations [mimpls]
   (let [[msgimpls impls] ((juxt take-while drop-while)
                           (complement symbol?)
-                          mimpls)]
+                          mimpls)
+        nrmls            (ensure-has-awake
+                           (concat
+                             (normalize-message-implementations msgimpls)
+                             (normalize-method-implementations impls)))]
     (apply concat
-      (for [impl (concat
-                   (normalize-message-implementations msgimpls)
-                   (normalize-method-implementations impls))]
+      (for [impl nrmls]
         (if (awake-method? impl)
           (process-awake-method impl)
           (process-method impl))))))
