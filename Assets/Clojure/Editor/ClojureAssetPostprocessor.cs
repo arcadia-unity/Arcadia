@@ -39,7 +39,7 @@ class ClojureAssetPostprocessor : AssetPostprocessor {
         }
 
     // dont need to be doing this every 
-    SetupLoadPath();
+    // SetupLoadPath();
     // RT.load("unity/internal/editor_interop");
     // RT.var("unity.internal.editor-interop", "touch-dlls").invoke(pathToAssemblies);
     
