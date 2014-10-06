@@ -6,6 +6,14 @@
 ;;; maps? might be some testable inflection point where transient is
 ;;; worth it
 
+(defn dissoc-in
+  [m [k & ks]]
+  (if ks
+    (if (contains? m k)
+      (assoc m k (dissoc-in (get m k) ks))
+      m)
+    (dissoc m k)))
+
 (defn submap? [m1 m2]  
   (or (identical? m1 m2) ;; sometimes you get lucky
     (reduce-kv

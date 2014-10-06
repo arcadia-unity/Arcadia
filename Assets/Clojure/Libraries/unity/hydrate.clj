@@ -12,6 +12,8 @@
            [UnityEngine GameObject Transform]
            System.AppDomain))
 
+;;; TODO: get rid of types->type-flags, is pointless
+
 (declare hydration-database hydrate populate! dehydrate)
 
 (defn camels-to-hyphens [s]
@@ -57,9 +59,9 @@
         (type? y)))))
 
 (defn keyword-for-type [t]
-  (nice-keyword
-    (.Name ^System.MonoType
-      (ensure-type t))))
+  (let [^Type t (ensure-type t)]
+    (nice-keyword
+      (.Name t))))
 
 ;; generate more if you feel it worth testing for
 (defn keys-for-setable [{n :name}]
@@ -303,7 +305,8 @@
 (defn populater-form
   ([typesym] (populater-form typesym {}))
   ([typesym ctx]
-     (if (.IsValueType (resolve typesym))
+     (if (let [^Type t (resolve typesym)] ;this is genuinely stupid
+           (.IsValueType t))
        (value-populater-form typesym ctx)
        (let [ctx      (mu/fill ctx :setables-fn setables)
              targsym  (with-meta (gensym "populater-target_") {:tag typesym})
@@ -320,14 +323,18 @@
 ;; hydrater-forms
 ;; ============================================================
  
-(defn constructors-spec [type]
-  (let [type (ensure-type type)]
+(defn constructors-spec [type-or-typesym]
+  (let [^Type t (ensure-type type-or-typesym)]
     (set
-      (conj 
-        (map :parameter-types (r/constructors type))
-        (when (.IsValueType type) [])))))
+      (conj
+        (for [^System.Reflection.MonoCMethod cinf (.GetConstructors t)
+              :let [pinfs (.GetParameters cinf)]]
+          (mapv (fn [^System.Reflection.ParameterInfo pinf]
+                  (.ParameterType pinf))
+            pinfs))
+        (when (.IsValueType t) [])))))
 
-;; janky + reflective 4 now. Need something to disambiguate dispatch
+;; janky + reflective for now. Need something to disambiguate dispatch
 ;; by argument type rather than arity
 (defn constructor-application-count-clauses
   " ctrspec should be: #{[type...]...}"
@@ -847,6 +854,146 @@
 
 (def hydration-database
   (atom default-hydration-database))
+
+;; ============================================================
+;; public-facing type registration api
+;; ============================================================
+
+(defn same-or-subclass? [^Type t1, ^Type t2]
+  (or (= t1 t2)
+    (.IsSubclassOf t2 t1)))
+
+(defn component-type? [x]
+  (and (type? x)
+    (same-or-subclass? UnityEngine.MonoBehaviour x)))
+
+(defn value-type? [x]
+  (and (type? x)
+    (.IsValueType x)))
+
+(defn register-component-type
+  ([type-or-typesym]
+     (register-component-type type-or-typesym {}))
+  ([type-or-typesym option-map]
+     (let [^Type t (ensure-type type-or-typesym)]
+       (if-not (component-type? t)
+         (throw
+           (System.ArgumentException.
+             "register-component-type expects component type"))
+         (let [type-flag  (keyword-for-type t)
+               typesym    (ensure-symbol t)
+               populater  (eval
+                            (populater-form typesym
+                              (merge {}
+                                (::populater-options option-map))))
+               dehydrater (eval
+                            (dehydrater-form typesym
+                              (merge
+                                {:setables-filter component-dehydrater-setables-filter}
+                                (::dehydrater-options option-map))))
+               type-flag  (keyword-for-type t)]
+           (swap! hydration-database
+             (fn [hdb]
+               (-> hdb
+                 (assoc-in [:populaters t]  populater)
+                 (assoc-in [:dehydraters t] dehydrater)
+                 (assoc-in [:type-flags->types type-flag] t)
+                 (assoc-in [:types->type-flags t] type-flag))))
+           nil)))))
+
+(defn register-value-type
+  ([type-or-typesym]
+     (register-component-type type-or-typesym {}))
+  ([type-or-typesym option-map]
+     (let [^Type t (ensure-type type-or-typesym)]
+       (if-not (value-type? t)
+         (throw
+           (System.ArgumentException.
+             "register-value-type expects value type"))
+         (let [type-flag  (keyword-for-type t)
+               typesym    (ensure-symbol t)
+               hydrater   (eval
+                            (value-hydrater-form
+                              (merge {}
+                                (::hydrater-options option-map))))
+               populater  (eval
+                            (populater-form typesym
+                              (merge {}
+                                (::populater-options option-map))))
+               dehydrater (eval
+                            (dehydrater-form typesym
+                              (merge
+                                {:setables-filter component-dehydrater-setables-filter}
+                                (::dehydrater-options option-map))))
+               type-flag  (keyword-for-type t)]
+           (swap! hydration-database
+             (fn [hdb]
+               (-> hdb
+                 (assoc-in [:populaters t]  populater)
+                 (assoc-in [:hydraters t]  hydrater)
+                 (assoc-in [:dehydraters t] dehydrater)
+                 (assoc-in [:type-flags->types type-flag] t)
+                 (assoc-in [:types->type-flags t] type-flag))))
+           nil)))))
+
+(defn- register-normal-type
+  ([type-or-typesym]
+     (register-component-type type-or-typesym {}))
+  ([type-or-typesym option-map]
+     (let [^Type t (ensure-type type-or-typesym)]
+       (let [type-flag  (keyword-for-type t)
+             typesym    (ensure-symbol t)
+             hydrater   (eval
+                          (hydrater-form typesym
+                            (merge {}
+                              (::hydrater-options option-map))))
+             populater  (eval
+                          (populater-form typesym
+                            (merge {}
+                              (::populater-options option-map))))
+             dehydrater (eval
+                          (dehydrater-form typesym
+                            (merge
+                              {:setables-filter component-dehydrater-setables-filter}
+                              (::dehydrater-options option-map))))
+             type-flag  (keyword-for-type t)]
+         (swap! hydration-database
+           (fn [hdb]
+             (-> hdb
+               (assoc-in [:populaters t]  populater)
+               (assoc-in [:hydraters t]  hydrater)
+               (assoc-in [:dehydraters t] dehydrater)
+               (assoc-in [:type-flags->types type-flag] t)
+               (assoc-in [:types->type-flags t] type-flag))))
+         nil))))
+
+(defn register-type
+  ([type-or-typesym]
+     (register-type type-or-typesym {}))
+  ([type-or-typesym option-map]
+     (let [^Type t (ensure-type type-or-typesym)]
+       (cond
+         (component-type? t)
+         (register-component-type t option-map)
+
+         (.IsValueType t)
+         (register-value-type t option-map)
+
+         :else
+         (register-normal-type t option-map)))))
+
+(defn unregister-type [type-or-typesym]
+  (let [^Type t (ensure-type type-or-typesym)]
+    (swap! hydration-database
+      (fn [hdb]
+        (let [type-flag (get-in hdb [:types->type-flags t])]
+          (-> hdb
+            (mu/dissoc-in [:populaters t])
+            (mu/dissoc-in [:hydraters t])
+            (mu/dissoc-in [:dehydraters t])
+            (mu/dissoc-in [:type-flags->types type-flag])
+            (mu/dissoc-in [:types->type-flags t])))))
+    nil))
 
 ;; ============================================================
 ;; runtime hydration & population
