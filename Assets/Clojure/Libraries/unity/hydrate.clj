@@ -107,6 +107,14 @@
       (r/reflection-transform
        (field->map f)))))
 
+;; TODO make this more efficient
+(defn setables-with-name [type-or-typesym name]
+  (let [t (ensure-type type-or-typesym)]
+    (filter #(= name (:name %))
+      (concat
+        (setable-fields t)
+        (setable-properties t)))))
+
 (defn dedup-by [f coll]
   (map peek (vals (group-by f coll))))
 
@@ -186,22 +194,27 @@
       `(let [~valsym' ~valsym]
          (.SetValue ~setter-sym ~targsym ~valsym')))))
 
+(defn default-populater-set-clause [setable ctx]
+  (mu/checked-keys [[targsym valsym] ctx]
+    (let [name         (:name setable)
+          setable-type (type-for-setable setable)
+          rezsym       (with-meta (gensym "hydrate-result_")
+                         {:tag setable-type})]
+      `(let [~rezsym (hydrate ~valsym ~setable-type)]
+         (set! (. ~targsym ~name) ~rezsym)))))
 
 (defn populater-key-clauses
   [{:keys [set-clause-fn]
     :as ctx}]
-  (mu/checked-keys [[targsym valsym typesym setables-fn] ctx]
+  (mu/checked-keys [[typesym setables-fn] ctx]
     (assert (symbol? typesym))
     (apply concat
-      (for [{n :name, :as setable} (setables-fn typesym)
-            :let [setable-type (type-for-setable setable)]
+      (for [{:keys [name] :as setable} (setables-fn typesym)
             k    (keys-for-setable setable)
-            :let [cls  (if set-clause-fn
-                          (set-clause-fn setable ctx)
-                          `(set! (. ~targsym ~n)
-                             (cast-as (hydrate ~valsym ~setable-type)
-                               ~setable-type)))]]
-        `[~k  ~cls]))))
+            :let [cls (if set-clause-fn
+                        (set-clause-fn setable ctx)
+                        (default-populater-set-clause setable ctx))]]
+        `[~k ~cls]))))
 
 (defn prcf-default-case-form [ctx]
   (if-let [case-default-fn (-> ctx
@@ -451,7 +464,12 @@
   (populater-form 'UnityEngine.GameObject
     {:populater-form-opts
      {:reducing-form-opts
-      {:case-default-fn game-object-populate-case-default-fn}}}))
+      {:case-default-fn game-object-populate-case-default-fn}}
+     
+     :prepopulater-form-fn
+     (fn hydrate-prepopulater-form-fn [ctx]
+       (mu/checked-keys [[initsym specsym] ctx]
+         `(game-object-prepopulate! ~initsym ~specsym)))}))
 
 (def populate-game-object!
   (populate-game-object-mac))
@@ -500,7 +518,7 @@
   (mu/checked-keys [[targsym typesym] ctx]
     (into {:type typesym}
       (for [setable  (setables-fn typesym)
-            :when (setables-filter setable)
+            :when (setables-filter setable ctx)
             :let [n       (:name setable)
                   typesym (ensure-symbol
                             (:type setable))
@@ -658,16 +676,72 @@
     (filter second)
     (into {})))
 
+;; some shortcuts here (default-populater-set-clause), see
+;; populater-key-clauses
+(defn sepf-clause [sharable ctx]
+  (mu/checked-keys [[direct shared]   sharable
+                    [specsym typesym] ctx]
+    (assert (symbol? direct))
+    (assert (symbol? shared))
+    (let [direct-setable (first (setables-with-name typesym direct))
+          shared-setable (first (setables-with-name typesym shared))
+          direct-valsym  (gensym "direct-valsym_")
+          shared-valsym  (gensym "shared-valsym_")
+          d-clause       (default-populater-set-clause direct-setable
+                           (assoc ctx :valsym direct-valsym))
+          s-clause       (default-populater-set-clause shared-setable
+                           (assoc ctx :valsym shared-valsym))
+          direct-key     (first (keys-for-setable direct-setable)) ;; the hell with it, one key per setable 4 now
+          shared-key     (first (keys-for-setable shared-setable))]
+      `(if-let [[_# ~direct-valsym] (find ~specsym ~direct-key)]
+         (do ~d-clause
+             (-> ~specsym (dissoc ~shared-key) (dissoc ~direct-key)))
+         (if-let [[_# ~shared-valsym] (find ~specsym ~shared-key)]
+           (do ~s-clause
+               (dissoc ~specsym ~shared-key))
+           ~specsym)))))
+
+(def log (atom nil))
+
+(defn shared-elem-prepopulater-form [sharables ctx]
+  (reset! log ctx)
+  (mu/checked-keys [[typesym initsym specsym] ctx]
+    (let [targsym initsym 
+          ctx2    (mu/lit-assoc ctx targsym specsym)
+          pfcs    (for [s sharables] (sepf-clause s ctx2))]
+      `(as-> ~specsym ~specsym
+         ~@pfcs))))
+
+(def shared-elem-components
+  {'UnityEngine.MeshFilter [{:direct 'mesh
+                             :shared 'sharedMesh}]
+   'UnityEngine.MeshRenderer [{:direct 'materials
+                               :shared 'sharedMaterials}
+                              {:direct 'material
+                               :shared 'sharedMaterial}]
+   'UnityEngine.CapsuleCollider [{:direct 'material
+                                  :shared 'sharedMaterial}]})
+
+;; this is kind of insane. Cleaner way?
 (defmacro establish-component-populaters-mac [m]
   (let [cpfmf (tsym-map
                 populater-form
-                ;;'[UnityEngine.Transform UnityEngine.BoxCollider]
-                (all-component-type-symbols)
-                {:setables-fn
-                 setables-cached
-                ;;setables
-                 })]
-    `(merge ~m ~cpfmf)))
+                (remove shared-elem-components
+                  (all-component-type-symbols))
+                {:setables-fn setables-cached})
+        cpfmf2 (reduce-kv
+                 (fn [bldg t sharables]
+                   (-> bldg
+                     (assoc t
+                       (populater-form t
+                         {:prepopulater-form-fn
+                          (fn [ctx]
+                            (shared-elem-prepopulater-form
+                              (shared-elem-components t)
+                              ctx))}))))
+                 cpfmf
+                 shared-elem-components)]
+    `(merge ~m ~cpfmf2)))
 
 (defmacro establish-value-type-populaters-mac [m]
   (let [vpfmf (tsym-map
@@ -692,6 +766,13 @@
                  })]
     `(merge ~m ~vhfmf)))
 
+(defn component-dehydrater-setables-filter [{:keys [name] :as setable} ctx]
+  (mu/checked-keys [[typesym] ctx]
+    (and
+      (not (#{'parent 'name 'tag 'active 'hideFlags} name))
+      (if-let [[_ sharables] (find shared-elem-components typesym)]
+        (not-any? #(= name (:direct %)) sharables)
+        true))))
 
 (defmacro establish-component-dehydraters-mac [m]
   (let [dhm (tsym-map
@@ -699,10 +780,7 @@
               ;;'[UnityEngine.Transform UnityEngine.BoxCollider]
               (all-component-type-symbols)
               {:setables-fn setables-cached
-               :setables-filter (fn [{:keys [name]}]
-                                  (not
-                                    ('#{parent name tag active hideFlags}
-                                     name)))})]
+               :setables-filter component-dehydrater-setables-filter})]
     `(merge ~m ~dhm)))
 
 (defmacro establish-value-type-dehydraters-mac [m]
