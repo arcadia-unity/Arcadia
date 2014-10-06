@@ -16,6 +16,10 @@
 
 (declare hydration-database hydrate populate! dehydrate)
 
+(defn same-or-subclass? [^Type t1, ^Type t2]
+  (or (= t1 t2)
+    (.IsSubclassOf t2 t1)))
+
 (defn camels-to-hyphens [s]
   (string/replace s #"([a-z])([A-Z])" "$1-$2"))
 
@@ -449,19 +453,20 @@
 (defn game-object-populate-case-default-fn [ctx]
   (mu/checked-keys [[targsym keysym valsym] ctx]
     `(do (when-let [^System.MonoType t# (resolve-type-flag ~keysym)]
-           (let [vspecs# ~valsym]
-             (if (vector? vspecs#)
-               (if (= UnityEngine.Transform t#)
-                 (doseq [cspec# vspecs#]
-                   (populate! (.GetComponent ~targsym t#) cspec# t#))
-                 (doseq [cspec# vspecs#]
-                   (populate! (.AddComponent ~targsym t#) cspec# t#)))
-               (throw
-                 (Exception.
-                   (str
-                     "Component population for " t# 
-                     " at spec-key " ~keysym
-                     " requires vector"))))))
+           (when (same-or-subclass? UnityEngine.MonoBehaviour t#)
+             (let [vspecs# ~valsym]
+               (if (vector? vspecs#)
+                 (if (= UnityEngine.Transform t#)
+                   (doseq [cspec# vspecs#]
+                     (populate! (.GetComponent ~targsym t#) cspec# t#))
+                   (doseq [cspec# vspecs#]
+                     (populate! (.AddComponent ~targsym t#) cspec# t#)))
+                 (throw
+                   (Exception.
+                     (str
+                       "Component population for " t# 
+                       " at spec-key " ~keysym
+                       " requires vector")))))))
          ~targsym)))
 
 (defmacro populate-game-object-mac []
@@ -481,19 +486,21 @@
 (defn game-object-hydrate-case-default-fn [ctx]
   (mu/checked-keys [[targsym keysym valsym] ctx]
     `(do (when-let [^System.MonoType t# (resolve-type-flag ~keysym)]
-           (let [vspecs# ~valsym]
-             (if (vector? vspecs#)
-               (if (= UnityEngine.Transform t#)
-                 (doseq [cspec# vspecs#]
-                   (populate! (.GetComponent ~targsym t#) cspec# t#))
-                 (doseq [cspec# vspecs#]
-                   (populate! (.AddComponent ~targsym t#) cspec# t#)))
-               (throw
-                 (Exception.
-                   (str
-                     "Component hydration for " t#
-                     " at spec-key " ~keysym
-                     " requires vector"))))))
+           (when (same-or-subclass? UnityEngine.MonoBehaviour t#)
+             (let [vspecs# ~valsym]
+               (if (vector? vspecs#)
+                 (if (= UnityEngine.Transform t#)
+                   (doseq [cspec# vspecs#]
+                     (populate! (.GetComponent ~targsym t#) cspec# t#))
+                   (doseq [cspec# vspecs#]
+                     (populate! (.AddComponent ~targsym t#) cspec# t#)))
+                 (throw
+                   (Exception.
+                     (str
+                       "Component hydration for " t#
+                       " at spec-key " ~keysym
+                       " requires vector")))))))
+         
          ~targsym)))
 
 (defmacro hydrate-game-object-mac []
@@ -587,83 +594,6 @@
 ;; establish database
 ;; ============================================================
 
-;; ------------------------------------------------------------
-;; qwik and dirty way
-;; ------------------------------------------------------------
-
-(def setables-path
-  "Assets/Clojure/Libraries/unity/setables.edn")
-(def problematic-typesyms-path "Assets/Clojure/Libraries/unity/problematic_typesyms.edn")
-
-(defn squirrel-setables-away [typesyms
-                              setables-path 
-                              problematic-typesyms-path]
-  (let [problematic-typesyms (atom [])
-        setables-map (clojure.walk/prewalk
-                       (fn [x] 
-                         (if (symbol? x)
-                           (name x)
-                           x))
-                       (into {}
-                         (filter second
-                           (for [tsym typesyms]
-                             [tsym,
-                              (try ;; nasty nasty nasty
-                                (vec (setables tsym))
-                                (catch System.ArgumentException e
-                                  (swap! problematic-typesyms conj tsym)
-                                  nil))]))))]
-    (with-open [f (io/output-stream setables-path)]
-      (spit f
-        (pr-str
-          setables-map)))
-    (with-open [f (io/output-stream problematic-typesyms-path)]
-      (spit f
-        (pr-str
-          @problematic-typesyms)))
-    (println "squirreling successful")))
-
-;; then evaluate the following, once, and wait a bit:
-;; (binding [*print-length* nil]
-;;   (squirrel-setables-away
-;;     (concat
-;;       (all-component-type-symbols)
-;;       (all-value-type-symbols))
-;;     setables-path
-;;     problematic-typesyms-path))
-;; time weirdly variable, not sure why
-
-;; then you can retrieve-it like so:
-
-(defn retrieve-squirreled-setables [setables-path]
-  (clojure.walk/prewalk
-    (fn [x]
-      (if (string? x)
-        (symbol x)
-        x))
-    (edn/read-string
-      (slurp setables-path))))
-
-;; and here's the cake:
-(def setables-cache
-  (atom nil))
-
-(defn refresh-setables-cache []
-  (reset! setables-cache
-    (retrieve-squirreled-setables setables-path)))
-
-;; when stable, make this disappear at runtime with some macro stuff
-(refresh-setables-cache)
-
-;; should get rid of all this ensure-type nonsense, hard to reason
-;; about what's going on
-(def setables-cached
-  (memoize
-    (fn [typesym]
-      (assert (symbol? typesym))
-      (@setables-cache
-        typesym))))
-
 (def problem-log (atom []))
 
 (defn tsym-map [f tsyms ctx]
@@ -732,7 +662,7 @@
                 populater-form
                 (remove shared-elem-components
                   (all-component-type-symbols))
-                {:setables-fn setables-cached})
+                {:setables-fn setables})
         cpfmf2 (reduce-kv
                  (fn [bldg t sharables]
                    (-> bldg
@@ -753,7 +683,7 @@
                 ;;'[UnityEngine.Vector3] 
                 (all-value-type-symbols)
                 {:setables-fn
-                 setables-cached
+                 setables
                  ;;setables
                  })]
     `(merge ~m ~vpfmf)))
@@ -765,7 +695,7 @@
                 ;;'[UnityEngine.Vector3]
                 (all-value-type-symbols) ;; 231
                 {:setables-fn
-                 setables-cached
+                 setables
                  ;;setables
                  })]
     `(merge ~m ~vhfmf)))
@@ -783,7 +713,7 @@
               dehydrater-form
               ;;'[UnityEngine.Transform UnityEngine.BoxCollider]
               (all-component-type-symbols)
-              {:setables-fn setables-cached
+              {:setables-fn setables
                :setables-filter component-dehydrater-setables-filter})]
     `(merge ~m ~dhm)))
 
@@ -792,7 +722,7 @@
               dehydrater-form
               (all-value-type-symbols)
               ;;'[UnityEngine.Vector3]
-              {:setables-fn setables-cached})]
+              {:setables-fn setables})]
     `(merge ~m ~dhm)))
 
 (defn establish-type-flags [hdb]
@@ -855,10 +785,6 @@
 ;; ============================================================
 ;; public-facing type registration api
 ;; ============================================================
-
-(defn same-or-subclass? [^Type t1, ^Type t2]
-  (or (= t1 t2)
-    (.IsSubclassOf t2 t1)))
 
 (defn component-type? [x]
   (and (type? x)
