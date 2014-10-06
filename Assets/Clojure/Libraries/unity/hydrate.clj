@@ -48,10 +48,6 @@
                 (str "Expects symbol or type, instead (type t) = "
                   (type t))))))
 
-(defmacro cast-as [x type] ;; not sure this works
-  (let [xsym (with-meta (gensym "caster_") {:tag (ensure-symbol type)})]
-    `(let [~xsym ~x] ~xsym)))
-
 (defn type-symbol? [x]
   (boolean
     (and (symbol? x)
@@ -136,7 +132,8 @@
           assembly-name
           
           (string? assembly-name)
-          (AssemblyName. (cast-as assembly-name String))
+          (let [^String assembly-name assembly-name]
+            (AssemblyName. assembly-name))
           
           :else
           (throw (Exception. "Expects AssemblyName or string")))]
@@ -871,6 +868,12 @@
   (and (type? x)
     (.IsValueType x)))
 
+(defn ns-qualify-kw [kw ns]
+  (let [nsn (if (same-or-subclass? clojure.lang.Namespace (type ns))
+              (str (ns-name ns))
+              (str ns))]
+    (keyword nsn (name kw))))
+
 (defn register-component-type
   ([type-or-typesym]
      (register-component-type type-or-typesym {}))
@@ -891,7 +894,10 @@
                               (merge
                                 {:setables-filter component-dehydrater-setables-filter}
                                 (::dehydrater-options option-map))))
-               type-flag  (keyword-for-type t)]
+               type-flag  (or (:type-flag option-map)
+                            (ns-qualify-kw
+                              (keyword-for-type t)
+                              *ns*))]
            (swap! hydration-database
              (fn [hdb]
                (-> hdb
@@ -925,7 +931,10 @@
                               (merge
                                 {:setables-filter component-dehydrater-setables-filter}
                                 (::dehydrater-options option-map))))
-               type-flag  (keyword-for-type t)]
+               type-flag  (or (:type-flag option-map)
+                            (ns-qualify-kw
+                              (keyword-for-type t)
+                              *ns*))]
            (swap! hydration-database
              (fn [hdb]
                (-> hdb
@@ -956,7 +965,10 @@
                             (merge
                               {:setables-filter component-dehydrater-setables-filter}
                               (::dehydrater-options option-map))))
-             type-flag  (keyword-for-type t)]
+             type-flag  (or (:type-flag option-map)
+                          (ns-qualify-kw
+                            (keyword-for-type t)
+                            *ns*))]
          (swap! hydration-database
            (fn [hdb]
              (-> hdb
