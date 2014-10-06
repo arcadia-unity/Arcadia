@@ -292,16 +292,16 @@
   ([typesym ctx]
      (if (.IsValueType (resolve typesym))
        (value-populater-form typesym ctx)
-       (let [targsym  (with-meta (gensym "populater-target_") {:tag typesym})
+       (let [ctx      (mu/fill ctx :setables-fn setables)
+             targsym  (with-meta (gensym "populater-target_") {:tag typesym})
              specsym  (gensym "spec_")
-             sr       (populater-reducing-fn-form
-                        (mu/lit-assoc ctx typesym))]
+             pmc      (populater-map-clause
+                        (-> ctx
+                          (assoc :initsym targsym)
+                          (mu/lit-assoc typesym specsym)))]
          `(fn ~(symbol (str "populater-fn-for_" typesym))
-            [~targsym spec#]
-            (reduce-kv
-              ~sr
-              ~targsym
-              spec#))))))
+            [~targsym ~specsym]
+            ~pmc)))))
 
 ;; ============================================================
 ;; hydrater-forms
@@ -428,24 +428,35 @@
         (dissoc spec :transform))
     spec))
 
-;; this doesn't work for other properties yet (eg tag, layer, etc)!
-(defn populate-game-object! ^UnityEngine.GameObject
-  [^UnityEngine.GameObject gob spec]
-  (reduce-kv
-    (fn [^UnityEngine.GameObject obj, k, vspecs]
-      (if (= :children k)
-        (hydrate-game-object-children obj vspecs)
-        (if-let [^System.MonoType t (resolve-type-flag k)]
-          (if (= UnityEngine.Transform t)
-            (doseq [cspec vspecs]
-              (populate! (.GetComponent obj t) cspec t))
-            (doseq [cspec vspecs]
-              (populate! (.AddComponent obj t) cspec t)))))
-      obj)
-    gob
-    spec))
+;; all about the snappy fn names
+(defn game-object-populate-case-default-fn [ctx]
+  (mu/checked-keys [[targsym keysym valsym] ctx]
+    `(do (when-let [^System.MonoType t# (resolve-type-flag ~keysym)]
+           (let [vspecs# ~valsym]
+             (if (vector? vspecs#)
+               (if (= UnityEngine.Transform t#)
+                 (doseq [cspec# vspecs#]
+                   (populate! (.GetComponent ~targsym t#) cspec# t#))
+                 (doseq [cspec# vspecs#]
+                   (populate! (.AddComponent ~targsym t#) cspec# t#)))
+               (throw
+                 (Exception.
+                   (str
+                     "Component population for " t# 
+                     " at spec-key " ~keysym
+                     " requires vector"))))))
+         ~targsym)))
 
-(defn game-object-case-default-fn [ctx]
+(defmacro populate-game-object-mac []
+  (populater-form 'UnityEngine.GameObject
+    {:populater-form-opts
+     {:reducing-form-opts
+      {:case-default-fn game-object-populate-case-default-fn}}}))
+
+(def populate-game-object!
+  (populate-game-object-mac))
+
+(defn game-object-hydrate-case-default-fn [ctx]
   (mu/checked-keys [[targsym keysym valsym] ctx]
     `(do (when-let [^System.MonoType t# (resolve-type-flag ~keysym)]
            (let [vspecs# ~valsym]
@@ -467,7 +478,7 @@
   (hydrater-form 'UnityEngine.GameObject
     {:populater-form-opts
      {:reducing-form-opts
-      {:case-default-fn game-object-case-default-fn}}
+      {:case-default-fn game-object-hydrate-case-default-fn}}
      
      :prepopulater-form-fn
      (fn hydrate-prepopulater-form-fn [ctx]
