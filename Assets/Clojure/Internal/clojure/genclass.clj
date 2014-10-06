@@ -82,7 +82,7 @@
    (validate-generate-class-options options-map)
    (let [default-options {:prefix "-" :load-impl-ns true :impl-ns (ns-name *ns*)}
         {:keys [name extends implements constructors methods main factory state init exposes 
-                exposes-methods prefix load-impl-ns impl-ns post-init]} 
+                exposes-methods prefix load-impl-ns impl-ns post-init class-attributes]}    ;;; DM: Added class-attributes
           (merge default-options options-map)
         name (str name)
         super (if extends (the-class extends) Object)
@@ -100,6 +100,7 @@
         factory-name (str factory)
         state-name (str state)
         main-name "main"
+		class-attributes (extract-attributes class-attributes)
         methods (map (fn [x] [(nth x 0) 
                               (map the-class (nth x 1)) 
                               (the-class (nth x 2)) 
@@ -114,7 +115,8 @@
 		factory-name state-name 
 		init-name post-init-name 
 		impl-cname impl-pkg-name 
-		(. clojure.lang.RT booleanCast  load-impl-ns))))
+		(. clojure.lang.RT booleanCast  load-impl-ns)
+		class-attributes)))
 		
 	 
  (defmacro gen-class 

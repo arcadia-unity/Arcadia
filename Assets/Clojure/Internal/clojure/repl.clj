@@ -165,16 +165,18 @@ Example: (source-fn 'filter)"
   `(println (or (source-fn '~n) (str "Source not found"))))
 
 (defn apropos
-  "Given a regular expression or stringable thing, return a seq of
-all definitions in all currently-loaded namespaces that match the
+  "Given a regular expression or stringable thing, return a seq of all
+public definitions in all currently-loaded namespaces that match the
 str-or-pattern."
   [str-or-pattern]
   (let [matches? (if (instance? System.Text.RegularExpressions.Regex str-or-pattern)    ;;; java.util.regex.Pattern
                    #(re-find str-or-pattern (str %))
                    #(.Contains (str %) (str str-or-pattern)))]                          ;;; .contains
-    (mapcat (fn [ns]
-              (filter matches? (keys (ns-publics ns))))
-            (all-ns))))
+    (sort (mapcat (fn [ns]
+                    (let [ns-name (str ns)]
+                      (map #(symbol ns-name (str %))
+                           (filter matches? (keys (ns-publics ns))))))
+                  (all-ns)))))
 
 (defn dir-fn
   "Returns a sorted seq of symbols naming public vars in

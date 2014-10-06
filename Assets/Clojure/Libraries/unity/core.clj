@@ -41,7 +41,7 @@
 
 (defmacro defcomponent*
   [name fields & opts+specs]
-  (validate-fields fields)
+  (validate-fields fields name)
   (let [gname name 
         [interfaces methods opts] (parse-opts+specs opts+specs)
         ns-part (namespace-munge *ns*)

@@ -302,12 +302,22 @@
 
 (defn- validate-fields
   ""
-  [fields]
+  [fields name]
   (when-not (vector? fields)
     (throw (Exception. "No fields vector given.")))                                                                             ;;; AssertionError.
   (let [specials #{'__meta '__extmap}]
     (when (some specials fields)
-      (throw (Exception. (str "The names in " specials " cannot be used as field names for types or records."))))))             ;;; AssertionError.
+      (throw (Exception. (str "The names in " specials " cannot be used as field names for types or records.")))))              ;;; AssertionError.
+  (let [non-syms (remove symbol? fields)]
+    (when (seq non-syms)
+      (throw (clojure.lang.Compiler+CompilerException.                                                                          ;;; Compiler$CompilerException
+              *file*
+              (.deref clojure.lang.Compiler/LineVar)                                                                            ;;; LINE
+              (.deref clojure.lang.Compiler/ColumnVar)                                                                          ;;; COLUMN
+              (Exception.                                                                                                       ;;; AssertionError.
+               (str "defrecord and deftype fields must be symbols, "
+                    *ns* "." name " had: "
+                    (apply str (interpose ", " non-syms)))))))))
 
 (defmacro defrecord
   "(defrecord name [fields*]  options* specs*)
@@ -378,6 +388,7 @@
    :arglists '([name [& fields] & opts+specs])}
 
   [name fields & opts+specs]
+  (validate-fields fields name)
   (let [gname name
         [interfaces methods opts] (parse-opts+specs opts+specs)
 		ns-part (namespace-munge *ns*)
@@ -392,7 +403,8 @@
        ~(build-positional-factory gname classname fields)
        (defn ~(symbol (str 'map-> gname))
          ~(str "Factory function for class " classname ", taking a map of keywords to field values.")
-         ([m#] (~(symbol (str classname "/create")) m#)))
+         ([m#] (~(symbol (str classname "/create"))
+                (if (instance? clojure.lang.MapEquivalence m#) m# (into {} m#)))))
        ~classname)))
 
 (defn record?
@@ -476,7 +488,7 @@
    :arglists '([name [& fields] & opts+specs])}
 
   [name fields & opts+specs]
-  (validate-fields fields)
+  (validate-fields fields name)
   (let [gname name 
         [interfaces methods opts] (parse-opts+specs opts+specs)
 		ns-part (namespace-munge *ns*)

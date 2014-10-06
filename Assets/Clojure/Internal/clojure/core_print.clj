@@ -72,8 +72,14 @@
           (pr-on m w))
       (.Write w " "))))
 
+(defn print-simple [o, ^System.IO.TextWriter w]
+  (print-meta o w)
+  (.Write w (str o)))
+
 (defmethod print-method :default [o, ^System.IO.TextWriter w]
-  (print-method (vary-meta o #(dissoc % :type)) w))
+  (if (instance? clojure.lang.IObj o)
+    (print-method (vary-meta o #(dissoc % :type)) w)
+    (print-simple o w)))
 
 (defmethod print-method nil [o, ^System.IO.TextWriter w]
   (.Write w "nil"))
@@ -163,10 +169,6 @@
   (.Write w (if o "true" "false")))                                                ;;; (.Write w (str o)))  else we get True False
 
 (defmethod print-dup Boolean [o w] (print-method o w))
-
-(defn print-simple [o, ^System.IO.TextWriter w]
-  (print-meta o w)
-  (.Write w (str o)))
 
 (defmethod print-method clojure.lang.Symbol [o, ^System.IO.TextWriter w]
   (print-simple o w))
