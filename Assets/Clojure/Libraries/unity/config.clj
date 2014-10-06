@@ -17,6 +17,8 @@
 (defn update-from-file! [f]
   (update! (edn/read-string (File/ReadAllText f))))
 
+(declare widgets)
+
 (defn widget [k v]
   (cond
     (or (vector? v) (map? v))

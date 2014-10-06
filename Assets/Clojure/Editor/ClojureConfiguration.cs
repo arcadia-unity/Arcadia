@@ -3,7 +3,8 @@ using UnityEditor;
 using clojure.lang;
 
 [InitializeOnLoad]
-public class ClojureConfiguration : EditorWindow {
+[CustomEditor(typeof(ClojureConfigurationObject))]
+public class ClojureConfiguration : Editor {
   static ClojureConfiguration() {
     ClojureAssetPostprocessor.SetupLoadPath();
     RT.load("unity/config");
@@ -12,6 +13,7 @@ public class ClojureConfiguration : EditorWindow {
   
   [SerializeField]
   static string configFilePath = "Assets/Clojure/configure.edn";
+  static ClojureConfigurationObject _clojureConfigurationObject = new ClojureConfigurationObject();
   
   public static T GetValue<T>(Keyword key) {
     // RT.load("unity/config");
@@ -25,11 +27,15 @@ public class ClojureConfiguration : EditorWindow {
 
   [MenuItem ("Clojure/Configuration...")]
   public static void Init () {
-    ClojureConfiguration window = (ClojureConfiguration)EditorWindow.GetWindow (typeof (ClojureConfiguration));
+    Selection.activeObject = _clojureConfigurationObject;
   }
 
-  void OnGUI () {
+  public override void OnInspectorGUI () {
     configFilePath = EditorGUILayout.TextField("Config File Path", configFilePath);
     RT.var("unity.config", "render-gui").invoke(configFilePath);
   }
+  
+  
 }
+
+public class ClojureConfigurationObject : ScriptableObject {}
