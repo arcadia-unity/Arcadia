@@ -9,7 +9,7 @@
   (:import UnityEditor.AssetDatabase
            [System.Reflection Assembly AssemblyName MemberInfo
             PropertyInfo FieldInfo]
-           [UnityEngine GameObject Transform]
+           [UnityEngine GameObject Transform Vector3 Quaternion]
            System.AppDomain))
 
 ;;; TODO: get rid of types->type-flags, is pointless
@@ -443,17 +443,45 @@
       (hydrate-game-object
         (mu/assoc-in-mv spec [:transform 0 :parent] trns)))))
 
-(defn game-object-prepopulate! [^GameObject obj, spec]
+(defn game-object-prepopulate [^GameObject obj, spec]
   (if-let [t (first (:transform spec))] ;; obsoletes resolve-type-key
     (do (populate! (.GetComponent obj UnityEngine.Transform) t)
         (dissoc spec :transform))
     spec))
 
+; globals before locals, for now
+(defn transform-prepopulate [^Transform trns, spec]
+  (as-> spec spec
+    (if-let [e (find spec :position)]
+      (let [^Vector3 v (val e)]
+        (set! (.position trns) v)
+        (dissoc spec :position))
+      spec)
+    (if-let [e (find spec :euler-angles)]
+      (let [^Vector3 v (val e)]
+        (set! (.eulerAngles trns) v)
+        (dissoc spec :euler-angles))
+      spec)
+    (if-let [e (find spec :rotation)]
+      (let [^Quaternion v (val e)]
+        (set! (.rotation trns) v)
+        (dissoc spec :rotation))
+      spec)
+    (if-let [e (find spec :scale)]
+      (let [^Vector3 v (val e)]
+        (set! (.scale trns) v)
+        (dissoc spec :scale))
+      spec)))
+
+(def log (atom nil))
+
 ;; all about the snappy fn names
 (defn game-object-populate-case-default-fn [ctx]
   (mu/checked-keys [[targsym keysym valsym] ctx]
-    `(do (when-let [^System.MonoType t# (resolve-type-flag ~keysym)]
-           (when (same-or-subclass? UnityEngine.MonoBehaviour t#)
+    `(do
+       (if-let [^System.MonoType t# (resolve-type-flag ~keysym)]
+         (do (reset! log [t# ~valsym])
+           (if (same-or-subclass? UnityEngine.Component t#)
              (let [vspecs# ~valsym]
                (if (vector? vspecs#)
                  (if (= UnityEngine.Transform t#)
@@ -464,10 +492,12 @@
                  (throw
                    (Exception.
                      (str
-                       "Component population for " t# 
+                       "GameObject population for " t# 
                        " at spec-key " ~keysym
                        " requires vector")))))))
-         ~targsym)))
+         (if (= :children ~keysym)
+           (hydrate-game-object-children ~targsym ~valsym)))
+       ~targsym)))
 
 (defmacro populate-game-object-mac []
   (populater-form 'UnityEngine.GameObject
@@ -478,41 +508,21 @@
      :prepopulater-form-fn
      (fn hydrate-prepopulater-form-fn [ctx]
        (mu/checked-keys [[initsym specsym] ctx]
-         `(game-object-prepopulate! ~initsym ~specsym)))}))
+         `(game-object-prepopulate ~initsym ~specsym)))}))
 
 (def populate-game-object!
   (populate-game-object-mac))
-
-(defn game-object-hydrate-case-default-fn [ctx]
-  (mu/checked-keys [[targsym keysym valsym] ctx]
-    `(do (when-let [^System.MonoType t# (resolve-type-flag ~keysym)]
-           (when (same-or-subclass? UnityEngine.MonoBehaviour t#)
-             (let [vspecs# ~valsym]
-               (if (vector? vspecs#)
-                 (if (= UnityEngine.Transform t#)
-                   (doseq [cspec# vspecs#]
-                     (populate! (.GetComponent ~targsym t#) cspec# t#))
-                   (doseq [cspec# vspecs#]
-                     (populate! (.AddComponent ~targsym t#) cspec# t#)))
-                 (throw
-                   (Exception.
-                     (str
-                       "Component hydration for " t#
-                       " at spec-key " ~keysym
-                       " requires vector")))))))
-         
-         ~targsym)))
 
 (defmacro hydrate-game-object-mac []
   (hydrater-form 'UnityEngine.GameObject
     {:populater-form-opts
      {:reducing-form-opts
-      {:case-default-fn game-object-hydrate-case-default-fn}}
+      {:case-default-fn game-object-populate-case-default-fn}}
      
      :prepopulater-form-fn
      (fn hydrate-prepopulater-form-fn [ctx]
        (mu/checked-keys [[initsym specsym] ctx]
-         `(game-object-prepopulate! ~initsym ~specsym)))}))
+         `(game-object-prepopulate ~initsym ~specsym)))}))
 
 (def hydrate-game-object
   (hydrate-game-object-mac))
@@ -635,10 +645,7 @@
                (dissoc ~specsym ~shared-key))
            ~specsym)))))
 
-(def log (atom nil))
-
 (defn shared-elem-prepopulater-form [sharables ctx]
-  (reset! log ctx)
   (mu/checked-keys [[typesym initsym specsym] ctx]
     (let [targsym initsym 
           ctx2    (mu/lit-assoc ctx targsym specsym)
@@ -658,24 +665,33 @@
 
 ;; this is kind of insane. Cleaner way?
 (defmacro establish-component-populaters-mac [m]
-  (let [cpfmf (tsym-map
-                populater-form
-                (remove shared-elem-components
-                  (all-component-type-symbols))
-                {:setables-fn setables})
-        cpfmf2 (reduce-kv
-                 (fn [bldg t sharables]
-                   (-> bldg
-                     (assoc t
-                       (populater-form t
-                         {:prepopulater-form-fn
-                          (fn [ctx]
-                            (shared-elem-prepopulater-form
-                              (shared-elem-components t)
-                              ctx))}))))
-                 cpfmf
-                 shared-elem-components)]
-    `(merge ~m ~cpfmf2)))
+  (let [specials (conj (set (keys shared-elem-components))
+                   'UnityEngine.Transform)
+        cpfmf (->
+                (tsym-map
+                  populater-form
+                  (remove specials
+                    (all-component-type-symbols))
+                  {:setables-fn setables})
+                (as-> cpfmf 
+                  (reduce-kv
+                    (fn [bldg t sharables]
+                      (assoc bldg t
+                        (populater-form t
+                          {:prepopulater-form-fn
+                           (fn [ctx]
+                             (shared-elem-prepopulater-form
+                               (shared-elem-components t)
+                               ctx))})))
+                    cpfmf
+                    shared-elem-components)
+                  (assoc cpfmf 'UnityEngine.Transform
+                    (populater-form 'UnityEngine.Transform
+                      {:prepopulater-form-fn
+                       (fn [ctx]
+                         (mu/checked-keys [[initsym specsym] ctx]
+                           `(transform-prepopulate ~initsym ~specsym)))}))))]
+    `(merge ~m ~cpfmf)))
 
 (defmacro establish-value-type-populaters-mac [m]
   (let [vpfmf (tsym-map
@@ -800,7 +816,46 @@
               (str ns))]
     (keyword nsn (name kw))))
 
-(defn register-component-type
+(defn- registration [{:keys [populater hydrater dehydrater type-flag] :as argsm}]
+  (mu/checked-keys [[type] argsm]
+    (swap! hydration-database
+      (fn [hdb]
+        (cond-> hdb
+          hydrater   (assoc-in [:populaters type]  hydrater)
+          populater  (assoc-in [:populaters type]  populater)
+          dehydrater (assoc-in [:dehydraters type] dehydrater)
+          type-flag  (->
+                       (assoc-in [:type-flags->types type-flag] type)
+                       (assoc-in [:types->type-flags type] type-flag)))))
+    nil))
+
+(defn hydrater-for-registration [typesym option-map]
+  (eval
+    (value-hydrater-form typesym
+      (merge {}
+        (::hydrater-options option-map)))))
+
+(defn dehydrater-for-registration [typesym option-map]
+  (eval
+    (dehydrater-form typesym
+      (merge
+        {:setables-filter component-dehydrater-setables-filter}
+        (::dehydrater-options option-map)))))
+
+(defn populater-for-registration [typesym option-map]
+  (eval
+    (populater-form typesym
+      (merge {}
+        (::populater-options option-map)))))
+
+(defn type-flag-for-registration [type option-map]
+  (or (:type-flag option-map)
+    (ns-qualify-kw
+      (keyword-for-type
+        (ensure-type type))
+      *ns*)))
+
+(defn- register-component-type
   ([type-or-typesym]
      (register-component-type type-or-typesym {}))
   ([type-or-typesym option-map]
@@ -809,31 +864,17 @@
          (throw
            (System.ArgumentException.
              "register-component-type expects component type"))
-         (let [type-flag  (keyword-for-type t)
-               typesym    (ensure-symbol t)
-               populater  (eval
-                            (populater-form typesym
-                              (merge {}
-                                (::populater-options option-map))))
-               dehydrater (eval
-                            (dehydrater-form typesym
-                              (merge
-                                {:setables-filter component-dehydrater-setables-filter}
-                                (::dehydrater-options option-map))))
-               type-flag  (or (:type-flag option-map)
-                            (ns-qualify-kw
-                              (keyword-for-type t)
-                              *ns*))]
-           (swap! hydration-database
-             (fn [hdb]
-               (-> hdb
-                 (assoc-in [:populaters t]  populater)
-                 (assoc-in [:dehydraters t] dehydrater)
-                 (assoc-in [:type-flags->types type-flag] t)
-                 (assoc-in [:types->type-flags t] type-flag))))
-           nil)))))
+         (let [typesym    (ensure-symbol t)
+               populater  (populater-for-registration typesym option-map)
+               dehydrater (dehydrater-for-registration typesym option-map
+                            (assoc option-map :setables-filter
+                                   component-dehydrater-setables-filter))
+               type-flag  (type-flag-for-registration t option-map)]
+           (registration
+             (mu/lit-assoc {:type t}
+               type-flag populater dehydrater)))))))
 
-(defn register-value-type
+(defn- register-value-type
   ([type-or-typesym]
      (register-component-type type-or-typesym {}))
   ([type-or-typesym option-map]
@@ -842,68 +883,28 @@
          (throw
            (System.ArgumentException.
              "register-value-type expects value type"))
-         (let [type-flag  (keyword-for-type t)
-               typesym    (ensure-symbol t)
-               hydrater   (eval
-                            (value-hydrater-form
-                              (merge {}
-                                (::hydrater-options option-map))))
-               populater  (eval
-                            (populater-form typesym
-                              (merge {}
-                                (::populater-options option-map))))
-               dehydrater (eval
-                            (dehydrater-form typesym
-                              (merge
-                                {:setables-filter component-dehydrater-setables-filter}
-                                (::dehydrater-options option-map))))
-               type-flag  (or (:type-flag option-map)
-                            (ns-qualify-kw
-                              (keyword-for-type t)
-                              *ns*))]
-           (swap! hydration-database
-             (fn [hdb]
-               (-> hdb
-                 (assoc-in [:populaters t]  populater)
-                 (assoc-in [:hydraters t]  hydrater)
-                 (assoc-in [:dehydraters t] dehydrater)
-                 (assoc-in [:type-flags->types type-flag] t)
-                 (assoc-in [:types->type-flags t] type-flag))))
-           nil)))))
+         (let [typesym    (ensure-symbol t)
+               hydrater   (hydrater-for-registration typesym option-map)
+               populater  (populater-for-registration typesym option-map)
+               dehydrater (dehydrater-for-registration typesym option-map)
+               type-flag  (type-flag-for-registration t option-map)]
+           (registration
+             (mu/lit-assoc {:type t}
+               hydrater populater dehydrater type-flag)))))))
 
 (defn- register-normal-type
   ([type-or-typesym]
      (register-component-type type-or-typesym {}))
   ([type-or-typesym option-map]
      (let [^Type t (ensure-type type-or-typesym)]
-       (let [type-flag  (keyword-for-type t)
-             typesym    (ensure-symbol t)
-             hydrater   (eval
-                          (hydrater-form typesym
-                            (merge {}
-                              (::hydrater-options option-map))))
-             populater  (eval
-                          (populater-form typesym
-                            (merge {}
-                              (::populater-options option-map))))
-             dehydrater (eval
-                          (dehydrater-form typesym
-                            (merge
-                              {:setables-filter component-dehydrater-setables-filter}
-                              (::dehydrater-options option-map))))
-             type-flag  (or (:type-flag option-map)
-                          (ns-qualify-kw
-                            (keyword-for-type t)
-                            *ns*))]
-         (swap! hydration-database
-           (fn [hdb]
-             (-> hdb
-               (assoc-in [:populaters t]  populater)
-               (assoc-in [:hydraters t]  hydrater)
-               (assoc-in [:dehydraters t] dehydrater)
-               (assoc-in [:type-flags->types type-flag] t)
-               (assoc-in [:types->type-flags t] type-flag))))
-         nil))))
+       (let [typesym    (ensure-symbol t)
+             hydrater   (hydrater-for-registration typesym option-map)
+             populater  (populater-for-registration typesym option-map)
+             dehydrater (dehydrater-for-registration typesym)
+             type-flag  (type-flag-for-registration t option-map)]
+         (registration
+           (mu/lit-assoc {:type t}
+             hydrater populater dehydrater type-flag))))))
 
 (defn register-type
   ([type-or-typesym]
