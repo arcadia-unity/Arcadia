@@ -289,7 +289,7 @@
      ~docstring))
   ([name class method docstring & body]
    `(defn ~name
-      ~docstring
+      ~(str docstring " Wraps " class "." method ".")
       ~@(->> (.GetMethods
                (resolve class)
                (enum-or BindingFlags/Public BindingFlags/Static))
@@ -304,10 +304,11 @@
 
 (defwrapper instantiate UnityEngine.Object Instantiate
   "Clones the object original and returns the clone."
-  ([^UnityEngine.Object obj ^UnityEngine.Vector3 pos]
-   (UnityEngine.Object/Instantiate obj pos Quaternion/identity)))
+  ([^UnityEngine.Object original ^UnityEngine.Vector3 position]
+   (UnityEngine.Object/Instantiate original position Quaternion/identity)))
 
 (defn create-primitive [prim]
+  "Creates a game object with a primitive mesh renderer and appropriate collider."
   (if (= PrimitiveType (type prim))
     (GameObject/CreatePrimitive prim)
     (GameObject/CreatePrimitive (case prim
@@ -323,9 +324,6 @@
 
 (defwrapper UnityEngine.Object DestroyImmediate
   "Destroys the object obj immediately. You are strongly recommended to use Destroy instead.")
-
-(defwrapper UnityEngine.Object DontDestroyOnLoad
-  "Makes the object target not be destroyed automatically when loading a new scene.")
 
 (defwrapper object-typed UnityEngine.Object FindObjectOfType
   "Returns the first active loaded object of Type type.")
@@ -379,3 +377,27 @@
 
 (defwrapper objects-tagged GameObject FindGameObjectsWithTag
   "Returns a list of active GameObjects tagged tag. Returns empty array if no GameObject was found.")
+
+(comment
+  
+  (use 'clojure.repl)
+  (use 'unity.core)
+  
+(defmacro docs [& names]
+  `(do (println) ~@(map (fn [n] `(doc ~n)) names)))
+
+(docs instantiate
+      create-primitive
+      destroy
+      destroy-immediate
+      dont-destroy-on-load
+      object-named
+      objects-named
+      object-tagged
+      objects-tagged
+      object-typed
+      objects-typed
+      get-component
+      )
+
+)

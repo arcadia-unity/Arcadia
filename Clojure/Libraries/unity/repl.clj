@@ -103,10 +103,10 @@
       (reset! server-running true)
       (let [socket (UdpClient. (IPEndPoint. IPAddress/Any port))]
         (.Start (Thread. (gen-delegate ThreadStart []
-          (Debug/Log "Starting UDP REPL...")
+          (Debug/Log "Starting REPL...")
           (while @server-running
             (listen-and-block socket))
-          (Debug/Log "Stopping UDP REPL...")
+          (Debug/Log "Stopping REPL...")
           (.Close socket))))))))
 
 (defn stop-server []
