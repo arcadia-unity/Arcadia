@@ -201,10 +201,12 @@
   (mu/checked-keys [[targsym valsym] ctx]
     (let [name         (:name setable)
           setable-type (type-for-setable setable)
-          rezsym       (with-meta (gensym "hydrate-result_")
+          ressym       (with-meta (gensym "hydrate-result_")
                          {:tag setable-type})]
-      `(let [~rezsym (hydrate ~valsym ~setable-type)]
-         (set! (. ~targsym ~name) ~rezsym)))))
+      `(let [~ressym (if (instance? ~setable-type ~valsym)
+                       ~valsym
+                       (hydrate ~valsym ~setable-type))]
+         (set! (. ~targsym ~name) ~ressym)))))
 
 (defn populater-key-clauses
   [{:keys [set-clause-fn]
@@ -449,52 +451,57 @@
         (dissoc spec :transform))
     spec))
 
-; globals before locals, for now
-(defn transform-prepopulate [^Transform trns, spec]
-  (as-> spec spec
-    (if-let [e (find spec :position)]
-      (let [^Vector3 v (val e)]
-        (set! (.position trns) v)
-        (dissoc spec :position))
-      spec)
-    (if-let [e (find spec :euler-angles)]
-      (let [^Vector3 v (val e)]
-        (set! (.eulerAngles trns) v)
-        (dissoc spec :euler-angles))
-      spec)
-    (if-let [e (find spec :rotation)]
-      (let [^Quaternion v (val e)]
-        (set! (.rotation trns) v)
-        (dissoc spec :rotation))
-      spec)
-    (if-let [e (find spec :scale)]
-      (let [^Vector3 v (val e)]
-        (set! (.scale trns) v)
-        (dissoc spec :scale))
-      spec)))
+(defmacro transform-prepopulate-helper-mac [targ spec key field type]
+  (let [valsym (with-meta (gensym "val_") {:tag type})]
+    `(if-let [e# (find ~spec ~key)] ;; local before global, suprisingly
+       (let [specval#    (val e#)
+             ~valsym (if (instance? ~type specval#)
+                       specval#
+                       (hydrate specval# ~type))]
+         (set! (. ~targ ~field) ~valsym)
+         (dissoc ~spec ~key))
+       ~spec)))
 
-(def log (atom nil))
+;; locals before globals, surprisingly
+(defn transform-prepopulate [^Transform trns, spec]
+  (-> spec
+    ;; (dissoc :local-rotation :rotation :local-euler-angles)
+    ;; (dissoc :local-rotation :rotation :euler-angles)
+    ;; (dissoc
+    ;;   ;:position :local-position
+    ;;   #_:local-rotation :rotation
+    ;;   :euler-angles :local-euler-angles
+    ;;   ;:scale :local-scale
+    ;;   )
+    (as-> spec 
+      (transform-prepopulate-helper-mac trns spec :local-position     localPosition    Vector3)
+      (transform-prepopulate-helper-mac trns spec :position           position         Vector3)
+      (transform-prepopulate-helper-mac trns spec :local-rotation     localRotation    Quaternion)
+      (transform-prepopulate-helper-mac trns spec :rotation           rotation         Quaternion)
+      (transform-prepopulate-helper-mac trns spec :local-euler-angles localEulerAngles Vector3)
+      (transform-prepopulate-helper-mac trns spec :euler-angles       eulerAngles      Vector3)
+      (transform-prepopulate-helper-mac trns spec :local-scale        localScale       Vector3)
+      (transform-prepopulate-helper-mac trns spec :scale              scale            Vector3))))
 
 ;; all about the snappy fn names
 (defn game-object-populate-case-default-fn [ctx]
   (mu/checked-keys [[targsym keysym valsym] ctx]
     `(do
        (if-let [^System.MonoType t# (resolve-type-flag ~keysym)]
-         (do (reset! log [t# ~valsym])
-           (if (same-or-subclass? UnityEngine.Component t#)
-             (let [vspecs# ~valsym]
-               (if (vector? vspecs#)
-                 (if (= UnityEngine.Transform t#)
-                   (doseq [cspec# vspecs#]
-                     (populate! (.GetComponent ~targsym t#) cspec# t#))
-                   (doseq [cspec# vspecs#]
-                     (populate! (.AddComponent ~targsym t#) cspec# t#)))
-                 (throw
-                   (Exception.
-                     (str
-                       "GameObject population for " t# 
-                       " at spec-key " ~keysym
-                       " requires vector")))))))
+         (if (same-or-subclass? UnityEngine.Component t#)
+           (let [vspecs# ~valsym]
+             (if (vector? vspecs#)
+               (if (= UnityEngine.Transform t#)
+                 (doseq [cspec# vspecs#]
+                   (populate! (.GetComponent ~targsym t#) cspec# t#))
+                 (doseq [cspec# vspecs#]
+                   (populate! (.AddComponent ~targsym t#) cspec# t#)))
+               (throw
+                 (Exception.
+                   (str
+                     "GameObject population for " t# 
+                     " at spec-key " ~keysym
+                     " requires vector"))))))
          (if (= :children ~keysym)
            (hydrate-game-object-children ~targsym ~valsym)))
        ~targsym)))
@@ -716,21 +723,37 @@
                  })]
     `(merge ~m ~vhfmf)))
 
-(defn component-dehydrater-setables-filter [{:keys [name] :as setable} ctx]
-  (mu/checked-keys [[typesym] ctx]
+(def component-hydrater-field-blacklist
+  #{'parent 'name 'tag 'active 'hideFlags})
+
+(defn component-dehydrater-setables-filter [setable ctx]
+  (mu/checked-keys [[typesym] ctx
+                    [name] setable]
     (and
-      (not (#{'parent 'name 'tag 'active 'hideFlags} name))
+      (not (component-hydrater-field-blacklist name))
       (if-let [[_ sharables] (find shared-elem-components typesym)]
         (not-any? #(= name (:direct %)) sharables)
         true))))
+
+(defn transform-dehydrater-setables-filter [setable ctx]
+  (mu/checked-keys [[typesym] ctx
+                    [name] setable]
+    ('#{local-position local-rotation local-scale}
+     name)))
 
 (defmacro establish-component-dehydraters-mac [m]
   (let [dhm (tsym-map
               dehydrater-form
               ;;'[UnityEngine.Transform UnityEngine.BoxCollider]
-              (all-component-type-symbols)
+              (remove #{'UnityEngine.Transform}
+                (all-component-type-symbols))
               {:setables-fn setables
-               :setables-filter component-dehydrater-setables-filter})]
+               :setables-filter component-dehydrater-setables-filter})
+        dhm (assoc dhm
+              'UnityEngine.Transform
+              (dehydrater-form 'UnityEngine.Transform
+                {:setables-fn setables
+                 :setables-filter component-dehydrater-setables-filter}))]
     `(merge ~m ~dhm)))
 
 (defmacro establish-value-type-dehydraters-mac [m]
@@ -988,4 +1011,95 @@
            (cfn inst spec)
            (throw (Exception. (str "No populater found for type " type))))
          (throw (Exception. "spec neither vector nor map"))))))
+
+
+
+;; ============================================================
+;; tests
+;; ============================================================
+
+;;; pending a better idea, tests can go here
+
+
+(require '[clojure.test :as test])
+
+(defn run-tests [& args]
+  (binding [test/*test-out* *out*]
+    (apply test/run-tests args)))
+
+(defmacro with-temporary-object [[name objexpr] & body]
+  `(let [~name  ~objexpr  
+         retval# (do ~@body)]
+     (UnityEngine.Object/DestroyImmediate ~name false)
+     retval#))
+
+(defn respec [spec]
+  (with-temporary-object [obj (hydrate spec)]
+    (dehydrate obj)))
+
+(defn spec-idempotent-under-hydration? [spec]
+  (let [spec' (respec spec)]
+    (= spec' (respec spec'))))
+
+(test/deftest hydrater-positional-idempotence
+  (test/testing "basic"
+    (test/is
+      (spec-idempotent-under-hydration?
+        {:children  [{:transform [{:position [1 1 1]
+                                   :local-position [1 2 3]}]}]
+         :transform [{:position [1 1 1]
+                      :local-position [1 2 3]}]}))
+    (test/is
+      (spec-idempotent-under-hydration?
+        {:children (->> (vec (repeat 3 {:transform [{:position [1 1 1]
+                                                     :local-position [1 2 3]}]})))
+         :transform [{:position [1 1 1]
+                      :local-position [1 2 3]}]})))
+  (test/testing "nesting"
+    (test/is
+      (spec-idempotent-under-hydration?
+        (as-> {:transform [{:position [1 1 1]
+                            :local-position [1 2 3]}]} spec
+          (assoc spec :children [spec])
+          (assoc spec :children [spec])
+          (assoc spec :children [spec]))))
+    (test/is
+      (spec-idempotent-under-hydration?
+        (as-> {:transform [{:position [1 1 1]
+                            :local-position [1 2 3]}]} spec
+          (assoc spec :children [spec spec])
+          (assoc spec :children [spec spec])
+          (assoc spec :children [spec spec]))))))
+
+
+;; following doesn't work, not sure it ever will
+;; (test/deftest hydrater-rotational-idempotence
+;;   (test/testing "basic"
+;;     (test/is
+;;       (spec-idempotent-under-hydration?
+;;         {:children  [{:transform [{:euler-angles [1 2 3]}]}]
+;;          :transform [{:euler-angles [1 2 3]}]}))
+;;     (test/is
+;;       (spec-idempotent-under-hydration?
+;;         {:children (->> (vec (repeat 3 {:transform [{:euler-angles [1 2 3]}]})))
+;;          :transform [{:euler-angles [1 2 3]}]})))
+;;   (test/testing "nesting"
+;;     (test/is
+;;       (spec-idempotent-under-hydration?
+;;         (-> {:transform [{:euler-angles [1 2 3]
+;;                           :local-euler-angles [1 2 3]}]}
+;;           (as-> spec
+;;             (assoc spec :children [spec])
+;;             (assoc spec :children [spec])
+;;             (assoc spec :children [spec])))))
+;;     (test/is
+;;       (spec-idempotent-under-hydration?
+;;         (-> {:transform [{:euler-angles [1 2 3]
+;;                           :local-euler-angles [1 2 3]}]}
+;;           (as-> spec
+;;             (assoc spec :children [spec spec])
+;;             (assoc spec :children [spec spec])
+;;             (assoc spec :children [spec spec])))))))
+
+
 
