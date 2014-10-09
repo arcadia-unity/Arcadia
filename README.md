@@ -8,7 +8,7 @@ Clojure Unity is under development, and should not be used for real projects yet
 
 Usage
 -----
-The `Assets/Clojure` folder can be copied into any Unity project to enable Clojure. In the future, this will be available from the Asset Store. Once copied, you have access to the REPL and the Clojure compiler.
+The `Clojure` folder can be copied into any Unity project's Assets folder to enable Clojure. In the future, this will be available from the Asset Store. Once copied, you have access to the REPL and the Clojure compiler.
 
 ### Prerequisites
 Before doing anything, Clojure Unity requires that Unity be set to run in the background and use the full .NET API
@@ -20,10 +20,10 @@ Click `Edit > Project Settings > Player`, then in the Inspector under Resolution
 Click `Edit > Project Settings > Player`, then in the Inspector under Other Settings make sure Api Compatibility Level is set to .NET 2.0 and not .NET 2.0 Subset.
 
 ### REPL
-Clojure Unity ships with a simple networked REPL that is started from `Clojure > REPL > Start`. You can connect to this REPL using `Extra/REPL/client.rb`. This script is also the basis of our Sublime Text support (via SublimeREPL) and our Emacs support (via Inferior Lisp).
+Clojure Unity ships with a simple networked REPL that is started automatically or from `Clojure > REPL > Start`. You can connect to this REPL using `Clojure/Editor/repl-client.rb`. This script is also the basis of our [Sublime Text support (via SublimeREPL)](https://github.com/clojure-unity/repl-sublimetext) and our Emacs support (via Inferior Lisp).
 
-### Clojure Compiler
-You can write components in pure Clojure. The API is still very much in the air, but the appropriate `gen-class` call will work. Examples and documentation will follow once we settle on a more permanent approach.
+### Clojure Components
+You can write components in pure Clojure using our `defcomponent` form.
 
 Legal
 -----
