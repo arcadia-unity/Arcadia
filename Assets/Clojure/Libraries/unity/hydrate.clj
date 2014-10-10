@@ -738,7 +738,7 @@
 (defn transform-dehydrater-setables-filter [setable ctx]
   (mu/checked-keys [[typesym] ctx
                     [name] setable]
-    ('#{local-position local-rotation local-scale}
+    ('#{localPosition localRotation localScale}
      name)))
 
 (defmacro establish-component-dehydraters-mac [m]
@@ -753,7 +753,7 @@
               'UnityEngine.Transform
               (dehydrater-form 'UnityEngine.Transform
                 {:setables-fn setables
-                 :setables-filter component-dehydrater-setables-filter}))]
+                 :setables-filter transform-dehydrater-setables-filter}))]
     `(merge ~m ~dhm)))
 
 (defmacro establish-value-type-dehydraters-mac [m]
@@ -1100,6 +1100,4 @@
 ;;             (assoc spec :children [spec spec])
 ;;             (assoc spec :children [spec spec])
 ;;             (assoc spec :children [spec spec])))))))
-
-
 
