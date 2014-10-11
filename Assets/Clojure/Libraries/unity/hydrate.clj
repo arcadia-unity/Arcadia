@@ -1012,14 +1012,105 @@
            (throw (Exception. (str "No populater found for type " type))))
          (throw (Exception. "spec neither vector nor map"))))))
 
+;; ============================================================
+;; structural manipulation functions
+;; ============================================================
+
+(declare assoc-in-mv)
+
+(defn- mv-default-clause [[k & ks]]
+  (cond
+    (= 0 k) []
+    (number? k) (throw
+                  (Exception.
+                    "assoc-ing into fresh vector fails for non-zero indices"))
+    :else {}))
+
+;; update-in-mv ----------------------
+
+(declare update-in-mv)
+
+(defn- update-in-mv-vec [v [k & ks :as path] f]
+  (let [num-q (number? k)]
+    (if ks
+      (if num-q
+        (assoc v k
+          (update-in-mv
+            (get v k (mv-default-clause ks))
+            ks f))
+        (mapv #(update-in-mv % path f) v))
+      (if num-q
+        (assoc v k (f (get v k)))
+        (mapv #(update-in-mv % path f) v)))))
+
+(defn- update-in-mv-map [m [k & ks] f]
+  (if ks
+    (assoc m k
+      (update-in-mv (get m k) ks f))
+    (assoc m k (f (get m k)))))
+
+(defn update-in-mv
+  ([m path f & args]
+     (update-in-mv path #(apply f % args)))
+  ([m path f]
+     (if (vector? m)
+       (update-in-mv-vec m path f)
+       (update-in-mv-map m path f))))
+
+;; assoc-in-mv --------------------------
+
+(defn assoc-in-mv [v path x]
+  (update-in-mv v path (fn [_] x)))
+
+;; deep-merge ---------------------------
+
+;; remove when reduce-kv patch lands
+(defn- stopgap-reduce-kv [f init coll]
+  (if (vector? coll)
+    (let [c (count coll)]
+      (loop [bldg init, i (int 0)]
+        (if (< i c)
+          (recur (f bldg i (nth coll i)), (inc i))
+          bldg)))
+    (reduce-kv f init coll)))
+
+;; another, wackier version of this would map across vectors when the
+;; corresponding spec val isn't a vector, but that would sacrifice
+;; associativity, which seems important for merge
+(defn deep-merge-mv [& maps]
+  (let [m-or-v?     #(or (vector? %) (map? %))
+        merge-entry (fn merge-entry [m k v1]
+                      (if (contains? m k)
+                        (let [v0 (get m k)] ;; something seems amiss
+                          (assoc m k
+                            (cond
+                              (not (m-or-v? v0)) v1
+                              (m-or-v? v1) (deep-merge-mv v0 v1)
+                              :else v1))) 
+                        (assoc m k v1)))
+        merge2 (fn merge2 [m1 m2]
+                 (stopgap-reduce-kv merge-entry (or m1 (empty m2)) m2))]
+    (reduce merge2 maps)))
+
+;; select-paths-mv ----------------------
+
+(defn select-paths-mv
+  ([m path]
+     (assoc-in-mv (empty m) path (get-in m path)))
+  ([m path & paths]
+     (loop [bldg (select-paths-mv m path),
+            paths paths]
+       (if-let [[p & rps] (seq paths)]
+         (recur (assoc-in-mv bldg p (get-in m p)), rps)
+         bldg))))
 
 
 ;; ============================================================
 ;; tests
 ;; ============================================================
 
-;;; pending a better idea, tests can go here
-
+;; not the best place to put them, move elsewhere when we have a
+;; stable testing story
 
 (require '[clojure.test :as test])
 
@@ -1041,7 +1132,7 @@
   (let [spec' (respec spec)]
     (= spec' (respec spec'))))
 
-(test/deftest hydrater-positional-idempotence
+(test/deftest test-hydrater-positional-idempotence
   (test/testing "basic"
     (test/is
       (spec-idempotent-under-hydration?
@@ -1101,3 +1192,28 @@
 ;;             (assoc spec :children [spec spec])
 ;;             (assoc spec :children [spec spec])))))))
 
+
+;; structural manipulation functions ----------------------------------
+
+(test/deftest test-structural
+  (test/is (= {:a [{:c :E, :b :B} {:c :C}]}
+             (let [m1 {:a [{:b :B} {:c :C}]}
+                   m2 {:a [{:c :E}]}]
+               (deep-merge-mv m1 m2))))
+  (test/is (= {:a [{:b :B} {:c :C}]}
+             (let [m1 {:a [{:b :B} {:c :C}]}
+                   m2 {:a []}]
+               (deep-merge-mv m1 m2))))
+  (test/is
+    (let [m1 {:a [{:b :B} {:c :C}]}
+          m2 {:a []}]
+      (= (deep-merge-mv m1 m2)
+        (deep-merge-mv m2 m1))))
+  (test/is (= (deep-merge-mv
+                {:a {:b :B}}
+                {})
+             {:a {:b :is}}))
+  (test/is (= (deep-merge-mv
+                {}
+                {:a {:b :B}})
+             {:a {:b :B}})))

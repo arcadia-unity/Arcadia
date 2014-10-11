@@ -159,51 +159,6 @@
       (apply concat
         (last argsm)))))
 
-(defn assoc-in-mv [m [k & ks] v]
-  (if-let [[k2] ks]
-    (assoc m k
-           (assoc-in-mv
-             (get m k
-               (if (number? k2) [] {}))
-             ks
-             v))
-    (assoc m k v)))
-
-;; remove when reduce-kv patch lands
-(defn stopgap-reduce-kv [f init coll]
-  (if (vector? coll)
-    (let [c (count coll)]
-      (loop [bldg init, i (int 0)]
-        (if (< i c)
-          (recur (f bldg i (nth coll i)), (inc i))
-          bldg)))
-    (reduce-kv f init coll)))
-
-(defn deep-merge-mv [& maps]
-  (let [m-or-v?     #(or (vector? %) (map? %))
-        merge-entry (fn merge-entry [m k v1]
-                      (if (contains? m k)
-                        (let [v0 (get m k)]
-                          (assoc m k
-                            (cond
-                              (not (m-or-v? v0)) v1
-                              (m-or-v? v1) (deep-merge-mv v0 v1)
-                              :else v1))) 
-                        (assoc m k v1)))
-        merge2 (fn merge2 [m1 m2]
-                 (stopgap-reduce-kv merge-entry (or m1 (empty m2)) m2))]
-    (reduce merge2 maps)))
-
-(defn select-paths-mv
-  ([m path]
-     (assoc-in-mv (empty m) path (get-in m path)))
-  ([m path & paths]
-     (loop [bldg (select-paths-mv m path),
-            paths paths]
-       (if-let [[p & rps] (seq paths)]
-         (recur (assoc-in-mv bldg p (get-in m p)), rps)
-         bldg))))
-
 (defn fill
   ([m k v]
      (if (contains? m k) m (assoc m k v)))
