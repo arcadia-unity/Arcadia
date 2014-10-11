@@ -25,6 +25,10 @@ Arcadia ships with a simple networked REPL that is started automatically or from
 ### Clojure Components
 You can write components in pure Clojure using our `defcomponent` form.
 
+Name
+-----
+This project was originally named "clojure-unity", but was changed to "Arcadia" To avoid infinging on Clojure's trademarks. It was suggested to us by @ztellman at a bar during StrangeLoop 2014, and we are eternally grateful.
+
 Legal
 -----
 Copyright © 2014 Ramsey Nasser and Tims Gardner.
