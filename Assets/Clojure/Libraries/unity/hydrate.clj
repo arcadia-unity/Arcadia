@@ -481,7 +481,9 @@
       (transform-prepopulate-helper-mac trns spec :local-euler-angles localEulerAngles Vector3)
       (transform-prepopulate-helper-mac trns spec :euler-angles       eulerAngles      Vector3)
       (transform-prepopulate-helper-mac trns spec :local-scale        localScale       Vector3)
-      (transform-prepopulate-helper-mac trns spec :scale              scale            Vector3))))
+      ; following doesn't exist:
+      ;(transform-prepopulate-helper-mac trns spec :scale              scale            Vector3) 
+      )))
 
 ;; all about the snappy fn names
 (defn game-object-populate-case-default-fn [ctx]
