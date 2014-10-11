@@ -4,7 +4,6 @@
 *.dll
 *.mdb
 **/Clojure/Compiled/**
-!**/Clojure/Compiled/unity.hydrate.clj*
 
 # =============== #
 # Unity generated #
