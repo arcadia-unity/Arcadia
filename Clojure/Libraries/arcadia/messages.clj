@@ -1,4 +1,4 @@
-(ns unity.messages)
+(ns arcadia.messages)
 
 ;; from http://docs.unity3d.com/ScriptReference/MonoBehaviour.html
 

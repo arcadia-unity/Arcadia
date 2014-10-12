@@ -1,5 +1,5 @@
-(ns unity.math
-  (:use unity.core)
+(ns arcadia.math
+  (:use arcadia.core)
   (:import UnityEngine.Mathf))
 
 (defwrapper Mathf)

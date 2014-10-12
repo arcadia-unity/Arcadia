@@ -22,24 +22,24 @@ public class ClojureRepl : EditorWindow {
   }
 
   public static void Update() {
-    RT.var("unity.repl", "eval-queue").invoke();
+    RT.var("arcadia.repl", "eval-queue").invoke();
   }
 
   [MenuItem ("Clojure/REPL/Start %#r")]
   public static void StartREPL () {
-    RT.load("unity/repl");
-    RT.var("unity.repl", "start-server").invoke(11211);
+    RT.load("arcadia/repl");
+    RT.var("arcadia.repl", "start-server").invoke(11211);
     EditorApplication.update += ClojureRepl.Update;
   }
 
   [MenuItem ("Clojure/REPL/Stop &#r")]
   public static void StopREPL () {
-    RT.var("unity.repl", "stop-server").invoke();
+    RT.var("arcadia.repl", "stop-server").invoke();
     EditorApplication.update -= ClojureRepl.Update;
   }
 
   void OnGUI () {
-    if(RT.booleanCast(RT.var("unity.repl", "server-running").deref())) {
+    if(RT.booleanCast(RT.var("arcadia.repl", "server-running").deref())) {
       GUI.color = Color.red;
       if(GUILayout.Button("Stop REPL")) {
         ClojureRepl.StopREPL();

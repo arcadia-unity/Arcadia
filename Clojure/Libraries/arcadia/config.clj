@@ -1,4 +1,4 @@
-(ns unity.config
+(ns arcadia.config
   (:require [clojure.edn :as edn])
   (:import
     [UnityEngine Debug]

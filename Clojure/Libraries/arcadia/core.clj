@@ -1,8 +1,8 @@
-(ns unity.core
+(ns arcadia.core
   (:require [clojure.string :as string]
-            [unity.reflect :as r]
-            [unity.internal.map-utils :as mu]
-            unity.messages)
+            [arcadia.reflect :as r]
+            [arcadia.internal.map-utils :as mu]
+            arcadia.messages)
   (:import [UnityEngine
             MonoBehaviour
             GameObject
@@ -69,13 +69,13 @@
 ;;    ~@(concat
 ;;        (let [forms (take-while list? methods)]
 ;;          ;; add protocol declaration for known unity messages
-;;          (interleave (map #(symbol (str "unity.messages/I" (first %))) forms)
+;;          (interleave (map #(symbol (str "arcadia.messages/I" (first %))) forms)
 ;;            ;; wrap method bodies in typehinted let bindings
 ;;            (map (fn [[name args & body]]
 ;;                   (list name args
 ;;                     `(let ~(vec (flatten (map (fn [typ arg]
 ;;                                                 [(vary-meta arg assoc :tag typ) arg])
-;;                                            (unity.messages/messages name)
+;;                                            (arcadia.messages/messages name)
 ;;                                            (drop 1 args))))
 ;;                        ~@body)))
 ;;              forms)))
@@ -91,7 +91,7 @@
     (mu/lit-map protocol name args fntail)))
 
 (defn- find-message-protocol-symbol [s]
-  (symbol (str "unity.messages/I" s)))
+  (symbol (str "arcadia.messages/I" s)))
 
 (defn- awake-method? [{:keys [name]}]
   (= name 'Awake))
@@ -210,7 +210,7 @@
 (defmacro get-component* [obj t]
   (if (not-every? symbol? [obj t])
     (raise-non-symbol-args
-      (list 'unity.core/get-component* obj t))
+      (list 'arcadia.core/get-component* obj t))
     (cond
       (contains? &env t)
       `(.GetComponent ~obj ~t)
@@ -224,7 +224,7 @@
 (defn get-component
   "Returns the component of Type type if the game object has one attached, nil if it doesn't."
   {:inline (fn [gameobject type]
-             (list 'unity.core/get-component* gameobject type))
+             (list 'arcadia.core/get-component* gameobject type))
    :inline-arities #{2}}
   [gameobject type]
   (.GetComponent gameobject type))
@@ -381,7 +381,7 @@
 (comment
   
   (use 'clojure.repl)
-  (use 'unity.core)
+  (use 'arcadia.core)
   
 (defmacro docs [& names]
   `(do (println) ~@(map (fn [n] `(doc ~n)) names)))

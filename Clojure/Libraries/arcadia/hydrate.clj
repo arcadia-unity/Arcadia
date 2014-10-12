@@ -1,6 +1,6 @@
-(ns unity.hydrate
-  (:require [unity.internal.map-utils :as mu]
-            [unity.reflect :as r]
+(ns arcadia.hydrate
+  (:require [arcadia.internal.map-utils :as mu]
+            [arcadia.reflect :as r]
             [clojure.string :as string]
             [clojure.set :as sets]
             [clojure.edn :as edn]
@@ -436,14 +436,14 @@
     tf
     ((:type-flags->types @hydration-database) tf)))
 
-(declare hydrate-game-object)
+(declare hydrate-game-object assoc-in-mv)
 
 (defn hydrate-game-object-children
   [^UnityEngine.GameObject obj, specs]
   (let [^UnityEngine.Transform trns (.GetComponent obj UnityEngine.Transform)]
     (doseq [spec specs]
       (hydrate-game-object
-        (mu/assoc-in-mv spec [:transform 0 :parent] trns)))))
+        (assoc-in-mv spec [:transform 0 :parent] trns)))))
 
 (defn game-object-prepopulate [^GameObject obj, spec]
   (if-let [t (first (:transform spec))] ;; obsoletes resolve-type-key
