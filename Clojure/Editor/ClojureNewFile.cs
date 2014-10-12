@@ -15,25 +15,23 @@ public class ClojureNewFile : EditorWindow {
   [MenuItem ("Assets/Create/Clojure Component", false, 90)]
   [MenuItem ("Clojure/New Component", false, 90)]
   public static void NewComponent () {
-    var icon = EditorGUIUtility.IconContent ("TextAsset Icon").image as Texture2D;
     var DoCreateScriptAsset = Type.GetType("UnityEditor.ProjectWindowCallback.DoCreateScriptAsset, UnityEditor");
     
     ProjectWindowUtil.StartNameEditingIfProjectWindowExists(0,
       ScriptableObject.CreateInstance(DoCreateScriptAsset) as UnityEditor.ProjectWindowCallback.EndNameEditAction,
       "Assets/Clojure/Scripts/new-component.clj",
-      icon,
+      null,
       "Assets/Clojure/Editor/new-component-template.clj.txt");
   }
   
   [MenuItem ("Clojure/New File", false, 91)]
   public static void NewFile () {
-    var icon = EditorGUIUtility.IconContent ("TextAsset Icon").image as Texture2D;
     var DoCreateScriptAsset = Type.GetType("UnityEditor.ProjectWindowCallback.DoCreateScriptAsset, UnityEditor");
     
     ProjectWindowUtil.StartNameEditingIfProjectWindowExists(0,
       ScriptableObject.CreateInstance(DoCreateScriptAsset) as UnityEditor.ProjectWindowCallback.EndNameEditAction,
       "Assets/Clojure/Scripts/new-file.clj",
-      icon,
+      null,
       "Assets/Clojure/Editor/new-file-template.clj.txt");
   }
 }
