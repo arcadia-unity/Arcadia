@@ -1,9 +1,9 @@
 # =============== #
 #  Clojure Unity  #
 # =============== #
-*.dll
 *.mdb
-**/Clojure/Compiled/**
+**/Clojure/Compiled/*.exe*
+**/Clojure/Compiled/*.dll*
 
 # =============== #
 # Unity generated #
