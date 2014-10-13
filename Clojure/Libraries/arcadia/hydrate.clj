@@ -263,7 +263,8 @@
             setable-type (type-for-setable setable)
             ressym       (with-meta (gensym "hydrate-result_")
                            {:tag setable-type})]
-        `(let [~ressym (if (instance? ~setable-type ~valsym)
+        `(let [~ressym (if (or (nil? ~valsym)
+                             (instance? ~setable-type ~valsym))
                          ~valsym
                          (hydrate ~valsym ~setable-type))]
            (set! (. ~targsym ~name) ~ressym))))))
