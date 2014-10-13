@@ -5,7 +5,8 @@
             [clojure.set :as sets]
             [clojure.edn :as edn]
             clojure.walk
-            [clojure.clr.io :as io])
+            [clojure.clr.io :as io]
+            [clojure.test :as test])
   (:import UnityEditor.AssetDatabase
            [System.Reflection Assembly AssemblyName MemberInfo
             PropertyInfo FieldInfo]
@@ -1232,8 +1233,6 @@
 
 ;; not the best place to put them, move elsewhere when we have a
 ;; stable testing story
-
-(require '[clojure.test :as test])
 
 (defn run-tests [& args]
   (binding [test/*test-out* *out*]
