@@ -13,6 +13,22 @@
            System.AppDomain))
 
 ;;; TODO: get rid of types->type-flags, is pointless
+;;; TODO: way too much ambiguity about types versus symbols naming types, lock it down
+;;;; Actually there's not much ambiguity, for symbolic programming looks like we need symbols:
+(comment
+  (set! *warn-on-reflection* true)
+  ;; this throws a reflection warning:
+  (let [argform (with-meta (gensym "x_")
+                  {:tag UnityEngine.Vector3})]
+    (eval
+      `(fn [~argform]
+         (.x ~argform))))
+  ;; this doesn't:
+  (let [argform (with-meta (gensym "x_")
+                  {:tag 'UnityEngine.Vector3})]
+    (eval
+      `(fn [~argform]
+         (.x ~argform)))))
 
 (declare hydration-database hydrate populate! dehydrate)
 
@@ -185,6 +201,34 @@
 ;; this is kind of mangled to accommodate value type populaters.
 ;; clean up later.
 
+(defn array-type? [t]
+  (and (type? t) (same-or-subclass? Array t)))
+
+(defn array-typesym? [sym]
+  (and (symbol? sym)
+    (array-type?
+      (ensure-type sym))))
+
+;; the general tack taken here might be misguided. Do we want to
+;; support map-based array hydration?
+(defn standard-array-set-clause [setable ctx]
+  (mu/checked-keys [[targsym valsym] ctx]
+    (let [name         (:name setable)
+          setable-type (type-for-setable setable)
+          element-type (ensure-symbol   ; meh
+                         (.GetElementType
+                           (ensure-type setable-type)))
+          ressym           (with-meta (gensym "hydrate-result_")
+                             {:tag setable-type})]
+      `(let [~ressym (if (instance? ~setable-type ~valsym)
+                       ~valsym
+                       (into-array ~element-type 
+                         (map           ; grumble
+                           (fn [element-spec#]
+                             (hydrate element-spec# ~element-type)) ; hmurk not sure about this
+                           ~valsym)))]
+         (set! (. ~targsym ~name) ~ressym)))))
+
 ;; could break things up into different kinds of context (setable,
 ;; targsym, and valsym are more specific than field->setter-sym, for
 ;; example)
@@ -197,16 +241,18 @@
       `(let [~valsym' ~valsym]
          (.SetValue ~setter-sym ~targsym ~valsym')))))
 
-(defn default-populater-set-clause [setable ctx]
+(defn standard-populater-set-clause [setable ctx]
   (mu/checked-keys [[targsym valsym] ctx]
-    (let [name         (:name setable)
-          setable-type (type-for-setable setable)
-          ressym       (with-meta (gensym "hydrate-result_")
-                         {:tag setable-type})]
-      `(let [~ressym (if (instance? ~setable-type ~valsym)
-                       ~valsym
-                       (hydrate ~valsym ~setable-type))]
-         (set! (. ~targsym ~name) ~ressym)))))
+    (if (array-typesym? (type-for-setable setable))
+      (standard-array-set-clause setable ctx)
+      (let [name         (:name setable)
+            setable-type (type-for-setable setable)
+            ressym       (with-meta (gensym "hydrate-result_")
+                           {:tag setable-type})]
+        `(let [~ressym (if (instance? ~setable-type ~valsym)
+                         ~valsym
+                         (hydrate ~valsym ~setable-type))]
+           (set! (. ~targsym ~name) ~ressym))))))
 
 (defn populater-key-clauses
   [{:keys [set-clause-fn]
@@ -218,7 +264,7 @@
             k    (keys-for-setable setable)
             :let [cls (if set-clause-fn
                         (set-clause-fn setable ctx)
-                        (default-populater-set-clause setable ctx))]]
+                        (standard-populater-set-clause setable ctx))]]
         `[~k ~cls]))))
 
 (defn prcf-default-case-form [ctx]
@@ -305,6 +351,8 @@
               ~targsym
               spec#))))))
 
+(def log (atom []))
+
 (defn populater-form
   ([typesym] (populater-form typesym {}))
   ([typesym ctx]
@@ -320,6 +368,7 @@
                           (mu/lit-assoc typesym specsym)))]
          `(fn ~(symbol (str "populater-fn-for_" typesym))
             [~targsym ~specsym]
+            (swap! log conj [~targsym ~specsym])
             ~pmc)))))
 
 ;; ============================================================
@@ -445,11 +494,32 @@
       (hydrate-game-object
         (assoc-in-mv spec [:transform 0 :parent] trns)))))
 
+(defn game-object-children [^GameObject obj]
+  (let [^Transform trns (.GetComponent obj UnityEngine.Transform)]
+    (for [^Transform trns' trns]
+      (.gameObject trns'))))
+
+(defn playing? []
+  UnityEngine.Application/isPlaying)
+
+(defn clear-game-object-children [^GameObject obj]
+  (let [playing (playing?)]
+    (doseq [^GameObject child  (vec (game-object-children obj))]
+      (if playing ;; maybe this is stupid, just destroy immediate
+        (.Destroy child)
+        (.DestroyImmediate child)))))
+
 (defn game-object-prepopulate [^GameObject obj, spec]
-  (if-let [t (first (:transform spec))] ;; obsoletes resolve-type-key
-    (do (populate! (.GetComponent obj UnityEngine.Transform) t)
-        (dissoc spec :transform))
-    spec))
+  (as-> spec spec
+    (if-let [t (first (:transform spec))] ;; obsoletes resolve-type-key
+      (do (populate! (.GetComponent obj UnityEngine.Transform) t)
+          (dissoc spec :transform))
+      spec)
+    (if-let [cs (:children spec)]
+      (do ;;(clear-game-object-children obj)
+          (hydrate-game-object-children obj cs)
+          (dissoc spec :children))
+      spec)))
 
 (defmacro transform-prepopulate-helper-mac [targ spec key field type]
   (let [valsym (with-meta (gensym "val_") {:tag type})]
@@ -462,8 +532,11 @@
          (dissoc ~spec ~key))
        ~spec)))
 
+(def log (atom []))
+
 ;; locals before globals, surprisingly
 (defn transform-prepopulate [^Transform trns, spec]
+  (swap! log conj (:local-position spec))
   (-> spec
     ;; (dissoc :local-rotation :rotation :local-euler-angles)
     ;; (dissoc :local-rotation :rotation :euler-angles)
@@ -473,7 +546,8 @@
     ;;   :euler-angles :local-euler-angles
     ;;   ;:scale :local-scale
     ;;   )
-    (as-> spec 
+    (as-> spec
+      (transform-prepopulate-helper-mac trns spec :parent             parent           Transform)
       (transform-prepopulate-helper-mac trns spec :local-position     localPosition    Vector3)
       (transform-prepopulate-helper-mac trns spec :position           position         Vector3)
       (transform-prepopulate-helper-mac trns spec :local-rotation     localRotation    Quaternion)
@@ -540,53 +614,83 @@
 ;; dehydration
 ;; ============================================================
 
-(defn dehydrater-map-form
-  [{:keys [setables-fn setables-filter]
-    :or {setables-fn setables
-         setables-filter (constantly true)}
-    :as ctx}]
-  (mu/checked-keys [[targsym typesym] ctx]
-    (into {:type typesym}
-      (for [setable  (setables-fn typesym)
-            :when (setables-filter setable ctx)
-            :let [n       (:name setable)
-                  typesym (ensure-symbol
-                            (:type setable))
-                  k       (nice-keyword n)
-                  twiddle (gensym "dehydrater-twiddle_")]]
-        `[~k
-          (let [~twiddle (. ~targsym ~n)]
-            (dehydrate ~twiddle)
-            ;;(identity ~twiddle) WORKS
-            ;;[~twiddle] WORKS
-            ;; (cast-as ~twiddle ~typesym) FAILS
-            )
-          ;(. ~targsym ~n) WORKS
-          ]))))
+(declare array-dehydration-form)
 
+(defn array-element-dehydration-form [ctx]
+  ;; typesym here is typesym of containing array
+  (mu/checked-keys [[element-sym element-typesym] ctx]
+    (if (array-typesym? element-typesym)
+      (array-dehydration-form
+        (-> ctx
+          (dissoc :element-sym :element-typesym)
+          (assoc
+            :targsym element-sym
+            :typesym element-typesym)))
+      `(dehydrate ~element-sym ~element-typesym))))
+
+(defn array-dehydration-form [ctx]
+  (mu/checked-keys [[targsym typesym] ctx]
+    (let [index-sym       (gensym "index_")
+          element-type    (.GetElementType (ensure-type typesym))
+          element-typesym (ensure-symbol element-type)
+          element-sym (with-meta (gensym "element_")
+                        (if (not (value-type? element-type))
+                          {:tag element-typesym}
+                          {}))
+          aedf        (array-element-dehydration-form
+                        (mu/lit-assoc ctx element-sym element-typesym))]
+      `(areduce ~targsym index# bldg# []
+         (let [~element-sym (aget ~targsym index#)]
+           (conj bldg# ~aedf))))))
+
+(defn object-element-dehydration-form [setable ctx]
+  (mu/checked-keys [[name] setable
+                    [targsym] ctx]
+    (let [element-typesym (type-for-setable setable)]
+      (if (array-typesym? element-typesym)
+        (let [arsym (with-meta (gensym "array_")
+                      {:tag element-typesym})
+              adf   (array-dehydration-form
+                      (assoc ctx
+                        :targsym arsym
+                        :typesym element-typesym))]
+          `(when-let [~arsym (. ~targsym ~name)]
+             ~adf))
+        `(when-let [elem# (. ~targsym ~name)]
+           (dehydrate elem#  ~element-typesym))))))
+
+(defn object-dehydration-form [ctx]
+  (mu/checked-keys [[setables-fn typesym] ctx]
+    (let [{:keys [setables-fn setables-filter]} ctx]
+      (into {:type typesym}
+        (for [setable (cond->> (setables-fn typesym)
+                        setables-filter (filter #(setables-filter % ctx)))
+              :let [k  (nice-keyword (:name setable))
+                    dc (object-element-dehydration-form setable ctx)]]
+          `[~k ~dc])))))
+
+(defn dehydration-form [ctx]
+  (mu/checked-keys [[typesym] ctx]
+    (if (array-type? (ensure-type typesym))
+      (array-dehydration-form ctx)
+      (object-dehydration-form ctx))))
+ 
 (defn dehydrater-form
   ([typesym] 
      (dehydrater-form typesym {}))
-  ([typesym
-    {:keys [setables-fn]
-     :or {setables-fn setables}
-     :as ctx0}]     
-     (let [ctx     (mu/lit-assoc ctx0 setables-fn)
-           targsym (with-meta (gensym "target-obj_") {:tag typesym})
-           dmf     (dehydrater-map-form
-                     (mu/lit-assoc ctx targsym typesym))]
+  ([typesym ctx]     
+     (let [targsym (with-meta (gensym "target-obj_") {:tag typesym})
+           df      (dehydration-form
+                     (-> ctx
+                       (mu/fill :setables-fn setables)
+                       (mu/lit-assoc targsym typesym)))]
        `(fn ~(symbol (str "dehydrater-fn-for_" typesym))
           [~targsym]
-          ~dmf))))
-
-(defn game-object-children [^GameObject obj]
-  (let [^Transform trns (.GetComponent obj UnityEngine.Transform)]
-    (for [^Transform trns' trns]
-      (.gameObject trns'))))
+          ~df))))
 
 (defn hydration-keyword-for-type [t]
   ((@hydration-database :types->type-flags) t))
-
+ 
 (defn game-object-component-dehydration [^GameObject obj]
   (let [cs (.GetComponents obj UnityEngine.Component)]
     (mu/map-keys
@@ -629,7 +733,7 @@
     (filter second)
     (into {})))
 
-;; some shortcuts here (default-populater-set-clause), see
+;; some shortcuts here (standard-populater-set-clause), see
 ;; populater-key-clauses
 (defn sepf-clause [sharable ctx]
   (mu/checked-keys [[direct shared]   sharable
@@ -640,9 +744,9 @@
           shared-setable (first (setables-with-name typesym shared))
           direct-valsym  (gensym "direct-valsym_")
           shared-valsym  (gensym "shared-valsym_")
-          d-clause       (default-populater-set-clause direct-setable
+          d-clause       (standard-populater-set-clause direct-setable
                            (assoc ctx :valsym direct-valsym))
-          s-clause       (default-populater-set-clause shared-setable
+          s-clause       (standard-populater-set-clause shared-setable
                            (assoc ctx :valsym shared-valsym))
           direct-key     (first (keys-for-setable direct-setable)) ;; the hell with it, one key per setable 4 now
           shared-key     (first (keys-for-setable shared-setable))]
@@ -792,16 +896,24 @@
 ;; ============================================================
 
 (def default-component-populaters
-  (establish-component-populaters-mac {}))
+  (establish-component-populaters-mac {})
+  ;;nil
+  )
 
 (def default-value-type-populaters
-  (establish-value-type-populaters-mac {}))
+  (establish-value-type-populaters-mac {})
+  ;;nil
+  )
 
 (def default-value-type-hydraters
-  (establish-value-type-hydraters-mac {}))
+  (establish-value-type-hydraters-mac {})
+  ;;nil
+  )
 
 (def default-component-dehydraters
-  (establish-component-dehydraters-mac {}))
+  (establish-component-dehydraters-mac {})
+  ;;nil
+  )
 
 ;; (def default-value-type-dehydraters
 ;;   (establish-value-type-dehydraters-mac {}))
@@ -834,6 +946,12 @@
 (defn value-type? [x]
   (and (type? x)
     (.IsValueType x)))
+
+(defn value-typesym? [x]
+  (and
+    (type-symbol? x)
+    (.IsValueType
+      (ensure-type x))))
 
 (defn ns-qualify-kw [kw ns]
   (let [nsn (if (same-or-subclass? clojure.lang.Namespace (type ns))
@@ -1138,61 +1256,25 @@
   (test/testing "basic"
     (test/is
       (spec-idempotent-under-hydration?
-        {:children  [{:transform [{:position [1 1 1]
-                                   :local-position [1 2 3]}]}]
-         :transform [{:position [1 1 1]
-                      :local-position [1 2 3]}]}))
+        {:children  [{:transform [{:local-position [1 2 3]}]}]
+         :transform [{:local-position [1 2 3]}]}))
     (test/is
       (spec-idempotent-under-hydration?
-        {:children (->> (vec (repeat 3 {:transform [{:position [1 1 1]
-                                                     :local-position [1 2 3]}]})))
-         :transform [{:position [1 1 1]
-                      :local-position [1 2 3]}]})))
+        {:children (->> (vec (repeat 3 {:transform [{:local-position [1 2 3]}]})))
+         :transform [{:local-position [1 2 3]}]})))
   (test/testing "nesting"
     (test/is
       (spec-idempotent-under-hydration?
-        (as-> {:transform [{:position [1 1 1]
-                            :local-position [1 2 3]}]} spec
+        (as-> {:transform [{:local-position [1 2 3]}]} spec
           (assoc spec :children [spec])
           (assoc spec :children [spec])
           (assoc spec :children [spec]))))
     (test/is
       (spec-idempotent-under-hydration?
-        (as-> {:transform [{:position [1 1 1]
-                            :local-position [1 2 3]}]} spec
+        (as-> {:transform [{:local-position [1 2 3]}]} spec
           (assoc spec :children [spec spec])
           (assoc spec :children [spec spec])
           (assoc spec :children [spec spec]))))))
-
-
-;; following doesn't work, not sure it ever will
-;; (test/deftest hydrater-rotational-idempotence
-;;   (test/testing "basic"
-;;     (test/is
-;;       (spec-idempotent-under-hydration?
-;;         {:children  [{:transform [{:euler-angles [1 2 3]}]}]
-;;          :transform [{:euler-angles [1 2 3]}]}))
-;;     (test/is
-;;       (spec-idempotent-under-hydration?
-;;         {:children (->> (vec (repeat 3 {:transform [{:euler-angles [1 2 3]}]})))
-;;          :transform [{:euler-angles [1 2 3]}]})))
-;;   (test/testing "nesting"
-;;     (test/is
-;;       (spec-idempotent-under-hydration?
-;;         (-> {:transform [{:euler-angles [1 2 3]
-;;                           :local-euler-angles [1 2 3]}]}
-;;           (as-> spec
-;;             (assoc spec :children [spec])
-;;             (assoc spec :children [spec])
-;;             (assoc spec :children [spec])))))
-;;     (test/is
-;;       (spec-idempotent-under-hydration?
-;;         (-> {:transform [{:euler-angles [1 2 3]
-;;                           :local-euler-angles [1 2 3]}]}
-;;           (as-> spec
-;;             (assoc spec :children [spec spec])
-;;             (assoc spec :children [spec spec])
-;;             (assoc spec :children [spec spec])))))))
 
 
 ;; structural manipulation functions ----------------------------------
@@ -1209,12 +1291,13 @@
   (test/is
     (let [m1 {:a [{:b :B} {:c :C}]}
           m2 {:a []}]
-      (= (deep-merge-mv m1 m2)
+      (=
+        (deep-merge-mv m1 m2)
         (deep-merge-mv m2 m1))))
   (test/is (= (deep-merge-mv
                 {:a {:b :B}}
                 {})
-             {:a {:b :is}}))
+             {:a {:b :B}}))
   (test/is (= (deep-merge-mv
                 {}
                 {:a {:b :B}})
