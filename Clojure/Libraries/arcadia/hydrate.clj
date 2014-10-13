@@ -1276,6 +1276,16 @@
           (assoc spec :children [spec spec])
           (assoc spec :children [spec spec]))))))
 
+(defn- capsule []
+  (GameObject/CreatePrimitive UnityEngine.PrimitiveType/Capsule))
+
+(def capsule-spec
+  (with-temporary-object [c (capsule)]
+    (dehydrate c)))
+
+(test/deftest test-capsule-spec-idempotence
+  (test/is (spec-idempotent-under-hydration? capsule-spec)))
+
 
 ;; structural manipulation functions ----------------------------------
 
