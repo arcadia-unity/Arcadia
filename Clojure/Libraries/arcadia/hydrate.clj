@@ -32,20 +32,26 @@
 
 (declare hydration-database hydrate populate! dehydrate)
 
-(defn same-or-subclass? [^Type t1, ^Type t2]
-  (or (= t1 t2)
-    (.IsSubclassOf t2 t1)))
-
-(defn camels-to-hyphens [s]
-  (string/replace s #"([a-z])([A-Z])" "$1-$2"))
-
 (defn type? [x]
   (instance? System.MonoType x))
 
-(defn nice-keyword [s]
-  (keyword
-    (clojure.string/lower-case
-      (camels-to-hyphens (name s)))))
+(defn same-or-subclass? [^Type t1, ^Type t2]
+  (or (= t1 t2)
+    (.IsSubclassOf t2 t1)))
+ 
+(defn component-type? [x]
+  (and (type? x)
+    (same-or-subclass? UnityEngine.MonoBehaviour x)))
+
+(defn value-type? [x]
+  (and (type? x)
+    (.IsValueType x)))
+
+(defn type-symbol? [x]
+  (boolean
+    (and (symbol? x)
+      (when-let [y (resolve x)]
+        (type? y)))))
 
 (defn ensure-type ^System.MonoType [t]
   (cond
@@ -55,6 +61,20 @@
             (ArgumentException.
               (str "Expects symbol or type, instead (type t) = "
                 (type t))))))
+
+(defn value-typesym? [x]
+  (and
+    (type-symbol? x)
+    (.IsValueType
+      (ensure-type x))))
+
+(defn camels-to-hyphens [s]
+  (string/replace s #"([a-z])([A-Z])" "$1-$2"))
+
+(defn nice-keyword [s]
+  (keyword
+    (clojure.string/lower-case
+      (camels-to-hyphens (name s)))))
 
 (defn type-symbol [^System.MonoType t]
   (symbol (.FullName t)))
@@ -67,12 +87,6 @@
               (ArgumentException.
                 (str "Expects symbol or type, instead (type t) = "
                   (type t))))))
-
-(defn type-symbol? [x]
-  (boolean
-    (and (symbol? x)
-      (when-let [y (resolve x)]
-        (type? y)))))
 
 (defn keyword-for-type [t]
   (let [^Type t (ensure-type t)]
@@ -938,20 +952,6 @@
 ;; ============================================================
 ;; public-facing type registration api
 ;; ============================================================
-
-(defn component-type? [x]
-  (and (type? x)
-    (same-or-subclass? UnityEngine.MonoBehaviour x)))
-
-(defn value-type? [x]
-  (and (type? x)
-    (.IsValueType x)))
-
-(defn value-typesym? [x]
-  (and
-    (type-symbol? x)
-    (.IsValueType
-      (ensure-type x))))
 
 (defn ns-qualify-kw [kw ns]
   (let [nsn (if (same-or-subclass? clojure.lang.Namespace (type ns))
