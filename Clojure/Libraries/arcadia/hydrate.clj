@@ -335,6 +335,12 @@
        `(let [~@setter-inits]
           (fn ~(symbol (str "populater-fn-for_" typesym))
             [~targsym spec#]
+            (when (nil? ~targsym)
+              (throw
+                (ArgumentException.
+                  (str
+                    "Attempting to populate nil. Check that Unity is aware of type "
+                    (quote ~typesym)))))
             (reduce-kv
               ~sr
               ~targsym
@@ -355,6 +361,12 @@
                           (mu/lit-assoc typesym specsym)))]
          `(fn ~(symbol (str "populater-fn-for_" typesym))
             [~targsym ~specsym]
+            (when (nil? ~targsym)
+              (throw
+                (ArgumentException.
+                  (str
+                    "Attempting to populate nil. Check that Unity is aware of type "
+                    (quote ~typesym)))))
             ~pmc)))))
 
 ;; ============================================================
@@ -902,12 +914,12 @@
               (str ns))]
     (keyword nsn (name kw))))
 
-(defn- registration [{:keys [populater hydrater dehydrater type-flag] :as argsm}]
+(defn registration [{:keys [populater hydrater dehydrater type-flag] :as argsm}]
   (mu/checked-keys [[type] argsm]
     (swap! hydration-database
       (fn [hdb]
         (cond-> hdb
-          hydrater   (assoc-in [:populaters type]  hydrater)
+          hydrater   (assoc-in [:hydraters type]  hydrater)
           populater  (assoc-in [:populaters type]  populater)
           dehydrater (assoc-in [:dehydraters type] dehydrater)
           type-flag  (->
@@ -915,24 +927,15 @@
                        (assoc-in [:types->type-flags type] type-flag)))))
     nil))
 
-(defn- hydrater-for-registration [typesym option-map]
-  (eval
-    (value-hydrater-form typesym
-      (merge {}
-        (::hydrater-options option-map)))))
+;; these are legacy, make substantive or get rid of them
+(defn- hydrater-for-registration-form [typesym option-map]
+  (value-hydrater-form typesym option-map))
 
-(defn- dehydrater-for-registration [typesym option-map]
-  (eval
-    (dehydrater-form typesym
-      (merge
-        {:setables-filter component-dehydrater-setables-filter}
-        (::dehydrater-options option-map)))))
+(defn- dehydrater-for-registration-form [typesym option-map]
+  (dehydrater-form typesym option-map))
 
-(defn- populater-for-registration [typesym option-map]
-  (eval
-    (populater-form typesym
-      (merge {}
-        (::populater-options option-map)))))
+(defn- populater-for-registration-form [typesym option-map]
+  (populater-form typesym option-map))
 
 (defn- type-flag-for-registration [type option-map]
   (or (:type-flag option-map)
@@ -941,28 +944,28 @@
         (ensure-type type))
       *ns*)))
 
-(defn- register-component-type
+(defn- register-component-type-form
   ([type-or-typesym]
-     (register-component-type type-or-typesym {}))
+     (register-component-type-form type-or-typesym {}))
   ([type-or-typesym option-map]
      (let [^Type t (ensure-type type-or-typesym)]
        (if-not (component-type? t)
          (throw
            (System.ArgumentException.
              "register-component-type expects component type"))
-         (let [typesym    (ensure-symbol t)
-               populater  (populater-for-registration typesym option-map)
-               dehydrater (dehydrater-for-registration typesym option-map
-                            (assoc option-map :setables-filter
-                                   component-dehydrater-setables-filter))
-               type-flag  (type-flag-for-registration t option-map)]
-           (registration
-             (mu/lit-assoc {:type t}
-               type-flag populater dehydrater)))))))
+         (let [typesym     (ensure-symbol t)
+               option-map2 (assoc option-map :setables-filter
+                             component-dehydrater-setables-filter)
+               populater   (populater-for-registration-form typesym option-map2)
+               dehydrater  (dehydrater-for-registration-form typesym option-map2)
+               type-flag   (type-flag-for-registration t option-map2)]
+           `(registration
+              ~(mu/lit-assoc {:type typesym}
+                 type-flag populater dehydrater)))))))
 
-(defn- register-value-type
+(defn- register-value-type-form
   ([type-or-typesym]
-     (register-component-type type-or-typesym {}))
+     (register-value-type-form type-or-typesym {}))
   ([type-or-typesym option-map]
      (let [^Type t (ensure-type type-or-typesym)]
        (if-not (value-type? t)
@@ -970,42 +973,42 @@
            (System.ArgumentException.
              "register-value-type expects value type"))
          (let [typesym    (ensure-symbol t)
-               hydrater   (hydrater-for-registration typesym option-map)
-               populater  (populater-for-registration typesym option-map)
-               dehydrater (dehydrater-for-registration typesym option-map)
+               hydrater   (hydrater-for-registration-form typesym option-map)
+               populater  (populater-for-registration-form typesym option-map)
+               dehydrater (dehydrater-for-registration-form typesym option-map)
                type-flag  (type-flag-for-registration t option-map)]
-           (registration
-             (mu/lit-assoc {:type t}
-               hydrater populater dehydrater type-flag)))))))
+           `(registration
+              ~(mu/lit-assoc {:type typesym}
+                 hydrater populater dehydrater type-flag)))))))
 
-(defn- register-normal-type
+(defn- register-normal-type-form
   ([type-or-typesym]
-     (register-component-type type-or-typesym {}))
+     (register-normal-type-form type-or-typesym {}))
   ([type-or-typesym option-map]
      (let [^Type t (ensure-type type-or-typesym)]
        (let [typesym    (ensure-symbol t)
-             hydrater   (hydrater-for-registration typesym option-map)
-             populater  (populater-for-registration typesym option-map)
-             dehydrater (dehydrater-for-registration typesym)
+             hydrater   (hydrater-for-registration-form typesym option-map)
+             populater  (populater-for-registration-form typesym option-map)
+             dehydrater (dehydrater-for-registration-form typesym option-map)
              type-flag  (type-flag-for-registration t option-map)]
-         (registration
-           (mu/lit-assoc {:type t}
-             hydrater populater dehydrater type-flag))))))
+         `(registration
+            ~(mu/lit-assoc {:type typesym}
+               hydrater populater dehydrater type-flag))))))
 
-(defn register-type
+(defmacro register-type
   ([type-or-typesym]
-     (register-type type-or-typesym {}))
+     `(register-type ~type-or-typesym {}))
   ([type-or-typesym option-map]
      (let [^Type t (ensure-type type-or-typesym)]
        (cond
          (component-type? t)
-         (register-component-type t option-map)
+         (register-component-type-form t option-map)
 
          (.IsValueType t)
-         (register-value-type t option-map)
+         (register-value-type-form t option-map)
 
          :else
-         (register-normal-type t option-map)))))
+         (register-normal-type-form t option-map)))))
 
 (defn unregister-type [type-or-typesym]
   (let [^Type t (ensure-type type-or-typesym)]
