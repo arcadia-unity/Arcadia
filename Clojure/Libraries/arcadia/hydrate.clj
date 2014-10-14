@@ -2,7 +2,8 @@
   (:require [arcadia.internal.map-utils :as mu]
             [arcadia.reflect :as r]
             [clojure.string :as string]
-            [clojure.test :as test])
+            [clojure.test :as test]
+            clojure.set)
   (:import [System.Reflection Assembly
             AssemblyName MemberInfo
             PropertyInfo FieldInfo]
@@ -77,7 +78,7 @@
 (defn- keys-for-setable [{n :name}]
   [(nice-keyword n)])
 
-(defn- type-for-setable [{typ :type}]
+(defn- type-for-setable [{typ ::type}]
   typ) ; good enough for now
 
 (defn- extract-property ;; this is stupid
@@ -119,23 +120,22 @@
       (r/reflection-transform
        (field->map f)))))
 
-;; TODO make this more efficient
-(defn- setables-with-name [type-or-typesym name]
-  (let [t (ensure-type type-or-typesym)]
-    (filter #(= name (:name %))
-      (concat
-        (setable-fields t)
-        (setable-properties t)))))
-
 (defn- dedup-by [f coll]
   (map peek (vals (group-by f coll))))
 
-(defn- setables [typesym]
-  (let [t (ensure-type typesym)]
+(defn- setables [type-or-typesym]
+  (let [t (ensure-type type-or-typesym)]
     (dedup-by :name
-      (concat
-        (setable-fields t)
-        (setable-properties t)))))
+      (map #(clojure.set/rename-keys %
+              {:type ::type})           ; YEP. See UnityEngine.Light
+        (concat
+          (setable-fields t)
+          (setable-properties t))))))
+
+;; TODO make this more efficient
+(defn- setables-with-name [type-or-typesym name]
+  (filter #(= name (:name %))
+    (setables type-or-typesym)))
 
 (defn- load-assembly
   "Takes string or AssemblyName, returns corresponding Assembly"
@@ -242,7 +242,8 @@
                              (instance? ~setable-type ~valsym))
                          ~valsym
                          (hydrate ~valsym ~setable-type))]
-           (set! (. ~targsym ~name) ~ressym))))))
+           (when-not (identical? (. ~targsym ~name) ~ressym) ; filters out large class of stupid errors
+             (set! (. ~targsym ~name) ~ressym)))))))
 
 (defn- populater-key-clauses
   [{:keys [set-clause-fn]
@@ -645,7 +646,7 @@
 (defn- object-dehydration-form [ctx]
   (mu/checked-keys [[setables-fn typesym] ctx]
     (let [{:keys [setables-fn setables-filter]} ctx]
-      (into {:type typesym}
+      (into {::type typesym}
         (for [setable (cond->> (setables-fn typesym)
                         setables-filter (filter #(setables-filter % ctx)))
               :let [k  (nice-keyword (:name setable))
@@ -677,24 +678,24 @@
 (defn- game-object-component-dehydration [^GameObject obj]
   (let [cs (.GetComponents obj UnityEngine.Component)]
     (mu/map-keys
-      (group-by :type (map dehydrate cs))
+      (group-by ::type (map dehydrate cs))
       hydration-keyword-for-type)))
 
 ;; strictly speaking I should pipe all the map literal stuff through
 ;; dehydrate, in the name of dynamicism and extensibility and
 ;; consistency and so on. Seems stupid for simple value types though
 (defn- dehydrate-game-object [^GameObject obj]
-  (merge
+  (assoc
     (game-object-component-dehydration obj)
-    {:children   (mapv dehydrate
-                   (game-object-children obj))
-     :type       UnityEngine.GameObject,
-     :is-static  (. obj isStatic),
-     :layer      (. obj layer),
-     :active     (. obj active),
-     :tag        (. obj tag),
-     :name       (. obj name),
-     :hide-flags (. obj hideFlags)}))
+    :children   (mapv dehydrate
+                    (game-object-children obj))
+    ::type       UnityEngine.GameObject,
+    :is-static  (. obj isStatic),
+    :layer      (. obj layer),
+    :active     (. obj active),
+    :tag        (. obj tag),
+    :name       (. obj name),
+    :hide-flags (. obj hideFlags)))
 
 ;; ============================================================
 ;; establish database
@@ -1078,7 +1079,7 @@
 
 (defn- get-hydrate-type-flag [spec]
   (or
-    (:type spec)
+    (::type spec)
     UnityEngine.GameObject))
 
 (defn hydrate
@@ -1124,7 +1125,7 @@ Aspires to be idempotent with hydrate, ie,
 
 (defn- get-populate-type-flag [inst spec]
   (if (map? spec)
-    (or (:type spec) (type inst))
+    (or (::type spec) (type inst))
     (type inst)))
 
 (defn populate!
