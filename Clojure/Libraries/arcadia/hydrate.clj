@@ -33,28 +33,28 @@
 
 (declare hydration-database hydrate populate! dehydrate)
 
-(defn type? [x]
+(defn- type? [x]
   (instance? System.MonoType x))
 
-(defn same-or-subclass? [^Type t1, ^Type t2]
+(defn- same-or-subclass? [^Type t1, ^Type t2]
   (or (= t1 t2)
     (.IsSubclassOf t2 t1)))
  
-(defn component-type? [x]
+(defn- component-type? [x]
   (and (type? x)
     (same-or-subclass? UnityEngine.MonoBehaviour x)))
 
-(defn value-type? [x]
+(defn- value-type? [x]
   (and (type? x)
     (.IsValueType x)))
 
-(defn type-symbol? [x]
+(defn- type-symbol? [x]
   (boolean
     (and (symbol? x)
       (when-let [y (resolve x)]
         (type? y)))))
 
-(defn ensure-type ^System.MonoType [t]
+(defn- ensure-type ^System.MonoType [t]
   (cond
     (symbol? t) (resolve t)
     (type? t) t
@@ -63,24 +63,24 @@
               (str "Expects symbol or type, instead (type t) = "
                 (type t))))))
 
-(defn value-typesym? [x]
+(defn- value-typesym? [x]
   (and
     (type-symbol? x)
     (.IsValueType
       (ensure-type x))))
 
-(defn camels-to-hyphens [s]
+(defn- camels-to-hyphens [s]
   (string/replace s #"([a-z])([A-Z])" "$1-$2"))
 
-(defn nice-keyword [s]
+(defn- nice-keyword [s]
   (keyword
     (clojure.string/lower-case
       (camels-to-hyphens (name s)))))
 
-(defn type-symbol [^System.MonoType t]
+(defn- type-symbol [^System.MonoType t]
   (symbol (.FullName t)))
 
-(defn ensure-symbol [t]
+(defn- ensure-symbol [t]
   (cond
     (symbol? t) t
     (type? t) (type-symbol t)
@@ -89,19 +89,19 @@
                 (str "Expects symbol or type, instead (type t) = "
                   (type t))))))
 
-(defn keyword-for-type [t]
+(defn- keyword-for-type [t]
   (let [^Type t (ensure-type t)]
     (nice-keyword
       (.Name t))))
 
 ;; generate more if you feel it worth testing for
-(defn keys-for-setable [{n :name}]
+(defn- keys-for-setable [{n :name}]
   [(nice-keyword n)])
 
-(defn type-for-setable [{typ :type}]
+(defn- type-for-setable [{typ :type}]
   typ) ; good enough for now
 
-(defn extract-property ;; this is stupid
+(defn- extract-property ;; this is stupid
   ^System.Reflection.PropertyInfo
   [{:keys [declaring-class name]}]
   (let [^System.MonoType t (resolve declaring-class)]
@@ -111,14 +111,14 @@
           (= (.Name p) (clojure.core/name name))))
       first)))
 
-(defn setable-property? [^PropertyInfo p]
+(defn- setable-property? [^PropertyInfo p]
   (boolean
     (and
       (not (= "Item" (.Name p)))
       (.CanRead p)
       (.CanWrite p))))
 
-(defn setable-properties [type-or-typesym]
+(defn- setable-properties [type-or-typesym]
   (let [^System.MonoType t (ensure-type type-or-typesym)
         property->map (var-get #'clojure.reflect/property->map)]
     (map (comp r/reflection-transform property->map)
@@ -126,13 +126,13 @@
         (.GetProperties t
           (enum-or BindingFlags/Instance BindingFlags/Public))))))
 
-(defn setable-field? [^FieldInfo f]
+(defn- setable-field? [^FieldInfo f]
   (boolean
     (and
       (.IsPublic f)
       (not (.IsStatic f)))))
 
-(defn setable-fields [type-or-typesym]
+(defn- setable-fields [type-or-typesym]
   (let [^System.Type t (ensure-type type-or-typesym)
         field->map (var-get #'clojure.reflect/field->map)]
     (for [^FieldInfo f (.GetFields t)
@@ -141,24 +141,24 @@
        (field->map f)))))
 
 ;; TODO make this more efficient
-(defn setables-with-name [type-or-typesym name]
+(defn- setables-with-name [type-or-typesym name]
   (let [t (ensure-type type-or-typesym)]
     (filter #(= name (:name %))
       (concat
         (setable-fields t)
         (setable-properties t)))))
 
-(defn dedup-by [f coll]
+(defn- dedup-by [f coll]
   (map peek (vals (group-by f coll))))
 
-(defn setables [typesym]
+(defn- setables [typesym]
   (let [t (ensure-type typesym)]
     (dedup-by :name
       (concat
         (setable-fields t)
         (setable-properties t)))))
 
-(defn load-assembly
+(defn- load-assembly
   "Takes string or AssemblyName, returns corresponding Assembly"
   [assembly-name]
   (let [^AssemblyName an
@@ -174,12 +174,12 @@
           (throw (Exception. "Expects AssemblyName or string")))]
     (System.Reflection.Assembly/Load an)))
 
-(defn decently-named? [^System.Type t]
+(defn- decently-named? [^System.Type t]
   (boolean
     (let [flnm (.FullName t)]
       (not (re-find #"[^a-zA-Z0-9.]" flnm)))))
 
-(defn all-component-types
+(defn- all-component-types
   ([] (all-component-types [(load-assembly "UnityEngine")]))
   ([assems]
      (for [^Assembly assem assems
@@ -189,13 +189,13 @@
                    (decently-named? t))]
        t)))
 
-(defn all-component-type-symbols []
+(defn- all-component-type-symbols []
   ;; weirdly, you have to filter. looks redundant but you hit
   ;; something weird, see problematic_typesyms.edn
   (filter resolve
     (map type-symbol (all-component-types))))
 
-(defn all-value-types
+(defn- all-value-types
   ([] (all-value-types [(load-assembly "UnityEngine")]))
   ([assems]
      (for [^Assembly assem assems
@@ -205,7 +205,7 @@
                    (decently-named? t))]
        t)))
 
-(defn all-value-type-symbols []
+(defn- all-value-type-symbols []
   (filter resolve
     (map type-symbol (all-value-types))))
 
@@ -216,17 +216,17 @@
 ;; this is kind of mangled to accommodate value type populaters.
 ;; clean up later.
 
-(defn array-type? [t]
+(defn- array-type? [t]
   (and (type? t) (same-or-subclass? Array t)))
 
-(defn array-typesym? [sym]
+(defn- array-typesym? [sym]
   (and (symbol? sym)
     (array-type?
       (ensure-type sym))))
 
 ;; the general tack taken here might be misguided. Do we want to
 ;; support map-based array hydration?
-(defn standard-array-set-clause [setable ctx]
+(defn- standard-array-set-clause [setable ctx]
   (mu/checked-keys [[targsym valsym] ctx]
     (let [name         (:name setable)
           setable-type (type-for-setable setable)
@@ -247,7 +247,7 @@
 ;; could break things up into different kinds of context (setable,
 ;; targsym, and valsym are more specific than field->setter-sym, for
 ;; example)
-(defn value-type-set-clause [setable ctx]
+(defn- value-type-set-clause [setable ctx]
   (mu/checked-keys [[targsym valsym field->setter-sym] ctx
                     [name] setable]
     (let [setable-type (type-for-setable setable)
@@ -256,7 +256,7 @@
       `(let [~valsym' ~valsym]
          (.SetValue ~setter-sym ~targsym ~valsym')))))
 
-(defn standard-populater-set-clause [setable ctx]
+(defn- standard-populater-set-clause [setable ctx]
   (mu/checked-keys [[targsym valsym] ctx]
     (if (array-typesym? (type-for-setable setable))
       (standard-array-set-clause setable ctx)
@@ -270,7 +270,7 @@
                          (hydrate ~valsym ~setable-type))]
            (set! (. ~targsym ~name) ~ressym))))))
 
-(defn populater-key-clauses
+(defn- populater-key-clauses
   [{:keys [set-clause-fn]
     :as ctx}]
   (mu/checked-keys [[typesym setables-fn] ctx]
@@ -283,7 +283,7 @@
                         (standard-populater-set-clause setable ctx))]]
         `[~k ~cls]))))
 
-(defn prcf-default-case-form [ctx]
+(defn- prcf-default-case-form [ctx]
   (if-let [case-default-fn (-> ctx
                              :populater-form-opts
                              :reducing-form-opts
@@ -292,7 +292,7 @@
     (mu/checked-keys [[targsym] ctx]
       targsym)))
 
-(defn populater-reducing-case-form [ctx]
+(defn- populater-reducing-case-form [ctx]
   (mu/checked-keys [[typesym targsym valsym keysym] ctx]
     (let [skcs (populater-key-clauses ctx)
           default-case (prcf-default-case-form ctx)]
@@ -300,13 +300,13 @@
          ~@skcs
          ~default-case))))
 
-(defn prepopulater-form [ctx]
+(defn- prepopulater-form [ctx]
   (mu/checked-keys [[specsym] ctx]
     (if-let [prepopulater-form-fn (:prepopulater-form-fn ctx)]
       (prepopulater-form-fn ctx)
       specsym)))
 
-(defn populater-reducing-fn-form [ctx]
+(defn- populater-reducing-fn-form [ctx]
   (mu/checked-keys [[typesym] ctx]
     (let [keysym   (gensym "spec-key_")
           valsym   (gensym "spec-val_")
@@ -318,7 +318,7 @@
          ~caseform
          ~targsym))))
 
-(defn populater-map-clause [ctx]
+(defn- populater-map-clause [ctx]
   (mu/checked-keys [[specsym typesym initsym] ctx]
     (let [sr      (populater-reducing-fn-form ctx)
           ppf     (prepopulater-form ctx)]
@@ -328,7 +328,7 @@
            ~initsym
            ~specsym)))))
 
-(defn get-field->setter-sym [fields]
+(defn- get-field->setter-sym [fields]
   (into {}
     (for [f fields]
       [f (with-meta
@@ -336,14 +336,14 @@
              (str "FieldInfo-for_" f))
            {:tag 'System.Reflection.FieldInfo})])))
 
-(defn get-setter-inits [typesym field->setter-sym]
+(defn- get-setter-inits [typesym field->setter-sym]
   (mapcat
     (fn [[f ss]]
       [ss `(.GetField ~typesym ~(str f))])
     field->setter-sym))
 
 ;; not the prettiest
-(defn value-populater-form
+(defn- value-populater-form
   ([typesym] (value-populater-form typesym {}))
   ([typesym ctx]
      (let [{:keys [setables-fn]
@@ -367,9 +367,7 @@
               ~targsym
               spec#))))))
 
-(def log (atom []))
-
-(defn populater-form
+(defn- populater-form
   ([typesym] (populater-form typesym {}))
   ([typesym ctx]
      (if (let [^Type t (resolve typesym)] ;this is genuinely stupid
@@ -384,14 +382,13 @@
                           (mu/lit-assoc typesym specsym)))]
          `(fn ~(symbol (str "populater-fn-for_" typesym))
             [~targsym ~specsym]
-            (swap! log conj [~targsym ~specsym])
             ~pmc)))))
 
 ;; ============================================================
 ;; hydrater-forms
 ;; ============================================================
  
-(defn constructors-spec [type-or-typesym]
+(defn- constructors-spec [type-or-typesym]
   (let [^Type t (ensure-type type-or-typesym)]
     (set
       (conj
@@ -404,7 +401,7 @@
 
 ;; janky + reflective for now. Need something to disambiguate dispatch
 ;; by argument type rather than arity
-(defn constructor-application-count-clauses
+(defn- constructor-application-count-clauses
   " ctrspec should be: #{[type...]...}"
   [ctx]
   (mu/checked-keys [[typesym cvsym ctrspec] ctx]
@@ -419,7 +416,7 @@
               (new ~typesym ~@args))])))))
 
 ;; can make the following more optimal if it becomes an issue
-(defn constructor-application-form [ctx]
+(defn- constructor-application-form [ctx]
   (mu/checked-keys [[cvsym] ctx]
     (let [capkc (constructor-application-count-clauses ctx)]
       `(case (count ~cvsym)
@@ -428,10 +425,10 @@
            (Exception.
              "Unsupported constructor arity"))))))
 
-(defn constructor-vec [m]
+(defn- constructor-vec [m]
   (:constructor m))
 
-(defn hydrater-init-form [ctx]
+(defn- hydrater-init-form [ctx]
   (mu/checked-keys [[typesym specsym ctrspec] ctx]
     (let [cvsym  (gensym "constructor-vec_")
           capf   (constructor-application-form
@@ -444,7 +441,7 @@
                (Exception. 
                  "hydration init requires constructor-vec"))))))) ;; find some better exception class
 
-(defn hydrater-map-clause [ctx]
+(defn- hydrater-map-clause [ctx]
   (mu/checked-keys [[specsym typesym] ctx]
     (let [initsym   (with-meta (gensym "hydrater-target_")
                       {:tag typesym})
@@ -454,7 +451,7 @@
       `(let ~[initsym initf]
          ~pmc))))
 
-(defn hydrater-form 
+(defn- hydrater-form 
   ([typesym]
      (hydrater-form typesym {}))
   ([typesym ctx]
@@ -481,7 +478,7 @@
             :else
             (throw (Exception. "Unsupported hydration spec")))))))
 
-(defn value-hydrater-form
+(defn- value-hydrater-form
   ([typesym]
      (value-hydrater-form typesym {}))
   ([typesym ctx]
@@ -496,36 +493,36 @@
            `(let [~@setter-inits]
               ~(hydrater-form typesym ctx3)))))))
 
-(defn resolve-type-flag [tf]
+(defn- resolve-type-flag [tf]
   (if (type? tf)
     tf
     ((:type-flags->types @hydration-database) tf)))
 
 (declare hydrate-game-object assoc-in-mv)
 
-(defn hydrate-game-object-children
+(defn- hydrate-game-object-children
   [^UnityEngine.GameObject obj, specs]
   (let [^UnityEngine.Transform trns (.GetComponent obj UnityEngine.Transform)]
     (doseq [spec specs]
       (hydrate-game-object
         (assoc-in-mv spec [:transform 0 :parent] trns)))))
 
-(defn game-object-children [^GameObject obj]
+(defn- game-object-children [^GameObject obj]
   (let [^Transform trns (.GetComponent obj UnityEngine.Transform)]
     (for [^Transform trns' trns]
       (.gameObject trns'))))
 
-(defn playing? []
+(defn- playing? []
   UnityEngine.Application/isPlaying)
 
-(defn clear-game-object-children [^GameObject obj]
+(defn- clear-game-object-children [^GameObject obj]
   (let [playing (playing?)]
     (doseq [^GameObject child  (vec (game-object-children obj))]
       (if playing ;; maybe this is stupid, just destroy immediate
         (.Destroy child)
         (.DestroyImmediate child)))))
 
-(defn game-object-prepopulate [^GameObject obj, spec]
+(defn- game-object-prepopulate [^GameObject obj, spec]
   (as-> spec spec
     (if-let [t (first (:transform spec))] ;; obsoletes resolve-type-key
       (do (populate! (.GetComponent obj UnityEngine.Transform) t)
@@ -537,7 +534,7 @@
           (dissoc spec :children))
       spec)))
 
-(defmacro transform-prepopulate-helper-mac [targ spec key field type]
+(defmacro ^:private transform-prepopulate-helper-mac [targ spec key field type]
   (let [valsym (with-meta (gensym "val_") {:tag type})]
     `(if-let [e# (find ~spec ~key)] ;; local before global, suprisingly
        (let [specval#    (val e#)
@@ -548,11 +545,8 @@
          (dissoc ~spec ~key))
        ~spec)))
 
-(def log (atom []))
-
 ;; locals before globals, surprisingly
-(defn transform-prepopulate [^Transform trns, spec]
-  (swap! log conj (:local-position spec))
+(defn- transform-prepopulate [^Transform trns, spec]
   (-> spec
     ;; (dissoc :local-rotation :rotation :local-euler-angles)
     ;; (dissoc :local-rotation :rotation :euler-angles)
@@ -576,7 +570,7 @@
       )))
 
 ;; all about the snappy fn names
-(defn game-object-populate-case-default-fn [ctx]
+(defn- game-object-populate-case-default-fn [ctx]
   (mu/checked-keys [[targsym keysym valsym] ctx]
     `(do
        (if-let [^System.MonoType t# (resolve-type-flag ~keysym)]
@@ -598,7 +592,7 @@
            (hydrate-game-object-children ~targsym ~valsym)))
        ~targsym)))
 
-(defmacro populate-game-object-mac []
+(defmacro ^:private populate-game-object-mac []
   (populater-form 'UnityEngine.GameObject
     {:populater-form-opts
      {:reducing-form-opts
@@ -609,10 +603,10 @@
        (mu/checked-keys [[initsym specsym] ctx]
          `(game-object-prepopulate ~initsym ~specsym)))}))
 
-(def populate-game-object!
+(def ^:private populate-game-object!
   (populate-game-object-mac))
 
-(defmacro hydrate-game-object-mac []
+(defmacro ^:private hydrate-game-object-mac []
   (hydrater-form 'UnityEngine.GameObject
     {:populater-form-opts
      {:reducing-form-opts
@@ -623,7 +617,7 @@
        (mu/checked-keys [[initsym specsym] ctx]
          `(game-object-prepopulate ~initsym ~specsym)))}))
 
-(def hydrate-game-object
+(def ^:private hydrate-game-object
   (hydrate-game-object-mac))
 
 ;; ============================================================
@@ -632,7 +626,7 @@
 
 (declare array-dehydration-form)
 
-(defn array-element-dehydration-form [ctx]
+(defn- array-element-dehydration-form [ctx]
   ;; typesym here is typesym of containing array
   (mu/checked-keys [[element-sym element-typesym] ctx]
     (if (array-typesym? element-typesym)
@@ -644,7 +638,7 @@
             :typesym element-typesym)))
       `(dehydrate ~element-sym ~element-typesym))))
 
-(defn array-dehydration-form [ctx]
+(defn- array-dehydration-form [ctx]
   (mu/checked-keys [[targsym typesym] ctx]
     (let [index-sym       (gensym "index_")
           element-type    (.GetElementType (ensure-type typesym))
@@ -659,7 +653,7 @@
          (let [~element-sym (aget ~targsym index#)]
            (conj bldg# ~aedf))))))
 
-(defn object-element-dehydration-form [setable ctx]
+(defn- object-element-dehydration-form [setable ctx]
   (mu/checked-keys [[name] setable
                     [targsym] ctx]
     (let [element-typesym (type-for-setable setable)]
@@ -675,7 +669,7 @@
         `(when-let [elem# (. ~targsym ~name)]
            (dehydrate elem#  ~element-typesym))))))
 
-(defn object-dehydration-form [ctx]
+(defn- object-dehydration-form [ctx]
   (mu/checked-keys [[setables-fn typesym] ctx]
     (let [{:keys [setables-fn setables-filter]} ctx]
       (into {:type typesym}
@@ -685,13 +679,13 @@
                     dc (object-element-dehydration-form setable ctx)]]
           `[~k ~dc])))))
 
-(defn dehydration-form [ctx]
+(defn- dehydration-form [ctx]
   (mu/checked-keys [[typesym] ctx]
     (if (array-type? (ensure-type typesym))
       (array-dehydration-form ctx)
       (object-dehydration-form ctx))))
  
-(defn dehydrater-form
+(defn- dehydrater-form
   ([typesym] 
      (dehydrater-form typesym {}))
   ([typesym ctx]     
@@ -704,10 +698,10 @@
           [~targsym]
           ~df))))
 
-(defn hydration-keyword-for-type [t]
+(defn- hydration-keyword-for-type [t]
   ((@hydration-database :types->type-flags) t))
  
-(defn game-object-component-dehydration [^GameObject obj]
+(defn- game-object-component-dehydration [^GameObject obj]
   (let [cs (.GetComponents obj UnityEngine.Component)]
     (mu/map-keys
       (group-by :type (map dehydrate cs))
@@ -716,7 +710,7 @@
 ;; strictly speaking I should pipe all the map literal stuff through
 ;; dehydrate, in the name of dynamicism and extensibility and
 ;; consistency and so on. Seems stupid for simple value types though
-(defn dehydrate-game-object [^GameObject obj]
+(defn- dehydrate-game-object [^GameObject obj]
   (merge
     (game-object-component-dehydration obj)
     {:children   (mapv dehydrate
@@ -733,9 +727,9 @@
 ;; establish database
 ;; ============================================================
 
-(def problem-log (atom []))
+(def ^:private problem-log (atom []))
 
-(defn tsym-map [f tsyms ctx]
+(defn- tsym-map [f tsyms ctx]
   (->> tsyms
     (map
       (fn [tsym]
@@ -751,7 +745,7 @@
 
 ;; some shortcuts here (standard-populater-set-clause), see
 ;; populater-key-clauses
-(defn sepf-clause [sharable ctx]
+(defn- sepf-clause [sharable ctx]
   (mu/checked-keys [[direct shared]   sharable
                     [specsym typesym] ctx]
     (assert (symbol? direct))
@@ -774,7 +768,7 @@
                (dissoc ~specsym ~shared-key))
            ~specsym)))))
 
-(defn shared-elem-prepopulater-form [sharables ctx]
+(defn- shared-elem-prepopulater-form [sharables ctx]
   (mu/checked-keys [[typesym initsym specsym] ctx]
     (let [targsym initsym 
           ctx2    (mu/lit-assoc ctx targsym specsym)
@@ -782,7 +776,7 @@
       `(as-> ~specsym ~specsym
          ~@pfcs))))
 
-(def shared-elem-components
+(def ^:private shared-elem-components
   {'UnityEngine.MeshFilter [{:direct 'mesh
                              :shared 'sharedMesh}]
    'UnityEngine.MeshRenderer [{:direct 'materials
@@ -793,7 +787,7 @@
                                   :shared 'sharedMaterial}]})
 
 ;; this is kind of insane. Cleaner way?
-(defmacro establish-component-populaters-mac [m]
+(defmacro ^:private establish-component-populaters-mac [m]
   (let [specials (conj (set (keys shared-elem-components))
                    'UnityEngine.Transform)
         cpfmf (->
@@ -822,7 +816,7 @@
                            `(transform-prepopulate ~initsym ~specsym)))}))))]
     `(merge ~m ~cpfmf)))
 
-(defmacro establish-value-type-populaters-mac [m]
+(defmacro ^:private establish-value-type-populaters-mac [m]
   (let [vpfmf (tsym-map
                 populater-form
                 ;;'[UnityEngine.Vector3] 
@@ -834,7 +828,7 @@
     `(merge ~m ~vpfmf)))
 
 ;; probably faster compile if you consolidate with populaters
-(defmacro establish-value-type-hydraters-mac [m]
+(defmacro ^:private establish-value-type-hydraters-mac [m]
   (let [vhfmf (tsym-map
                 value-hydrater-form
                 ;;'[UnityEngine.Vector3]
@@ -845,10 +839,10 @@
                  })]
     `(merge ~m ~vhfmf)))
 
-(def component-hydrater-field-blacklist
+(def ^:private component-hydrater-field-blacklist
   #{'parent 'name 'tag 'active 'hideFlags})
 
-(defn component-dehydrater-setables-filter [setable ctx]
+(defn- component-dehydrater-setables-filter [setable ctx]
   (mu/checked-keys [[typesym] ctx
                     [name] setable]
     (and
@@ -857,13 +851,13 @@
         (not-any? #(= name (:direct %)) sharables)
         true))))
 
-(defn transform-dehydrater-setables-filter [setable ctx]
+(defn- transform-dehydrater-setables-filter [setable ctx]
   (mu/checked-keys [[typesym] ctx
                     [name] setable]
     ('#{localPosition localRotation localScale}
      name)))
 
-(defmacro establish-component-dehydraters-mac [m]
+(defmacro ^:private establish-component-dehydraters-mac [m]
   (let [dhm (tsym-map
               dehydrater-form
               ;;'[UnityEngine.Transform UnityEngine.BoxCollider]
@@ -878,7 +872,7 @@
                  :setables-filter transform-dehydrater-setables-filter}))]
     `(merge ~m ~dhm)))
 
-(defmacro establish-value-type-dehydraters-mac [m]
+(defmacro ^:private establish-value-type-dehydraters-mac [m]
   (let [dhm (tsym-map
               dehydrater-form
               (all-value-type-symbols)
@@ -886,7 +880,7 @@
               {:setables-fn setables})]
     `(merge ~m ~dhm)))
 
-(defn establish-type-flags [hdb]
+(defn- establish-type-flags [hdb]
   ;; put something here
   (let [tks (seq
               (set
@@ -897,7 +891,7 @@
     (update-in hdb [:type-flags->types] merge
       (zipmap (map keyword-for-type tks) tks))))
 
-(defn establish-inverse-type-flags [hdb]
+(defn- establish-inverse-type-flags [hdb]
   (let [tks (seq
               (set
                 (concat
@@ -911,22 +905,22 @@
 ;; database
 ;; ============================================================
 
-(def default-component-populaters
+(def ^:private default-component-populaters
   (establish-component-populaters-mac {})
   ;;nil
   )
 
-(def default-value-type-populaters
+(def ^:private default-value-type-populaters
   (establish-value-type-populaters-mac {})
   ;;nil
   )
 
-(def default-value-type-hydraters
+(def ^:private default-value-type-hydraters
   (establish-value-type-hydraters-mac {})
   ;;nil
   )
 
-(def default-component-dehydraters
+(def ^:private default-component-dehydraters
   (establish-component-dehydraters-mac {})
   ;;nil
   )
@@ -934,7 +928,7 @@
 ;; (def default-value-type-dehydraters
 ;;   (establish-value-type-dehydraters-mac {}))
 
-(def default-hydration-database
+(def ^:private default-hydration-database
   (->
     {:populaters {UnityEngine.GameObject #'populate-game-object!}
      :hydraters {UnityEngine.GameObject #'hydrate-game-object}
@@ -955,7 +949,7 @@
 ;; public-facing type registration api
 ;; ============================================================
 
-(defn ns-qualify-kw [kw ns]
+(defn- ns-qualify-kw [kw ns]
   (let [nsn (if (same-or-subclass? clojure.lang.Namespace (type ns))
               (str (ns-name ns))
               (str ns))]
@@ -974,26 +968,26 @@
                        (assoc-in [:types->type-flags type] type-flag)))))
     nil))
 
-(defn hydrater-for-registration [typesym option-map]
+(defn- hydrater-for-registration [typesym option-map]
   (eval
     (value-hydrater-form typesym
       (merge {}
         (::hydrater-options option-map)))))
 
-(defn dehydrater-for-registration [typesym option-map]
+(defn- dehydrater-for-registration [typesym option-map]
   (eval
     (dehydrater-form typesym
       (merge
         {:setables-filter component-dehydrater-setables-filter}
         (::dehydrater-options option-map)))))
 
-(defn populater-for-registration [typesym option-map]
+(defn- populater-for-registration [typesym option-map]
   (eval
     (populater-form typesym
       (merge {}
         (::populater-options option-map)))))
 
-(defn type-flag-for-registration [type option-map]
+(defn- type-flag-for-registration [type option-map]
   (or (:type-flag option-map)
     (ns-qualify-kw
       (keyword-for-type
@@ -1083,7 +1077,7 @@
 ;; runtime hydration & population
 ;; ============================================================
 
-(defn get-hydrate-type-flag [spec]
+(defn- get-hydrate-type-flag [spec]
   (or
     (:type spec)
     UnityEngine.GameObject))
@@ -1109,7 +1103,7 @@
        (f x)
        x)))
 
-(defn get-populate-type-flag [inst spec]
+(defn- get-populate-type-flag [inst spec]
   (if (map? spec)
     (or (:type spec) (type inst))
     (type inst)))
@@ -1226,11 +1220,11 @@
 ;; not the best place to put them, move elsewhere when we have a
 ;; stable testing story
 
-(defn run-tests [& args]
+(defn- run-tests [& args]
   (binding [test/*test-out* *out*]
     (apply test/run-tests args)))
 
-(defmacro with-temporary-object [[name objexpr] & body]
+(defmacro ^:private with-temporary-object [[name objexpr] & body]
   `(let [~name  ~objexpr  
          retval# (do ~@body)]
      (UnityEngine.Object/DestroyImmediate ~name false)
@@ -1244,7 +1238,7 @@
   (let [spec' (respec spec)]
     (= spec' (respec spec'))))
 
-(test/deftest test-hydrater-positional-idempotence
+(test/deftest- test-hydrater-positional-idempotence
   (test/testing "basic"
     (test/is
       (spec-idempotent-under-hydration?
@@ -1271,17 +1265,17 @@
 (defn- capsule []
   (GameObject/CreatePrimitive UnityEngine.PrimitiveType/Capsule))
 
-(def capsule-spec
+(defn- capsule-spec []
   (with-temporary-object [c (capsule)]
     (dehydrate c)))
 
-(test/deftest test-capsule-spec-idempotence
-  (test/is (spec-idempotent-under-hydration? capsule-spec)))
+(test/deftest- test-capsule-spec-idempotence
+  (test/is (spec-idempotent-under-hydration? (capsule-spec))))
 
 
 ;; structural manipulation functions ----------------------------------
 
-(test/deftest test-structural
+(test/deftest- test-structural
   (test/is (= {:a [{:c :E, :b :B} {:c :C}]}
              (let [m1 {:a [{:b :B} {:c :C}]}
                    m2 {:a [{:c :E}]}]
