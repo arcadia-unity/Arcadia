@@ -10,24 +10,6 @@
             Transform Vector3
             Quaternion]))
 
-;;; TODO: get rid of types->type-flags, is pointless
-;;; TODO: way too much ambiguity about types versus symbols naming types, lock it down
-;;;; Actually there's not much ambiguity, for symbolic programming looks like we need symbols:
-(comment
-  (set! *warn-on-reflection* true)
-  ;; this throws a reflection warning:
-  (let [argform (with-meta (gensym "x_")
-                  {:tag UnityEngine.Vector3})]
-    (eval
-      `(fn [~argform]
-         (.x ~argform))))
-  ;; this doesn't:
-  (let [argform (with-meta (gensym "x_")
-                  {:tag 'UnityEngine.Vector3})]
-    (eval
-      `(fn [~argform]
-         (.x ~argform)))))
-
 (declare hydration-database hydrate populate! dehydrate)
 
 (defn- type? [x]
@@ -187,9 +169,7 @@
        t)))
 
 (defn- all-component-type-symbols []
-  ;; weirdly, you have to filter. looks redundant but you hit
-  ;; something weird, see problematic_typesyms.edn
-  (filter resolve
+  (filter resolve ; rather suboptimal. Sometimes resolution fails, however.
     (map type-symbol (all-component-types))))
 
 (defn- all-value-types
@@ -209,9 +189,6 @@
 ;; ============================================================
 ;; populater forms
 ;; ============================================================
-
-;; this is kind of mangled to accommodate value type populaters.
-;; clean up later.
 
 (defn- array-type? [t]
   (and (type? t) (same-or-subclass? Array t)))
@@ -339,7 +316,6 @@
       [ss `(.GetField ~typesym ~(str f))])
     field->setter-sym))
 
-;; not the prettiest
 (defn- value-populater-form
   ([typesym] (value-populater-form typesym {}))
   ([typesym ctx]
@@ -396,8 +372,8 @@
             pinfs))
         (when (.IsValueType t) [])))))
 
-;; janky + reflective for now. Need something to disambiguate dispatch
-;; by argument type rather than arity
+;; Need something to disambiguate dispatch by argument type rather
+;; than arity
 (defn- constructor-application-count-clauses
   " ctrspec should be: #{[type...]...}"
   [ctx]
@@ -412,7 +388,6 @@
            `(let [~args ~cvsym]
               (new ~typesym ~@args))])))))
 
-;; can make the following more optimal if it becomes an issue
 (defn- constructor-application-form [ctx]
   (mu/checked-keys [[cvsym] ctx]
     (let [capkc (constructor-application-count-clauses ctx)]
@@ -545,14 +520,6 @@
 ;; locals before globals, surprisingly
 (defn- transform-prepopulate [^Transform trns, spec]
   (-> spec
-    ;; (dissoc :local-rotation :rotation :local-euler-angles)
-    ;; (dissoc :local-rotation :rotation :euler-angles)
-    ;; (dissoc
-    ;;   ;:position :local-position
-    ;;   #_:local-rotation :rotation
-    ;;   :euler-angles :local-euler-angles
-    ;;   ;:scale :local-scale
-    ;;   )
     (as-> spec
       (transform-prepopulate-helper-mac trns spec :parent             parent           Transform)
       (transform-prepopulate-helper-mac trns spec :local-position     localPosition    Vector3)
@@ -561,10 +528,7 @@
       (transform-prepopulate-helper-mac trns spec :rotation           rotation         Quaternion)
       (transform-prepopulate-helper-mac trns spec :local-euler-angles localEulerAngles Vector3)
       (transform-prepopulate-helper-mac trns spec :euler-angles       eulerAngles      Vector3)
-      (transform-prepopulate-helper-mac trns spec :local-scale        localScale       Vector3)
-      ; following doesn't exist:
-      ;(transform-prepopulate-helper-mac trns spec :scale              scale            Vector3) 
-      )))
+      (transform-prepopulate-helper-mac trns spec :local-scale        localScale       Vector3))))
 
 ;; all about the snappy fn names
 (defn- game-object-populate-case-default-fn [ctx]
@@ -755,7 +719,7 @@
                            (assoc ctx :valsym direct-valsym))
           s-clause       (standard-populater-set-clause shared-setable
                            (assoc ctx :valsym shared-valsym))
-          direct-key     (first (keys-for-setable direct-setable)) ;; the hell with it, one key per setable 4 now
+          direct-key     (first (keys-for-setable direct-setable)) ; the hell with it, one key per setable 4 now
           shared-key     (first (keys-for-setable shared-setable))]
       `(if-let [[_# ~direct-valsym] (find ~specsym ~direct-key)]
          (do ~d-clause
@@ -818,10 +782,7 @@
                 populater-form
                 ;;'[UnityEngine.Vector3] 
                 (all-value-type-symbols)
-                {:setables-fn
-                 setables
-                 ;;setables
-                 })]
+                {:setables-fn setables})]
     `(merge ~m ~vpfmf)))
 
 ;; probably faster compile if you consolidate with populaters
@@ -830,10 +791,7 @@
                 value-hydrater-form
                 ;;'[UnityEngine.Vector3]
                 (all-value-type-symbols) ;; 231
-                {:setables-fn
-                 setables
-                 ;;setables
-                 })]
+                {:setables-fn setables})]
     `(merge ~m ~vhfmf)))
 
 (def ^:private component-hydrater-field-blacklist
@@ -903,24 +861,16 @@
 ;; ============================================================
 
 (def ^:private default-component-populaters
-  (establish-component-populaters-mac {})
-  ;;nil
-  )
+  (establish-component-populaters-mac {}))
 
 (def ^:private default-value-type-populaters
-  (establish-value-type-populaters-mac {})
-  ;;nil
-  )
+  (establish-value-type-populaters-mac {}))
 
 (def ^:private default-value-type-hydraters
-  (establish-value-type-hydraters-mac {})
-  ;;nil
-  )
+  (establish-value-type-hydraters-mac {}))
 
 (def ^:private default-component-dehydraters
-  (establish-component-dehydraters-mac {})
-  ;;nil
-  )
+  (establish-component-dehydraters-mac {}))
 
 ;; (def default-value-type-dehydraters
 ;;   (establish-value-type-dehydraters-mac {}))
