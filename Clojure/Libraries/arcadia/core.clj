@@ -4,6 +4,7 @@
             [arcadia.internal.map-utils :as mu]
             arcadia.messages)
   (:import [UnityEngine
+            Application
             MonoBehaviour
             GameObject
             PrimitiveType]))
@@ -12,11 +13,21 @@
   (instance? System.Text.RegularExpressions.Regex x))
 
 ;; ============================================================
+;; application
+;; ============================================================
+
+(defn editor? 
+  "Returns true if called from within the editor. Notably, calls
+  from the REPL are considered to be form within the editor"
+  []
+  Application/isEditor)
+
+;; ============================================================
 ;; defcomponent 
 ;; ============================================================
 
 (defmacro defleaked [var]
-  `(def ~(symbol (name var))
+  `(def ~(with-meta (symbol (name var)) {:private true})
      (var-get (find-var '~var))))
 
 (defleaked clojure.core/validate-fields)
@@ -62,28 +73,6 @@
        ~(build-positional-factory gname classname fields)
        ~classname)))
 
-;; `(defcomponent*
-;;    ~name
-;;    ;; make all fields mutable
-;;    ~(vec (map #(vary-meta % assoc :unsynchronized-mutable true) fields))
-;;    ~@(concat
-;;        (let [forms (take-while list? methods)]
-;;          ;; add protocol declaration for known unity messages
-;;          (interleave (map #(symbol (str "arcadia.messages/I" (first %))) forms)
-;;            ;; wrap method bodies in typehinted let bindings
-;;            (map (fn [[name args & body]]
-;;                   (list name args
-;;                     `(let ~(vec (flatten (map (fn [typ arg]
-;;                                                 [(vary-meta arg assoc :tag typ) arg])
-;;                                            (arcadia.messages/messages name)
-;;                                            (drop 1 args))))
-;;                        ~@body)))
-;;              forms)))
-;;        (drop-while list? methods)))
-
-;; {:keys [protocol]
-;;  {{:keys [name args fntail]} :implementation}}
-
 (defn- normalize-method-implementations [mimpls]
   (for [[[protocol] impls] (partition 2
                              (partition-by symbol? mimpls))
@@ -109,7 +98,7 @@
     (update-in impl [:fntail]
       #(cons `(require (quote ~(ns-name *ns*))) %))))
 
-(defn ensure-has-awake [mimpls]
+(defn ^:private ensure-has-awake [mimpls]
   (if (some awake-method? mimpls)
     mimpls
     (cons {:protocol (find-message-protocol-symbol 'Awake)
@@ -139,7 +128,7 @@
         method-impls2 (process-defcomponent-method-implementations method-impls)]
     `(defcomponent* ~name ~fields2 ~@method-impls2)))
 
- ;; ============================================================
+;; ============================================================
 ;; get-component
 ;; ============================================================
 
@@ -207,7 +196,7 @@
     `(let [~@(mapcat reverse bndgs)]
        ~(cons head (replace bndgs rst)))))
 
-(defmacro get-component* [obj t]
+(defmacro ^:private get-component* [obj t]
   (if (not-every? symbol? [obj t])
     (raise-non-symbol-args
       (list 'arcadia.core/get-component* obj t))
@@ -222,18 +211,32 @@
       `(.GetComponent ~obj ~t))))
 
 (defn get-component
-  "Returns the component of Type type if the game object has one attached, nil if it doesn't."
+  "Returns the component of Type type if the game object has one attached, nil if it doesn't.
+  
+  * gameobject - the GameObject to query, a GameObject
+  * type - the type of the component to get, a Type or String"
   {:inline (fn [gameobject type]
              (list 'arcadia.core/get-component* gameobject type))
    :inline-arities #{2}}
   [gameobject type]
   (.GetComponent gameobject type))
 
+(defn add-component 
+  "Add a component to a gameobject
+  
+  * gameobject - the GameObject recieving the component, a GameObject
+  * type       - the type of the component, a Type"
+  {:inline (fn [gameobject type]
+             `(.AddComponent ~gameobject ~type))
+   :inline-arities #{2}}
+  [^GameObject gameobject ^Type type]
+  (.AddComponent gameobject type))
+
 ;; note this takes an optional default value. This macro is potentially
 ;; annoying in the case that you want to branch on a supertype, for
 ;; instance, but the cast would remove interface information. Use with
 ;; this in mind.
-(defmacro condcast [expr xsym & clauses]
+(defmacro ^:private condcast [expr xsym & clauses]
   (let [[clauses default] (if (even? (count clauses))
                             [clauses nil] 
                             [(butlast clauses)
@@ -254,14 +257,21 @@
 ;; wrappers
 ;; ============================================================
 
-(defn hintable-type [t]
+(defn- hintable-type [t]
   (cond (= t System.Single) System.Double
     (= t System.Int32) System.Int64
     (= t System.Boolean) nil
     :else t))
 
 (defmacro defwrapper
-  "Wrap static methods of C# classes"
+  "Wrap static methods of C# classes
+  
+  * class - the C# class to wrap, a Symbol
+  * method - the C# method to wrap, a Symbol
+  * docstring - the documentation for the wrapped method, a String
+  * name - the name of the corresponding Clojure function, a Symbol
+  
+  Used internally to wrap parts of the Unity API, but generally useful."
   ([class]
    `(do ~@(map (fn [m]
           `(defwrapper
@@ -305,17 +315,17 @@
 (defwrapper instantiate UnityEngine.Object Instantiate
   "Clones the object original and returns the clone.
   
-  original - the object to clone, GameObject or Component
-  position - the position to place the clone in space, a Vector3
-  rotation - the rotation to apply to the clone, a Quaternion"
+  * original the object to clone, GameObject or Component
+  * position the position to place the clone in space, a Vector3
+  * rotation the rotation to apply to the clone, a Quaternion"
   ([^UnityEngine.Object original ^UnityEngine.Vector3 position]
    (UnityEngine.Object/Instantiate original position Quaternion/identity)))
 
 (defn create-primitive
   "Creates a game object with a primitive mesh renderer and appropriate collider.
   
-  prim - the kind of primitive to create, a Keyword or a PrimitiveType.
-         Keyword can be one of :sphere :capsule :cylinder :cube :plane :quad"
+  * prim - the kind of primitive to create, a Keyword or a PrimitiveType.
+           Keyword can be one of :sphere :capsule :cylinder :cube :plane :quad"
   [prim]
   (if (= PrimitiveType (type prim))
     (GameObject/CreatePrimitive prim)
@@ -327,37 +337,38 @@
                                   :plane    PrimitiveType/Plane
                                   :quad     PrimitiveType/Quad))))
 
-(defwrapper UnityEngine.Object Destroy
+(defn destroy 
   "Removes a gameobject, component or asset.
   
-  obj - the object to destroy, a GameObject, Component, or Asset
-  t   - timeout before destroying object, a float")
-
-(defwrapper UnityEngine.Object DestroyImmediate
-  "Destroys the object obj immediately. You are strongly recommended to use Destroy instead.
-  
-  obj - the object to destroy, a GameObject, Component, or Asset")
+  * obj - the object to destroy, a GameObject, Component, or Asset
+  * t   - timeout before destroying object, a float"
+  ([^UnityEngine.Object obj]
+   (if (editor?)
+    (UnityEngine.Object/DestroyImmediate obj)
+    (UnityEngine.Object/Destroy obj)))
+  ([^UnityEngine.Object obj ^double t]
+   (UnityEngine.Object/Destroy obj t)))
 
 (defwrapper object-typed UnityEngine.Object FindObjectOfType
   "Returns the first active loaded object of Type type.
   
-  type - The type to search for, a Type")
+  * type - The type to search for, a Type")
 
 (defwrapper objects-typed UnityEngine.Object FindObjectsOfType
   "Returns a list of all active loaded objects of Type type.
   
-  type - The type to search for, a Type")
+  * type - The type to search for, a Type")
 
 (defwrapper object-named GameObject Find
   "Finds a game object by name and returns it.
   
-  name - The name of the object to find, a String")
+  * name - The name of the object to find, a String")
 
 ;; type-hinting of condcast isn't needed here, but seems a good habit to get into
 (defn objects-named
   "Finds game objects by name.
   
-  name - the name of the objects to find, can be A String or regex "
+  * name - the name of the objects to find, can be A String or regex"
   [name]
   (condcast name name
     System.String
@@ -375,9 +386,9 @@
 (defwrapper object-tagged GameObject FindWithTag
   "Returns one active GameObject tagged tag. Returns null if no GameObject was found.
   
-  tag - the tag to seach for, a String")
+  * tag - the tag to seach for, a String")
 
 (defwrapper objects-tagged GameObject FindGameObjectsWithTag
   "Returns a list of active GameObjects tagged tag. Returns empty array if no GameObject was found.
   
-  tag - the tag to seach for, a String")
+  * tag - the tag to seach for, a String")
