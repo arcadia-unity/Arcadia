@@ -229,111 +229,6 @@
   [gameobject type]
   (.GetComponent gameobject type))
 
-(comment (defmacro single-typearg-generic [name doc]
-  (let [cljname     (-> name str camels-to-hyphens string/lower-case symbol)
-        macroname   (symbol (str cljname "*"))
-        nsmacroname (symbol (str (.Name *ns*) "/" cljname "*"))]
-    `(do
-       (defmacro ~nsmacroname [obj# t#]
-         (if (not-every? symbol? [obj# t#])
-           (raise-non-symbol-args
-             (list ~nsmacroname obj# t#))
-           (cond
-             (contains? ~'&env t#)
-             (quote (. (unquote obj#) ~name (unquote t#)))
-             (and
-               (known-implementer-reference? obj# (quote ~name) ~'&env)
-               (type-name? t#))
-             (quote (. (unquote obj#) ~name (~'type-args (unquote t#))))
-             :else
-             (quote (. obj# ~name t#)))))
-
-       (defn ~cljname
-          ~doc
-          {:inline (fn [~'gameobject ~'type]
-                     (~nsmacroname
-                        ~'gameobject
-                        ~'type))
-          :inline-arities #{2}}
-          [~'gameobject ~'type]
-          (. ~'gameobject ~name ~'type))))))
-
-(comment (pprint (macroexpand-1 '(single-typearg-generic GetComponentInChildren "foo")))
-(set! *print-meta* true))
-
-(comment (single-typearg-generic GetComponentInChildren "foo"))
-
-;; ============================================================
-;; wrappers
-;; ============================================================
-
-(defmacro defwrapper
-  "Wrap static methods of C# classes"
-  ([class]
-   `(do ~@(map (fn [m]
-          `(defwrapper
-             ~class
-             ~(symbol (.Name m))
-             ~(str "No documentation for " class "/" (.Name m))))
-        (->>
-          (.GetMethods
-            (resolve class)
-            (enum-or BindingFlags/Public BindingFlags/Static))
-          (remove #(or (.IsSpecialName %) (.IsGenericMethod %)))))))
-  ([class method docstring]
-   `(defwrapper
-     ~(symbol (string/lower-case
-                (camels-to-hyphens (str method))))
-     ~class
-     ~method
-     ~docstring))
-  ([name class method docstring & body]
-   `(defn ~name
-      ~(str docstring " Wraps " class "." method ".")
-      ~@(->> (.GetMethods
-               (resolve class)
-               (enum-or BindingFlags/Public BindingFlags/Static))
-             (filter #(= (.Name %) (str method)))
-             (remove #(.IsGenericMethod %))
-             (dedup-by #(.Length (.GetParameters %)))
-             (map (fn [m]
-                    (let [params (map #(symbol (.Name %)) (.GetParameters m))]
-                      (list (vec params)
-                            `(~(symbol (str class "/" method)) ~@params))))))
-      ~@body)))
-
-(defwrapper instantiate UnityEngine.Object Instantiate
-  "Clones the object original and returns the clone."
-  ([^UnityEngine.Object original ^UnityEngine.Vector3 position]
-   (UnityEngine.Object/Instantiate original position Quaternion/identity)))
-
-(defn create-primitive [prim]
-  "Creates a game object with a primitive mesh renderer and appropriate collider."
-  (if (= PrimitiveType (type prim))
-    (GameObject/CreatePrimitive prim)
-    (GameObject/CreatePrimitive (case prim
-                                  :sphere   PrimitiveType/Sphere
-                                  :capsule  PrimitiveType/Capsule
-                                  :cylinder PrimitiveType/Cylinder
-                                  :cube     PrimitiveType/Cube
-                                  :plane    PrimitiveType/Plane
-                                  :quad     PrimitiveType/Quad))))
-
-(defwrapper UnityEngine.Object Destroy
-  "Removes a gameobject, component or asset.")
-
-(defwrapper UnityEngine.Object DestroyImmediate
-  "Destroys the object obj immediately. You are strongly recommended to use Destroy instead.")
-
-(defwrapper object-typed UnityEngine.Object FindObjectOfType
-  "Returns the first active loaded object of Type type.")
-
-(defwrapper objects-typed UnityEngine.Object FindObjectsOfType
-  "Returns a list of all active loaded objects of Type type.")
-
-(defwrapper object-named GameObject Find
-  "Finds a game object by name and returns it.")
-
 ;; note this takes an optional default value. This macro is potentially
 ;; annoying in the case that you want to branch on a supertype, for
 ;; instance, but the cast would remove interface information. Use with
@@ -355,9 +250,114 @@
        ~(cons 'cond
           (concat cs default)))))
 
+;; ============================================================
+;; wrappers
+;; ============================================================
+
+(defn hintable-type [t]
+  (cond (= t System.Single) System.Double
+    (= t System.Int32) System.Int64
+    (= t System.Boolean) nil
+    :else t))
+
+(defmacro defwrapper
+  "Wrap static methods of C# classes"
+  ([class]
+   `(do ~@(map (fn [m]
+          `(defwrapper
+             ~class
+             ~(symbol (.Name m))
+             ~(str "TODO No documentation for " class "/" (.Name m))))
+        (->>
+          (.GetMethods
+            (resolve class)
+            (enum-or BindingFlags/Public BindingFlags/Static))
+          (remove #(or (.IsSpecialName %) (.IsGenericMethod %)))))))
+  ([class method docstring]
+   `(defwrapper
+     ~(symbol (string/lower-case
+                (camels-to-hyphens (str method))))
+     ~class
+     ~method
+     ~docstring))
+  ([name class method docstring & body]
+   `(defn ~name
+      ~(str docstring (let [link-name (str (.Name (resolve class)) "." method)]
+                        (str "\n\nSee also ["
+                        link-name
+                        "](http://docs.unity3d.com/ScriptReference/"
+                        link-name
+                        ".html) in Unity's reference.")))
+      ~@(->> (.GetMethods
+               (resolve class)
+               (enum-or BindingFlags/Public BindingFlags/Static))
+             (filter #(= (.Name %) (str method)))
+             (remove #(.IsGenericMethod %))
+             (dedup-by #(.Length (.GetParameters %)))
+             (map (fn [m]
+                    (let [params (map #(with-meta (symbol (.Name %))
+                                                  {:tag (hintable-type (.ParameterType %))})
+                                      (.GetParameters m))] 
+                      (list (with-meta (vec params) {:tag (hintable-type (.ReturnType m))})
+                            `(~(symbol (str class "/" method)) ~@params))))))
+      ~@body)))
+
+(defwrapper instantiate UnityEngine.Object Instantiate
+  "Clones the object original and returns the clone.
+  
+  original - the object to clone, GameObject or Component
+  position - the position to place the clone in space, a Vector3
+  rotation - the rotation to apply to the clone, a Quaternion"
+  ([^UnityEngine.Object original ^UnityEngine.Vector3 position]
+   (UnityEngine.Object/Instantiate original position Quaternion/identity)))
+
+(defn create-primitive
+  "Creates a game object with a primitive mesh renderer and appropriate collider.
+  
+  prim - the kind of primitive to create, a Keyword or a PrimitiveType.
+         Keyword can be one of :sphere :capsule :cylinder :cube :plane :quad"
+  [prim]
+  (if (= PrimitiveType (type prim))
+    (GameObject/CreatePrimitive prim)
+    (GameObject/CreatePrimitive (case prim
+                                  :sphere   PrimitiveType/Sphere
+                                  :capsule  PrimitiveType/Capsule
+                                  :cylinder PrimitiveType/Cylinder
+                                  :cube     PrimitiveType/Cube
+                                  :plane    PrimitiveType/Plane
+                                  :quad     PrimitiveType/Quad))))
+
+(defwrapper UnityEngine.Object Destroy
+  "Removes a gameobject, component or asset.
+  
+  obj - the object to destroy, a GameObject, Component, or Asset
+  t   - timeout before destroying object, a float")
+
+(defwrapper UnityEngine.Object DestroyImmediate
+  "Destroys the object obj immediately. You are strongly recommended to use Destroy instead.
+  
+  obj - the object to destroy, a GameObject, Component, or Asset")
+
+(defwrapper object-typed UnityEngine.Object FindObjectOfType
+  "Returns the first active loaded object of Type type.
+  
+  type - The type to search for, a Type")
+
+(defwrapper objects-typed UnityEngine.Object FindObjectsOfType
+  "Returns a list of all active loaded objects of Type type.
+  
+  type - The type to search for, a Type")
+
+(defwrapper object-named GameObject Find
+  "Finds a game object by name and returns it.
+  
+  name - The name of the object to find, a String")
+
 ;; type-hinting of condcast isn't needed here, but seems a good habit to get into
 (defn objects-named
-  "Finds game objects by name. Name can be string or regex."
+  "Finds game objects by name.
+  
+  name - the name of the objects to find, can be A String or regex "
   [name]
   (condcast name name
     System.String
@@ -373,31 +373,11 @@
     (throw (Exception. (str "Expects String or Regex, instead got " (type name))))))
 
 (defwrapper object-tagged GameObject FindWithTag
-  "Returns one active GameObject tagged tag. Returns null if no GameObject was found.")
+  "Returns one active GameObject tagged tag. Returns null if no GameObject was found.
+  
+  tag - the tag to seach for, a String")
 
 (defwrapper objects-tagged GameObject FindGameObjectsWithTag
-  "Returns a list of active GameObjects tagged tag. Returns empty array if no GameObject was found.")
-
-(comment
+  "Returns a list of active GameObjects tagged tag. Returns empty array if no GameObject was found.
   
-  (use 'clojure.repl)
-  (use 'arcadia.core)
-  
-(defmacro docs [& names]
-  `(do (println) ~@(map (fn [n] `(doc ~n)) names)))
-
-(docs instantiate
-      create-primitive
-      destroy
-      destroy-immediate
-      dont-destroy-on-load
-      object-named
-      objects-named
-      object-tagged
-      objects-tagged
-      object-typed
-      objects-typed
-      get-component
-      )
-
-)
+  tag - the tag to seach for, a String")
