@@ -1084,17 +1084,9 @@
 ;; ============================================================
 
 (defn get-hydrate-type-flag [spec]
-  (cond
-    (map? spec)
-    (or
-      (:type spec)
-      UnityEngine.GameObject)
-
-    (vector? spec)
-    (case (count spec)
-      2 UnityEngine.Vector2
-      3 UnityEngine.Vector3
-      4 UnityEngine.Vector4)))
+  (or
+    (:type spec)
+    UnityEngine.GameObject))
 
 (defn hydrate
   ([spec]
