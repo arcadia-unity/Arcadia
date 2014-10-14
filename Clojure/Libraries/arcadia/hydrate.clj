@@ -2,16 +2,13 @@
   (:require [arcadia.internal.map-utils :as mu]
             [arcadia.reflect :as r]
             [clojure.string :as string]
-            [clojure.set :as sets]
-            [clojure.edn :as edn]
-            clojure.walk
-            [clojure.clr.io :as io]
             [clojure.test :as test])
-  (:import UnityEditor.AssetDatabase
-           [System.Reflection Assembly AssemblyName MemberInfo
+  (:import [System.Reflection Assembly
+            AssemblyName MemberInfo
             PropertyInfo FieldInfo]
-           [UnityEngine GameObject Transform Vector3 Quaternion]
-           System.AppDomain))
+           [UnityEngine GameObject
+            Transform Vector3
+            Quaternion]))
 
 ;;; TODO: get rid of types->type-flags, is pointless
 ;;; TODO: way too much ambiguity about types versus symbols naming types, lock it down
