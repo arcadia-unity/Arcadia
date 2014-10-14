@@ -731,7 +731,7 @@
                            (assoc ctx :valsym direct-valsym))
           s-clause       (standard-populater-set-clause shared-setable
                            (assoc ctx :valsym shared-valsym))
-          direct-key     (first (keys-for-setable direct-setable)) ; the hell with it, one key per setable 4 now
+          direct-key     (first (keys-for-setable direct-setable))
           shared-key     (first (keys-for-setable shared-setable))]
       `(if-let [[_# ~direct-valsym] (find ~specsym ~direct-key)]
          (do ~d-clause
@@ -750,19 +750,60 @@
          ~@pfcs))))
 
 (def ^:private shared-elem-components
-  {'UnityEngine.MeshFilter [{:direct 'mesh
-                             :shared 'sharedMesh}]
-   'UnityEngine.MeshRenderer [{:direct 'materials
-                               :shared 'sharedMaterials}
-                              {:direct 'material
-                               :shared 'sharedMaterial}]
-   'UnityEngine.CapsuleCollider [{:direct 'material
-                                  :shared 'sharedMaterial}]})
+  {'UnityEngine.CapsuleCollider
+   [{:shared 'sharedMaterial, :direct 'material}],
+   'UnityEngine.TerrainCollider
+   [{:shared 'sharedMaterial, :direct 'material}],
+   'UnityEngine.SphereCollider
+   [{:shared 'sharedMaterial, :direct 'material}],
+   'UnityEngine.ParticleRenderer
+   [{:shared 'sharedMaterials, :direct 'materials}
+    {:shared 'sharedMaterial, :direct 'material}],
+   'UnityEngine.MeshFilter [{:shared 'sharedMesh, :direct 'mesh}],
+   'UnityEngine.ParticleSystemRenderer
+   [{:shared 'sharedMaterials, :direct 'materials}
+    {:shared 'sharedMaterial, :direct 'material}],
+   'UnityEngine.WheelCollider
+   [{:shared 'sharedMaterial, :direct 'material}],
+   'UnityEngine.Collider [{:shared 'sharedMaterial, :direct 'material}],
+   'UnityEngine.BoxCollider
+   [{:shared 'sharedMaterial, :direct 'material}],
+   'UnityEngine.CharacterController
+   [{:shared 'sharedMaterial, :direct 'material}],
+   'UnityEngine.SkinnedMeshRenderer
+   [{:shared 'sharedMaterials, :direct 'materials}
+    {:shared 'sharedMaterial, :direct 'material}],
+   'UnityEngine.MeshRenderer
+   [{:shared 'sharedMaterials, :direct 'materials}
+    {:shared 'sharedMaterial, :direct 'material}],
+   'UnityEngine.RaycastCollider
+   [{:shared 'sharedMaterial, :direct 'material}],
+   'UnityEngine.TrailRenderer
+   [{:shared 'sharedMaterials, :direct 'materials}
+    {:shared 'sharedMaterial, :direct 'material}],
+   'UnityEngine.MeshCollider
+   [{:shared 'sharedMaterial, :direct 'material}
+    {:shared 'sharedMesh, :direct 'mesh}],
+   'UnityEngine.ClothRenderer
+   [{:shared 'sharedMaterials, :direct 'materials}
+    {:shared 'sharedMaterial, :direct 'material}],
+   'UnityEngine.Renderer
+   [{:shared 'sharedMaterials, :direct 'materials}
+    {:shared 'sharedMaterial, :direct 'material}],
+   'UnityEngine.LineRenderer
+   [{:shared 'sharedMaterials, :direct 'materials}
+    {:shared 'sharedMaterial, :direct 'material}],
+   'UnityEngine.SpriteRenderer
+   [{:shared 'sharedMaterials, :direct 'materials}
+    {:shared 'sharedMaterial, :direct 'material}]})
 
 ;; this is kind of insane. Cleaner way?
 (defmacro ^:private establish-component-populaters-mac [m]
-  (let [specials (conj (set (keys shared-elem-components))
-                   'UnityEngine.Transform)
+  (let [all-cmpnts (all-component-type-symbols)
+        specials   (set
+                     (keep (conj (set (keys shared-elem-components))
+                             'UnityEngine.Transform)
+                       all-cmpnts))
         cpfmf (->
                 (tsym-map
                   populater-form
@@ -780,7 +821,7 @@
                                (shared-elem-components t)
                                ctx))})))
                     cpfmf
-                    shared-elem-components)
+                    (select-keys shared-elem-components specials))
                   (assoc cpfmf 'UnityEngine.Transform
                     (populater-form 'UnityEngine.Transform
                       {:prepopulater-form-fn
@@ -996,6 +1037,10 @@
                hydrater populater dehydrater type-flag))))))
 
 (defmacro register-type
+  "Registers type for hydration.
+
+* type-or-typesym - type to be registered, or symbol naming type to be registered.
+* option-map - unstable feature currently used for hydration development."
   ([type-or-typesym]
      `(register-type ~type-or-typesym {}))
   ([type-or-typesym option-map]
@@ -1010,7 +1055,11 @@
          :else
          (register-normal-type-form t option-map)))))
 
-(defn unregister-type [type-or-typesym]
+(defn unregister-type
+"Removes a type from hydration, if it is registered.
+
+* type-or-typesym - type to be removed from hydration"
+  [type-or-typesym]
   (let [^Type t (ensure-type type-or-typesym)]
     (swap! hydration-database
       (fn [hdb]
@@ -1033,6 +1082,19 @@
     UnityEngine.GameObject))
 
 (defn hydrate
+  "Constructs object from Clojure data (spec). Interpretation of spec depends
+ on context and type-flag, if present.
+
+* spec - Clojure data specifying construction of object for some type
+  registered with hydration
+* type-flag - Forces interpretation of spec to particular type
+  registered with hydration
+
+Aspires to be idempotent with dehydrate, ie, 
+```
+(let [c (comp dehydrate hydrate)]
+  (= (c spec) (c (c spec))))
+```"
   ([spec]
      (hydrate spec (get-hydrate-type-flag spec)))
   ([spec, type-flag]
@@ -1047,6 +1109,13 @@
        spec)))
  
 (defn dehydrate
+  "Converts Unity object (x) to Clojure data. 
+
+Aspires to be idempotent with hydrate, ie, 
+```
+(let [c (comp dehydrate hydrate)]
+  (= (c spec) (c (c spec))))
+```"
   ([x] (dehydrate x (type x)))
   ([x t]
      (if-let [f ((:dehydraters @hydration-database) t)]
@@ -1059,6 +1128,16 @@
     (type inst)))
 
 (defn populate!
+  "Mutates object inst to conform to spec. Interpretation of spec
+  depends on context and type-flag, if present.
+
+* inst - Object instance to be mutated 
+
+* spec - Specifies aspects of inst to set, should work like spec for
+  hydrate but without instantiation.
+
+* type-flag - Forces interpretation of spec to particular type
+  registered with hydration"
   ([inst spec]
      (populate! inst spec
        (get-populate-type-flag inst spec)))
@@ -1073,8 +1152,6 @@
 ;; ============================================================
 ;; structural manipulation functions
 ;; ============================================================
-
-(declare assoc-in-mv)
 
 (defn- mv-default-clause [[k & ks]]
   (cond
@@ -1098,16 +1175,34 @@
             ks f))
         (mapv #(update-in-mv % path f) v))
       (if num-q
-        (assoc v k (f (get v k)))
+        (assoc v k (f (get v k (mv-default-clause ks))))
         (mapv #(update-in-mv % path f) v)))))
 
 (defn- update-in-mv-map [m [k & ks] f]
   (if ks
     (assoc m k
-      (update-in-mv (get m k) ks f))
-    (assoc m k (f (get m k)))))
+      (update-in-mv
+        (get m k (mv-default-clause ks))
+        ks f))
+    (assoc m k
+      (f (get m k (mv-default-clause ks))))))
 
 (defn update-in-mv
+  "Experimental. Similar to clojure.core/update-in, but interprets
+  path specially for map-and-vector-style data, as used in
+  hydration. Non-numeric keys descend maps as in update-in, but map
+  across vectors. If any levels do not exist, vectors will be created
+  if the corresponding key is zero; an exception will be thrown if the
+  corresponding key is numeric but non-zero; and a map will be created
+  otherwise.
+```
+in:  (-> {:box-collider [{:center [0 0 0]}
+                         {:center [1 1 1]}]}
+       (update-in-mv [:box-collider :center 1] inc))
+
+out: {:box-collider [{:center [0 1 0]}
+                     {:center [1 2 1]}]}
+```"
   ([m path f & args]
      (update-in-mv path #(apply f % args)))
   ([m path f]
@@ -1117,7 +1212,29 @@
 
 ;; assoc-in-mv --------------------------
 
-(defn assoc-in-mv [v path x]
+(defn assoc-in-mv
+  "Experimental. Similar to clojure.core/assoc-in, but interprets path
+  specially for map-and-vector-style data, as used in
+  hydration. Non-numeric keys descend maps as in assoc-in, but map
+  across vectors. If any levels do not exist, vectors will be created
+  if the corresponding key is zero; an exception will be thrown if the
+  corresponding key is numeric but non-zero; and a map will be created
+  otherwise.
+```
+in:  (-> {:box-collider [{}
+                         {}]}
+       (assoc-in-mv [:box-collider :center] [0.5 0.5 0.5]))
+
+out: {:box-collider [{:center [0.5 0.5 0.5]}
+                     {:center [0.5 0.5 0.5]}]}
+
+
+in:  (-> nil
+       (assoc-in-mv [:box-collider 0 :center] [0.5 0.5 0.5]))
+
+out: {:box-collider [{:center [0.5 0.5 0.5]}]}
+```"
+  [v path x]
   (update-in-mv v path (fn [_] x)))
 
 ;; deep-merge ---------------------------
@@ -1135,7 +1252,29 @@
 ;; another, wackier version of this would map across vectors when the
 ;; corresponding spec val isn't a vector, but that would sacrifice
 ;; associativity, which seems important for merge
-(defn deep-merge-mv [& maps]
+(defn deep-merge-mv
+  "Experimental. Deep merge of two or more map-and-vector-style
+  structures m, such as those used in hydration. 
+```
+in:  (deep-merge-mv
+       {:box-collider [{}]}
+       {:box-collider [{:center [4 5 6]}
+                       {:center [7 8 9]}]})
+
+out: {:box-collider [{:center [4 5 6]} {:center [7 8 9]}]}
+
+
+in:  (deep-merge-mv
+       {:box-collider [{:extents [0 0 0]
+                        :center [1 2 3]}]}
+       {:box-collider [{:center [4 5 6]}
+                       {:center [7 8 9]}]})
+
+out: {:box-collider [{:extents [0 0 0],
+                    :center [4 5 6]}
+                   {:center [7 8 9]}]}
+```"
+  [& maps]
   (let [m-or-v?     #(or (vector? %) (map? %))
         merge-entry (fn merge-entry [m k v1]
                       (if (contains? m k)
@@ -1153,6 +1292,8 @@
 ;; select-paths-mv ----------------------
 
 (defn select-paths-mv
+  "Experimental. Takes slices through map-and-vector-style
+  structure m."
   ([m path]
      (assoc-in-mv (empty m) path (get-in m path)))
   ([m path & paths]
