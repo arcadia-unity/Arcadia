@@ -6,6 +6,8 @@ Status (Important!)
 -------------------
 Arcadia is under development, and should not be used for real projects yet. The remainder of this file is mostly for our own reference. More to come.
 
+[![Clojure-Unity @ StrangeLoop 2014](http://img.youtube.com/vi/tJr_TD1BtF0/0.jpg)](http://www.youtube.com/watch?v=tJr_TD1BtF0)
+
 Usage
 -----
 The `Clojure` folder can be copied into any Unity project's Assets folder to enable Clojure. In the future, this will be available from the Asset Store. Once copied, you have access to the REPL and the Clojure compiler.
