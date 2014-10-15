@@ -196,7 +196,7 @@
     `(let [~@(mapcat reverse bndgs)]
        ~(cons head (replace bndgs rst)))))
 
-(defmacro ^:private get-component* [obj t]
+(defmacro get-component* [obj t]
   (if (not-every? symbol? [obj t])
     (raise-non-symbol-args
       (list 'arcadia.core/get-component* obj t))
