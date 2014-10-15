@@ -263,7 +263,7 @@
     (= t System.Boolean) nil
     :else t))
 
-(defmacro defwrapper
+(defmacro ^:private defwrapper
   "Wrap static methods of C# classes
   
   * class - the C# class to wrap, a Symbol
