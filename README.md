@@ -2,13 +2,15 @@ Arcadia
 =======
 The integration of the Clojure Programming Language with the Unity 3D game engine.
 
-Status (Important!)
--------------------
-Arcadia is under development, and should not be used for real projects yet. The remainder of this file is mostly for our own reference. More to come.
+Status
+------
+Arcadia is alpha-quality software, and shouldn't be used for anything important yet.
 
 Usage
 -----
 The `Clojure` folder can be copied into any Unity project's Assets folder to enable Clojure. In the future, this will be available from the Asset Store. Once copied, you have access to the REPL and the Clojure compiler.
+
+There's a screencast on getting set up [here](https://www.youtube.com/watch?v=ubXgobwSATQ&feature=youtu.be).
 
 ### Prerequisites
 Before doing anything, Arcadia requires that Unity be set to run in the background and use the full .NET API
@@ -20,17 +22,24 @@ Click `Edit > Project Settings > Player`, then in the Inspector under Resolution
 Click `Edit > Project Settings > Player`, then in the Inspector under Other Settings make sure Api Compatibility Level is set to .NET 2.0 and not .NET 2.0 Subset.
 
 ### REPL
-Arcadia ships with a simple networked REPL that is started automatically or from `Clojure > REPL > Start`. You can connect to this REPL using `Clojure/Editor/repl-client.rb`. This script is also the basis of our [Sublime Text support (via SublimeREPL)](https://github.com/clojure-unity/repl-sublimetext) and our Emacs support (via Inferior Lisp).
+Arcadia ships with a simple networked REPL that is started automatically or from `Clojure > REPL > Start`. You can connect to this REPL using `Clojure/Editor/repl-client.rb`. This script is also the basis of our [Sublime Text support (via SublimeREPL)](https://github.com/clojure-unity/repl-sublimetext) and [our Emacs support (via Inferior Lisp)](https://github.com/arcadia-unity/arcadia/wiki/Editor-support#emacs).
 
 ### Clojure Components
-You can write components in pure Clojure using our `defcomponent` form.
+You can write components in pure Clojure using our [`defcomponent`](https://github.com/arcadia-unity/arcadia/wiki/arcadia.core#defcomponent) form. To be recognized by Unity these must be saved in Clojure files, not just defined in the REPL. 
 
 Name
 -----
-This project was originally named "clojure-unity", but was changed to "Arcadia" To avoid infinging on Clojure's trademarks. It was suggested to us by @ztellman at a bar during StrangeLoop 2014, and we are eternally grateful.
+This project was originally named "clojure-unity", but was changed to "Arcadia" to avoid infinging on Clojure's trademarks. It was suggested to us by @ztellman at a bar during StrangeLoop 2014, and we are eternally grateful.
 
 Legal
 -----
-Copyright © 2014 Ramsey Nasser and Tims Gardner.
+Copyright © 2014 Tims Gardner and Ramsey Nasser
 
-Licensed under the [Eclipse License](https://www.eclipse.org/legal/epl-v10.html), the same as Clojure.
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
+
+```
+http://www.apache.org/licenses/LICENSE-2.0
+```
+
+Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
+
