@@ -543,7 +543,7 @@
       (transform-prepopulate-helper-mac trns spec :euler-angles       eulerAngles      Vector3)
       (transform-prepopulate-helper-mac trns spec :local-scale        localScale       Vector3))))
 
-;; all about the snappy fn names
+;; for now this does it like a merge. This might be a horrible idea.
 (defn- game-object-populate-case-default-fn [ctx]
   (mu/checked-keys [[targsym keysym valsym] ctx]
     `(do
@@ -551,11 +551,13 @@
          (if (same-or-subclass? UnityEngine.Component t#)
            (let [vspecs# ~valsym]
              (if (vector? vspecs#)
-               (if (= UnityEngine.Transform t#)
-                 (doseq [cspec# vspecs#]
-                   (populate! (.GetComponent ~targsym t#) cspec# t#))
-                 (doseq [cspec# vspecs#]
-                   (populate! (.AddComponent ~targsym t#) cspec# t#)))
+               (let [^Array preobjs# (.GetComponents ~targsym t#) ;; I hate this manyness thing
+                     pocnt#  (count preobjs#)]
+                 (dotimes [i# (count vspecs#)]
+                   (-> (if (< i# pocnt#)
+                         (aget preobjs# i#)
+                         (.AddComponent ~targsym t#))
+                     (populate! (nth vspecs# i#) t#))))
                (throw
                  (Exception.
                    (str
