@@ -1154,7 +1154,7 @@ Aspires to be idempotent with hydrate, ie,
 ;; structural manipulation functions
 ;; ============================================================
 
-(defn- mv-default-clause [[k & ks]]
+(defn- mv-default-clause [k]
   (cond
     (= 0 k) []
     (number? k) (throw
@@ -1172,21 +1172,21 @@ Aspires to be idempotent with hydrate, ie,
       (if num-q
         (assoc v k
           (update-in-mv
-            (get v k (mv-default-clause ks))
+            (get v k (mv-default-clause (first ks)))
             ks f))
         (mapv #(update-in-mv % path f) v))
       (if num-q
-        (assoc v k (f (get v k (mv-default-clause ks))))
+        (assoc v k (f (get v k (mv-default-clause (first ks)))))
         (mapv #(update-in-mv % path f) v)))))
 
 (defn- update-in-mv-map [m [k & ks] f]
   (if ks
     (assoc m k
       (update-in-mv
-        (get m k (mv-default-clause ks))
+        (get m k (mv-default-clause (first ks)))
         ks f))
     (assoc m k
-      (f (get m k (mv-default-clause ks))))))
+      (f (get m k (mv-default-clause (first ks)))))))
 
 (defn update-in-mv
   "Experimental. Similar to clojure.core/update-in, but interprets
@@ -1291,19 +1291,26 @@ out: {:box-collider [{:extents [0 0 0],
     (reduce merge2 maps)))
 
 ;; select-paths-mv ----------------------
+(declare select-paths-mv)
 
-(defn select-paths-mv
-  "Experimental. Takes slices through map-and-vector-style
-  structure m."
-  ([m path]
-     (assoc-in-mv (empty m) path (get-in m path)))
-  ([m path & paths]
-     (loop [bldg (select-paths-mv m path),
-            paths paths]
-       (if-let [[p & rps] (seq paths)]
-         (recur (assoc-in-mv bldg p (get-in m p)), rps)
-         bldg))))
+(defn- select-paths-mv-vec [v [k & ks :as path]]
+  (if (number? k)
+    (when (contains? v k)
+      [(select-paths-mv (nth v k) ks)])
+    (mapv #(select-paths-mv % path) v)))
 
+(defn- select-paths-mv-map [m [k & ks]]
+  (when-let [e (find m k)]
+    {k (select-paths-mv (val e) ks)}))
+
+;; this is so weird, what am I even doing. Guess it makes sense in a
+;; sort of screwy way but feels super dirty.
+(defn select-paths-mv [m path]
+  (cond
+    (empty? path) m
+    (vector? m)   (select-paths-mv-vec m path)
+    (map? m)      (select-paths-mv-map m path)
+    :else         m)) 
 
 ;; ============================================================
 ;; tests
@@ -1368,25 +1375,46 @@ out: {:box-collider [{:extents [0 0 0],
 ;; structural manipulation functions ----------------------------------
 
 (test/deftest- test-structural
-  (test/is (= {:a [{:c :E, :b :B} {:c :C}]}
-             (let [m1 {:a [{:b :B} {:c :C}]}
-                   m2 {:a [{:c :E}]}]
-               (deep-merge-mv m1 m2))))
-  (test/is (= {:a [{:b :B} {:c :C}]}
-             (let [m1 {:a [{:b :B} {:c :C}]}
-                   m2 {:a []}]
-               (deep-merge-mv m1 m2))))
-  (test/is
-    (let [m1 {:a [{:b :B} {:c :C}]}
-          m2 {:a []}]
-      (=
-        (deep-merge-mv m1 m2)
-        (deep-merge-mv m2 m1))))
-  (test/is (= (deep-merge-mv
-                {:a {:b :B}}
-                {})
-             {:a {:b :B}}))
-  (test/is (= (deep-merge-mv
-                {}
-                {:a {:b :B}})
-             {:a {:b :B}})))
+  (test/testing "deep-merge-mv"
+    (test/is (= {:a [{:c :E, :b :B} {:c :C}]}
+               (let [m1 {:a [{:b :B} {:c :C}]}
+                     m2 {:a [{:c :E}]}]
+                 (deep-merge-mv m1 m2))))
+    (test/is (= {:a [{:b :B} {:c :C}]}
+               (let [m1 {:a [{:b :B} {:c :C}]}
+                     m2 {:a []}]
+                 (deep-merge-mv m1 m2))))
+    (test/is
+      (let [m1 {:a [{:b :B} {:c :C}]}
+            m2 {:a []}]
+        (=
+          (deep-merge-mv m1 m2)
+          (deep-merge-mv m2 m1))))
+    (test/is (= (deep-merge-mv
+                  {:a {:b :B}}
+                  {})
+               {:a {:b :B}}))
+    (test/is (= (deep-merge-mv
+                  {}
+                  {:a {:b :B}})
+               {:a {:b :B}})))
+  (test/testing "select-paths-mv"
+    (let [spec {:box-collider [{:center  [1 2 3]
+                                :extents [4 5 6]}
+                               {:center  [1 2 3]
+                                :extents [4 5 6]}]}]
+      (test/is
+        (= (select-paths-mv spec [:box-collider :center])
+          {:box-collider [{:center [1 2 3]}
+                          {:center [1 2 3]}]}))
+      (test/is
+        (= (select-paths-mv spec [:box-collider 1 :center])
+          {:box-collider [{:center [1 2 3]}]}))
+      (test/is
+        (= (select-paths-mv spec [:box-collider :horse])
+          {:box-collider [nil nil]}))
+      (test/is
+        (= (select-paths-mv spec [:box-collider 0 :horse])
+          {:box-collider [nil]})))))
+
+;; merge stuff --------------------------------------------------------
