@@ -198,6 +198,12 @@
     (array-type?
       (ensure-type sym))))
 
+                        ;; (into-array ~element-type 
+                        ;;   (map          ; grumble
+                        ;;     (fn [element-spec#]
+                        ;;       (hydrate element-spec# ~element-type)) ; hmurk not sure about this
+                        ;;     ~valsym))
+
 ;; the general tack taken here might be misguided. Do we want to
 ;; support map-based array hydration?
 (defn- standard-array-set-clause [setable ctx]
@@ -207,15 +213,39 @@
           element-type (ensure-symbol   ; meh
                          (.GetElementType
                            (ensure-type setable-type)))
-          ressym           (with-meta (gensym "hydrate-result_")
-                             {:tag setable-type})]
-      `(let [~ressym (if (instance? ~setable-type ~valsym)
-                       ~valsym
-                       (into-array ~element-type 
-                         (map           ; grumble
-                           (fn [element-spec#]
-                             (hydrate element-spec# ~element-type)) ; hmurk not sure about this
-                           ~valsym)))]
+          ressym       (with-meta (gensym "result_")
+                         {:tag setable-type})]
+      `(let [~ressym (cond
+                       (or (nil? ~valsym)
+                         (instance? ~setable-type ~valsym))
+                       ~valsym          ; arrays blow each other away
+
+                       (vector? ~valsym)
+                       (let [preval#  (. ~targsym ~name)
+                             prvcnt#  (count preval#)
+                             vcnt#    (count ~valsym)
+                             mx#      (max prvcnt# vcnt#)
+                             ar#      (make-array ~element-type mx#)]
+                         (dotimes [i# mx#]
+                           (if (< i# vcnt#)
+                             (let [spc# (nth ~valsym i#)
+                                   v# (if (< i# prvcnt#)
+                                        (let [specval# (nth ~valsym i#)]
+                                          (if (instance? ~element-type specval#)
+                                            specval#
+                                            (populate!
+                                              (aget preval# i#)
+                                              specval#
+                                              ~element-type)))
+                                        (hydrate (nth ~valsym i#) ~element-type))]
+                               (aset ar# i# v#))
+                             (aset ar# i# preval#)))
+                         ar#)
+
+                       :else (throw
+                               (Exception.
+                                 (str "Expects array or vector, instead got "
+                                   ~setable-type))))]
          (set! (. ~targsym ~name) ~ressym)))))
 
 ;; could break things up into different kinds of context (setable,
@@ -236,13 +266,15 @@
       (standard-array-set-clause setable ctx)
       (let [name         (:name setable)
             setable-type (type-for-setable setable)
-            ressym       (with-meta (gensym "hydrate-result_")
+            ressym       (with-meta (gensym "result_")
                            {:tag setable-type})]
-        `(let [~ressym (if (or (nil? ~valsym)
-                             (instance? ~setable-type ~valsym))
-                         ~valsym
-                         (hydrate ~valsym ~setable-type))]
-           (when-not (identical? (. ~targsym ~name) ~ressym) ; filters out large class of stupid errors
+        `(let [prevsym# (. ~targsym ~name)
+               ~ressym (cond
+                         (instance? ~setable-type ~valsym) ~valsym
+                         (nil? ~valsym) ~valsym
+                         (nil? prevsym#) (hydrate ~valsym ~setable-type)
+                         :else (populate! prevsym# ~valsym ~setable-type))]
+           (when-not (identical? prevsym# ~ressym)
              (set! (. ~targsym ~name) ~ressym)))))))
 
 (defn- populater-key-clauses
@@ -1150,7 +1182,9 @@ Aspires to be idempotent with hydrate, ie,
          (if-let [cfn (get (@hydration-database :populaters) t)]
            (cfn inst spec)
            (throw (Exception. (str "No populater found for type " type))))
-         (throw (Exception. "spec neither vector nor map"))))))
+         (throw (Exception.
+                  (str "spec neither vector nor map, instead type is "
+                    (type spec))))))))
 
 ;; ============================================================
 ;; structural manipulation functions
