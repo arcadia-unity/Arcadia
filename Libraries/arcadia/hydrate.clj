@@ -1242,16 +1242,6 @@ out: {:box-collider [{:center [0.5 0.5 0.5]}]}
 
 ;; deep-merge ---------------------------
 
-;; remove when reduce-kv patch lands
-(defn- stopgap-reduce-kv [f init coll]
-  (if (vector? coll)
-    (let [c (count coll)]
-      (loop [bldg init, i (int 0)]
-        (if (< i c)
-          (recur (f bldg i (nth coll i)), (inc i))
-          bldg)))
-    (reduce-kv f init coll)))
-
 ;; another, wackier version of this would map across vectors when the
 ;; corresponding spec val isn't a vector, but that would sacrifice
 ;; associativity, which seems important for merge
@@ -1289,7 +1279,7 @@ out: {:box-collider [{:extents [0 0 0],
                               :else v1))) 
                         (assoc m k v1)))
         merge2 (fn merge2 [m1 m2]
-                 (stopgap-reduce-kv merge-entry (or m1 (empty m2)) m2))]
+                 (reduce-kv merge-entry (or m1 (empty m2)) m2))]
     (reduce merge2 maps)))
 
 ;; select-paths-mv ----------------------
