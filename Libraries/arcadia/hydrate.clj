@@ -1297,12 +1297,17 @@ out: {:box-collider [{:extents [0 0 0],
 
 ;; this is so weird, what am I even doing. Guess it makes sense in a
 ;; sort of screwy way but feels super dirty.
-(defn select-paths-mv [m path]
-  (cond
-    (empty? path) m
-    (vector? m)   (select-paths-mv-vec m path)
-    (map? m)      (select-paths-mv-map m path)
-    :else         m)) 
+(defn select-paths-mv
+  ([m path]
+     (cond
+       (empty? path) m
+       (vector? m)   (select-paths-mv-vec m path)
+       (map? m)      (select-paths-mv-map m path)
+       :else         m))
+  ([m p & paths] ;; use transducers or whatever
+     (->> (list* p paths)
+       (map #(select-paths-mv m %))
+       (reduce deep-merge-mv)))) 
 
 ;; ============================================================
 ;; tests
