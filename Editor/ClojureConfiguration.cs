@@ -5,7 +5,7 @@ public class ClojureConfiguration : EditorWindow {
   [SerializeField]
   public static bool AutoCompile = true;
 
-  [MenuItem ("Clojure/Configuration...")]
+  [MenuItem ("Arcadia/Configuration...")]
   static void Init () {
     ClojureConfiguration window = (ClojureConfiguration)EditorWindow.GetWindow (typeof (ClojureConfiguration));
   }
