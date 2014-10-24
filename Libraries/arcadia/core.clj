@@ -237,11 +237,13 @@
 ;; instance, but the cast would remove interface information. Use with
 ;; this in mind.
 (defmacro ^:private condcast-> [expr xsym & clauses]
-  (let [[clauses default] (if (even? (count clauses))
+  (let [exprsym (gensym "exprsym_")
+        [clauses default] (if (even? (count clauses))
                             [clauses nil] 
                             [(butlast clauses)
-                             [:else (last clauses)]])
-        exprsym (gensym "exprsym_")
+                             [:else
+                              `(let [~xsym ~exprsym]
+                                 ~(last clauses))]])
         cs (->> clauses
              (partition 2)
              (mapcat
