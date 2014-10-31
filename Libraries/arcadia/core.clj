@@ -236,18 +236,20 @@
 ;; annoying in the case that you want to branch on a supertype, for
 ;; instance, but the cast would remove interface information. Use with
 ;; this in mind.
-(defmacro ^:private condcast [expr xsym & clauses]
-  (let [[clauses default] (if (even? (count clauses))
+(defmacro ^:private condcast-> [expr xsym & clauses]
+  (let [exprsym (gensym "exprsym_")
+        [clauses default] (if (even? (count clauses))
                             [clauses nil] 
                             [(butlast clauses)
-                             [:else (last clauses)]])
-        exprsym (gensym "exprsym_")
+                             [:else
+                              `(let [~xsym ~exprsym]
+                                 ~(last clauses))]])
         cs (->> clauses
              (partition 2)
              (mapcat
                (fn [[t then]]
                  `[(instance? ~t ~exprsym)
-                   (let [~(with-meta xsym {:tag (resolve t)}) ~exprsym]
+                   (let [~(with-meta xsym {:tag t}) ~exprsym]
                      ~then)])))]
     `(let [~exprsym ~expr]
        ~(cons 'cond
@@ -370,7 +372,7 @@
   
   * name - the name of the objects to find, can be A String or regex"
   [name]
-  (condcast name name
+  (condcast-> name name
     System.String
     (for [^GameObject obj (objects-typed GameObject)
           :when (= (.name obj) name)]
