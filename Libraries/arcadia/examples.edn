@@ -1,0 +1,24 @@
+{defcomponent
+ [(defcomponent ExampleClass []
+  (OnMouseEnter [this]
+    (set! (.. this renderer material color)
+          Color/red)))
+  (defcomponent ExampleClass []
+  (Update [this]
+    (.. this transform (Translate 0 0 (* Time/deltaTime 1)))))
+  (defcomponent ExampleClass []
+  (Update [this]
+    (.. this transform (Translate 0 0 (* Time/deltaTime 1)))))
+  (defcomponent ExampleClass []
+  (OnCollisionEnter2D [this coll]
+    (if (= "Enemy" (.. coll gameObject tag))
+      (.. coll gameObject (SendMessage "ApplyDamage" 10)))))
+  (defcomponent ExampleClass [^float rechargeRate
+                            ^float batteryLevel]
+  (OnCollisionStay2D [this coll]
+    (if (= "RechargePoint" (.. coll gameObject tag))
+      (set! batteryLevel (float (min 100 (+ batteryLevel (* rechargeRate Time/deltaTime))))))))]
+ object-typed
+ [(object-typed UnityEngine.BoxCollider)
+  (object-typed nil)
+  ]}

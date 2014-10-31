@@ -1,7 +1,7 @@
 (ns arcadia.repl
   (:refer-clojure :exclude [with-bindings])
   (:require [clojure.main :as main]
-            [unity.config :as config])
+            [arcadia.config :as config])
   (:import
     [UnityEngine Debug]
     [System.IO EndOfStreamException]

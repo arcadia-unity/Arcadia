@@ -1,4 +1,4 @@
-(ns unity.config
+(ns arcadia.config
   (:require [clojure.edn :as edn]
             [clojure.pprint :as pprint]
             [clojure.data :as data])
@@ -23,6 +23,9 @@
 (defn update-from-file! [f]
   (Debug/Log (str "update-from-file " f))
   (update! (edn/read-string (File/ReadAllText f))))
+
+(defn update-from-default-location! []
+  (update-from-file! "Assets/Arcadia/configure.edn"))
 
 (declare widgets)
 
