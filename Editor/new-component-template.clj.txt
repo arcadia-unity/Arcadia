@@ -1,0 +1,10 @@
+(ns #SCRIPTNAME#
+  (:use arcadia.core)
+  (:import [UnityEngine Debug]))
+
+(defcomponent #SCRIPTNAME# []
+  ; use this for initialization
+  (Start [this])
+  
+  ; update is called once per frame
+  (Update [this]))

@@ -1,6 +1,0 @@
-(ns #SCRIPTNAME#
-  (:use unity.core)
-  (:import [UnityEngine Debug]))
-
-(defn foo []
-  )

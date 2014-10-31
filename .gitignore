@@ -1,10 +1,9 @@
 # =============== #
 #  Clojure Unity  #
 # =============== #
-*.dll
 *.mdb
-**/Clojure/Compiled/**
-!**/Clojure/Compiled/unity.hydrate.clj*
+**/Compiled/*.exe*
+**/Compiled/*.dll*
 
 # =============== #
 # Unity generated #
