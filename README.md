@@ -10,7 +10,7 @@ Usage
 -----
 The contents of the repository should be copied to a folder named `Arcadia` in any Unity project's Assets folder to enable Clojure. In the future, this will be available from the Asset Store. Once copied, you have access to the REPL and the Clojure compiler.
 
-There's a screencast on getting set up [here](http://youtu.be/X4xCVsLhaZ0).
+There's a screencast on getting set up [here](https://www.youtube.com/watch?v=KLq9b9lDmkc).
 
 #### Download Zip File
 
