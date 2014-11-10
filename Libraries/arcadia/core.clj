@@ -50,11 +50,6 @@
        :implements ~interfaces 
        ~@methods)))
 
-(defn- constant-guard [frm name]
-  `(let [v# (def ~name)]
-     (when-not (.hasRoot v#)
-       ~frm)))
-
 ;; ported from deftype. should remove opts+specs, bizarre as a key. 
 (defn- component-defform [{:keys [name fields constant opts+specs]}]
   (validate-fields fields name)
@@ -64,20 +59,23 @@
         classname (symbol (str ns-part "." gname))
         hinted-fields fields
         fields (vec (map #(with-meta % nil) fields))
-        [field-args over] (split-at 20 fields)]
-    ((if constant constant-guard identity)
-     `(do
-        ~(emit-defclass*
-           name
-           gname
-           'UnityEngine.MonoBehaviour
-           'UnityEngine
-           (vec hinted-fields)
-           (vec interfaces)
-           methods)
-        (import ~classname)
-        ~(build-positional-factory gname classname fields)
-        ~classname))))
+        [field-args over] (split-at 20 fields)
+        frm `(do
+               ~(emit-defclass*
+                  name
+                  gname
+                  'UnityEngine.MonoBehaviour
+                  'UnityEngine
+                  (vec hinted-fields)
+                  (vec interfaces)
+                  methods)
+               (import ~classname)
+               ~(build-positional-factory gname classname fields)
+               ~classname)]
+    (if constant
+      `(when-not (type? (resolve (quote ~name)))
+         ~frm)
+      frm)))
 
 (defn- normalize-method-implementations [mimpls]
   (for [[[protocol] impls] (partition 2
