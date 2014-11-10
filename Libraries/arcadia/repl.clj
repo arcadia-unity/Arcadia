@@ -13,7 +13,7 @@
 
 (defn env-map []
   {:*ns* *ns*
-   :*warn-on-reflection* *warn-on-reflection*
+   :*warn-on-reflection* (-> @config/config :compiler :warn-on-reflection)
    :*math-context* *math-context*
    :*print-meta* *print-meta*
    :*print-length* *print-length*
@@ -21,7 +21,7 @@
    :*data-readers* *data-readers*
    :*default-data-reader-fn* *default-data-reader-fn*
    :*command-line-args* *command-line-args*
-   :*unchecked-math* *unchecked-math*
+   :*unchecked-math* (-> @config/config :compiler :unchecked-math)
    :*assert* *assert*})
 
 (defn update-repl-env [repl-env]
