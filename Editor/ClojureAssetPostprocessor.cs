@@ -13,4 +13,9 @@ class ClojureAssetPostprocessor : AssetPostprocessor {
         RT.load("arcadia/compiler");
         RT.var("arcadia.compiler", "process-assets").invoke(importedAssets);        
     }
+    
+      [MenuItem ("Arcadia/Reload Assets")]
+      public static void ReloadAssets () {
+        AssetDatabase.Refresh();
+      }
 }

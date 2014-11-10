@@ -21,29 +21,6 @@ public class ClojureConfiguration : Editor {
   static string configFilePath = "Assets/Arcadia/configure.edn";
   
   static ClojureConfigurationObject _clojureConfigurationObject = new ClojureConfigurationObject();
-  
-//  public static T GetValue<T>(Keyword key) {
-//    UpdateFromFile();
-//    return (T)RT.var("arcadia.config", "value").invoke(key);
-//  }
-  //
-//  public static T GetValue<T>(params Keyword[] keys) {
-//    UpdateFromFile();
-//    return (T)RT.var("arcadia.config", "value-in").invoke(PersistentVector.create(keys));
-//  }
-  //
-//  public static T GetValue<T>(string key) {
-//    return GetValue<T>(Keyword.intern(null, key));
-//  }
-  //
-//  public static T GetValue<T>(params string[] keys) {
-//    return GetValue<T>((Keyword[])keys.Select(k => Keyword.intern(null, k)));
-//  }
-
-  // [MenuItem ("Clojure/Test...")]
-  // public static void Test () {
-    // GetValue<bool>("verbose");
-  // }
     
   [MenuItem ("Arcadia/Configuration...")]
   public static void Init () {
