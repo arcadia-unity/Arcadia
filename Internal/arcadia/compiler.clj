@@ -3,9 +3,14 @@
             clojure.string)
   (:import [System IO.Path Environment]
            [UnityEngine Debug]
-           [UnityEditor AssetDatabase ImportAssetOptions]))
+           [UnityEditor AssetDatabase ImportAssetOptions PlayerSettings ApiCompatibilityLevel]))
+
+(defn initialize-unity []
+  (set! PlayerSettings/apiCompatibilityLevel ApiCompatibilityLevel/NET_2_0)
+  (set! PlayerSettings/runInBackground true))
 
 (defn setup-load-paths []
+  (initialize-unity)
   (arcadia.config/update-from-default-location!)
   (let [config @config]
     (->> (cons (get-in config [:compiler :assemblies])
