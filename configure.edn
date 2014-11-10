@@ -1,8 +1,7 @@
 {:compiler
  {:load-path
   ["Assets/Arcadia/Scripts"
-   "Assets/Arcadia/Libraries"
-   "Assets/Arcadia/Internal"],
+   "Assets/Arcadia/Libraries"],
   :assemblies "Assets/Arcadia/Compiled"
   :warn-on-reflection true
   :unchecked-math false},
