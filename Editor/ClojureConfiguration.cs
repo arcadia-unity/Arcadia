@@ -10,7 +10,6 @@ public class ClojureConfiguration : Editor {
       return;
       
     updatedFromFile = true;
-    ClojureAssetPostprocessor.SetupLoadPath();
     RT.load("arcadia/config");
     RT.var("arcadia.config", "update-from-file!").invoke(configFilePath);
   }

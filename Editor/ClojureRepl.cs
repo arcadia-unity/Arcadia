@@ -12,7 +12,6 @@ using System.Threading;
 public class ClojureRepl : EditorWindow {
   static ClojureRepl() {
     // TODO read from config
-    ClojureAssetPostprocessor.SetupLoadPath();
     ClojureRepl.StartREPL();
   }
 

@@ -19,16 +19,6 @@
   (set! PlayerSettings/apiCompatibilityLevel ApiCompatibilityLevel/NET_2_0)
   (set! PlayerSettings/runInBackground true))
 
-(defn setup-load-paths []
-  (initialize-unity)
-  (arcadia.config/update-from-default-location!)
-  (let [config @config]
-    (->> (cons "Assets"
-               (get-in config [:compiler :load-path]))
-         (map #(Path/Combine Environment/CurrentDirectory %))
-         (clojure.string/join ":")
-         (Environment/SetEnvironmentVariable "CLOJURE_LOAD_PATH"))))
-
 (defn rests
   "Returns a sequence of all rests of the input sequence
   
@@ -52,41 +42,35 @@
         (clojure.string/replace #"\.clj$" "")
         (clojure.string/replace #"\/" ".")))
 
-(defn load-path-relative
+(defn relative-to-load-path
   "Sequence of subpaths relative to the load path, shortest first"
-  [p]
-  (->> (clojure.string/split p #"\/")
+  [path]
+  (->> (clojure.string/split path #"\/")
        rests
        reverse
        (map #(clojure.string/join "/" %))
        (filter #(clojure.lang.RT/FindFile %))))
 
-(-> (load-path-relative "Assets/Arcadia/arcadia/core.clj")
-    first
-    path->ns)
-
 (defn process-assets [imported]
-  (let [config @config
-        {:keys [assemblies warn-on-reflection unchecked-math]}
-        (config :compiler)
-        assemblies (or assemblies
-                       (assemblies-path))]
-    (doseq [asset imported
-            :when (re-find #"\.clj$" asset)]
-      
-      (if-let [root (->> (load-path) (filter #(.Contains asset %)) first)]
-        (let [namespace (-> asset 
-                            (clojure.string/replace root "")
-                            (clojure.string/replace #".clj$" "")
-                            (clojure.string/replace #"^\/" "")
-                            (clojure.string/replace "/" ".")
-                            (clojure.string/replace "_" "-"))]
-          (try
-            (binding [*compile-path* assemblies
-                      *warn-on-reflection* warn-on-reflection
-                      *unchecked-math* unchecked-math
-                      *compiler-options* nil]
-              (compile (symbol namespace))
-              (AssetDatabase/Refresh ImportAssetOptions/ForceUpdate))
-            (catch Exception e
-              (Debug/LogException e))))))))
+  (doseq [asset imported
+          :when (re-find #"\.clj$" asset)]
+    (if-let [namespace (-> (relative-to-load-path asset)
+                           first
+                           path->ns)]
+      (let [config @config
+            {:keys [assemblies
+                    warn-on-reflection
+                    unchecked-math
+                    compiler-options]}
+            (config :compiler)
+            assemblies (or assemblies
+                           (assemblies-path))]
+        (try
+          (binding [*compile-path* assemblies
+                    *warn-on-reflection* warn-on-reflection
+                    *unchecked-math* unchecked-math
+                    *compiler-options* compiler-options]
+            (compile (symbol namespace))
+            (AssetDatabase/Refresh ImportAssetOptions/ForceUpdate))
+          (catch Exception e
+            (Debug/LogException e)))))))
