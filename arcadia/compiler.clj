@@ -15,6 +15,9 @@
                             (enum-or BindingFlags/Static BindingFlags/NonPublic))
                 clojure.lang.RT nil)))
 
+(defn env-load-path []
+  (System.Environment/GetEnvironmentVariable "CLOJURE_LOAD_PATH"))
+
 (defn initialize-unity []
   (set! PlayerSettings/apiCompatibilityLevel ApiCompatibilityLevel/NET_2_0)
   (set! PlayerSettings/runInBackground true))
@@ -54,17 +57,23 @@
 (defn process-assets [imported]
   (doseq [asset imported
           :when (re-find #"\.clj$" asset)]
-    (if-let [namespace (-> (relative-to-load-path asset)
-                           first
-                           path->ns)]
-      (let [config @config
-            {:keys [assemblies
-                    warn-on-reflection
-                    unchecked-math
-                    compiler-options]}
-            (config :compiler)
-            assemblies (or assemblies
-                           (assemblies-path))]
+    (let [config @config
+          {:keys [assemblies
+                  load-path
+                  warn-on-reflection
+                  unchecked-math
+                  compiler-options]}
+          (config :compiler)
+          assemblies (or assemblies
+                         (assemblies-path))]
+      (System.Environment/SetEnvironmentVariable
+        "CLOJURE_LOAD_PATH"
+        (clojure.string/join ":" (if load-path
+                                   (concat load-path ["Assets"])
+                                   "Assets")))
+      (if-let [namespace (-> (relative-to-load-path asset)
+                             first
+                             path->ns)]
         (try
           (binding [*compile-path* assemblies
                     *warn-on-reflection* warn-on-reflection
