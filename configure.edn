@@ -1,7 +1,6 @@
-{:compiler
- :load-path ["Assets"]
- {:warn-on-reflection true
-  :unchecked-math false},
+{:compiler {:load-path ["Assets"]
+            :warn-on-reflection true
+            :unchecked-math false},
  :injections (do
                (use 'arcadia.core)
                (use 'clojure.repl)),
