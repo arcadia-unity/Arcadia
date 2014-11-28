@@ -411,7 +411,7 @@ java -cp clojure.jar clojure.main -i init.clj script.clj args...")
 
   main options:
     -r, --repl          Run a repl
-    path                Run a script from from a file or resource
+    path                Run a script from a file or resource
 	-m, --main ns-name  Run the -main function from a given namespace
     -                   Run a script from standard input
     -h, -?, --help      Print this help message and exit

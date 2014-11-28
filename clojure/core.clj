@@ -1607,7 +1607,7 @@
 
 (defmacro defmulti
   "Creates a new multimethod with the associated dispatch function. 
-  The docstring and attribute-map are optional.  
+  The docstring and attr-map are optional.  
   
   Options are key-value pairs and may be one of:
 
@@ -2231,10 +2231,10 @@
   the value that was swapped in."
   {:added "1.0"
    :static true}
-  ([^clojure.lang.Atom atom f] (.swap atom f))
-  ([^clojure.lang.Atom atom f x] (.swap atom f x))
-  ([^clojure.lang.Atom atom f x y] (.swap atom f x y))
-  ([^clojure.lang.Atom atom f x y & args] (.swap atom f x y args)))
+  ([^clojure.lang.IAtom atom f] (.swap atom f))
+  ([^clojure.lang.IAtom atom f x] (.swap atom f x))
+  ([^clojure.lang.IAtom atom f x y] (.swap atom f x y))
+  ([^clojure.lang.IAtom atom f x y & args] (.swap atom f x y args)))
   
 (defn compare-and-set!
   "Atomically sets the value of atom to newval if and only if the
@@ -2242,14 +2242,14 @@
   set happened, else false"
   {:added "1.0"
    :static true}
-  [^clojure.lang.Atom atom oldval newval] (.compareAndSet atom oldval newval))
+  [^clojure.lang.IAtom atom oldval newval] (.compareAndSet atom oldval newval))
 
 (defn reset!
   "Sets the value of atom to newval without regard for the
   current value. Returns newval."
   {:added "1.0"
    :static true}
-  [^clojure.lang.Atom atom newval] (.reset atom newval))
+  [^clojure.lang.IAtom atom newval] (.reset atom newval))
 
 (defn set-validator
   "Sets the validator-fn for a var/ref/agent/atom. validator-fn must be nil or a
@@ -2593,14 +2593,14 @@
   {:added "1.0"
    :static true}
   ([f]
-    (fn [f1]
+    (fn [rf]
       (fn
-        ([] (f1))
-        ([result] (f1 result))
+        ([] (rf))
+        ([result] (rf result))
         ([result input]
-           (f1 result (f input)))
+           (rf result (f input)))
         ([result input & inputs]
-           (f1 result (apply f input inputs))))))
+           (rf result (apply f input inputs))))))
   ([f coll]
    (lazy-seq
     (when-let [s (seq coll)]
@@ -2656,13 +2656,13 @@
   {:added "1.0"
    :static true}
   ([pred]
-    (fn [f1]
+    (fn [rf]
       (fn
-        ([] (f1))
-        ([result] (f1 result))
+        ([] (rf))
+        ([result] (rf result))
         ([result input]
            (if (pred input)
-             (f1 result input)
+             (rf result input)
              result)))))
   ([pred coll]
    (lazy-seq
@@ -2704,6 +2704,18 @@
    :added "1.5"}
   ([x] (clojure.lang.RT/isReduced x)))
 
+(defn ensure-reduced
+  "If x is already reduced?, returns it, else returns (reduced x)"
+  {:added "1.7"}
+  [x]
+  (if (reduced? x) x (reduced x)))
+
+(defn unreduced
+  "If x is reduced?, returns (deref x), else returns x"
+  {:added "1.7"}
+  [x]
+  (if (reduced? x) (deref x) x))
+
 (defn take
   "Returns a lazy sequence of the first n items in coll, or all items if
   there are fewer than n.  Returns a stateful transducer when
@@ -2711,19 +2723,19 @@
   {:added "1.0"
    :static true}
   ([n]
-     (fn [f1]
+     (fn [rf]
        (let [nv (volatile! n)]
          (fn
-           ([] (f1))
-           ([result] (f1 result))
+           ([] (rf))
+           ([result] (rf result))
            ([result input]
               (let [n @nv
                     nn (vswap! nv dec)
                     result (if (pos? n)
-                             (f1 result input)
+                             (rf result input)
                              result)]
                 (if (not (pos? nn))
-                  (reduced result)
+                  (ensure-reduced result)
                   result)))))))
   ([n coll]
      (lazy-seq
@@ -2738,13 +2750,13 @@
   {:added "1.0"
    :static true}
   ([pred]
-     (fn [f1]
+     (fn [rf]
        (fn
-         ([] (f1))
-         ([result] (f1 result))
+         ([] (rf))
+         ([result] (rf result))
          ([result input]
             (if (pred input)
-              (f1 result input)
+              (rf result input)
               (reduced result))))))
   ([pred coll]
      (lazy-seq
@@ -2758,17 +2770,17 @@
   {:added "1.0"
    :static true}
   ([n]
-     (fn [f1]
+     (fn [rf]
        (let [nv (volatile! n)]
          (fn
-           ([] (f1))
-           ([result] (f1 result))
+           ([] (rf))
+           ([result] (rf result))
            ([result input]
               (let [n @nv]
                 (vswap! nv dec)
                 (if (pos? n)
                   result
-                  (f1 result input))))))))
+                  (rf result input))))))))
   ([n coll]
      (let [step (fn [n coll]
                   (let [s (seq coll)]
@@ -2802,18 +2814,18 @@
   {:added "1.0"
    :static true}
   ([pred]
-     (fn [f1]
+     (fn [rf]
        (let [dv (volatile! true)]
          (fn
-           ([] (f1))
-           ([result] (f1 result))
+           ([] (rf))
+           ([result] (rf result))
            ([result input]
               (let [drop? @dv]
                 (if (and drop? (pred input))
                   result
                   (do
                     (vreset! dv nil)
-                    (f1 result input)))))))))
+                    (rf result input)))))))))
   ([pred coll]
      (let [step (fn [pred coll]
                   (let [s (seq coll)]
@@ -4098,15 +4110,15 @@
   {:added "1.0"
    :static true}
   ([n]
-     (fn [f1]
+     (fn [rf]
        (let [iv (volatile! -1)]
          (fn
-           ([] (f1))
-           ([result] (f1 result))
+           ([] (rf))
+           ([result] (rf result))
            ([result input]
               (let [i (vswap! iv inc)]
                 (if (zero? (rem i n))
-                  (f1 result input)
+                  (rf result input)
                   result)))))))
   ([n coll]
      (lazy-seq
@@ -6428,7 +6440,7 @@
 (load "genclass")
 (load "core_deftype")
 (load "core/protocols")
-(load "gvec")
+; (load "gvec") ;~)
 (load "instant")
 (load "uuid")
 
@@ -6515,8 +6527,8 @@
   ([xform f coll] (transduce xform f (f) coll))
   ([xform f init coll]
      (let [f (xform f)
-           ret (if (instance? clojure.lang.IReduce coll)
-                 (.reduce ^clojure.lang.IReduce coll f init)
+           ret (if (instance? clojure.lang.IReduceInit coll)
+                 (.reduce ^clojure.lang.IReduceInit coll f init)
                  (clojure.core.protocols/coll-reduce coll f init))]
        (f ret))))
 
@@ -6801,19 +6813,19 @@
   {:added "1.2"
    :static true}
   ([f]
-  (fn [f1]
+  (fn [rf]
     (let [a (System.Collections.ArrayList.)                                       ;;; java.util.ArrayList
           pv (volatile! ::none)]
       (fn
-        ([] (f1))
+        ([] (rf))
         ([result]
            (let [result (if (zero? (.Count a))                                    ;;; (.isEmpty a)
                           result
                           (let [v (vec (.ToArray a))]                             ;;; .toArray
                             ;;clear first!
                             (.Clear a)                                            ;;; .clear
-                            (f1 result v)))]
-             (f1 result)))
+                            (unreduced (rf result v))))]
+             (rf result)))
         ([result input]
            (let [pval @pv
                  val (f input)]
@@ -6825,7 +6837,7 @@
                  result)
                (let [v (vec (.ToArray a))]                                       ;;; .toArray
                  (.Clear a)                                                      ;;; .clear
-                 (let [ret (f1 result v)]
+                 (let [ret (rf result v)]
                    (when-not (reduced? ret)
                      (.Add a input))                                            ;;; .add
                    ret)))))))))
@@ -6881,24 +6893,24 @@
   {:added "1.2"
    :static true}
   ([^long n]
-   (fn [f1]
+   (fn [rf]
      (let [a (System.Collections.ArrayList. n)]                                           ;;; java.util.ArrayList.
        (fn
-         ([] (f1))
+         ([] (rf))
          ([result]
             (let [result (if (zero? (.Count a))                                           ;;; (.isEmpty a)
                            result
                            (let [v (vec (.ToArray a))]                                    ;;; .toArray
                              ;;clear first!
                              (.Clear a)                                                   ;;; .clear
-                             (f1 result v)))]
-              (f1 result)))
+                             (unreduced (rf result v))))]
+              (rf result)))
          ([result input]
             (.Add a input)                                                                ;;; .add
             (if (= n (.Count a))                                                          ;;; .size
               (let [v (vec (.ToArray a))]                                                 ;;; .toArray
                 (.Clear a)                                                                ;;; .clear
-                (f1 result v))
+                (rf result v))
               result))))))
   ([n coll]
      (partition-all n n coll))
@@ -6945,15 +6957,15 @@
   {:added "1.2"
    :static true}
   ([f]
-   (fn [f1]
+   (fn [rf]
      (fn
-       ([] (f1))
-       ([result] (f1 result))
+       ([] (rf))
+       ([result] (rf result))
        ([result input]
           (let [v (f input)]
             (if (nil? v)
               result
-              (f1 result v)))))))
+              (rf result v)))))))
   ([f coll]
    (lazy-seq
     (when-let [s (seq coll)]
@@ -6979,17 +6991,17 @@
   {:added "1.2"
    :static true}
   ([f]
-   (fn [f1]
+   (fn [rf]
      (let [iv (volatile! -1)]
        (fn
-         ([] (f1))
-         ([result] (f1 result))
+         ([] (rf))
+         ([result] (rf result))
          ([result input]
             (let [i (vswap! iv inc)
                   v (f i input)]
               (if (nil? v)
                 result
-                (f1 result v))))))))
+                (rf result v))))))))
   ([f coll]
      (letfn [(keepi [idx coll]
                (lazy-seq
@@ -7212,8 +7224,8 @@
        ~g)))
 
 (defn ^:private preserving-reduced
-  [f1]
-  #(let [ret (f1 %1 %2)]
+  [rf]
+  #(let [ret (rf %1 %2)]
      (if (reduced? ret)
        (reduced ret)
        ret)))
@@ -7222,30 +7234,30 @@
   "A transducer which concatenates the contents of each input, which must be a
   collection, into the reduction."
   {:added "1.7"}
-  [f1]
-  (let [rf1 (preserving-reduced f1)]  
+  [rf]
+  (let [rrf (preserving-reduced rf)]  
     (fn
-      ([] (f1))
-      ([result] (f1 result))
+      ([] (rf))
+      ([result] (rf result))
       ([result input]
-         (reduce rf1 result input)))))
+         (reduce rrf result input)))))
 
 (defn dedupe
   "Returns a lazy sequence removing consecutive duplicates in coll.
   Returns a transducer when no collection is provided."
   {:added "1.7"}
   ([]
-   (fn [f1]
+   (fn [rf]
      (let [pv (volatile! ::none)]
        (fn
-         ([] (f1))
-         ([result] (f1 result))
+         ([] (rf))
+         ([result] (rf result))
          ([result input]
             (let [prior @pv]
-+              (vreset! pv input)
+              (vreset! pv input)
               (if (= prior input)
                 result
-                (f1 result input))))))))
+                (rf result input))))))))
   ([coll] (sequence (dedupe) coll)))
 
 (defn random-sample
@@ -7257,27 +7269,27 @@
   ([prob coll]
      (filter (fn [_] (< (rand) prob)) coll)))
 
-(deftype Iteration [xform coll]
+(deftype Eduction [xform coll]
    System.Collections.IEnumerable                                                                    ;;; Iterable
    (GetEnumerator [_] (.GetEnumerator ^System.Collections.ICollection (sequence xform coll)))        ;;; iterator  .iterator ^java.util.Collection
 
    clojure.lang.Seqable
    (seq [_] (seq (sequence xform coll)))
 
-   clojure.lang.IReduce
+   clojure.lang.IReduceInit
    (reduce [_ f init] (transduce xform f init coll))
 
    clojure.lang.Sequential)
 
-(defn iteration
-  "Returns an iterable/seqable/reducible sequence of applications of
+(defn eduction
+  "Returns a reducible/iterable/seqable sequence of application of
   the transducer to the items in coll. Note that these applications
-  will be performed every time iterator/seq/reduce is called."
+  will be performed every time reduce/iterator/seq is called."
   {:added "1.7"}
   [xform coll]
-  (Iteration. xform coll))
+  (Eduction. xform coll))
 
-(defmethod print-method Iteration [c, ^System.IO.TextWriter w]                          ;;; ^Writer
+(defmethod print-method Eduction [c, ^System.IO.TextWriter w]                          ;;; ^Writer
   (if *print-readably*
     (do
       (print-sequential "(" pr-on " " ")" c w))

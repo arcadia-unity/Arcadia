@@ -403,6 +403,7 @@
 ;;;                           {} (seq pmap)))]
 ;;;    (proxy [clojure.lang.APersistentMap]
 ;;;           []
+;;;      (iterator [] (.iterator ^Iterable pmap))
 ;;;      (containsKey [k] (contains? pmap k))
 ;;;      (entryAt [k] (when (contains? pmap k) (new clojure.lang.MapEntry k (v k))))
 ;;;      (valAt ([k] (when (contains? pmap k) (v k)))

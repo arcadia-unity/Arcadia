@@ -114,7 +114,7 @@
   "Attempts to coerce its argument into an open System.IO.Stream
    in input mode.
 
-   Default implementations are defined for tStream, FileInfo, Uri,
+   Default implementations are defined for Stream, FileInfo, Uri,
    Socket, byte array, char array, and String arguments.
 
    If the argument is a String, it tries to resolve it first as a URI, then

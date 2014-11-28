@@ -188,7 +188,7 @@
                 `(getLookupThunk [this# k#]
                    (let [~'gclass (class this#)]              
                      (case k#
-                           ~@(let [hinted-target 'gtarget]    ;;;  Major loss of type hint here: [hinted-target (with-meta 'gtarget {:tag tagname})] 
+                           ~@(let [hinted-target (with-meta 'gtarget {:tag tagname})]
                                (mapcat 
                                 (fn [fld]
                                   [(keyword fld) 
@@ -204,12 +204,12 @@
              (conj m 
                    `(count [this#] (+ ~(count base-fields) (count ~'__extmap)))
                    `(empty [this#] (throw (InvalidOperationException. (str "Can't create empty: " ~(str classname)))))   ;;; UnsupportedOperationException
-                   `(^ clojure.lang.IPersistentMap cons [this# e#] ((var imap-cons) this# e#))                          ;;; type hint added
+                   `(^clojure.lang.IPersistentMap cons [this# e#] ((var imap-cons) this# e#))                          ;;; type hint added
                    `(equiv [this# ~gs]
                         (boolean 
                          (or (identical? this# ~gs)
                              (when (identical? (class this#) (class ~gs))
-                               (let [~gs ~gs ]     ;;; ~(with-meta gs {:tag tagname})]    ----------------major loss of type hint here.  TODO: Figure out what the problem is
+                               (let [~gs ~(with-meta gs {:tag tagname}) ]
                                  (and  ~@(map (fn [fld] `(= ~fld (. ~gs ~(symbol (str "-" fld))))) base-fields)
                                        (= ~'__extmap (. ~gs ~'__extmap))))))))
                    `(containsKey [this# k#] (not (identical? this# (.valAt this# k# this#))))
@@ -219,15 +219,15 @@
                    `(seq [this#] (seq (concat [~@(map #(list `new `clojure.lang.MapEntry (keyword %) %) base-fields)] 
                                           ~'__extmap)))
 					`(|System.Collections.Generic.IEnumerable`1[clojure.lang.IMapEntry]|.GetEnumerator [this#]  (clojure.lang.IMapEntrySeqEnumerator. this#))
-                   `(^ clojure.lang.IPersistentMap assoc [this# k# ~gs]                        ;;; type hint added
+                   `(^clojure.lang.IPersistentMap assoc [this# k# ~gs]                        ;;; type hint added
                      (condp identical? k#
                        ~@(mapcat (fn [fld]
                                    [(keyword fld) (list* `new tagname (replace {fld gs} fields))])
                                  base-fields)
                        (new ~tagname ~@(remove #{'__extmap} fields) (assoc ~'__extmap k# ~gs))))
-                   `(assocEx [this# k# v#]                                                                    ;;; ADDED
-                       (if (.containsKey k#)                                                                    ;;; ADDED
-                           (throw (Exception. "Key already present"))                                            ;;; ADDED
+                   `(^clojure.lang.IPersistentMap assocEx [this# k# v#]                                       ;;; ADDED
+                       (if (.containsKey this# k#)                                                            ;;; ADDED
+                           (throw (Exception. "Key already present"))                                         ;;; ADDED
                            (.assoc this# k# v#)))                                                             ;;; ADDED
                    `(without [this# k#] (if (contains? #{~@(map keyword base-fields)} k#)
                                             (dissoc (with-meta (into {} this#) ~'__meta) k#)
@@ -252,23 +252,27 @@
                   `(CopyTo [this# a# i#]  (throw (InvalidOperationException.)))   ;;; TODO: implement this.  Got lazy.
                   `(System.Collections.IDictionary.GetEnumerator [this#]  (clojure.lang.Runtime.ImmutableDictionaryEnumerator. this#))
                   `(System.Collections.IEnumerable.GetEnumerator [this#]  (clojure.lang.IMapEntrySeqEnumerator. (seq this#)))
-                  )])                 
-      (ipc [[i m]]
-           [(conj i 'clojure.lang.IPersistentCollection)
-            (conj m
-                  `(clojure.lang.IPersistentCollection.cons [this# e#]                                   ;;; ADDED
-                        ((var imap-cons) this# e#)))])                                                   ;;; ADDED
-      (associative                                                                                       ;;; ADDED
-            [[i m]]                                                                                      ;;; ADDED
-            [(conj i 'clojure.lang.Associative)                                                          ;;; ADDED
-             (conj m 
+                  )])
+	  (cntd [[i m]]                                                                                       ;;; ADDED
+	        [(conj i 'clojure.lang.Counted)                                                               ;;; ADDED
+			 (conj m                                                                                      ;;; ADDED
+			      `(clojure.lang.Counted.count [this#] (+ ~(count base-fields) (count ~'__extmap))))])	  ;;; ADDED		                   
+      (ipc [[i m]]                                                                                        ;;; ADDED
+           [(conj i 'clojure.lang.IPersistentCollection)                                                  ;;; ADDED
+            (conj m                                                                                       ;;; ADDED                   
+                  `(clojure.lang.IPersistentCollection.cons [this# e#]                                    ;;; ADDED
+                        ((var imap-cons) this# e#)))])                                                    ;;; ADDED
+      (associative                                                                                        ;;; ADDED
+            [[i m]]                                                                                       ;;; ADDED
+            [(conj i 'clojure.lang.Associative)                                                           ;;; ADDED
+             (conj m                                                                                      ;;; ADDED
                    `(clojure.lang.Associative.assoc [this# k# ~gs]                                        ;;; ADDED
                      (condp identical? k#                                                                 ;;; ADDED
                        ~@(mapcat (fn [fld]                                                                ;;; ADDED
                                    [(keyword fld) (list* `new tagname (replace {fld gs} fields))])        ;;; ADDED
                                  base-fields)                                                             ;;; ADDED
                        (new ~tagname ~@(remove #{'__extmap} fields) (assoc ~'__extmap k# ~gs)))))])]      ;;; ADDED
-     (let [[i m] (-> [interfaces methods] irecord eqhash iobj ilookup imap associative ipc dict)]                              ;;; Associative, ipc added
+     (let [[i m] (-> [interfaces methods] irecord eqhash iobj ilookup imap associative cntd ipc dict)]                              ;;; Associative, ipc, cntd added
        `(deftype* ~tagname ~(vary-meta classname merge {System.SerializableAttribute {}}) ~(conj hinted-fields '__meta '__extmap) 
           :implements ~(vec i) 
           ~@m))))))
@@ -444,7 +448,7 @@
   are optional. The only methods that can be supplied are those
   declared in the protocols/interfaces.  Note that method bodies are
   not closures, the local environment includes only the named fields,
-  and those fields can be accessed directy. Fields can be qualified
+  and those fields can be accessed directly. Fields can be qualified
   with the metadata :volatile-mutable true or :unsynchronized-mutable
   true, at which point (set! afield aval) will be supported in method
   bodies. Note well that mutable fields are extremely difficult to use
