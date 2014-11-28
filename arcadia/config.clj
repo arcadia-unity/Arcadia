@@ -3,31 +3,35 @@
             [clojure.pprint :as pprint]
             [clojure.data :as data])
   (:import
+    [System DateTime]
     [System.IO File]
     [UnityEngine Debug]
-    [UnityEditor EditorGUILayout]))
+    [UnityEditor EditorGUI EditorGUILayout]))
 
-(def config (atom {}))
+(def configuration (atom {}))
+(def last-read-time (atom 0))
 
-(def foldouts (atom {}))
+;; TODO account for multiple/different files
+(defn should-update-from? [f]
+  (and (not (nil? f))
+       (File/Exists f)
+       (< (or @last-read-time 0)
+          (.Ticks (File/GetLastWriteTime f)))))
 
-(defn value [k]
-  (@config k))
+(defn update! 
+  ([] (update! ClojureConfiguration/configFilePath))
+  ([f]
+   (if (should-update-from? f)
+     (do
+       (reset! last-read-time (.Ticks DateTime/Now))
+       (reset! configuration (edn/read-string (File/ReadAllText f)))))))
 
-(defn value-in [p]
-  (get-in @config p))
-
-(defn update! [m]
-  (reset! config m))
-
-(defn update-from-file! [f]
-  (Debug/Log (str "update-from-file " f))
-  (update! (edn/read-string (File/ReadAllText f))))
-
-(defn update-from-default-location! []
-  (update-from-file! "Assets/Arcadia/configure.edn"))
+;; update as soon as the file is required
+(update!)
 
 (declare widgets)
+
+(def foldouts (atom {}))
 
 (defn widget [k v]
   (cond
@@ -59,15 +63,15 @@
     (sequential? m)
     (vec (map-indexed #(widget %1 %2) m))))
 
-(defn render-gui [config-file]
-  (let [config (into (sorted-map) (edn/read-string (File/ReadAllText config-file)))]
+(defn render-gui []
+  (let [config (into (sorted-map) @configuration)]
     (EditorGUILayout/BeginVertical nil)
-    (let [new-config (widgets config)]
-      (if (not= config new-config)
-        (do
-          (File/WriteAllText config-file
-                             (binding [pprint/*print-pretty* true]
-                               (with-out-str (pprint/pprint new-config))))
-          (update! new-config))))
+    (let [new-configuration (widgets config)]
+      (if (not= @configuration new-configuration)
+        (if-let [config-file ClojureConfiguration/configFilePath]
+          (do
+            (File/WriteAllText config-file
+                               (binding [pprint/*print-pretty* true]
+                                 (with-out-str (pprint/pprint new-configuration))))
+            (update!)))))
     (EditorGUILayout/EndVertical)))
-

@@ -1,7 +1,7 @@
 (ns arcadia.repl
   (:refer-clojure :exclude [with-bindings])
   (:require [clojure.main :as main]
-            [arcadia.config :as config])
+            [arcadia.config :refer [configuration]])
   (:import
     [UnityEngine Debug]
     [System.IO EndOfStreamException]
@@ -13,7 +13,7 @@
 
 (defn env-map []
   {:*ns* *ns*
-   :*warn-on-reflection* (-> @config/config :compiler :warn-on-reflection)
+   :*warn-on-reflection* (-> @configuration :compiler :warn-on-reflection)
    :*math-context* *math-context*
    :*print-meta* *print-meta*
    :*print-length* *print-length*
@@ -21,7 +21,7 @@
    :*data-readers* *data-readers*
    :*default-data-reader-fn* *default-data-reader-fn*
    :*command-line-args* *command-line-args*
-   :*unchecked-math* (-> @config/config :compiler :unchecked-math)
+   :*unchecked-math* (-> @configuration :compiler :unchecked-math)
    :*assert* *assert*})
 
 (defn update-repl-env [repl-env]
@@ -55,7 +55,7 @@
         (binding [*err* *out*] ;; not sure about this
           (prn
             (let [res (eval
-                        `(do ~(when-let [inj (read-string (pr-str (:injections @config/config)))]
+                        `(do ~(when-let [inj (read-string (pr-str (@configuration :injections)))]
                                 `(try ~inj (catch Exception e# e#)))
                              ~frm))]
               (update-repl-env repl-env)
@@ -100,11 +100,11 @@
       (reset! server-running true)
       (let [socket (UdpClient. (IPEndPoint. IPAddress/Any port))]
         (.Start (Thread. (gen-delegate ThreadStart []
-          (if (@config/config :verbose)
+          (if (@configuration :verbose)
             (Debug/Log "Starting UDP REPL..."))
           (while @server-running
             (listen-and-block socket))
-          (if (@config/config :verbose)
+          (if (@configuration :verbose)
             (Debug/Log "Stopping UDP REPL..."))
           (Debug/Log "Starting REPL...")
           (while @server-running

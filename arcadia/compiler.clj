@@ -1,5 +1,5 @@
 (ns arcadia.compiler
-  (:require [arcadia.config :refer [config]]
+  (:require [arcadia.config :refer [configuration]]
             clojure.string)
   (:import [System IO.Path Environment]
            [UnityEngine Debug]
@@ -54,32 +54,47 @@
        (map #(clojure.string/join "/" %))
        (filter #(clojure.lang.RT/FindFile %))))
 
-(defn process-assets [imported]
-  (doseq [asset imported
-          :when (re-find #"\.clj$" asset)]
-    (let [config @config
-          {:keys [assemblies
-                  load-path
-                  warn-on-reflection
-                  unchecked-math
-                  compiler-options]}
-          (config :compiler)
-          assemblies (or assemblies
-                         (assemblies-path))]
-      (System.Environment/SetEnvironmentVariable
-        "CLOJURE_LOAD_PATH"
-        (clojure.string/join ":" (if load-path
-                                   (concat load-path ["Assets"])
-                                   "Assets")))
-      (if-let [namespace (-> (relative-to-load-path asset)
-                             first
-                             path->ns)]
-        (try
-          (binding [*compile-path* assemblies
-                    *warn-on-reflection* warn-on-reflection
-                    *unchecked-math* unchecked-math
-                    *compiler-options* compiler-options]
-            (compile (symbol namespace))
-            (AssetDatabase/Refresh ImportAssetOptions/ForceUpdate))
-          (catch Exception e
-            (Debug/LogException e)))))))
+(defn clj-file? [path]
+  (boolean (re-find #"\.clj$" path)))
+
+(defn clj-files [paths]
+  (filter clj-file? paths))
+
+(defn import-asset [asset]
+  (let [verbose (@configuration :verbose)
+        {:keys [assemblies
+                load-path
+                warn-on-reflection
+                unchecked-math
+                compiler-options]}
+        (@configuration :compiler)
+        assemblies (or assemblies
+                       (assemblies-path))]
+    (System.Environment/SetEnvironmentVariable
+      "CLOJURE_LOAD_PATH"
+      (clojure.string/join ":" (if load-path
+                                 (concat load-path ["Assets"])
+                                 "Assets")))
+    (if-let [namespace (-> (relative-to-load-path asset)
+                           first
+                           path->ns)]
+      (try
+        (binding [*compile-path* assemblies
+                  *warn-on-reflection* warn-on-reflection
+                  *unchecked-math* unchecked-math
+                  *compiler-options* compiler-options]
+          (compile (symbol namespace))
+          (AssetDatabase/Refresh ImportAssetOptions/ForceUpdate))
+        (catch clojure.lang.Compiler+CompilerException e
+          (Debug/Log (str (.Message e))))
+        (catch Exception e
+          (Debug/LogException e)
+          )))))
+
+(defn import-assets [imported]
+  (doseq [asset (clj-files imported)]
+    (import-asset asset)))
+
+(defn delete-assets [deleted]
+  (doseq [asset (clj-files deleted)]
+    ))
