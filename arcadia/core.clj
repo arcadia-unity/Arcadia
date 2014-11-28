@@ -50,28 +50,32 @@
        :implements ~interfaces 
        ~@methods)))
 
-(defmacro defcomponent*
-  [name fields & opts+specs]
+;; ported from deftype. should remove opts+specs, bizarre as a key. 
+(defn- component-defform [{:keys [name fields constant opts+specs]}]
   (validate-fields fields name)
-  (let [gname name 
+  (let [gname name ;?
         [interfaces methods opts] (parse-opts+specs opts+specs)
         ns-part (namespace-munge *ns*)
         classname (symbol (str ns-part "." gname))
         hinted-fields fields
         fields (vec (map #(with-meta % nil) fields))
-        [field-args over] (split-at 20  fields)]
-    `(let []
-       ~(emit-defclass*
-          name
-          gname
-          'UnityEngine.MonoBehaviour
-          'UnityEngine
-          (vec hinted-fields)
-          (vec interfaces)
-          methods)
-       (import ~classname)
-       ~(build-positional-factory gname classname fields)
-       ~classname)))
+        [field-args over] (split-at 20 fields)
+        frm `(do
+               ~(emit-defclass*
+                  name
+                  gname
+                  'UnityEngine.MonoBehaviour
+                  'UnityEngine
+                  (vec hinted-fields)
+                  (vec interfaces)
+                  methods)
+               (import ~classname)
+               ~(build-positional-factory gname classname fields)
+               ~classname)]
+    (if constant
+      `(when-not (type? (resolve (quote ~name)))
+         ~frm)
+      frm)))
 
 (defn- normalize-method-implementations [mimpls]
   (for [[[protocol] impls] (partition 2
@@ -121,12 +125,26 @@
           (process-awake-method impl)
           (process-method impl))))))
 
+(defmacro defcomponent*
+  "Defines a new component. See defcomponent for version with defonce semantics."
+  [name fields & method-impls]
+  (let [fields2 (mapv #(vary-meta % assoc :unsynchronized-mutable true) fields) ;make all fields mutable
+        method-impls2 (process-defcomponent-method-implementations method-impls)]
+    (component-defform
+      {:name name
+       :fields fields2
+       :opts+specs method-impls2})))
+
 (defmacro defcomponent
-  "Defines a new component."
+  "Defines a new component. defcomponent forms will not evaluate if name is already bound, thus avoiding redefining the name of an existing type (possibly with live instances). For redefinable defcomponent, use defcomponent*."
   [name fields & method-impls] 
   (let [fields2 (mapv #(vary-meta % assoc :unsynchronized-mutable true) fields) ;make all fields mutable
         method-impls2 (process-defcomponent-method-implementations method-impls)]
-    `(defcomponent* ~name ~fields2 ~@method-impls2)))
+    (component-defform
+      {:name name
+       :constant true
+       :fields fields2
+       :opts+specs method-impls2})))
 
 ;; ============================================================
 ;; get-component
