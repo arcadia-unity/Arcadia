@@ -43,6 +43,10 @@ Mailing List
 ------------
 The mailing list is [here](https://groups.google.com/forum/#!forum/arcadia-unity).
 
+IRC
+---
+The IRC channel for Arcadia is #arcadiaunity on freenode, if we're online we're usually on the channel.
+
 Name
 -----
 This project was originally named "clojure-unity", but was changed to "Arcadia" to avoid infinging on Clojure's trademarks. It was suggested to us by @ztellman at a bar during StrangeLoop 2014, and we are eternally grateful.
