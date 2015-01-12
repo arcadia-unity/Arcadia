@@ -1,5 +1,7 @@
 Arcadia
 =======
+
+[![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/arcadia-unity/Arcadia?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 The integration of the Clojure Programming Language with the Unity 3D game engine.
 
 Status
