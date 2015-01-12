@@ -10,7 +10,7 @@ Usage
 -----
 The contents of the repository should be copied to a folder named `Arcadia` in any Unity project's Assets folder to enable Clojure. In the future, this will be available from the Asset Store. Once copied, you have access to the REPL and the Clojure compiler.
 
-There's a screencast on getting set up [here](http://youtu.be/X4xCVsLhaZ0).
+There's a screencast on getting set up [here](https://www.youtube.com/watch?v=KLq9b9lDmkc).
 
 #### Download Zip File
 
@@ -37,7 +37,15 @@ Click `Edit > Project Settings > Player`, then in the Inspector under Other Sett
 Arcadia ships with a simple networked REPL that is started automatically or from `Clojure > REPL > Start`. You can connect to this REPL using `Clojure/Editor/repl-client.rb`. This script is also the basis of our [Sublime Text support (via SublimeREPL)](https://github.com/clojure-unity/repl-sublimetext) and [our Emacs support (via Inferior Lisp)](https://github.com/arcadia-unity/arcadia/wiki/Editor-support#emacs).
 
 ### Clojure Components
-You can write components in pure Clojure using our [`defcomponent`](https://github.com/arcadia-unity/arcadia/wiki/arcadia.core#defcomponent) form. To be recognized by Unity these must be saved in Clojure files, not just defined in the REPL. 
+You can write components in pure Clojure using our [`defcomponent`](https://github.com/arcadia-unity/arcadia/wiki/arcadia.core#defcomponent) form. To be recognized by Unity these must be saved in Clojure files, not just defined in the REPL.
+
+Mailing List
+------------
+The mailing list is [here](https://groups.google.com/forum/#!forum/arcadia-unity).
+
+IRC
+---
+The IRC channel for Arcadia is #arcadiaunity on freenode, if we're online we're usually on the channel.
 
 Name
 -----
