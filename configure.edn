@@ -1,5 +1,4 @@
-{:compiler {:load-path ["Assets"]
-            :warn-on-reflection true
+{:compiler {:warn-on-reflection true
             :unchecked-math false},
  :injections (do
                (use 'arcadia.core)
