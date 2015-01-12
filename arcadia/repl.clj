@@ -7,7 +7,7 @@
     [System.IO EndOfStreamException]
     [System.Collections Queue]
     [System.Net IPEndPoint IPAddress]
-    [System.Net.Sockets UdpClient]
+    [System.Net.Sockets UdpClient SocketException]
     [System.Threading Thread ThreadStart]
     [System.Text Encoding]))
 
@@ -85,7 +85,15 @@
                   (catch Exception e
                     (str e)))
           bytes (.GetBytes Encoding/UTF8 (str result "\n" (ns-name (:*ns* @default-repl-env)) "=> "))]
-            (.Send socket bytes (.Length bytes) destination))))
+            (try
+              (.Send socket bytes (.Length bytes) destination)
+              (catch SocketException e
+                (let [estr (str (.ToString e)
+                                "\n"
+                                (ns-name (:*ns* @default-repl-env))
+                                "=> ")
+                      ebytes (.GetBytes Encoding/UTF8 estr)]
+                  (.Send socket ebytes (.Length ebytes) destination)))))))
 
 (defn- listen-and-block [^UdpClient socket]
   (let [sender (IPEndPoint. IPAddress/Any 0)
@@ -99,6 +107,8 @@
     (do
       (reset! server-running true)
       (let [socket (UdpClient. (IPEndPoint. IPAddress/Any port))]
+        (set! (.. socket Client SendBufferSize) (* 1024 5000)) ;; 1Mb
+        (set! (.. socket Client ReceiveBufferSize) (* 1024 5000)) ;; 1Mb
         (.Start (Thread. (gen-delegate ThreadStart []
           (if (@configuration :verbose)
             (Debug/Log "Starting UDP REPL..."))

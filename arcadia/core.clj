@@ -73,7 +73,7 @@
                ~(build-positional-factory gname classname fields)
                ~classname)]
     (if constant
-      `(when-not (type? (resolve (quote ~name)))
+      `(when-not (instance? System.MonoType (resolve (quote ~name)))
          ~frm)
       frm)))
 
