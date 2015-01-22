@@ -23,6 +23,61 @@
   Application/isEditor)
 
 ;; ============================================================
+;; lifecycle
+;; ============================================================
+
+;; this one's really handy
+(defn destroyed? [^UnityEngine.Object x]
+  (UnityEngine.Object/op_Equality x nil))
+
+(defn ia?
+  "Stands for in-aot?, which is too many characters when we start
+  stringing it into larger constructions. Returns true if and only if
+  compiler is currently AOT-ing. Very useful for controling side
+  effects to the scene graph."
+  []
+  (boolean *compile-files*))
+
+(defmacro if-ia [& body]
+  `(if-not *compile-files*
+     ~@body))
+
+(defmacro when-ia [& body]
+  (when *compile-path*
+    ~@body))
+
+(defmacro when-not-ia [& body]
+  `(when-not *compile-files*
+     ~@body))
+
+(defmacro def-ia [& body]
+  `(let [v# (declare ~name)]
+     (when-ia (def ~name ~@body))
+     v#))
+
+(defmacro def-not-ia [name & body]
+  `(let [v# (declare ~name)]
+     (when-not-ia (def ~name ~@body))
+     v#))
+
+(defn bound-var? [v]
+  (and (var? v)
+    (not
+      (instance? clojure.lang.Var+Unbound
+        (var-get v)))))
+
+;; this one could use some more work
+(defmacro defscn [name & body]
+  `(let [v# (declare ~name)]
+     (when-not-ia
+       (let [bldg# (do ~@body)]
+         (when (and (bound-var? (resolve (quote ~name)))
+                 (not (destroyed? ~name)))
+           (destroy ~name))
+         (def ~name bldg#)))
+     v#))
+
+;; ============================================================
 ;; defcomponent 
 ;; ============================================================
 
