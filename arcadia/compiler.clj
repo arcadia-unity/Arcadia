@@ -74,7 +74,7 @@
       "CLOJURE_LOAD_PATH"
       (clojure.string/join ":" (if load-path
                                  (concat load-path ["Assets"])
-                                 "Assets")))
+                                 ["Assets"])))
     (if-let [namespace (-> (relative-to-load-path asset)
                            first
                            path->ns)]
