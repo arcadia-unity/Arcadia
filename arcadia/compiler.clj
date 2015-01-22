@@ -6,10 +6,8 @@
            [UnityEditor AssetDatabase ImportAssetOptions PlayerSettings ApiCompatibilityLevel]))
 
 (defn assemblies-path []
-  (Path/Combine
-    (Path/GetDirectoryName
-      (.Location (.Assembly clojure.lang.RT)))
-    "Compiled"))
+  (Path/GetDirectoryName
+    (.Location (.Assembly clojure.lang.RT))))
 
 ;; should we just patch the compiler to make GetFindFilePaths public?
 (defn load-path []
@@ -70,15 +68,13 @@
                 unchecked-math
                 compiler-options]}
         (@configuration :compiler)
-        load-path (if load-path
-                    (concat load-path ["Assets"])
-                    ["Assets"])
         assemblies (or assemblies
                        (assemblies-path))]
     (System.Environment/SetEnvironmentVariable
       "CLOJURE_LOAD_PATH"
-      (clojure.string/join ":"
-                           (cons assemblies load-path)))
+      (clojure.string/join ":" (if load-path
+                                 (concat load-path ["Assets"])
+                                 "Assets")))
     (if-let [namespace (-> (relative-to-load-path asset)
                            first
                            path->ns)]
