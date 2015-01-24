@@ -6,23 +6,16 @@
            [UnityEditor AssetDatabase ImportAssetOptions PlayerSettings ApiCompatibilityLevel]))
 
 (defn assemblies-path []
-  (Path/Combine
-    (Path/GetDirectoryName
-      (.Location (.Assembly clojure.lang.RT)))
-    "Compiled"))
+  (let [clj-dll-folder (Path/GetDirectoryName (.Location (.Assembly clojure.lang.RT)))
+        arcadia-folder (Path/Combine clj-dll-folder "..")
+        compiled-folder (Path/Combine arcadia-folder "Compiled")]
+    (Path/GetFullPath compiled-folder)))
 
 ;; should we just patch the compiler to make GetFindFilePaths public?
 (defn load-path []
   (seq (.Invoke (.GetMethod clojure.lang.RT "GetFindFilePaths"
                             (enum-or BindingFlags/Static BindingFlags/NonPublic))
                 clojure.lang.RT nil)))
-
-(defn env-load-path []
-  (System.Environment/GetEnvironmentVariable "CLOJURE_LOAD_PATH"))
-
-(defn initialize-unity []
-  (set! PlayerSettings/apiCompatibilityLevel ApiCompatibilityLevel/NET_2_0)
-  (set! PlayerSettings/runInBackground true))
 
 (defn rests
   "Returns a sequence of all rests of the input sequence
@@ -70,15 +63,8 @@
                 unchecked-math
                 compiler-options]}
         (@configuration :compiler)
-        load-path (if load-path
-                    (concat load-path ["Assets"])
-                    ["Assets"])
         assemblies (or assemblies
                        (assemblies-path))]
-    (System.Environment/SetEnvironmentVariable
-      "CLOJURE_LOAD_PATH"
-      (clojure.string/join ":"
-                           (cons assemblies load-path)))
     (if-let [namespace (-> (relative-to-load-path asset)
                            first
                            path->ns)]

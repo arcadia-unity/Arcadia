@@ -8,13 +8,7 @@ using System.Net.Sockets;
 using System.Collections.Generic;
 using System.Threading;
 
-[InitializeOnLoad]
 public class ClojureRepl : EditorWindow {
-  static ClojureRepl() {
-    // TODO read from config
-    ClojureRepl.StartREPL();
-  }
-
   [MenuItem ("Arcadia/REPL/Window...")]
   public static void Init () {
     ClojureRepl window = (ClojureRepl)EditorWindow.GetWindow (typeof (ClojureRepl));
