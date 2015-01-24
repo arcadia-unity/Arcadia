@@ -35,14 +35,13 @@ namespace Arcadia {
         PlayerSettings.runInBackground = true;
       }
     }
-    
+
     public static void SetClojureLoadPath() {
       try {
         Debug.Log("Setting Load Path...");
         string clojureDllFolder = Path.GetDirectoryName(
-          AssetDatabase.FindAssets("Clojure")
-            .Select(x => AssetDatabase.GUIDToAssetPath(x))
-            .Where(x => x.Contains("Clojure.dll"))
+          AssetDatabase.GetAllAssetPaths()
+            .Where(s => System.Text.RegularExpressions.Regex.IsMatch(s, ".*/Clojure.dll$")) // for compatibility with 4.3
             .Single());
         
         Environment.SetEnvironmentVariable("CLOJURE_LOAD_PATH",
