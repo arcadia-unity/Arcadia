@@ -39,15 +39,15 @@
   (boolean *compile-files*))
 
 (defmacro if-ia [& body]
-  `(if-not *compile-files*
+  `(if (ia?)
      ~@body))
 
 (defmacro when-ia [& body]
-  (when *compile-path*
+  (when (ia?)
     ~@body))
 
 (defmacro when-not-ia [& body]
-  `(when-not *compile-files*
+  `(when-not (ia?)
      ~@body))
 
 (defmacro def-ia [& body]
