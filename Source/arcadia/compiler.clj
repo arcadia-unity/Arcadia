@@ -1,7 +1,7 @@
 (ns arcadia.compiler
   (:require [arcadia.config :refer [configuration]]
             clojure.string)
-  (:import [System IO.Path Environment]
+  (:import [System IO.Path IO.File Environment]
            [UnityEngine Debug]
            [UnityEditor AssetDatabase ImportAssetOptions PlayerSettings ApiCompatibilityLevel]))
 
@@ -55,6 +55,24 @@
 (defn clj-files [paths]
   (filter clj-file? paths))
 
+(defn asset->ns [asset]
+  (-> asset
+      relative-to-load-path
+      first
+      path->ns
+      (#(if % (symbol %) %))))
+
+(defn first-form [file]
+  (binding [*read-eval* false]
+    (read-string (slurp file :encoding "utf8"))))
+
+(defn should-compile? [file]
+  (if (File/Exists file)
+    (let [[frst scnd & rst] (first-form file)
+          expected-ns (asset->ns file)]
+      (and (= frst 'ns)
+           (= scnd expected-ns)))))
+
 (defn import-asset [asset]
   (let [verbose (@configuration :verbose)
         {:keys [assemblies
@@ -65,20 +83,22 @@
         (@configuration :compiler)
         assemblies (or assemblies
                        (assemblies-path))]
-    (if-let [namespace (-> (relative-to-load-path asset)
-                           first
-                           path->ns)]
-      (try
-        (binding [*compile-path* assemblies
-                  *warn-on-reflection* warn-on-reflection
-                  *unchecked-math* unchecked-math
-                  *compiler-options* compiler-options]
-          (compile (symbol namespace))
-          (AssetDatabase/Refresh ImportAssetOptions/ForceUpdate))
-        (catch clojure.lang.Compiler+CompilerException e
-          (Debug/Log (str (.Message e))))
-        (catch Exception e
-          (Debug/LogException e))))))
+    (if (should-compile? asset)
+      (let [namespace (asset->ns asset)]
+        (try
+          (binding [*compile-path* assemblies
+                    *warn-on-reflection* warn-on-reflection
+                    *unchecked-math* unchecked-math
+                    *compiler-options* compiler-options]
+            (Debug/Log (str "Compiling " (name namespace) "..."))
+            (compile namespace)
+            (AssetDatabase/Refresh ImportAssetOptions/ForceUpdate))
+          (catch clojure.lang.Compiler+CompilerException e
+            (Debug/Log (str (.Message e))))
+          (catch Exception e
+            (Debug/LogException e))))
+      (Debug/Log (str "Skipping " asset "..."))
+      )))
 
 (defn import-assets [imported]
   (doseq [asset (clj-files imported)]
