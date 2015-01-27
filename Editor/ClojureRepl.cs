@@ -12,6 +12,7 @@ public class ClojureRepl : EditorWindow {
   private static UdpClient replSocket;
   
   static ClojureRepl() {
+    RT.load("arcadia/repl");
     // kill repl when exiting unity
     AppDomain.CurrentDomain.ProcessExit += (object sender, EventArgs e) => { StopREPL(); };
   }
@@ -32,7 +33,6 @@ public class ClojureRepl : EditorWindow {
 
   [MenuItem ("Arcadia/REPL/Start %#r")]
   public static void StartREPL () {
-    RT.load("arcadia/repl");
     replSocket = (UdpClient)RT.var("arcadia.repl", "start-server").invoke(11211);
     EditorApplication.update += ClojureRepl.Update;
   }
