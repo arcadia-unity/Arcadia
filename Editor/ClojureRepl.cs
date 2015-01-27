@@ -13,7 +13,7 @@ public class ClojureRepl : EditorWindow {
   
   static ClojureRepl() {
     // kill repl when exiting unity
-    AppDomain.CurrentDomain.ProcessExit += StopREPL;
+    AppDomain.CurrentDomain.ProcessExit += (object sender, EventArgs e) => { StopREPL(); };
   }
   
   [MenuItem ("Arcadia/REPL/Window...")]
