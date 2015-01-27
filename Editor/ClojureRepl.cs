@@ -23,7 +23,7 @@ public class ClojureRepl : EditorWindow {
   }
 
   public static void Update() {
-    if(!EditorApplication.isPlaying && EditorApplication.isPlayingOrWillChangePlaymode) {
+    if(EditorApplication.isCompiling || (!EditorApplication.isPlaying && EditorApplication.isPlayingOrWillChangePlaymode)) {
       // kill the repl when entering play mode
       StopREPL();
     } else {
