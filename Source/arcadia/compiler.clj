@@ -62,16 +62,23 @@
       path->ns
       (#(if % (symbol %) %))))
 
-(defn first-form [file]
+(defn read-file [file]
   (binding [*read-eval* false]
     (read-string (slurp file :encoding "utf8"))))
 
+(defn first-form-is-ns? [asset]
+  (let [[frst & rst] (read-file asset)]
+    (= frst 'ns)))
+
+(defn correct-ns? [asset]
+  (let [[frst scnd & rst] (read-file asset)
+        expected-ns (asset->ns asset)]
+    (= scnd expected-ns)))
+
 (defn should-compile? [file]
   (if (File/Exists file)
-    (let [[frst scnd & rst] (first-form file)
-          expected-ns (asset->ns file)]
-      (and (= frst 'ns)
-           (= scnd expected-ns)))))
+    (and (first-form-is-ns? file)
+         (correct-ns? file))))
 
 (defn import-asset [asset]
   (let [verbose (@configuration :verbose)
@@ -98,8 +105,13 @@
             (Debug/Log (str (.Message e))))
           (catch Exception e
             (Debug/LogException e))))
-      (Debug/Log (str "Skipping " asset "..."))
-      )))
+      (Debug/Log (str "Skipping " asset ", "
+                      (cond (not (first-form-is-ns? asset))
+                            "first form is not ns"
+                            (not (correct-ns? asset))
+                            "namespace in ns form does not match file name"
+                            :else
+                            "not sure why"))))))
 
 (defn import-assets [imported]
   (doseq [asset (clj-files imported)]
