@@ -97,30 +97,31 @@
 
 (defn- listen-and-block [^UdpClient socket]
   (let [sender (IPEndPoint. IPAddress/Any 0)
-        incoming-bytes (.Receive socket (by-ref sender))
-        incoming-code (.GetString Encoding/UTF8 incoming-bytes 0 (.Length incoming-bytes))]
-          (.Enqueue work-queue [incoming-code socket sender])))
+        incoming-bytes (.Receive socket (by-ref sender))]
+    (if (> (.Length incoming-bytes) 0) 
+      (let [incoming-code (.GetString Encoding/UTF8 incoming-bytes 0 (.Length incoming-bytes))]
+        (.Enqueue work-queue [incoming-code socket sender])))))
 
 (defn start-server [^long port]
+  (Debug/Log @server-running)
   (if @server-running
-    (throw (Exception. "REPL Already Running"))
-    (do
-      (reset! server-running true)
-      (let [socket (UdpClient. (IPEndPoint. IPAddress/Any port))]
-        (set! (.. socket Client SendBufferSize) (* 1024 5000)) ;; 1Mb
-        (set! (.. socket Client ReceiveBufferSize) (* 1024 5000)) ;; 1Mb
-        (.Start (Thread. (gen-delegate ThreadStart []
-          (if (@configuration :verbose)
-            (Debug/Log "Starting UDP REPL..."))
-          (while @server-running
-            (listen-and-block socket))
-          (if (@configuration :verbose)
-            (Debug/Log "Stopping UDP REPL..."))
-          (Debug/Log "Starting REPL...")
-          (while @server-running
-            (listen-and-block socket))
-          (Debug/Log "Stopping REPL...")
-          (.Close socket))))))))
+    (throw (Exception. "REPL Already Running")))
+  (reset! server-running true)
+  (let [socket (UdpClient. (IPEndPoint. IPAddress/Any port))]
+    (set! (.. socket Client SendBufferSize) (* 1024 5000)) ;; 5Mb
+    (set! (.. socket Client ReceiveBufferSize) (* 1024 5000)) ;; 5Mb
+    (.Start (Thread. (gen-delegate ThreadStart []
+                                   (if (@configuration :verbose)
+                                     (Debug/Log "Starting REPL..."))
+                                   (while @server-running
+                                     (listen-and-block socket))
+                                   ;; TODO why does this line not execute?
+                                   (if (@configuration :verbose)
+                                     (Debug/Log "REPL Stopped")))))
+    socket))
 
-(defn stop-server []
-  (reset! server-running false))
+(defn stop-server [^UdpClient socket]
+  (if (@configuration :verbose)
+    (Debug/Log "Stopping REPL..."))
+  (reset! server-running false)
+  (.Close socket))

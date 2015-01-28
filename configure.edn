@@ -1,6 +1,3 @@
-{:compiler {:warn-on-reflection true
-            :unchecked-math false},
- :injections (do
-               (use 'arcadia.core)
-               (use 'clojure.repl)),
+{:compiler {:warn-on-reflection true, :unchecked-math false, :enabled true},
+ :injections (do (use 'arcadia.core) (use 'clojure.repl)),
  :verbose true}

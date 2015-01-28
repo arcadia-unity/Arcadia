@@ -1,28 +1,21 @@
 (ns arcadia.compiler
   (:require [arcadia.config :refer [configuration]]
             clojure.string)
-  (:import [System IO.Path Environment]
+  (:import [System IO.Path IO.File Environment]
            [UnityEngine Debug]
            [UnityEditor AssetDatabase ImportAssetOptions PlayerSettings ApiCompatibilityLevel]))
 
 (defn assemblies-path []
-  (Path/Combine
-    (Path/GetDirectoryName
-      (.Location (.Assembly clojure.lang.RT)))
-    "Compiled"))
+  (let [clj-dll-folder (Path/GetDirectoryName (.Location (.Assembly clojure.lang.RT)))
+        arcadia-folder (Path/Combine clj-dll-folder "..")
+        compiled-folder (Path/Combine arcadia-folder "Compiled")]
+    (Path/GetFullPath compiled-folder)))
 
 ;; should we just patch the compiler to make GetFindFilePaths public?
 (defn load-path []
   (seq (.Invoke (.GetMethod clojure.lang.RT "GetFindFilePaths"
                             (enum-or BindingFlags/Static BindingFlags/NonPublic))
                 clojure.lang.RT nil)))
-
-(defn env-load-path []
-  (System.Environment/GetEnvironmentVariable "CLOJURE_LOAD_PATH"))
-
-(defn initialize-unity []
-  (set! PlayerSettings/apiCompatibilityLevel ApiCompatibilityLevel/NET_2_0)
-  (set! PlayerSettings/runInBackground true))
 
 (defn rests
   "Returns a sequence of all rests of the input sequence
@@ -62,37 +55,51 @@
 (defn clj-files [paths]
   (filter clj-file? paths))
 
+(defn asset->ns [asset]
+  (-> asset
+      relative-to-load-path
+      first
+      path->ns
+      (#(if % (symbol %) %))))
+
+(defn first-form [file]
+  (binding [*read-eval* false]
+    (read-string (slurp file :encoding "utf8"))))
+
+(defn should-compile? [file]
+  (if (File/Exists file)
+    (let [[frst scnd & rst] (first-form file)
+          expected-ns (asset->ns file)]
+      (and (= frst 'ns)
+           (= scnd expected-ns)))))
+
 (defn import-asset [asset]
   (let [verbose (@configuration :verbose)
         {:keys [assemblies
                 load-path
                 warn-on-reflection
                 unchecked-math
-                compiler-options]}
+                compiler-options
+                enabled]}
         (@configuration :compiler)
-        load-path (if load-path
-                    (concat load-path ["Assets"])
-                    ["Assets"])
         assemblies (or assemblies
                        (assemblies-path))]
-    (System.Environment/SetEnvironmentVariable
-      "CLOJURE_LOAD_PATH"
-      (clojure.string/join ":"
-                           (cons assemblies load-path)))
-    (if-let [namespace (-> (relative-to-load-path asset)
-                           first
-                           path->ns)]
-      (try
-        (binding [*compile-path* assemblies
-                  *warn-on-reflection* warn-on-reflection
-                  *unchecked-math* unchecked-math
-                  *compiler-options* compiler-options]
-          (compile (symbol namespace))
-          (AssetDatabase/Refresh ImportAssetOptions/ForceUpdate))
-        (catch clojure.lang.Compiler+CompilerException e
-          (Debug/Log (str (.Message e))))
-        (catch Exception e
-          (Debug/LogException e))))))
+    (if (and enabled (should-compile? asset))
+      (let [namespace (asset->ns asset)]
+        (try
+          (binding [*compile-path* assemblies
+                    *warn-on-reflection* warn-on-reflection
+                    *unchecked-math* unchecked-math
+                    *compiler-options* compiler-options]
+            (Debug/Log (str "Compiling " (name namespace) "..."))
+            (compile namespace)
+            (AssetDatabase/Refresh ImportAssetOptions/ForceUpdate))
+          (catch clojure.lang.Compiler+CompilerException e
+            (Debug/Log (str (.Message e))))
+          (catch Exception e
+            (Debug/LogException e))))
+      (Debug/Log (str "Skipping " asset "..."))
+      )))
 
 (defn import-assets [imported]
   (doseq [asset (clj-files imported)]
