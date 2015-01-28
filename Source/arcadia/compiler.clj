@@ -79,11 +79,12 @@
                 load-path
                 warn-on-reflection
                 unchecked-math
-                compiler-options]}
+                compiler-options
+                enabled]}
         (@configuration :compiler)
         assemblies (or assemblies
                        (assemblies-path))]
-    (if (should-compile? asset)
+    (if (and enabled (should-compile? asset))
       (let [namespace (asset->ns asset)]
         (try
           (binding [*compile-path* assemblies
