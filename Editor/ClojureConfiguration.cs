@@ -13,6 +13,7 @@ public class ClojureConfiguration : Editor {
     if(_clojureConfigurationObject == null)
       _clojureConfigurationObject = new ClojureConfigurationObject();
       
+    RT.var("arcadia.config", "update!").invoke();
     Selection.activeObject = _clojureConfigurationObject;
   }
 
