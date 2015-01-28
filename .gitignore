@@ -3,8 +3,7 @@
 # =============== #
 *.mdb
 **/Compiled/*.exe*
-*.dll*
-*.dll.meta*
+**/Compiled/*.dll*
 
 # =============== #
 # Unity generated #
