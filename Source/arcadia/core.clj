@@ -147,6 +147,33 @@
        :opts+specs method-impls2})))
 
 ;; ============================================================
+;; condcast->
+;; ============================================================
+
+;; note this takes an optional default value. This macro is potentially
+;; annoying in the case that you want to branch on a supertype, for
+;; instance, but the cast would remove interface information. Use with
+;; this in mind.
+(defmacro ^:private condcast-> [expr xsym & clauses]
+  (let [exprsym (gensym "exprsym_")
+        [clauses default] (if (even? (count clauses))
+                            [clauses nil] 
+                            [(butlast clauses)
+                             [:else
+                              `(let [~xsym ~exprsym]
+                                 ~(last clauses))]])
+        cs (->> clauses
+             (partition 2)
+             (mapcat
+               (fn [[t then]]
+                 `[(instance? ~t ~exprsym)
+                   (let [~(with-meta xsym {:tag t}) ~exprsym]
+                     ~then)])))]
+    `(let [~exprsym ~expr]
+       ~(cons 'cond
+          (concat cs default)))))
+
+;; ============================================================
 ;; get-component
 ;; ============================================================
 
@@ -250,28 +277,6 @@
   [^GameObject gameobject ^Type type]
   (.AddComponent gameobject type))
 
-;; note this takes an optional default value. This macro is potentially
-;; annoying in the case that you want to branch on a supertype, for
-;; instance, but the cast would remove interface information. Use with
-;; this in mind.
-(defmacro ^:private condcast-> [expr xsym & clauses]
-  (let [exprsym (gensym "exprsym_")
-        [clauses default] (if (even? (count clauses))
-                            [clauses nil] 
-                            [(butlast clauses)
-                             [:else
-                              `(let [~xsym ~exprsym]
-                                 ~(last clauses))]])
-        cs (->> clauses
-             (partition 2)
-             (mapcat
-               (fn [[t then]]
-                 `[(instance? ~t ~exprsym)
-                   (let [~(with-meta xsym {:tag t}) ~exprsym]
-                     ~then)])))]
-    `(let [~exprsym ~expr]
-       ~(cons 'cond
-          (concat cs default)))))
 
 ;; ============================================================
 ;; wrappers
