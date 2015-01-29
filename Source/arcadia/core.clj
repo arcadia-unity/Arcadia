@@ -7,6 +7,7 @@
             Application
             MonoBehaviour
             GameObject
+            Component
             PrimitiveType]))
 
 (defn- regex? [x]
@@ -241,30 +242,53 @@
     `(let [~@(mapcat reverse bndgs)]
        ~(cons head (replace bndgs rst)))))
 
+(def log
+  (atom []))
+
+; t here can be (type-args bla)
+(defn- get-component-rt [obj t env]
+  (if (known-implementer-reference? obj 'GetComponent env)
+    `(.GetComponent  ~obj ~t)
+    `(condcast-> ~obj obj# 
+       UnityEngine.GameObject (.GetComponent obj# ~t)
+       UnityEngine.Component (.GetComponent obj# ~t))))
+
 (defmacro get-component* [obj t]
+  (swap! log conj
+    {:obj obj
+     :t t
+     :&env (into {}
+             (map (fn [k] [k (get &env k)])
+               (keys &env)))})
   (if (not-every? symbol? [obj t])
     (raise-non-symbol-args
       (list 'arcadia.core/get-component* obj t))
     (cond
       (contains? &env t)
-      `(.GetComponent ~obj ~t)
-      (and
-        (known-implementer-reference? obj 'GetComponent &env)
-        (type-name? t))
-      `(.GetComponent ~obj (~'type-args ~t))
+      (get-component-rt obj t &env)
+
+      (type-name? t)
+      (get-component-rt obj `(~'type-args ~t) &env)
+      
       :else
-      `(.GetComponent ~obj ~t))))
+      (get-component-rt obj t &env))))
 
 (defn get-component
   "Returns the component of Type type if the game object has one attached, nil if it doesn't.
   
-  * gameobject - the GameObject to query, a GameObject
+  * obj - the object to query, a GameObject or Component
   * type - the type of the component to get, a Type or String"
   {:inline (fn [gameobject type]
              (list 'arcadia.core/get-component* gameobject type))
    :inline-arities #{2}}
-  [gameobject type]
-  (.GetComponent gameobject type))
+  [obj t]
+  (condcast-> t t2
+    Type   (condcast-> obj obj2
+             GameObject (.GetComponent obj2 t2)
+             Component (.GetComponent obj2 t2))
+    String (condcast-> obj obj2
+             GameObject (.GetComponent obj2 t2)
+             Component (.GetComponent obj2 t2))))
 
 (defn add-component 
   "Add a component to a gameobject
