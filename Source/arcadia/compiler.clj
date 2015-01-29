@@ -87,7 +87,8 @@
                 warn-on-reflection
                 unchecked-math
                 compiler-options
-                enabled]}
+                enabled
+                debug]}
         (@configuration :compiler)
         assemblies (or assemblies
                        (assemblies-path))]
@@ -95,6 +96,7 @@
       (let [namespace (asset->ns asset)]
         (try
           (binding [*compile-path* assemblies
+                    *debug* debug
                     *warn-on-reflection* warn-on-reflection
                     *unchecked-math* unchecked-math
                     *compiler-options* compiler-options]
@@ -102,7 +104,7 @@
             (compile namespace)
             (AssetDatabase/Refresh ImportAssetOptions/ForceUpdate))
           (catch clojure.lang.Compiler+CompilerException e
-            (Debug/Log (str (.Message e))))
+            (Debug/LogError (str (.. e InnerException Message) " (at " (.FileSource e) ":" (.Line e) ")")))
           (catch Exception e
             (Debug/LogException e))))
       (Debug/Log (str "Skipping " asset ", "
