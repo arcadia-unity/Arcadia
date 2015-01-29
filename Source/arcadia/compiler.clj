@@ -100,20 +100,23 @@
                     *warn-on-reflection* warn-on-reflection
                     *unchecked-math* unchecked-math
                     *compiler-options* compiler-options]
-            (Debug/Log (str "Compiling " (name namespace) "..."))
+            (if (@configuration :verbose)
+              (Debug/Log
+                (str "Compiling " (name namespace) "...")))
             (compile namespace)
             (AssetDatabase/Refresh ImportAssetOptions/ForceUpdate))
           (catch clojure.lang.Compiler+CompilerException e
             (Debug/LogError (str (.. e InnerException Message) " (at " (.FileSource e) ":" (.Line e) ")")))
           (catch Exception e
             (Debug/LogException e))))
-      (Debug/Log (str "Skipping " asset ", "
-                      (cond (not (first-form-is-ns? asset))
-                            "first form is not ns"
-                            (not (correct-ns? asset))
-                            "namespace in ns form does not match file name"
-                            :else
-                            "not sure why"))))))
+      (if (@configuration :verbose)
+        (Debug/LogWarning (str "Skipping " asset ", "
+                               (cond (not (first-form-is-ns? asset))
+                                     "first form is not ns"
+                                     (not (correct-ns? asset))
+                                     "namespace in ns form does not match file name"
+                                     :else
+                                     "not sure why")))))))
 
 (defn import-assets [imported]
   (doseq [asset (clj-files imported)]
