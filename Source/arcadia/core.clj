@@ -155,7 +155,7 @@
 ;; annoying in the case that you want to branch on a supertype, for
 ;; instance, but the cast would remove interface information. Use with
 ;; this in mind.
-(defmacro ^:private condcast-> [expr xsym & clauses]
+(defmacro condcast-> [expr xsym & clauses]
   (let [exprsym (gensym "exprsym_")
         [clauses default] (if (even? (count clauses))
                             [clauses nil] 
@@ -242,36 +242,47 @@
     `(let [~@(mapcat reverse bndgs)]
        ~(cons head (replace bndgs rst)))))
 
-(def log
-  (atom []))
+(defn- gc-default-body [obj t]
+  `(condcast-> ~t t2#
+     Type   (condcast-> ~obj obj2#
+              UnityEngine.GameObject (.GetComponent obj2# t2#)
+              UnityEngine.Component (.GetComponent obj2# t2#))
+     String (condcast-> ~obj obj2#
+              UnityEngine.GameObject (.GetComponent obj2# t2#)
+              UnityEngine.Component (.GetComponent obj2# t2#))))
 
-; t here can be (type-args bla)
-(defn- get-component-rt [obj t env]
-  (if (known-implementer-reference? obj 'GetComponent env)
-    `(.GetComponent  ~obj ~t)
-    `(condcast-> ~obj obj# 
-       UnityEngine.GameObject (.GetComponent obj# ~t)
-       UnityEngine.Component (.GetComponent obj# ~t))))
+(defmacro ^:private gc-default-body-mac [obj t]
+  (gc-default-body obj t))
+
+(defn- gc-rt [obj t env]
+  (cond
+    (type-name? t)
+    (if (known-implementer-reference? obj 'GetComponent env)
+      `(.GetComponent ~obj (~'type-args ~t))
+      `(condcast-> ~obj obj#
+         UnityEngine.GameObject (.GetComponent obj# (~'type-args ~t))
+         UnityEngine.Component (.GetComponent obj# (~'type-args ~t))))
+    
+    (let [t-tr (type-of-reference t env)]
+      (or (isa? t-tr Type) (isa? t-tr String)))
+    (if (known-implementer-reference? obj 'GetComponent env)
+      `(.GetComponent ~obj (~'type-args ~t))
+      `(condcast-> ~obj obj#
+         UnityEngine.GameObject (.GetComponent obj# ~t)
+         UnityEngine.Component (.GetComponent obj# ~t)))
+
+    (known-implementer-reference? obj 'GetComponent env)
+    `(condcast-> ~t t#
+       Type (.GetComponent ~obj t#)
+       String (.GetComponent ~obj t#))
+
+    :else (gc-default-body obj t)))
 
 (defmacro get-component* [obj t]
-  (swap! log conj
-    {:obj obj
-     :t t
-     :&env (into {}
-             (map (fn [k] [k (get &env k)])
-               (keys &env)))})
   (if (not-every? symbol? [obj t])
     (raise-non-symbol-args
       (list 'arcadia.core/get-component* obj t))
-    (cond
-      (contains? &env t)
-      (get-component-rt obj t &env)
-
-      (type-name? t)
-      (get-component-rt obj `(~'type-args ~t) &env)
-      
-      :else
-      (get-component-rt obj t &env))))
+    (gc-rt obj t &env)))
 
 (defn get-component
   "Returns the component of Type type if the game object has one attached, nil if it doesn't.
@@ -282,13 +293,7 @@
              (list 'arcadia.core/get-component* gameobject type))
    :inline-arities #{2}}
   [obj t]
-  (condcast-> t t2
-    Type   (condcast-> obj obj2
-             GameObject (.GetComponent obj2 t2)
-             Component (.GetComponent obj2 t2))
-    String (condcast-> obj obj2
-             GameObject (.GetComponent obj2 t2)
-             Component (.GetComponent obj2 t2))))
+  (gc-default-body-mac obj t))
 
 (defn add-component 
   "Add a component to a gameobject
