@@ -115,7 +115,9 @@
             (Debug/LogException e)))
       (if (@configuration :verbose)
         (Debug/LogWarning (str "Skipping " asset ", "
-                               (cond (not (first-form-is-ns? asset))
+                               (cond (not enabled)
+                                     "compiler is disabled"
+                                     (not (first-form-is-ns? asset))
                                      "first form is not ns"
                                      (not (correct-ns? asset))
                                      "namespace in ns form does not match file name"
