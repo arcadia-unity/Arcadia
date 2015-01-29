@@ -7,6 +7,7 @@
             Application
             MonoBehaviour
             GameObject
+            Component
             PrimitiveType]))
 
 (defn- regex? [x]
@@ -21,6 +22,61 @@
   from the REPL are considered to be form within the editor"
   []
   Application/isEditor)
+
+;; ============================================================
+;; lifecycle
+;; ============================================================
+
+;; this one's really handy
+(defn destroyed? [^UnityEngine.Object x]
+  (UnityEngine.Object/op_Equality x nil))
+
+(defn ia?
+  "Stands for in-aot?, which is too many characters when we start
+  stringing it into larger constructions. Returns true if and only if
+  compiler is currently AOT-ing. Very useful for controling side
+  effects to the scene graph."
+  []
+  (boolean *compile-files*))
+
+(defmacro if-ia [& body]
+  `(if (ia?)
+     ~@body))
+
+(defmacro when-ia [& body]
+  (when (ia?)
+    ~@body))
+
+(defmacro when-not-ia [& body]
+  `(when-not (ia?)
+     ~@body))
+
+(defmacro def-ia [& body]
+  `(let [v# (declare ~name)]
+     (when-ia (def ~name ~@body))
+     v#))
+
+(defmacro def-not-ia [name & body]
+  `(let [v# (declare ~name)]
+     (when-not-ia (def ~name ~@body))
+     v#))
+
+(defn bound-var? [v]
+  (and (var? v)
+    (not
+      (instance? clojure.lang.Var+Unbound
+        (var-get v)))))
+
+;; this one could use some more work
+(defmacro defscn [name & body]
+  `(let [v# (declare ~name)]
+     (when-not-ia
+       (let [bldg# (do ~@body)]
+         (when (and (bound-var? (resolve (quote ~name)))
+                 (not (destroyed? ~name)))
+           (destroy ~name))
+         (def ~name bldg#)))
+     v#))
 
 ;; ============================================================
 ;; defcomponent 
@@ -147,6 +203,33 @@
        :opts+specs method-impls2})))
 
 ;; ============================================================
+;; condcast->
+;; ============================================================
+
+;; note this takes an optional default value. This macro is potentially
+;; annoying in the case that you want to branch on a supertype, for
+;; instance, but the cast would remove interface information. Use with
+;; this in mind.
+(defmacro condcast-> [expr xsym & clauses]
+  (let [exprsym (gensym "exprsym_")
+        [clauses default] (if (even? (count clauses))
+                            [clauses nil] 
+                            [(butlast clauses)
+                             [:else
+                              `(let [~xsym ~exprsym]
+                                 ~(last clauses))]])
+        cs (->> clauses
+             (partition 2)
+             (mapcat
+               (fn [[t then]]
+                 `[(instance? ~t ~exprsym)
+                   (let [~(with-meta xsym {:tag t}) ~exprsym]
+                     ~then)])))]
+    `(let [~exprsym ~expr]
+       ~(cons 'cond
+          (concat cs default)))))
+
+;; ============================================================
 ;; get-component
 ;; ============================================================
 
@@ -214,30 +297,58 @@
     `(let [~@(mapcat reverse bndgs)]
        ~(cons head (replace bndgs rst)))))
 
+(defn- gc-default-body [obj t]
+  `(condcast-> ~t t2#
+     Type   (condcast-> ~obj obj2#
+              UnityEngine.GameObject (.GetComponent obj2# t2#)
+              UnityEngine.Component (.GetComponent obj2# t2#))
+     String (condcast-> ~obj obj2#
+              UnityEngine.GameObject (.GetComponent obj2# t2#)
+              UnityEngine.Component (.GetComponent obj2# t2#))))
+
+(defmacro ^:private gc-default-body-mac [obj t]
+  (gc-default-body obj t))
+
+(defn- gc-rt [obj t env]
+  (cond
+    (type-name? t)
+    (if (known-implementer-reference? obj 'GetComponent env)
+      `(.GetComponent ~obj (~'type-args ~t))
+      `(condcast-> ~obj obj#
+         UnityEngine.GameObject (.GetComponent obj# (~'type-args ~t))
+         UnityEngine.Component (.GetComponent obj# (~'type-args ~t))))
+    
+    (let [t-tr (type-of-reference t env)]
+      (or (isa? t-tr Type) (isa? t-tr String)))
+    (if (known-implementer-reference? obj 'GetComponent env)
+      `(.GetComponent ~obj (~'type-args ~t))
+      `(condcast-> ~obj obj#
+         UnityEngine.GameObject (.GetComponent obj# ~t)
+         UnityEngine.Component (.GetComponent obj# ~t)))
+
+    (known-implementer-reference? obj 'GetComponent env)
+    `(condcast-> ~t t#
+       Type (.GetComponent ~obj t#)
+       String (.GetComponent ~obj t#))
+
+    :else (gc-default-body obj t)))
+
 (defmacro get-component* [obj t]
   (if (not-every? symbol? [obj t])
     (raise-non-symbol-args
       (list 'arcadia.core/get-component* obj t))
-    (cond
-      (contains? &env t)
-      `(.GetComponent ~obj ~t)
-      (and
-        (known-implementer-reference? obj 'GetComponent &env)
-        (type-name? t))
-      `(.GetComponent ~obj (~'type-args ~t))
-      :else
-      `(.GetComponent ~obj ~t))))
+    (gc-rt obj t &env)))
 
 (defn get-component
   "Returns the component of Type type if the game object has one attached, nil if it doesn't.
   
-  * gameobject - the GameObject to query, a GameObject
+  * obj - the object to query, a GameObject or Component
   * type - the type of the component to get, a Type or String"
   {:inline (fn [gameobject type]
              (list 'arcadia.core/get-component* gameobject type))
    :inline-arities #{2}}
-  [gameobject type]
-  (.GetComponent gameobject type))
+  [obj t]
+  (gc-default-body-mac obj t))
 
 (defn add-component 
   "Add a component to a gameobject
@@ -250,28 +361,6 @@
   [^GameObject gameobject ^Type type]
   (.AddComponent gameobject type))
 
-;; note this takes an optional default value. This macro is potentially
-;; annoying in the case that you want to branch on a supertype, for
-;; instance, but the cast would remove interface information. Use with
-;; this in mind.
-(defmacro ^:private condcast-> [expr xsym & clauses]
-  (let [exprsym (gensym "exprsym_")
-        [clauses default] (if (even? (count clauses))
-                            [clauses nil] 
-                            [(butlast clauses)
-                             [:else
-                              `(let [~xsym ~exprsym]
-                                 ~(last clauses))]])
-        cs (->> clauses
-             (partition 2)
-             (mapcat
-               (fn [[t then]]
-                 `[(instance? ~t ~exprsym)
-                   (let [~(with-meta xsym {:tag t}) ~exprsym]
-                     ~then)])))]
-    `(let [~exprsym ~expr]
-       ~(cons 'cond
-          (concat cs default)))))
 
 ;; ============================================================
 ;; wrappers
