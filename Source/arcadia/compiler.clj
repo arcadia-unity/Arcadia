@@ -38,7 +38,8 @@
   [p]
   (if-> p
         (clojure.string/replace #"\.clj$" "")
-        (clojure.string/replace #"\/" ".")))
+        (clojure.string/replace #"\/" ".")
+        (clojure.string/replace "_" "-")))
 
 (defn relative-to-load-path
   "Sequence of subpaths relative to the load path, shortest first"
