@@ -13,6 +13,7 @@
 
 (defn env-map []
   {:*ns* *ns*
+   :debug (-> @configuration :compiler :debug)
    :*warn-on-reflection* (-> @configuration :compiler :warn-on-reflection)
    :*math-context* *math-context*
    :*print-meta* *print-meta*
@@ -45,6 +46,7 @@
                  *default-data-reader-fn* (:*default-data-reader-fn* e#)
                  *command-line-args* (:*command-line-args* e#)
                  *unchecked-math* (:*unchecked-math* e#)
+                 *debug* true
                  *assert* (:*assert* e#)]
          ~@body))))
 

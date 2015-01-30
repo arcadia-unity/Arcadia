@@ -1,7 +1,7 @@
 (ns arcadia.compiler
   (:require [arcadia.config :refer [configuration]]
             clojure.string)
-  (:import [System IO.Path IO.File Environment]
+  (:import [System IO.Path IO.File IO.StringWriter Environment]
            [UnityEngine Debug]
            [UnityEditor AssetDatabase ImportAssetOptions PlayerSettings ApiCompatibilityLevel]))
 
@@ -88,31 +88,42 @@
                 warn-on-reflection
                 unchecked-math
                 compiler-options
-                enabled]}
+                enabled
+                debug]}
         (@configuration :compiler)
         assemblies (or assemblies
                        (assemblies-path))]
     (if (and enabled (should-compile? asset))
-      (let [namespace (asset->ns asset)]
-        (try
+      (try
+        (let [namespace (asset->ns asset)
+              errors (StringWriter.)]
           (binding [*compile-path* assemblies
+                    *debug* debug
                     *warn-on-reflection* warn-on-reflection
                     *unchecked-math* unchecked-math
-                    *compiler-options* compiler-options]
-            (Debug/Log (str "Compiling " (name namespace) "..."))
+                    *compiler-options* compiler-options
+                    *err* errors]
+            (if (@configuration :verbose)
+              (Debug/Log
+                (str "Compiling " (name namespace) "...")))
             (compile namespace)
-            (AssetDatabase/Refresh ImportAssetOptions/ForceUpdate))
+            (doseq [error (remove empty? (clojure.string/split (.ToString errors) #"\n"))]
+                 (Debug/LogWarning error))
+            (AssetDatabase/Refresh ImportAssetOptions/ForceUpdate)))
           (catch clojure.lang.Compiler+CompilerException e
-            (Debug/Log (str (.Message e))))
+            (Debug/LogError (str (.. e InnerException Message) " (at " (.FileSource e) ":" (.Line e) ")")))
           (catch Exception e
-            (Debug/LogException e))))
-      (Debug/Log (str "Skipping " asset ", "
-                      (cond (not (first-form-is-ns? asset))
-                            "first form is not ns"
-                            (not (correct-ns? asset))
-                            "namespace in ns form does not match file name"
-                            :else
-                            "not sure why"))))))
+            (Debug/LogException e)))
+      (if (@configuration :verbose)
+        (Debug/LogWarning (str "Skipping " asset ", "
+                               (cond (not enabled)
+                                     "compiler is disabled"
+                                     (not (first-form-is-ns? asset))
+                                     "first form is not ns"
+                                     (not (correct-ns? asset))
+                                     "namespace in ns form does not match file name"
+                                     :else
+                                     "not sure why")))))))
 
 (defn import-assets [imported]
   (doseq [asset (clj-files imported)]
