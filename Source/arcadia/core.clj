@@ -310,28 +310,29 @@
   (gc-default-body obj t))
 
 (defn- gc-rt [obj t env]
-  (cond
-    (type-name? t)
-    (if (known-implementer-reference? obj 'GetComponent env)
-      `(.GetComponent ~obj (~'type-args ~t))
-      `(condcast-> ~obj obj#
-         UnityEngine.GameObject (.GetComponent obj# (~'type-args ~t))
-         UnityEngine.Component (.GetComponent obj# (~'type-args ~t))))
-    
-    (let [t-tr (type-of-reference t env)]
-      (or (isa? t-tr Type) (isa? t-tr String)))
-    (if (known-implementer-reference? obj 'GetComponent env)
-      `(.GetComponent ~obj (~'type-args ~t))
-      `(condcast-> ~obj obj#
-         UnityEngine.GameObject (.GetComponent obj# ~t)
-         UnityEngine.Component (.GetComponent obj# ~t)))
+  (let [implref (known-implementer-reference? obj 'GetComponent env)
+        t-tr (type-of-reference t env)]
+    (cond
+      (isa? t-tr Type)
+      (if implref
+        `(.GetComponent ~obj (~'type-args ~t))
+        `(condcast-> ~obj obj#
+           UnityEngine.GameObject (.GetComponent obj# (~'type-args ~t))
+           UnityEngine.Component (.GetComponent obj# (~'type-args ~t))))
 
-    (known-implementer-reference? obj 'GetComponent env)
-    `(condcast-> ~t t#
-       Type (.GetComponent ~obj t#)
-       String (.GetComponent ~obj t#))
-
-    :else (gc-default-body obj t)))
+      (isa? t-tr String)
+      (if implref
+        `(.GetComponent ~obj ~t)
+        `(condcast-> ~obj obj#
+           UnityEngine.GameObject (.GetComponent obj# ~t)
+           UnityEngine.Component (.GetComponent obj# ~t)))
+      
+      :else
+      (if implref
+        `(condcast-> ~t t#
+           Type (.GetComponent ~obj t#)
+           String (.GetComponent ~obj t#))
+        (gc-default-body obj t)))))
 
 (defmacro get-component* [obj t]
   (if (not-every? symbol? [obj t])
