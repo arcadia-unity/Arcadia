@@ -8,6 +8,13 @@ Arcadia is alpha-quality software, and shouldn't be used for anything important 
 
 Primary work is done on the rapidly evolving [develop branch](https://github.com/arcadia-unity/Arcadia/tree/develop). Use that for bleeding edge features.
 
+Community
+---------
+- [Mailing List](https://groups.google.com/forum/#!forum/arcadia-unity)
+- [Twitter](https://twitter.com/arcadiaunity)
+- [Gittr](https://gitter.im/arcadia-unity/Arcadia)
+- IRC freenode #arcadiaunity
+
 Usage
 -----
 The contents of the repository should be copied to a folder named `Arcadia` in any Unity project's Assets folder to enable Clojure. In the future, this will be available from the Asset Store. Once copied, you have access to the REPL and the Clojure compiler.
