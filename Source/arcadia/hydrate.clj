@@ -487,10 +487,14 @@
 
 (defn- hydrate-game-object-children
   [^UnityEngine.GameObject obj, specs]
-  (let [^UnityEngine.Transform trns (.GetComponent obj UnityEngine.Transform)]
+  (let [^UnityEngine.Transform trns (.GetComponent obj (type-args UnityEngine.Transform))]
     (doseq [spec specs]
-      (hydrate-game-object
-        (assoc-in-mv spec [:transform 0 :parent] trns)))))
+      (if (instance? GameObject spec)
+        (let [^GameObject spec2 spec
+              trns2 (.GetComponent spec2 (type-args Transform))]
+          (set! (.parent trns2) trns))
+        (hydrate-game-object
+          (assoc-in-mv spec [:transform 0 :parent] trns))))))
 
 (defn- game-object-children [^GameObject obj]
   (let [^Transform trns (.GetComponent obj UnityEngine.Transform)]
