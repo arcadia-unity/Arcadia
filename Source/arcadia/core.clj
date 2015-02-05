@@ -144,6 +144,9 @@
 (defn- find-message-protocol-symbol [s]
   (symbol (str "arcadia.messages/I" s)))
 
+(defn- awake-method? [{:keys [name]}]
+  (= name 'Awake))
+
 (defn- normalize-message-implementations [msgimpls]
   (for [[name args & fntail] msgimpls
         :let [protocol (find-message-protocol-symbol name)]]
@@ -152,14 +155,33 @@
 (defn- process-method [{:keys [protocol name args fntail]}]
   [protocol `(~name ~args ~@fntail)])
 
+(defn- process-awake-method [impl]
+  (process-method
+    (update-in impl [:fntail]
+      #(cons `(require (quote ~(ns-name *ns*))) %))))
+
+(defn ^:private ensure-has-awake [mimpls]
+  (if (some awake-method? mimpls)
+    mimpls
+    (cons {:protocol (find-message-protocol-symbol 'Awake)
+           :name     'Awake
+           :args     '[this]
+           :fntail   nil}
+      mimpls)))
+
 (defn- process-defcomponent-method-implementations [mimpls]
   (let [[msgimpls impls] ((juxt take-while drop-while)
                           (complement symbol?)
                           mimpls)
-        nrmls             (concat
-                            (normalize-message-implementations msgimpls)
-                            (normalize-method-implementations impls))]
-    (mapcat process-method nrmls)))
+        nrmls            (ensure-has-awake
+                           (concat
+                             (normalize-message-implementations msgimpls)
+                             (normalize-method-implementations impls)))]
+    (apply concat
+      (for [impl nrmls]
+        (if (awake-method? impl)
+          (process-awake-method impl)
+          (process-method impl))))))
 
 (defmacro defcomponent*
   "Defines a new component. See defcomponent for version with defonce semantics."
