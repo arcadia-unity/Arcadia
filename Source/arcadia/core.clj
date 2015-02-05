@@ -73,6 +73,8 @@
      (when-not-ia
        (let [bldg# (do ~@body)]
          (when (and (bound-var? (resolve (quote ~name)))
+                 (or (instance? UnityEngine.GameObject ~name)
+                   (instance? UnityEngine.Component ~name))
                  (not (destroyed? ~name)))
            (destroy ~name))
          (def ~name bldg#)))
