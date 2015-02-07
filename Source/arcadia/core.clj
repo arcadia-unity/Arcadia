@@ -13,6 +13,7 @@
 (defn- regex? [x]
   (instance? System.Text.RegularExpressions.Regex x))
 
+
 ;; ============================================================
 ;; application
 ;; ============================================================
@@ -176,9 +177,10 @@
 (defn- process-require-trigger [impl ns-squirrel-sym]
   (process-method
     (update-in impl [:fntail]
-      #(cons `(do (UnityEngine.Debug/Log (str "requiring " (quote ~(ns-name *ns*))))
+      #(cons `(do ;(UnityEngine.Debug/Log (str "requiring " (quote ~(ns-name *ns*))))
                 (require (quote ~(ns-name *ns*)))
-                (UnityEngine.Debug/Log (str "(hopefully) required " (quote ~(ns-name *ns*)))))
+                ;(UnityEngine.Debug/Log (str "(hopefully) required " (quote ~(ns-name *ns*))))
+                )
          %))))
 
 (defn- require-trigger-method? [mimpl]
@@ -396,6 +398,27 @@
   [^GameObject gameobject ^Type type]
   (.AddComponent gameobject type))
 
+
+;; ============================================================
+;; parent/child
+;; ============================================================
+
+(defn unparent ^GameObject [^GameObject child]
+  (set! (.parent (.transform child)) nil)
+  child)
+
+(defn unchild ^GameObject [^GameObject parent ^GameObject child]
+  (when (= parent (.parent (.transform child)))
+    (unparent child))
+  parent)
+
+(defn set-parent ^GameObject [^GameObject child ^GameObject parent]
+  (set! (.parent (.transform child)) (.transform parent))
+  child)
+
+(defn set-child ^GameObject [^GameObject parent child]
+  (set-parent child parent)
+  parent)
 
 ;; ============================================================
 ;; wrappers
