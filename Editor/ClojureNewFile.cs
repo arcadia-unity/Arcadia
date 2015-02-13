@@ -1,13 +1,10 @@
 using System;
 using System.Linq;
 using System.IO;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.RegularExpressions;
 
 using UnityEngine;
 using UnityEditor;
-using UnityEditor.ProjectWindowCallback;
 using clojure.lang;
 
 public class ClojureNewFile : EditorWindow {
@@ -86,7 +83,7 @@ public class ClojureNewFileEndNameEditAction : UnityEditor.ProjectWindowCallback
       return;
     }
 
-    // slurp up the template and replace ##NAMESPACE## with the namespace and ##SCRIPTNAME## with the last namespace component
+    // slurp up the template and replace #NAMESPACE# with the namespace and #COMPONENTNAME# with the last namespace component
     // writing the result to our destination
     var ns = nsSym.Name;
     var component = ns.Split('.').Last();
