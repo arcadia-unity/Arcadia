@@ -1,8 +1,8 @@
-(ns #SCRIPTNAME#
+(ns #NAMESPACE#
   (:use arcadia.core)
   (:import [UnityEngine Debug]))
 
-(defcomponent #SCRIPTNAME# []
+(defcomponent #COMPONENTNAME# []
   ; use this for initialization
   (Start [this])
   
