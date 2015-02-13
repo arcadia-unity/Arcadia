@@ -1,7 +1,9 @@
 (ns arcadia.compiler
   (:require [arcadia.config :refer [configuration]]
-            clojure.string)
+            [clojure.string :as s])
   (:import [System IO.Path IO.File IO.StringWriter Environment]
+           [System.Security.Cryptography MD5]
+           [System.Text Encoding]
            [UnityEngine Debug]
            [UnityEditor AssetDatabase ImportAssetOptions PlayerSettings ApiCompatibilityLevel]))
 
@@ -37,24 +39,30 @@
   \"foo.bar.baz\""
   [p]
   (if-> p
-        (clojure.string/replace #"\.clj$" "")
-        (clojure.string/replace #"\/" ".")
-        (clojure.string/replace "_" "-")))
+        (s/replace #"\.clj$" "")
+        (s/replace #"\/" ".")
+        (s/replace "_" "-")))
 
 (defn relative-to-load-path
   "Sequence of subpaths relative to the load path, shortest first"
   [path]
-  (->> (clojure.string/split path #"\/")
+  (->> (s/split path #"\/")
        rests
        reverse
-       (map #(clojure.string/join "/" %))
+       (map #(s/join "/" %))
        (filter #(clojure.lang.RT/FindFile %))))
 
-(defn clj-file? [path]
+(defn- clj-file? [path]
   (boolean (re-find #"\.clj$" path)))
 
-(defn clj-files [paths]
+(defn- clj-compiled? [path]
+  (boolean (re-find #"\.clj.dll$" path)))
+
+(defn- clj-files [paths]
   (filter clj-file? paths))
+
+(defn- clj-compiled [paths]
+  (filter clj-compiled? paths))
 
 (defn asset->ns [asset]
   (-> asset
@@ -107,7 +115,7 @@
               (Debug/Log
                 (str "Compiling " (name namespace) "...")))
             (compile namespace)
-            (doseq [error (remove empty? (clojure.string/split (.ToString errors) #"\n"))]
+            (doseq [error (remove empty? (s/split (.ToString errors) #"\n"))]
                  (Debug/LogWarning error))
             (AssetDatabase/Refresh ImportAssetOptions/ForceUpdate)))
           (catch clojure.lang.Compiler+CompilerException e
@@ -125,9 +133,23 @@
                                      :else
                                      "not sure why")))))))
 
+(defn hash-string [text]
+  (reduce
+   (fn [hash byte]
+     (str hash (format "%x" byte)))
+   (.ComputeHash (MD5/Create) (.GetBytes Encoding/UTF8 text))))
+
+(defn import-compiled [asset]
+  (let [guid (hash-string (s/replace asset #"\.clj\.dll" ""))
+        meta (str asset ".meta")]
+    (Debug/Log (format "Generating GUID for compiled DLL '%s'" asset))
+    (spit meta (s/replace (slurp meta) #"\b[0-9a-f]{32}\b" guid))))
+
 (defn import-assets [imported]
-  (doseq [asset (clj-files imported)]
-    (import-asset asset)))
+  (let [files (clj-files imported)
+        compiled (clj-compiled imported)]
+    (doseq [asset files] (import-asset asset))
+    (doseq [asset compiled] (import-compiled asset))))
 
 (defn delete-assets [deleted]
   (doseq [asset (clj-files deleted)]
