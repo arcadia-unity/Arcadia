@@ -64,7 +64,7 @@ public class ClojureNewFileEndNameEditAction : UnityEditor.ProjectWindowCallback
     var filename = Path.GetFileName(path);
     var dir = Path.GetDirectoryName(path);
     if (filename == null) return;
-    if (dir == null) dir = "";
+    if (dir == null) dir = DefaultScriptPath;
 
     dir = Path.Combine(Environment.CurrentDirectory, dir);
 
