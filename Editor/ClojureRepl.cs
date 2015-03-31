@@ -7,9 +7,14 @@ using System.Text;
 using System.Net.Sockets;
 using System.Collections.Generic;
 using System.Threading;
+using System.Runtime.InteropServices;
 
 public class ClojureRepl : EditorWindow {
   private static UdpClient replSocket;
+  
+  
+  [DllImport ("ForceEditorUpdates")]
+  private static extern void StartForcingEditorApplicationUpdates();
   
   static ClojureRepl() {
     RT.load("arcadia/repl");
@@ -35,6 +40,7 @@ public class ClojureRepl : EditorWindow {
   public static void StartREPL () {
     replSocket = (UdpClient)RT.var("arcadia.repl", "start-server").invoke(11211);
     EditorApplication.update += ClojureRepl.Update;
+    StartForcingEditorApplicationUpdates();
   }
 
   [MenuItem ("Arcadia/REPL/Stop &#r")]
