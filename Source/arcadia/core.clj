@@ -159,7 +159,7 @@
 (defn- ensure-has-awake [mimpls]
   (if (some awake-method? mimpls)
     mimpls
-    (cons {:protocol (find-message-protocol-symbol 'Awake)
+    (cons {:interface (find-message-interface-symbol 'Awake)
            :name     'Awake
            :args     '[this]
            :fntail   nil}
@@ -168,7 +168,7 @@
 (defn- ensure-has-start [mimpls]
   (if (some #(= (:name %) 'Start) mimpls)
     mimpls
-    (cons {:protocol (find-message-protocol-symbol 'Start)
+    (cons {:interface (find-message-interface-symbol 'Start)
            :name     'Start
            :args     '[this]
            :fntail   nil}
