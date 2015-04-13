@@ -295,7 +295,7 @@
     (when (.get_HasClrType lclb)
       (.get_ClrType lclb))))
 
-(defn type? [x]
+(defn- type? [x]
   (instance? System.MonoType x))
 
 (defn- tag-type [x]

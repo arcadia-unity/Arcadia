@@ -31,7 +31,10 @@
 (defn- type-symbol? [x]
   (boolean
     (and (symbol? x)
-      (when-let [y (resolve x)]
+      (when-let [y (try
+                     (resolve x)
+                     (catch clojure.lang.TypeNotFoundException e
+                       nil))]
         (type? y)))))
 
 (defn- ensure-type ^System.MonoType [t]
@@ -75,8 +78,9 @@
       (.Name t))))
 
 ;; generate more if you feel it worth testing for
-(defn- keys-for-setable [{n :name}]
-  [(nice-keyword n)])
+(defn- keys-for-setable [setable]
+  (mu/checked-keys [[name] setable]
+    [(nice-keyword name)]))
 
 (defn- type-for-setable [{typ ::type}]
   typ) ; good enough for now
@@ -731,22 +735,26 @@
     (assert (symbol? direct))
     (assert (symbol? shared))
     (let [direct-setable (first (setables-with-name typesym direct))
-          shared-setable (first (setables-with-name typesym shared))
-          direct-valsym  (gensym "direct-valsym_")
-          shared-valsym  (gensym "shared-valsym_")
-          d-clause       (standard-populater-set-clause direct-setable
-                           (assoc ctx :valsym direct-valsym))
-          s-clause       (standard-populater-set-clause shared-setable
-                           (assoc ctx :valsym shared-valsym))
-          direct-key     (first (keys-for-setable direct-setable))
-          shared-key     (first (keys-for-setable shared-setable))]
-      `(if-let [[_# ~direct-valsym] (find ~specsym ~direct-key)]
-         (do ~d-clause
-             (-> ~specsym (dissoc ~shared-key) (dissoc ~direct-key)))
-         (if-let [[_# ~shared-valsym] (find ~specsym ~shared-key)]
-           (do ~s-clause
-               (dissoc ~specsym ~shared-key))
-           ~specsym)))))
+          shared-setable (first (setables-with-name typesym shared))]
+      (assert direct-setable
+        (str "no direct-setable. typesym: " typesym ", direct: " direct))
+      (assert shared-setable
+        (str "no shared-setable. typesym: " typesym ", shared: " direct))
+      (let [direct-valsym  (gensym "direct-valsym_")
+            shared-valsym  (gensym "shared-valsym_")
+            d-clause       (standard-populater-set-clause direct-setable
+                             (assoc ctx :valsym direct-valsym))
+            s-clause       (standard-populater-set-clause shared-setable
+                             (assoc ctx :valsym shared-valsym))
+            direct-key     (first (keys-for-setable direct-setable))
+            shared-key     (first (keys-for-setable shared-setable))]
+        `(if-let [[_# ~direct-valsym] (find ~specsym ~direct-key)]
+           (do ~d-clause
+               (-> ~specsym (dissoc ~shared-key) (dissoc ~direct-key)))
+           (if-let [[_# ~shared-valsym] (find ~specsym ~shared-key)]
+             (do ~s-clause
+                 (dissoc ~specsym ~shared-key))
+             ~specsym))))))
 
 (defn- shared-elem-prepopulater-form [sharables ctx]
   (mu/checked-keys [[typesym initsym specsym] ctx]
@@ -756,53 +764,27 @@
       `(as-> ~specsym ~specsym
          ~@pfcs))))
 
+(defn- shared-direct-pairs [t]
+  (let [ss (setables t)]
+    (for [s ss
+          :let [n (name (:name s))]
+          :when (re-find #"shared" n)
+          :let [[[_ short]] (re-seq #"shared(.*)" n)
+                p (re-pattern (str "(?i)" short))
+                shared s
+                direct (first ;; this is janky
+                         (filter #(re-matches p (name (:name %)))
+                           ss))]]
+      {:shared (:name shared) ;; sort of/severely stupid that we're
+                              ;; throwing away the setable, fix later
+       :direct (:name direct)})))
+
 (def ^:private shared-elem-components
-  {'UnityEngine.CapsuleCollider
-   [{:shared 'sharedMaterial, :direct 'material}],
-   'UnityEngine.TerrainCollider
-   [{:shared 'sharedMaterial, :direct 'material}],
-   'UnityEngine.SphereCollider
-   [{:shared 'sharedMaterial, :direct 'material}],
-   'UnityEngine.ParticleRenderer
-   [{:shared 'sharedMaterials, :direct 'materials}
-    {:shared 'sharedMaterial, :direct 'material}],
-   'UnityEngine.MeshFilter [{:shared 'sharedMesh, :direct 'mesh}],
-   'UnityEngine.ParticleSystemRenderer
-   [{:shared 'sharedMaterials, :direct 'materials}
-    {:shared 'sharedMaterial, :direct 'material}],
-   'UnityEngine.WheelCollider
-   [{:shared 'sharedMaterial, :direct 'material}],
-   'UnityEngine.Collider [{:shared 'sharedMaterial, :direct 'material}],
-   'UnityEngine.BoxCollider
-   [{:shared 'sharedMaterial, :direct 'material}],
-   'UnityEngine.CharacterController
-   [{:shared 'sharedMaterial, :direct 'material}],
-   'UnityEngine.SkinnedMeshRenderer
-   [{:shared 'sharedMaterials, :direct 'materials}
-    {:shared 'sharedMaterial, :direct 'material}],
-   'UnityEngine.MeshRenderer
-   [{:shared 'sharedMaterials, :direct 'materials}
-    {:shared 'sharedMaterial, :direct 'material}],
-   'UnityEngine.RaycastCollider
-   [{:shared 'sharedMaterial, :direct 'material}],
-   'UnityEngine.TrailRenderer
-   [{:shared 'sharedMaterials, :direct 'materials}
-    {:shared 'sharedMaterial, :direct 'material}],
-   'UnityEngine.MeshCollider
-   [{:shared 'sharedMaterial, :direct 'material}
-    {:shared 'sharedMesh, :direct 'mesh}],
-   'UnityEngine.ClothRenderer
-   [{:shared 'sharedMaterials, :direct 'materials}
-    {:shared 'sharedMaterial, :direct 'material}],
-   'UnityEngine.Renderer
-   [{:shared 'sharedMaterials, :direct 'materials}
-    {:shared 'sharedMaterial, :direct 'material}],
-   'UnityEngine.LineRenderer
-   [{:shared 'sharedMaterials, :direct 'materials}
-    {:shared 'sharedMaterial, :direct 'material}],
-   'UnityEngine.SpriteRenderer
-   [{:shared 'sharedMaterials, :direct 'materials}
-    {:shared 'sharedMaterial, :direct 'material}]})
+  (into {}
+    (for [t (all-component-types)
+          :let [sdp (shared-direct-pairs t)]
+          :when (seq sdp)]
+      [t sdp])))
 
 ;; this is kind of insane. Cleaner way?
 (defmacro ^:private establish-component-populaters-mac [m]
@@ -834,7 +816,8 @@
                       {:prepopulater-form-fn
                        (fn [ctx]
                          (mu/checked-keys [[initsym specsym] ctx]
-                           `(transform-prepopulate ~initsym ~specsym)))}))))]
+                           `(transform-prepopulate ~initsym ~specsym)))}))
+                  (mu/filter-keys cpfmf type-symbol?)))]
     `(merge ~m ~cpfmf)))
 
 (defmacro ^:private establish-value-type-populaters-mac [m]
@@ -1153,7 +1136,7 @@ Aspires to be idempotent with hydrate, ie,
        (if (or (vector? spec) (map? spec))
          (if-let [cfn (get (@hydration-database :populaters) t)]
            (cfn inst spec)
-           (throw (Exception. (str "No populater found for type " type))))
+           (throw (Exception. (str "No populater found for type " t))))
          (throw (Exception. "spec neither vector nor map"))))))
 
 ;; ============================================================
