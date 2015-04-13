@@ -134,21 +134,21 @@
       frm)))
 
 (defn- normalize-method-implementations [mimpls]
-  (for [[[protocol] impls] (partition 2
+  (for [[[interface] impls] (partition 2
                              (partition-by symbol? mimpls))
         [name args & fntail] impls]
-    (mu/lit-map protocol name args fntail)))
+    (mu/lit-map interface name args fntail)))
 
-(defn- find-message-protocol-symbol [s]
-  (symbol (str "arcadia.messages/I" s)))
+(defn- find-message-interface-symbol [s]
+  (symbol (str "arcadia.messages.I" s)))
 
 (defn- normalize-message-implementations [msgimpls]
   (for [[name args & fntail] msgimpls
-        :let [protocol (find-message-protocol-symbol name)]]
-    (mu/lit-map protocol name args fntail)))
+        :let [interface (find-message-interface-symbol name)]]
+    (mu/lit-map interface name args fntail)))
 
-(defn- process-method [{:keys [protocol name args fntail]}]
-  [protocol `(~name ~args ~@fntail)])
+(defn- process-method [{:keys [interface name args fntail]}]
+  [interface `(~name ~args ~@fntail)])
 
 (defn- process-defcomponent-method-implementations [mimpls]
   (let [[msgimpls impls] ((juxt take-while drop-while)
