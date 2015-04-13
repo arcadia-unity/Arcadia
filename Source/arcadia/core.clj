@@ -13,6 +13,7 @@
 (defn- regex? [x]
   (instance? System.Text.RegularExpressions.Regex x))
 
+
 ;; ============================================================
 ;; application
 ;; ============================================================
@@ -73,6 +74,8 @@
      (when-not-ia
        (let [bldg# (do ~@body)]
          (when (and (bound-var? (resolve (quote ~name)))
+                 (or (instance? UnityEngine.GameObject ~name)
+                   (instance? UnityEngine.Component ~name))
                  (not (destroyed? ~name)))
            (destroy ~name))
          (def ~name bldg#)))
@@ -107,7 +110,7 @@
        ~@methods)))
 
 ;; ported from deftype. should remove opts+specs, bizarre as a key. 
-(defn- component-defform [{:keys [name fields constant opts+specs]}]
+(defn- component-defform [{:keys [name fields constant opts+specs ns-squirrel-sym]}]
   (validate-fields fields name)
   (let [gname name ;?
         [interfaces methods opts] (parse-opts+specs opts+specs)
@@ -142,6 +145,9 @@
 (defn- find-message-interface-symbol [s]
   (symbol (str "arcadia.messages.I" s)))
 
+(defn- awake-method? [{:keys [name]}]
+  (= name 'Awake))
+
 (defn- normalize-message-implementations [msgimpls]
   (for [[name args & fntail] msgimpls
         :let [interface (find-message-interface-symbol name)]]
@@ -150,35 +156,87 @@
 (defn- process-method [{:keys [interface name args fntail]}]
   [interface `(~name ~args ~@fntail)])
 
-(defn- process-defcomponent-method-implementations [mimpls]
+(defn- ensure-has-awake [mimpls]
+  (if (some awake-method? mimpls)
+    mimpls
+    (cons {:protocol (find-message-protocol-symbol 'Awake)
+           :name     'Awake
+           :args     '[this]
+           :fntail   nil}
+      mimpls)))
+
+(defn- ensure-has-start [mimpls]
+  (if (some #(= (:name %) 'Start) mimpls)
+    mimpls
+    (cons {:protocol (find-message-protocol-symbol 'Start)
+           :name     'Start
+           :args     '[this]
+           :fntail   nil}
+      mimpls)))
+
+(defn- process-require-trigger [impl ns-squirrel-sym]
+  (process-method
+    (update-in impl [:fntail]
+      #(cons `(do ;(UnityEngine.Debug/Log (str "requiring " (quote ~(ns-name *ns*))))
+                (require (quote ~(ns-name *ns*)))
+                ;(UnityEngine.Debug/Log (str "(hopefully) required " (quote ~(ns-name *ns*))))
+                )
+         %))))
+
+(defn- require-trigger-method? [mimpl]
+  (boolean
+    (#{'Awake 'OnDrawGizmosSelected 'OnDrawGizmos 'Start}
+     (:name mimpl))))
+
+(defn- process-defcomponent-method-implementations [mimpls ns-squirrel-sym]
   (let [[msgimpls impls] ((juxt take-while drop-while)
                           (complement symbol?)
                           mimpls)
-        nrmls             (concat
-                            (normalize-message-implementations msgimpls)
-                            (normalize-method-implementations impls))]
-    (mapcat process-method nrmls)))
+        nrmls            (->
+                           (concat
+                             (normalize-message-implementations msgimpls)
+                             (normalize-method-implementations impls))
+                           ensure-has-awake
+                           ensure-has-start; I mean why not
+                           )]
+    (apply concat
+      (for [impl nrmls]
+        (if (require-trigger-method? impl)
+          (process-require-trigger impl ns-squirrel-sym)
+          (process-method impl))
+        ;; (if (awake-method? impl)
+        ;;   (process-awake-method impl)
+        ;;   (process-method impl))
+        ))))
 
 (defmacro defcomponent*
-  "Defines a new component. See defcomponent for version with defonce semantics."
+  "Defines a new component. See defcomponent for version with defonce
+  semantics."
   [name fields & method-impls]
   (let [fields2 (mapv #(vary-meta % assoc :unsynchronized-mutable true) fields) ;make all fields mutable
-        method-impls2 (process-defcomponent-method-implementations method-impls)]
+        ns-squirrel-sym (gensym (str "ns-required-state-for-" name "_"))
+        method-impls2 (process-defcomponent-method-implementations method-impls ns-squirrel-sym)]
     (component-defform
       {:name name
        :fields fields2
-       :opts+specs method-impls2})))
+       :opts+specs method-impls2
+       :ns-squirrel-sym ns-squirrel-sym})))
 
 (defmacro defcomponent
-  "Defines a new component. defcomponent forms will not evaluate if name is already bound, thus avoiding redefining the name of an existing type (possibly with live instances). For redefinable defcomponent, use defcomponent*."
+  "Defines a new component. defcomponent forms will not evaluate if
+  name is already bound, thus avoiding redefining the name of an
+  existing type (possibly with live instances). For redefinable
+  defcomponent, use defcomponent*."
   [name fields & method-impls] 
   (let [fields2 (mapv #(vary-meta % assoc :unsynchronized-mutable true) fields) ;make all fields mutable
-        method-impls2 (process-defcomponent-method-implementations method-impls)]
+        ns-squirrel-sym (gensym (str "ns-required-state-for-" name "_"))
+        method-impls2 (process-defcomponent-method-implementations method-impls ns-squirrel-sym)]
     (component-defform
       {:name name
        :constant true
        :fields fields2
-       :opts+specs method-impls2})))
+       :opts+specs method-impls2
+       :ns-squirrel-sym ns-squirrel-sym})))
 
 ;; ============================================================
 ;; condcast->
@@ -340,6 +398,27 @@
   [^GameObject gameobject ^Type type]
   (.AddComponent gameobject type))
 
+
+;; ============================================================
+;; parent/child
+;; ============================================================
+
+(defn unparent ^GameObject [^GameObject child]
+  (set! (.parent (.transform child)) nil)
+  child)
+
+(defn unchild ^GameObject [^GameObject parent ^GameObject child]
+  (when (= parent (.parent (.transform child)))
+    (unparent child))
+  parent)
+
+(defn set-parent ^GameObject [^GameObject child ^GameObject parent]
+  (set! (.parent (.transform child)) (.transform parent))
+  child)
+
+(defn set-child ^GameObject [^GameObject parent child]
+  (set-parent child parent)
+  parent)
 
 ;; ============================================================
 ;; wrappers
