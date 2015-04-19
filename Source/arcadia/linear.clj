@@ -13,6 +13,88 @@
 ;; significant performance implications for this sort of thing.
 
 ;; ============================================================
+;; utils
+
+(defn- mtag [x tag]
+  (if tag
+    (with-meta x (assoc (meta x) :tag tag))
+    x))
+
+(defn nestl [op args]
+  (if (next args) ;; check this
+    (reduce #(list op %1 %2) args)
+    (list op (first args))))
+
+
+;; nestl needs to be public for inline thing to work, so should be in
+;; a different namespace
+(defmacro ^:private def-vop-lower [name opts]
+  (mu/checked-keys [[op] opts]
+    (let [{:keys [doc return-type]} opts
+          args (map #(mtag % return-type) (mcu/classy-args))
+          f (fn [op n]
+              (list (mtag (vec (take n args)) return-type)
+                (nestl op (take n args))))
+          optspec {:inline-arities (if unary-op
+                                     #(< 0 %)
+                                     #(< 1 %))
+                   :inline `(fn [& xs#]
+                              (nestl (quote ~op) xs#))}
+          body (remove nil?
+                 (concat
+                   [(when unary-op
+                      (f unary-op 1))]
+                   (for [n (range 2 20)]
+                     (f op n))
+                   [(list (mtag (conj (vec (take n args)) '& 'more) return-type)
+                      (list `reduce name
+                        (nestl op (take 20 args))
+                        'more))]))]
+      `(defn ~name ~@(when doc [doc])
+         ~@body))))
+
+;; actually would be kind o fnice to ahve evalable clozes I guess
+;; or at least serializable ones
+
+;; need to ward against double evaluation in the inliner!!
+(defmacro ^:private def-vop-higher [name opts]
+  (mu/checked-keys [[op] opts]
+    (let [{:keys [doc]} opts
+          asym (gensym "a")
+          nfnform `(fn [v rargs]
+                     (list* (symbol (str v op)) asym rargs))
+          nfn (eval nfnform) ;; whee
+          f (fn [op n]
+              (let [[a & args2] (take n args)]
+                (list (mtag (vec args2) return-type)
+                  `(condcast-> ~a ~asym
+                     UnityEngine.Vector3 ~(nfn `v3 args2)
+                     UnityEngine.Vector2 ~(nfn `v2 args2)
+                     UnityEngine.Vector4 ~(nfn `v4 args2)))))
+          
+          optspec {:inline-arities (if unary-op
+                                     #(< 0 %)
+                                     #(< 1 %))
+                   :inline `(fn [[a# & args2#]]
+                              (let [nfn# ~nfnform]
+                                `(condcast-> ~a# ~~asym
+                                   UnityEngine.Vector3 ~(nfn# `v3 args2#)
+                                   UnityEngine.Vector2 ~(nfn# `v2 args2#)
+                                   UnityEngine.Vector4 ~(nfn# `v4 args2#))))}
+          body (remove nil?
+                 (concat
+                   [(when unary-op
+                      (f unary-op 1))]
+                   (for [n (range 2 20)]
+                     (f op n))
+                   [(list (mtag (conj (vec (take n args)) '& 'more) return-type)
+                      (list `reduce name
+                        (nestl op (take 20 args))
+                        'more))]))]
+      `(defn ~name ~@(when doc [doc])
+         ~@body))))
+
+;; ============================================================
 ;; div
 
 (definline v2div [a b]
@@ -28,6 +110,8 @@
   `(condcast-> ~a a#
      Vector3 (v3div a# ~b)
      Vector2 (v2div a# ~b)
+
+
      Vector4 (v4div a# ~b)))
 
 ;; ============================================================
