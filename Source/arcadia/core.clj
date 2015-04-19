@@ -238,43 +238,12 @@
        :opts+specs method-impls2
        :ns-squirrel-sym ns-squirrel-sym})))
 
-;; ============================================================
-;; condcast->
-;; ============================================================
-
-;; note this takes an optional default value. This macro is potentially
-;; annoying in the case that you want to branch on a supertype, for
-;; instance, but the cast would remove interface information. Use with
-;; this in mind.
-(defmacro condcast-> [expr xsym & clauses]
-  (let [exprsym (gensym "exprsym_")
-        [clauses default] (if (even? (count clauses))
-                            [clauses nil] 
-                            [(butlast clauses)
-                             [:else
-                              `(let [~xsym ~exprsym]
-                                 ~(last clauses))]])
-        cs (->> clauses
-             (partition 2)
-             (mapcat
-               (fn [[t then]]
-                 `[(instance? ~t ~exprsym)
-                   (let [~(with-meta xsym {:tag t}) ~exprsym]
-                     ~then)])))]
-    `(let [~exprsym ~expr]
-       ~(cons 'cond
-          (concat cs default)))))
 
 ;; ============================================================
-;; get-component
+;; type utils
 ;; ============================================================
 
-(defn- camels-to-hyphens [s]
-  (string/replace s #"([a-z])([A-Z])" "$1-$2"))
-
-(defn- dedup-by [f coll]
-  (map peek (vals (group-by f coll))))
-
+;; put elsewhere
 (defn- some-2
   "Uses reduced, should be faster + less garbage + more general than clojure.core/some"
   [pred coll]
@@ -282,6 +251,11 @@
 
 (defn- in? [x coll]
   (boolean (some-2 #(= x %) coll)))
+ ; reference to tagged var, or whatever 
+
+;; really ought to be testing for arity as well
+(defn- type-has-method? [t mth]
+  (in? (symbol mth) (map :name (r/methods t :ancestors true))))
 
 (defn- type-name? [x]
   (boolean
@@ -298,21 +272,97 @@
 (defn- type? [x]
   (instance? System.MonoType x))
 
+(defn- ensure-type [x]
+  (cond
+    (type? x) x
+    (symbol? x) (let [xt (resolve x)]
+                  (if (type? xt)
+                    xt
+                    (throw
+                      (Exception.
+                        (str "symbol does not resolve to a type")))))
+    (throw
+      (Exception.
+        (str "expects type or symbol")))))
+
 (defn- tag-type [x]
   (when-let [t (:tag (meta x))]
-    (cond ;; this does seem kind of stupid. Can we really tag things
-          ;; with mere symbols as types?
-      (type? t) t
-      (type-name? t) (resolve t))))
+    (ensure-type t)))
 
 (defn- type-of-reference [x env]
   (or (tag-type x) ; tagged symbol
-      (when (contains? env x) (type-of-local-reference x env)) ; local
-      (when (symbol? x) (tag-type (resolve x))))) ; reference to tagged var, or whatever 
+    (when (contains? env x) (type-of-local-reference x env)) ; local
+    (when (symbol? x) (tag-type (resolve x))))) ;; this does not seem wise, this seems broken
 
-;; really ought to be testing for arity as well
-(defn- type-has-method? [t mth]
-  (in? (symbol mth) (map :name (r/methods t :ancestors true))))
+;; ============================================================
+;; condcast->
+;; ============================================================
+
+(defn- is-assignable-from [^Type a ^Type b]
+  (.IsAssignableFrom a b))
+
+(defn- most-specific-type ^Type [& types]
+  (first ;; this is stupid, need compare-by stuff
+    (sort-by (comparator is-assignable-from)
+      types)))
+
+(defn- contract-condcast-clauses [expr xsym clauses env]
+  (let [etype (most-specific-type
+                (type-of-reference expr env)
+                (type-of-reference xsym env))]
+    (if etype
+      (->> clauses
+        (partition 2)
+        (filter
+          (fn [[^Type t _]]
+            (.IsAssignableFrom t etype)))
+        (apply concat))
+      clauses)))
+
+;; note this takes an optional default value. This macro is potentially
+;; annoying in the case that you want to branch on a supertype, for
+;; instance, but the cast would remove interface information. Use with
+;; this in mind.
+(defmacro condcast-> [expr xsym & clauses]
+  (let [exprsym (gensym "exprsym_")
+        [clauses default] (if (even? (count clauses))
+                            [clauses nil] 
+                            [(butlast clauses)
+                             [:else
+                              `(let [~xsym ~exprsym]
+                                 ~(last clauses))]])
+        clauses (contract-condcast-clauses
+                  expr xsym clauses env)]
+    (cond 
+      (= 0 (count clauses))
+      (or default
+        (throw
+          (Exception. (str "no clause matches inferrable type "
+                        (most-specific-type
+                          (env-type expr env)
+                          (env-type xsym env))))))
+      
+      (and (= 2 (count clauses)) (not default))
+      `(let [~(with-meta xsym {:tag (first clauses)}) ~exprsym]
+         ~then)
+      
+      (->> clauses
+        (partition 2)
+        (mapcat
+          (fn [[t then]]
+            `[(instance? ~t ~exprsym)
+              (let [~(with-meta xsym {:tag t}) ~exprsym]
+                ~then)]))))))
+
+;; ============================================================
+;; get-component
+;; ============================================================
+
+(defn- camels-to-hyphens [s]
+  (string/replace s #"([a-z])([A-Z])" "$1-$2"))
+
+(defn- dedup-by [f coll]
+  (map peek (vals (group-by f coll))))
 
 ;; maybe we should be passing full method sigs around rather than
 ;; method names. 
