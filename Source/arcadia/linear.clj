@@ -30,33 +30,31 @@
 ;; a different namespace
 (defmacro ^:private def-vop-lower [name opts]
   (mu/checked-keys [[op] opts]
-    (let [{:keys [doc return-type]} opts
-          args (map #(mtag % return-type) (mcu/classy-args))
-          f (fn [op n]
-              (list (mtag (vec (take n args)) return-type)
-                (nestl op (take n args))))
-          optspec {:inline-arities (if unary-op
-                                     #(< 0 %)
-                                     #(< 1 %))
-                   :inline `(fn [& xs#]
-                              (nestl (quote ~op) xs#))}
-          body (remove nil?
-                 (concat
-                   [(when unary-op
-                      (f unary-op 1))]
-                   (for [n (range 2 20)]
-                     (f op n))
-                   [(list (mtag (conj (vec (take n args)) '& 'more) return-type)
-                      (list `reduce name
-                        (nestl op (take 20 args))
-                        'more))]))]
+    (let [{:keys [doc return-type param-type]
+           :or {param-type return-type}} opts
+           args (map #(mtag % param-type)
+                  (mcu/classy-args))
+           f (fn [op n]
+               (list (mtag (vec (take n args)) return-type)
+                 (nestl op (take n args))))
+           optspec {:inline-arities (if unary-op
+                                      #(< 0 %)
+                                      #(< 1 %))
+                    :inline `(fn [& xs#]
+                               (nestl (quote ~op) xs#))}
+           body (remove nil?
+                  (concat
+                    [(when unary-op
+                       (f unary-op 1))]
+                    (for [n (range 2 20)]
+                      (f op n))
+                    [(list (mtag (conj (vec (take n args)) '& 'more) return-type)
+                       (list `reduce name
+                         (nestl op (take 20 args))
+                         'more))]))]
       `(defn ~name ~@(when doc [doc])
          ~@body))))
 
-;; actually would be kind o fnice to ahve evalable clozes I guess
-;; or at least serializable ones
-
-;; need to ward against double evaluation in the inliner!!
 (defmacro ^:private def-vop-higher [name opts]
   (mu/checked-keys [[op] opts]
     (let [{:keys [doc]} opts
@@ -66,7 +64,7 @@
           nfn (eval nfnform) ;; whee
           f (fn [op n]
               (let [[a & args2] (take n args)]
-                (list (mtag (vec args2) return-type)
+                (list (vec args2)
                   `(condcast-> ~a ~asym
                      UnityEngine.Vector3 ~(nfn `v3 args2)
                      UnityEngine.Vector2 ~(nfn `v2 args2)
@@ -97,22 +95,20 @@
 ;; ============================================================
 ;; div
 
-(definline v2div [a b]
-  `(Vector2/op_Division ~a ~b))
+(def-vop-lower v2div
+  {:op UnityEngine.Vector2/op_Division
+   :return-type UnityEngine.Vector2/op_Division})
 
-(definline v3div [a b]
-  `(Vector3/op_Division ~a ~b))
+(def-vop-lower v3div
+  {:op UnityEngine.Vector3/op_Division
+   :return-type UnityEngine.Vector3/op_Division})
 
-(definline v4div [a b]
-  `(Vector4/op_Division ~a ~b))
+(def-vop-lower v4div 
+  {:op UnityEngine.Vector4/op_Division
+   :return-type UnityEngine.Vector4/op_Division})
 
-(definline vdiv [a b]
-  `(condcast-> ~a a#
-     Vector3 (v3div a# ~b)
-     Vector2 (v2div a# ~b)
-
-
-     Vector4 (v4div a# ~b)))
+(def-vop-higher vdiv
+  {:op -})
 
 ;; ============================================================
 ;; +
