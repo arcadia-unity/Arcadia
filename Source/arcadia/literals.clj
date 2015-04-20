@@ -76,13 +76,7 @@
      ~@(mapcat
          (fn [t]
            [`(install-type-printer ~t)
-            `(install-type-parser ~t)
-            `(set! *data-readers*
-                   (assoc *data-readers*
-                     (quote ~(symbol (str "unity/"
-                                          (type-name t))))
-                     (var ~(symbol (str "arcadia.literals/parse-"
-                                        (type-name t))))))])
+            `(install-type-parser ~t)])
          types)))
 
 (install-printers-and-parsers

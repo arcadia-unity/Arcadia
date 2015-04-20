@@ -3,7 +3,8 @@
             [arcadia.reflect :as r]
             [arcadia.internal.map-utils :as mu]
             arcadia.messages
-            arcadia.literals)
+            arcadia.literals
+            arcadia.internal.editor-interop)
   (:import [UnityEngine
             Application
             MonoBehaviour
@@ -200,6 +201,28 @@
   (mu/checked-keys [[name args fntail] impl]
     `(~name ~args ~@fntail)))
 
+(defn default-on-after-deserialize [this]
+  (require 'arcadia.literals)
+  (try 
+    (UnityEngine.Debug/Log (read-string (. this __sf)))
+    (doseq [[field-name field-value]
+            (eval (read-string (. this __sf)))]
+      (.. this
+          GetType
+          (GetField field-name)
+          (SetValue this field-value)))
+    (catch ArgumentException e
+      (throw (ArgumentException. (str 
+                                   "Could not deserialize "
+                                   this
+                                   ". EDN might be invalid."))))))
+
+(defn default-on-before-serialize [this]
+  (let [field-map (arcadia.internal.editor-interop/field-map this)
+        serializable-fields (mapv #(.Name %) (arcadia.internal.editor-interop/serializable-fields this))
+        field-map-to-serialize (apply dissoc field-map serializable-fields)]
+    (set! (. this __sf) (pr-str field-map-to-serialize))))
+
 (defn- process-defcomponent-method-implementations [mimpls ns-squirrel-sym]
   (let [[msgimpls impls] ((juxt take-while drop-while)
                           (complement symbol?)
@@ -214,35 +237,15 @@
         {:name 'OnAfterDeserialize
          :interface 'UnityEngine.ISerializationCallbackReceiver
          :args '[this]
-         :fntail '[(require 'clojure.edn)
-                   (Debug/Log (str (.name this) ":: OnAfterDeserialize" (. this __sf)))
-                   (try 
-                     (doseq [[field-name field-value]
-                             (clojure.edn/read-string (. this __sf))]
-                       (Debug/Log (str "    " field-name " " field-value))
-                       (.. this
-                           GetType
-                           (GetField field-name)
-                           (SetValue this field-value)))
-                     (catch ArgumentException e
-                       (throw (ArgumentException. (str 
-                                                    "Could not deserialize "
-                                                    this
-                                                    ". EDN might be invalid.")))))]})
+         :fntail '[(require 'arcadia.core)
+                   (arcadia.core/default-on-after-deserialize this)]})
       
       (ensure-has-method
         {:name 'OnBeforeSerialize
          :interface 'UnityEngine.ISerializationCallbackReceiver
          :args '[this]
-         :fntail '[(require 'arcadia.internal.editor-interop)
-                   (Debug/Log (str (.name this) ": OnBeforeSerialize A " (. this __sf)))
-                   (set! (. this __sf)
-                         (-> this
-                             arcadia.internal.editor-interop/field-map
-                             (dissoc "__sf")
-                             pr-str))
-                   (Debug/Log (str (.name this) ": OnBeforeSerialize B " (. this __sf)))
-                   ]})
+         :fntail '[(require 'arcadia.core)
+                   (arcadia.core/default-on-before-serialize this)]})
       (map (fn [impl]
              (if (require-trigger-method? impl)
                (process-require-trigger impl ns-squirrel-sym)
@@ -251,6 +254,7 @@
       (mapcat
         (fn [[k impls]]
           (cons k (map collapse-method impls)))))))
+
 
 (defmacro defcomponent*
   "Defines a new component. See defcomponent for version with defonce

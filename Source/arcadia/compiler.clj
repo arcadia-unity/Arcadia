@@ -76,9 +76,11 @@
         expected-ns (asset->ns asset)]
     (= scnd expected-ns)))
 
+
 (defn should-compile? [file]
   (if (File/Exists file)
-    (and (first-form-is-ns? file)
+    (and (not (re-find #"data_readers.clj$" file))
+         (first-form-is-ns? file)
          (correct-ns? file))))
 
 (defn import-asset [asset]
