@@ -3,7 +3,7 @@
             [arcadia.reflect :as r]
             [arcadia.internal.map-utils :as mu]
             arcadia.messages
-            arcadia.types)
+            arcadia.literals)
   (:import [UnityEngine
             Application
             MonoBehaviour

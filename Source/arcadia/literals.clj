@@ -1,4 +1,4 @@
-(ns arcadia.types
+(ns arcadia.literals
   (:import [System.Reflection
             ConstructorInfo
             ParameterInfo]))
@@ -81,7 +81,7 @@
                    (assoc *data-readers*
                      (quote ~(symbol (str "unity/"
                                           (type-name t))))
-                     (var ~(symbol (str "arcadia.types/parse-"
+                     (var ~(symbol (str "arcadia.literals/parse-"
                                         (type-name t))))))])
          types)))
 
