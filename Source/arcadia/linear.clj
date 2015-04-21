@@ -193,43 +193,43 @@
 
 (definline v2* [^UnityEngine.Vector2 a b]
   `(let [b# (float ~b)]
-     (Vector2/op_Multiply ~a b#)))
+     (UnityEngine.Vector2/op_Multiply ~a b#)))
 
 (definline v3* [^UnityEngine.Vector3 a b]
   `(let [b# (float ~b)]
-     (Vector3/op_Multiply ~a b#)))
+     (UnityEngine.Vector3/op_Multiply ~a b#)))
 
 (definline v4* [^UnityEngine.Vector4 a b]
   `(let [b# (float ~b)]
-     (Vector4/op_Multiply ~a b#)))
+     (UnityEngine.Vector4/op_Multiply ~a b#)))
 
 ;; this one requires some more thought, of course
 (definline v* [a b]
   `(condcast-> ~a a#
-     Vector3 (v3* a# ~b)
-     Vector2 (v2* a# ~b)
-     Vector4 (v4* a# ~b)))
+     UnityEngine.Vector3 (v3* a# ~b)
+     UnityEngine.Vector2 (v2* a# ~b)
+     UnityEngine.Vector4 (v4* a# ~b)))
 
 ;; ============================================================
 ;; div
 
 (definline v2div [a b]
   `(let [b# (float ~b)]
-     (Vector2/op_Division ~a b#)))
+     (UnityEngine.Vector2/op_Division ~a b#)))
 
 (definline v3div [a b]
   `(let [b# (float ~b)]
-     (Vector3/op_Division ~a b#)))
+     (UnityEngine.Vector3/op_Division ~a b#)))
 
 (definline v4div [a b]
   `(let [b# (float ~b)]
-     (Vector4/op_Division ~a b#)))
+     (UnityEngine.Vector4/op_Division ~a b#)))
 
 (definline vdiv [a b]
   `(condcast-> ~a a#
-     Vector3 (v3div a# ~b)
-     Vector2 (v2div a# ~b)
-     Vector4 (v4div a# ~b)))
+     UnityEngine.Vector3 (v3div a# ~b)
+     UnityEngine.Vector2 (v2div a# ~b)
+     UnityEngine.Vector4 (v4div a# ~b)))
 
 ;; ============================================================
 ;; Quaternions
