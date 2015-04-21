@@ -269,21 +269,48 @@
        :opts+specs method-impls2
        :ns-squirrel-sym ns-squirrel-sym})))
 
-(defmacro defcomponent
+(defmacro defcomponent-once
   "Defines a new component. defcomponent forms will not evaluate if
   name is already bound, thus avoiding redefining the name of an
   existing type (possibly with live instances). For redefinable
   defcomponent, use defcomponent*."
   [name fields & method-impls] 
-  (let [fields2 (mapv #(vary-meta % assoc :unsynchronized-mutable true) fields) ;make all fields mutable
+  (let [fields2 (conj (mapv #(vary-meta % assoc :unsynchronized-mutable true) fields) ;make all fields mutable
+                      (with-meta '_serialized_data {:tag 'String
+                                                    :unsynchronized-mutable true
+                                                    UnityEngine.HideInInspector {}}))
         ns-squirrel-sym (gensym (str "ns-required-state-for-" name "_"))
         method-impls2 (process-defcomponent-method-implementations method-impls ns-squirrel-sym)]
-    (component-defform
-      {:name name
-       :constant true
-       :fields fields2
-       :opts+specs method-impls2
-       :ns-squirrel-sym ns-squirrel-sym})))
+    `(do
+       ~(component-defform
+          {:name name
+           :constant true
+           :fields fields2
+           :opts+specs method-impls2
+           :ns-squirrel-sym ns-squirrel-sym}))))
+
+(defmacro defeditor
+  [sym]
+  (let [target (resolve sym)
+        editor-name (symbol (str (.Name target) "Editor"))
+        editor-classname (with-meta
+                           (symbol (str (.FullName target) "Editor"))
+                           {UnityEditor.CustomEditor target})]
+    `(defclass*
+       ~editor-name
+       ~editor-classname
+       UnityEditor.Editor ~'UnityEditor
+       []
+       :implements [clojure.lang.IType]
+       (OnInspectorGUI
+         [this#]
+         (require 'arcadia.inspectors)
+         (arcadia.inspectors/render-gui (.target this#))))))
+
+(defmacro defcomponent [sym & rest]
+  `(do
+     (defcomponent-once ~sym ~@rest)
+     (defeditor ~sym)))
 
 ;; ============================================================
 ;; condcast->
