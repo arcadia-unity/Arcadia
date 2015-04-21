@@ -82,23 +82,23 @@
           nfnform `(fn ~'nfn [v# rargs#]
                      (list* (symbol (str v# '~op)) '~asym rargs#))
           nfn (eval nfnform)
-          f (fn [op n]
+          f (fn f [op n]
               (let [[a :as args2] (take n args)]
                 (list (vec args2)
                   `(condcast-> ~a ~asym
                      UnityEngine.Vector3 ~(nfn `v3 args2)
                      UnityEngine.Vector2 ~(nfn `v2 args2)
                      UnityEngine.Vector4 ~(nfn `v4 args2)))))
-          optspec #_{:inline-arities (if unary-op
-                                       #(< 0 %)
-                                       #(< 1 %))
-                     :inline `(fn [[a# & args2#]]
-                                (let [nfn# ~nfnform]
-                                  `(condcast-> ~a# ~'~asym
-                                     UnityEngine.Vector3 ~(nfn# `v3 args2#)
-                                     UnityEngine.Vector2 ~(nfn# `v2 args2#)
-                                     UnityEngine.Vector4 ~(nfn# `v4 args2#))))}
-          {}
+          optspec {:inline-arities (if unary-op
+                                     #(< 0 %)
+                                     #(< 1 %))
+                   :inline `(fn ~'checked-keys-inliner [a# & args2#]
+                              (let [nfn# ~nfnform]
+                                `(condcast-> ~a# ~'~asym
+                                   UnityEngine.Vector3 ~(nfn# `v3 args2#)
+                                   UnityEngine.Vector2 ~(nfn# `v2 args2#)
+                                   UnityEngine.Vector4 ~(nfn# `v4 args2#))))}
+          ;{}
           body (remove nil?
                  (concat
                    [(when unary-op
@@ -182,7 +182,6 @@
 
 (def-vop-higher v-
   {:op -})
-
 
 ;; undecided whether to support variadic versions of these
 ;; non-associative multiply and divide ops (eg force associativity, at
