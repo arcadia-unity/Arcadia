@@ -243,6 +243,10 @@
 ;; type utils
 ;; ============================================================
 
+(defn- same-or-subclass? [^Type a ^Type b]
+  (or (= a b)
+    (.IsSubclassOf a b)))
+
 ;; put elsewhere
 (defn- some-2
   "Uses reduced, should be faster + less garbage + more general than clojure.core/some"
@@ -281,42 +285,61 @@
                     (throw
                       (Exception.
                         (str "symbol does not resolve to a type")))))
-    (throw
-      (Exception.
-        (str "expects type or symbol")))))
+    :else (throw
+            (Exception.
+              (str "expects type or symbol")))))
 
 (defn- tag-type [x]
   (when-let [t (:tag (meta x))]
     (ensure-type t)))
 
 (defn- type-of-reference [x env]
-  (or (tag-type x) ; tagged symbol
-    (when (contains? env x) (type-of-local-reference x env)) ; local
-    (when (symbol? x) (tag-type (resolve x))))) ;; this does not seem wise, this seems broken
+  (or (tag-type x)
+    (and (symbol? x)
+      (if (contains? env x)
+        (type-of-local-reference x env) ; local
+        (let [v (resolve x)] ;; dubious
+          (when (not (and (var? v) (fn? (var-get v))))
+            (tag-type v))))))) 
 
 ;; ============================================================
 ;; condcast->
 ;; ============================================================
 
-(defn- is-assignable-from [^Type a ^Type b]
-  (.IsAssignableFrom a b))
+(defn- maximize
+  ([xs]
+   (maximize (comparator >) xs))
+  ([compr xs]
+   (when (seq xs)
+     (reduce
+       (fn [mx x]
+         (if (= 1 (compr mx x))
+           x
+           mx))
+       xs))))
 
 (defn- most-specific-type ^Type [& types]
-  (first ;; this is stupid, need compare-by stuff
-    (sort-by (comparator is-assignable-from)
-      types)))
+  (maximize (comparator same-or-subclass?)
+    (remove nil? types)))
+
+(def ccc-log (atom []))
 
 (defn- contract-condcast-clauses [expr xsym clauses env]
   (let [etype (most-specific-type
                 (type-of-reference expr env)
-                (type-of-reference xsym env))]
+                (tag-type xsym))]
+    (swap! ccc-log conj etype)
     (if etype
-      (->> clauses
-        (partition 2)
-        (filter
-          (fn [[^Type t _]]
-            (.IsAssignableFrom t etype)))
-        (apply concat))
+      (if-let [[_ then] (first
+                          (filter #(= etype (ensure-type (first %)))
+                            (partition 2 clauses)))]
+        [then]
+        (->> clauses
+          (partition 2)
+          (filter
+            (fn [[t _]]
+              (same-or-subclass? etype (ensure-type t))))
+          (apply concat)))
       clauses)))
 
 ;; note this takes an optional default value. This macro is potentially
@@ -324,35 +347,33 @@
 ;; instance, but the cast would remove interface information. Use with
 ;; this in mind.
 (defmacro condcast-> [expr xsym & clauses]
-  (let [exprsym (gensym "exprsym_")
-        [clauses default] (if (even? (count clauses))
+  (let [[clauses default] (if (even? (count clauses))
                             [clauses nil] 
                             [(butlast clauses)
                              [:else
-                              `(let [~xsym ~exprsym]
+                              `(let [~xsym ~expr]
                                  ~(last clauses))]])
         clauses (contract-condcast-clauses
-                  expr xsym clauses env)]
-    (cond 
+                  expr xsym clauses &env)]
+    (cond
       (= 0 (count clauses))
-      (or default
-        (throw
-          (Exception. (str "no clause matches inferrable type "
-                        (most-specific-type
-                          (env-type expr env)
-                          (env-type xsym env))))))
-      
-      (and (= 2 (count clauses)) (not default))
-      `(let [~(with-meta xsym {:tag (first clauses)}) ~exprsym]
-         ~then)
-      
-      (->> clauses
-        (partition 2)
-        (mapcat
-          (fn [[t then]]
-            `[(instance? ~t ~exprsym)
-              (let [~(with-meta xsym {:tag t}) ~exprsym]
-                ~then)]))))))
+      `(let [~xsym ~expr]
+         ~default) ;; might be nil obvi
+
+      (= 1 (count clauses)) ;; corresponds to exact type match. janky but fine
+      `(let [~xsym ~expr]
+         ~@clauses)
+
+      :else
+      `(let [~xsym ~expr]
+         (cond
+           ~@(->> clauses
+               (partition 2)
+               (mapcat
+                 (fn [[t then]]
+                   `[(instance? ~t ~xsym)
+                     (let [~(with-meta xsym {:tag t}) ~xsym]
+                       ~then)]))))))))
 
 ;; ============================================================
 ;; get-component
@@ -598,7 +619,8 @@
           :when (re-matches name (.name obj))]
       obj)
     
-    (throw (Exception. (str "Expects String or Regex, instead got " (type name))))))
+   ; (throw (Exception. (str "Expects String or Regex, instead got " (type name))))
+    ))
 
 (defwrapper object-tagged GameObject FindWithTag
   "Returns one active GameObject tagged tag. Returns null if no GameObject was found.
