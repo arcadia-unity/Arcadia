@@ -312,43 +312,16 @@
      (defcomponent-once ~sym ~@rest)
      (defeditor ~sym)))
 
-;; ============================================================
-;; condcast->
-;; ============================================================
-
-;; note this takes an optional default value. This macro is potentially
-;; annoying in the case that you want to branch on a supertype, for
-;; instance, but the cast would remove interface information. Use with
-;; this in mind.
-(defmacro condcast-> [expr xsym & clauses]
-  (let [exprsym (gensym "exprsym_")
-        [clauses default] (if (even? (count clauses))
-                            [clauses nil] 
-                            [(butlast clauses)
-                             [:else
-                              `(let [~xsym ~exprsym]
-                                 ~(last clauses))]])
-        cs (->> clauses
-             (partition 2)
-             (mapcat
-               (fn [[t then]]
-                 `[(instance? ~t ~exprsym)
-                   (let [~(with-meta xsym {:tag t}) ~exprsym]
-                     ~then)])))]
-    `(let [~exprsym ~expr]
-       ~(cons 'cond
-          (concat cs default)))))
 
 ;; ============================================================
-;; get-component
+;; type utils
 ;; ============================================================
 
-(defn- camels-to-hyphens [s]
-  (string/replace s #"([a-z])([A-Z])" "$1-$2"))
+(defn- same-or-subclass? [^Type a ^Type b]
+  (or (= a b)
+    (.IsSubclassOf a b)))
 
-(defn- dedup-by [f coll]
-  (map peek (vals (group-by f coll))))
-
+;; put elsewhere
 (defn- some-2
   "Uses reduced, should be faster + less garbage + more general than clojure.core/some"
   [pred coll]
@@ -356,6 +329,11 @@
 
 (defn- in? [x coll]
   (boolean (some-2 #(= x %) coll)))
+ ; reference to tagged var, or whatever 
+
+;; really ought to be testing for arity as well
+(defn- type-has-method? [t mth]
+  (in? (symbol mth) (map :name (r/methods t :ancestors true))))
 
 (defn- type-name? [x]
   (boolean
@@ -372,21 +350,114 @@
 (defn- type? [x]
   (instance? System.MonoType x))
 
+(defn- ensure-type [x]
+  (cond
+    (type? x) x
+    (symbol? x) (let [xt (resolve x)]
+                  (if (type? xt)
+                    xt
+                    (throw
+                      (Exception.
+                        (str "symbol does not resolve to a type")))))
+    :else (throw
+            (Exception.
+              (str "expects type or symbol")))))
+
 (defn- tag-type [x]
   (when-let [t (:tag (meta x))]
-    (cond ;; this does seem kind of stupid. Can we really tag things
-          ;; with mere symbols as types?
-      (type? t) t
-      (type-name? t) (resolve t))))
+    (ensure-type t)))
 
 (defn- type-of-reference [x env]
-  (or (tag-type x) ; tagged symbol
-      (when (contains? env x) (type-of-local-reference x env)) ; local
-      (when (symbol? x) (tag-type (resolve x))))) ; reference to tagged var, or whatever 
+  (or (tag-type x)
+    (and (symbol? x)
+      (if (contains? env x)
+        (type-of-local-reference x env) ; local
+        (let [v (resolve x)] ;; dubious
+          (when (not (and (var? v) (fn? (var-get v))))
+            (tag-type v))))))) 
 
-;; really ought to be testing for arity as well
-(defn- type-has-method? [t mth]
-  (in? (symbol mth) (map :name (r/methods t :ancestors true))))
+;; ============================================================
+;; condcast->
+;; ============================================================
+
+(defn- maximize
+  ([xs]
+   (maximize (comparator >) xs))
+  ([compr xs]
+   (when (seq xs)
+     (reduce
+       (fn [mx x]
+         (if (= 1 (compr mx x))
+           x
+           mx))
+       xs))))
+
+(defn- most-specific-type ^Type [& types]
+  (maximize (comparator same-or-subclass?)
+    (remove nil? types)))
+
+(def ccc-log (atom []))
+
+(defn- contract-condcast-clauses [expr xsym clauses env]
+  (let [etype (most-specific-type
+                (type-of-reference expr env)
+                (tag-type xsym))]
+    (swap! ccc-log conj etype)
+    (if etype
+      (if-let [[_ then] (first
+                          (filter #(= etype (ensure-type (first %)))
+                            (partition 2 clauses)))]
+        [then]
+        (->> clauses
+          (partition 2)
+          (filter
+            (fn [[t _]]
+              (same-or-subclass? etype (ensure-type t))))
+          (apply concat)))
+      clauses)))
+
+;; note this takes an optional default value. This macro is potentially
+;; annoying in the case that you want to branch on a supertype, for
+;; instance, but the cast would remove interface information. Use with
+;; this in mind.
+(defmacro condcast-> [expr xsym & clauses]
+  (let [[clauses default] (if (even? (count clauses))
+                            [clauses nil] 
+                            [(butlast clauses)
+                             [:else
+                              `(let [~xsym ~expr]
+                                 ~(last clauses))]])
+        clauses (contract-condcast-clauses
+                  expr xsym clauses &env)]
+    (cond
+      (= 0 (count clauses))
+      `(let [~xsym ~expr]
+         ~default) ;; might be nil obvi
+
+      (= 1 (count clauses)) ;; corresponds to exact type match. janky but fine
+      `(let [~xsym ~expr]
+         ~@clauses)
+
+      :else
+      `(let [~xsym ~expr]
+         (cond
+           ~@(->> clauses
+               (partition 2)
+               (mapcat
+                 (fn [[t then]]
+                   `[(instance? ~t ~xsym)
+                     (let [~(with-meta xsym {:tag t}) ~xsym]
+                       ~then)]))))))))
+
+;; ============================================================
+;; get-component
+;; ============================================================
+
+(defn- camels-to-hyphens [s]
+  (string/replace s #"([a-z])([A-Z])" "$1-$2"))
+
+(defn- dedup-by [f coll]
+  (map peek (vals (group-by f coll))))
 
 ;; maybe we should be passing full method sigs around rather than
 ;; method names. 
@@ -622,7 +693,8 @@
           :when (re-matches name (.name obj))]
       obj)
     
-    (throw (Exception. (str "Expects String or Regex, instead got " (type name))))))
+   ; (throw (Exception. (str "Expects String or Regex, instead got " (type name))))
+    ))
 
 (defwrapper object-tagged GameObject FindWithTag
   "Returns one active GameObject tagged tag. Returns null if no GameObject was found.
