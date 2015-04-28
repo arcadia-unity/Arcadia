@@ -126,7 +126,7 @@
              ([x y]
               `(UnityEngine.Vector2. ~x ~y)))}
   (^UnityEngine.Vector2 []
-    UnityEngine.Vector2/zero)
+    UnityEngine.Vector2/one)
   (^UnityEngine.Vector2 [x]
     (UnityEngine.Vector2. x x))
   (^UnityEngine.Vector2 [x y]
@@ -142,7 +142,7 @@
              ([x y z]
               `(UnityEngine.Vector3. ~x ~y ~z)))}
   (^UnityEngine.Vector3 []
-    UnityEngine.Vector3/zero)
+    UnityEngine.Vector3/one)
   (^UnityEngine.Vector3 [x]
     (UnityEngine.Vector3. x x x))
   (^UnityEngine.Vector3 [x y z]
@@ -158,7 +158,7 @@
              ([x y z w]
               `(UnityEngine.Vector4. ~x ~y ~z ~w)))}
   (^UnityEngine.Vector4 []
-    UnityEngine.Vector4/zero)
+    UnityEngine.Vector4/one)
   (^UnityEngine.Vector4 [x]
     (UnityEngine.Vector4. x x x x))
   (^UnityEngine.Vector4 [x y z w]
