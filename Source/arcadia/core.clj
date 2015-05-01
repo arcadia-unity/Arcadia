@@ -310,7 +310,8 @@
 (defmacro defcomponent [sym & rest]
   `(do
      (defcomponent-once ~sym ~@rest)
-     (defeditor ~sym)))
+     ; (defeditor ~sym)
+     ))
 
 
 ;; ============================================================
