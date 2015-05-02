@@ -119,7 +119,7 @@
 (defn v2
   {:inline-arities #{0 1 2}
    :inline (fn
-             ([] `UnityEngine.Vector2/zero)
+             ([] `UnityEngine.Vector2/one)
              ([x]
               `(let [x# ~x]
                  (UnityEngine.Vector2. x# x#)))
@@ -135,7 +135,7 @@
 (defn v3
   {:inline-arities #{0 1 3}
    :inline (fn
-             ([] `UnityEngine.Vector3/zero)
+             ([] `UnityEngine.Vector3/one)
              ([x]
               `(let [x# ~x]
                  (UnityEngine.Vector3. x# x# x#)))
@@ -151,7 +151,7 @@
 (defn v4
   {:inline-arities #{0 1 4}
    :inline (fn
-             ([] `UnityEngine.Vector4/zero)
+             ([] `UnityEngine.Vector4/one)
              ([x]
               `(let [x# ~x]
                  (UnityEngine.Vector4. x# x# x# x#)))
