@@ -52,7 +52,8 @@
                               (cond
                                 unary-expr (list [(first args)] unary-expr)
                                 unary-op `([~(first args)]
-                                           (~unary-op ~(first args))))
+                                           (list (quote ~unary-op)
+                                             ~(first args))))
                               `([x# & xs#]
                                 (nestl (quote ~op)
                                   (cons x# xs#)))])}
@@ -206,15 +207,18 @@
 
 (def-vop-lower v2-
   {:op UnityEngine.Vector2/op_Subtraction
-   :return-type UnityEngine.Vector2/op_Subtraction})
+   :return-type UnityEngine.Vector2/op_Subtraction
+   :unary-op UnityEngine.Vector3/op_UnaryNegation})
 
 (def-vop-lower v3-
   {:op UnityEngine.Vector3/op_Subtraction
-   :return-type UnityEngine.Vector3/op_Subtraction})
+   :return-type UnityEngine.Vector3/op_Subtraction
+   :unary-op UnityEngine.Vector3/op_UnaryNegation})
 
 (def-vop-lower v4- 
   {:op UnityEngine.Vector4/op_Subtraction
-   :return-type UnityEngine.Vector4/op_Subtraction})
+   :return-type UnityEngine.Vector4/op_Subtraction
+   :unary-op UnityEngine.Vector3/op_UnaryNegation})
 
 (def-vop-higher v-
   {:op -})
