@@ -68,8 +68,9 @@
     (read-string (slurp file :encoding "utf8"))))
 
 (defn first-form-is-ns? [asset]
-  (let [[frst & rst] (read-file asset)]
-    (= frst 'ns)))
+  (boolean
+    (when-let [[frst & rst] (seq (read-file asset))]
+      (= frst 'ns))))
 
 (defn correct-ns? [asset]
   (let [[frst scnd & rst] (read-file asset)

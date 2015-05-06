@@ -218,7 +218,6 @@
                                    ". EDN might be invalid."))))))
 
 (defn default-on-before-serialize [this]
-  (require 'arcadia.internal.editor-interop)
   (let [field-map (arcadia.internal.editor-interop/field-map this)
         serializable-fields (mapv #(.Name %) (arcadia.internal.editor-interop/serializable-fields this))
         field-map-to-serialize (apply dissoc field-map serializable-fields)]
@@ -270,7 +269,7 @@
        :opts+specs method-impls2
        :ns-squirrel-sym ns-squirrel-sym})))
 
-(defmacro defcomponent-once
+(defmacro defcomponent
   "Defines a new component. defcomponent forms will not evaluate if
   name is already bound, thus avoiding redefining the name of an
   existing type (possibly with live instances). For redefinable
@@ -282,37 +281,12 @@
                                                     UnityEngine.HideInInspector {}}))
         ns-squirrel-sym (gensym (str "ns-required-state-for-" name "_"))
         method-impls2 (process-defcomponent-method-implementations method-impls ns-squirrel-sym)]
-    `(do
-       ~(component-defform
-          {:name name
-           :constant true
-           :fields fields2
-           :opts+specs method-impls2
-           :ns-squirrel-sym ns-squirrel-sym}))))
-
-(defmacro defeditor
-  [sym]
-  (let [target (resolve sym)
-        editor-name (symbol (str (.Name target) "Editor"))
-        editor-classname (with-meta
-                           (symbol (str (.FullName target) "Editor"))
-                           {UnityEditor.CustomEditor target})]
-    `(defclass*
-       ~editor-name
-       ~editor-classname
-       UnityEditor.Editor ~'UnityEditor
-       []
-       :implements [clojure.lang.IType]
-       (OnInspectorGUI
-         [this#]
-         (require 'arcadia.inspectors)
-         (arcadia.inspectors/render-gui (.target this#))))))
-
-(defmacro defcomponent [sym & rest]
-  `(do
-     (defcomponent-once ~sym ~@rest)
-     ; (defeditor ~sym)
-     ))
+    (component-defform
+      {:name name
+       :constant true
+       :fields fields2
+       :opts+specs method-impls2
+       :ns-squirrel-sym ns-squirrel-sym})))
 
 
 ;; ============================================================
