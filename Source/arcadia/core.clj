@@ -204,8 +204,9 @@
 (defn default-on-after-deserialize [this]
   (require 'arcadia.literals)
   (try 
+    (UnityEngine.Debug/Log (read-string (. this __sf)))
     (doseq [[field-name field-value]
-            (eval (read-string (. this _serialized_data)))]
+            (eval (read-string (. this __sf)))]
       (.. this
           GetType
           (GetField field-name)
@@ -217,11 +218,10 @@
                                    ". EDN might be invalid."))))))
 
 (defn default-on-before-serialize [this]
-  (require 'arcadia.internal.editor-interop)
   (let [field-map (arcadia.internal.editor-interop/field-map this)
         serializable-fields (mapv #(.Name %) (arcadia.internal.editor-interop/serializable-fields this))
         field-map-to-serialize (apply dissoc field-map serializable-fields)]
-    (set! (. this _serialized_data) (pr-str field-map-to-serialize))))
+    (set! (. this __sf) (pr-str field-map-to-serialize))))
 
 (defn- process-defcomponent-method-implementations [mimpls ns-squirrel-sym]
   (let [[msgimpls impls] ((juxt take-while drop-while)

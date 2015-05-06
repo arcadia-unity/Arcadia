@@ -1,6 +1,5 @@
 (ns arcadia.internal.editor-interop
-  (:import [System.IO File]
-           [System.Reflection FieldInfo]))
+  (:import [System.IO File]))
 
 (defn touch-dlls [^System.String folder]
   (doseq [dll (Directory/GetFiles folder "*.dll")]
@@ -27,24 +26,16 @@
         .GetType
         .GetFields)))
 
-(defn should-display-field? [^FieldInfo f]
-  (not-any? #(= (-> % type .Name)
-                "HideInInspector")
-            (.GetCustomAttributes f true)))
-
 ;; TODO replace with dehydrate
 (defn field-map
   "Get a map of all of an object's public fields. Reflects."
-  ([obj] (field-map obj true))
-  ([obj respect-attributes]
-   (->> obj
-        .GetType
-        .GetFields
-        (filter #(or (not respect-attributes)
-                     (should-display-field? %)))
-        (mapcat #(vector (.Name %)
-                         (.GetValue % obj)))
-        (apply hash-map))))
+  [obj]
+  (-> obj
+      .GetType
+      .GetFields
+      (->> (mapcat #(vector (.Name %)
+                            (.GetValue % obj)))
+           (apply hash-map))))
 
 ;; TODO replace with populate
 (defn apply-field-map
