@@ -45,8 +45,8 @@ namespace Arcadia {
             .Single());
         
         Environment.SetEnvironmentVariable("CLOJURE_LOAD_PATH",
-          Path.GetFullPath(VariadicCombine(clojureDllFolder, "..", "Compiled")) + ":" +
-          Path.GetFullPath(VariadicCombine(clojureDllFolder, "..", "Source")) + ":" +
+          Path.GetFullPath(VariadicCombine(clojureDllFolder, "..", "Compiled")) + Path.PathSeparator +
+          Path.GetFullPath(VariadicCombine(clojureDllFolder, "..", "Source")) + Path.PathSeparator +
           Path.GetFullPath(Application.dataPath));
         Debug.Log("Load Path is " + Environment.GetEnvironmentVariable("CLOJURE_LOAD_PATH"));
       } catch(InvalidOperationException e) {
