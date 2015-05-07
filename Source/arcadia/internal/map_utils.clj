@@ -134,20 +134,24 @@
          (map keyword syms)
          syms)))
 
+(definline checked-get [m k]
+  `(let [k# ~k]
+     (if-let [e# (find ~m k#)]
+       (val e#)
+       (throw
+         (Exception.
+           (str "key " k# " not found"))))))
+
 (defmacro checked-keys [bndgs & body]
   (let [dcls (for [[ks m] (partition 2 bndgs),
                    :let [msym (gensym "map_")]]
                (->> ks
                  (mapcat
-                   (fn [k]
-                     `[~k (if-let [e# (find ~msym ~(keyword k))]
-                            (val e#)
-                            (throw
-                              (Exception.
-                                (str "key " ~(keyword k) " not found"))))]))
+                   (fn [k] [k `(checked-get ~m ~(keyword k))]))
                  (list* msym m)))]
     `(let [~@(apply concat dcls)]
        ~@body)))
+
 
 (defn apply-kv
   "Terrible, necessary function. Use with APIs employing horrific
