@@ -16,7 +16,7 @@ public class ClojureRepl : EditorWindow {
     ClojureRepl.StartREPL();
   }
 
-  [MenuItem ("Clojure/REPL/Window...")]
+  [MenuItem ("Arcadia/REPL/Window...")]
   public static void Init () {
     ClojureRepl window = (ClojureRepl)EditorWindow.GetWindow (typeof (ClojureRepl));
   }
@@ -25,14 +25,14 @@ public class ClojureRepl : EditorWindow {
     RT.var("arcadia.repl", "eval-queue").invoke();
   }
 
-  [MenuItem ("Clojure/REPL/Start %#r")]
+  [MenuItem ("Arcadia/REPL/Start %#r")]
   public static void StartREPL () {
     RT.load("arcadia/repl");
     RT.var("arcadia.repl", "start-server").invoke(11211);
     EditorApplication.update += ClojureRepl.Update;
   }
 
-  [MenuItem ("Clojure/REPL/Stop &#r")]
+  [MenuItem ("Arcadia/REPL/Stop &#r")]
   public static void StopREPL () {
     RT.var("arcadia.repl", "stop-server").invoke();
     EditorApplication.update -= ClojureRepl.Update;

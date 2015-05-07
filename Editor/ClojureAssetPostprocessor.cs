@@ -8,12 +8,12 @@ using clojure.lang;
 
 class ClojureAssetPostprocessor : AssetPostprocessor {
     static public string[] CompilationRoots = new [] {
-        "Assets/Clojure/Scripts",
-        "Assets/Clojure/Libraries",
-        "Assets/Clojure/Internal",
+        "Assets/Arcadia/Scripts",
+        "Assets/Arcadia/Libraries",
+        "Assets/Arcadia/Internal",
     };
 
-    static public string pathToAssemblies = "Assets/Clojure/Compiled";
+    static public string pathToAssemblies = "Assets/Arcadia/Compiled";
 
     static public void SetupLoadPath() {
         string loadPath = Path.Combine(System.Environment.CurrentDirectory, pathToAssemblies);

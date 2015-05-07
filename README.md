@@ -8,9 +8,21 @@ Arcadia is alpha-quality software, and shouldn't be used for anything important 
 
 Usage
 -----
-The `Clojure` folder can be copied into any Unity project's Assets folder to enable Clojure. In the future, this will be available from the Asset Store. Once copied, you have access to the REPL and the Clojure compiler.
+The contents of the repository should be copied to a folder named `Arcadia` in any Unity project's Assets folder to enable Clojure. In the future, this will be available from the Asset Store. Once copied, you have access to the REPL and the Clojure compiler.
 
-There's a screencast on getting set up [here](https://www.youtube.com/watch?v=ubXgobwSATQ&feature=youtu.be).
+There's a screencast on getting set up [here](http://youtu.be/X4xCVsLhaZ0).
+
+#### Download Zip File
+
+1. Create a subfolder of your Assets folder named Arcadia
+2. [Download](https://github.com/arcadia-unity/Arcadia/archive/develop.zip) our zip file and extract its contents into Arcadia
+
+#### Git Clone
+
+```
+cd path/to/unity/project/Assets
+git clone https://github.com/arcadia-unity/Arcadia.git
+```
 
 ### Prerequisites
 Before doing anything, Arcadia requires that Unity be set to run in the background and use the full .NET API
