@@ -1,4 +1,5 @@
 (ns arcadia.hydrate
+  (:use [arcadia.core])
   (:require [arcadia.internal.map-utils :as mu]
             [arcadia.reflect :as r]
             [clojure.string :as string]
@@ -532,10 +533,24 @@
         (hydrate-game-object
           (assoc-in-mv spec [:transform 0 :parent] trns))))))
 
+
+;; careful treating transforms as sequences, don't quite understand
+;; the concurent/lazy semantics here. would be much more comfortable
+;; with some introp function that returns an array, if such a thing can be found
 (defn- game-object-children [^GameObject obj]
   (let [^Transform trns (.GetComponent obj UnityEngine.Transform)]
-    (for [^Transform trns' trns]
-      (.gameObject trns'))))
+    (into [] ;; right?
+      (for [^Transform trns' trns]
+        (.gameObject trns')))))
+
+(defn- populate-game-object-children
+  [^UnityEngine.GameObject obj, specs]
+  (dorun ;; make faster later I guess
+    (map populate!
+      (concat (game-object-children obj)
+        (repeatedly #(set-parent (GameObject.) obj)))
+      specs))
+  obj)
 
 (defn- playing? []
   UnityEngine.Application/isPlaying)
@@ -547,7 +562,7 @@
         (.Destroy child)
         (.DestroyImmediate child)))))
 
-(defn- game-object-prepopulate [^GameObject obj, spec]
+(defn- game-object-prehydrate [^GameObject obj, spec]
   (as-> spec spec
     (if-let [t (first (:transform spec))] ;; obsoletes resolve-type-key
       (do (populate! (.GetComponent obj UnityEngine.Transform) t)
@@ -556,6 +571,18 @@
     (if-let [cs (:children spec)]
       (do ;;(clear-game-object-children obj)
           (hydrate-game-object-children obj cs)
+          (dissoc spec :children))
+      spec)))
+
+(defn- game-object-prepopulate [^GameObject obj, spec]
+  (as-> spec spec
+    (if-let [t (first (:transform spec))] ;; obsoletes resolve-type-key
+      (do (populate! (.GetComponent obj UnityEngine.Transform) t)
+          (dissoc spec :transform))
+      spec)
+    (if-let [cs (:children spec)]
+      (do ;;(clear-game-object-children obj)
+          (populate-game-object-children obj cs)
           (dissoc spec :children))
       spec)))
 
@@ -584,7 +611,7 @@
       (transform-prepopulate-helper-mac trns spec :local-scale        localScale       Vector3))))
 
 ;; for now this does it like a merge. This might be a horrible idea.
-(defn- game-object-populate-case-default-fn [ctx]
+(defn- game-object-hydrate-case-default-fn [ctx]
   (mu/checked-keys [[targsym keysym valsym] ctx]
     `(do
        (if-let [^System.MonoType t# (resolve-type-flag ~keysym)]
@@ -608,6 +635,31 @@
            (hydrate-game-object-children ~targsym ~valsym)))
        ~targsym)))
 
+;; copypaste hydrate case, except for the children clause. cloze soon.
+(defn- game-object-populate-case-default-fn [ctx]
+  (mu/checked-keys [[targsym keysym valsym] ctx]
+    `(do
+       (if-let [^System.MonoType t# (resolve-type-flag ~keysym)]
+         (if (same-or-subclass? UnityEngine.Component t#)
+           (let [vspecs# ~valsym]
+             (if (vector? vspecs#)
+               (let [^Array preobjs# (.GetComponents ~targsym t#) ;; I hate this manyness thing
+                     pocnt#  (count preobjs#)]
+                 (dotimes [i# (count vspecs#)]
+                   (-> (if (< i# pocnt#)
+                         (aget preobjs# i#)
+                         (.AddComponent ~targsym t#))
+                     (populate! (nth vspecs# i#) t#))))
+               (throw
+                 (Exception.
+                   (str
+                     "GameObject population for " t# 
+                     " at spec-key " ~keysym
+                     " requires vector"))))))
+         (if (= :children ~keysym)
+           (populate-game-object-children ~targsym ~valsym)))
+       ~targsym)))
+
 (defmacro ^:private populate-game-object-mac []
   (populater-form 'UnityEngine.GameObject
     {:populater-form-opts
@@ -626,12 +678,12 @@
   (hydrater-form 'UnityEngine.GameObject
     {:populater-form-opts
      {:reducing-form-opts
-      {:case-default-fn game-object-populate-case-default-fn}}
+      {:case-default-fn game-object-hydrate-case-default-fn}}
      
      :prepopulater-form-fn
      (fn hydrate-prepopulater-form-fn [ctx]
        (mu/checked-keys [[initsym specsym] ctx]
-         `(game-object-prepopulate ~initsym ~specsym)))}))
+         `(game-object-prehydrate ~initsym ~specsym)))}))
 
 (def ^:private hydrate-game-object
   (hydrate-game-object-mac))
@@ -1436,3 +1488,14 @@ out: {:box-collider [{:extents [0 0 0],
           {:box-collider [nil]})))))
 
 ;; merge stuff --------------------------------------------------------
+
+(test/deftest- test-merge-populate
+  (test/testing "populate-game-object!"
+    (let [spec {:name "parent-object"
+                :children [{:name "child-object-1"}
+                           {:name "child-object-2"}]}]
+      (with-temporary-object [^GameObject obj (hydrate spec)]
+        (populate! obj {:children [{:name "child-object-3"}]})
+        (test/is
+          (= (count (seq (.GetComponent obj UnityEngine.Transform)))
+            2))))))
