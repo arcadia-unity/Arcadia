@@ -68,6 +68,51 @@
    "https://repo1.maven.org/maven2/"
    "https://clojars.org/repo/"])
 
+(defn url-exists? [^String url]
+  (let [req ^HttpWebRequest (WebRequest/Create url)]
+    (try
+      (set! (.Method req) "HEAD")
+      (set! (.Timeout req) 1000)
+      (.GetResponse req)
+      true
+      (catch WebException c
+        false))))
+
+(defn short-base-url [group artifact version]
+  (let [group (string/replace group "." "/")]
+   (str group "/"
+        artifact "/"
+        version "/")))
+
+(defn download-file [url file]
+  (with-open [wc (WebClient.)]
+    (try (.. wc (DownloadFile url file))
+      file
+      (catch System.Net.WebException e
+        nil))))
+
+(defn download-string [url]
+  (with-open [wc (WebClient.)]
+    (try
+      (.. wc (DownloadString url))
+      (catch System.Net.WebException e
+        nil))))
+
+(defn base-url [group artifact version]
+  (str (short-base-url group artifact version)
+       artifact "-"
+       version))
+
+(defn base-metadata-url [group artifact version]
+  (str (short-base-url group artifact version) "maven-metadata.xml"))
+
+(defn metadata-urls [group artifact version]
+  (->> (map #(str % (base-metadata-url group artifact version)) url-prefixes)
+       (filter url-exists?)))
+
+(defn metadata-url [group artifact version]
+  (first (metadata-urls group artifact version)))
+
 (defn snapshot-timestamp
   [group artifact version]
   (if-let [metadata (metadata-url group artifact version)]
@@ -79,37 +124,6 @@
          :snapshot
          ((juxt :timestamp :buildNumber))
          (string/join "-"))))
-
-(defn short-base-url [group artifact version]
-  (let [group (string/replace group "." "/")]
-   (str group "/"
-        artifact "/"
-        version "/")))
-
-(defn base-url [group artifact version]
-  (str (short-base-url group artifact version)
-       artifact "-"
-       version))
-
-(defn url-exists? [^String url]
-  (let [req ^HttpWebRequest (WebRequest/Create url)]
-    (try
-      (set! (.Method req) "HEAD")
-      (set! (.Timeout req) 1000)
-      (.GetResponse req)
-      true
-      (catch WebException c
-        false))))
-
-(defn base-metadata-url [group artifact version]
-  (str (short-base-url group artifact version) "maven-metadata.xml"))
-
-(defn metadata-urls [group artifact version]
-  (->> (map #(str % (base-metadata-url group artifact version)) url-prefixes)
-       (filter url-exists?)))
-
-(defn metadata-url [group artifact version]
-  (first (metadata-urls group artifact version)))
 
 (defn base-jar-url [group artifact version]
   (string/replace (str (base-url group artifact version) ".jar")
@@ -133,20 +147,6 @@
   (first (jar-urls group artifact version)))
 (defn pom-url [group artifact version]
   (first (pom-urls group artifact version)))
-
-(defn download-file [url file]
-  (with-open [wc (WebClient.)]
-    (try (.. wc (DownloadFile url file))
-      file
-      (catch System.Net.WebException e
-        nil))))
-
-(defn download-string [url]
-  (with-open [wc (WebClient.)]
-    (try
-      (.. wc (DownloadString url))
-      (catch System.Net.WebException e
-        nil))))
 
 (defn dependencies
   [[group artifact version]]
