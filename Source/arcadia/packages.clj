@@ -1,8 +1,9 @@
 (ns arcadia.packages
   (:require [clojure.string :as string])
   (:import XmlReader
-           System.Net.WebClient
-           [System.IO File StringReader]))
+           [System.Net WebClient WebException WebRequest HttpWebRequest]
+           [System.IO Directory Path File StringReader]
+           [Ionic.Zip ZipEntry ZipFile ExtractExistingFileAction]))
 
 ;; xml reading
 (defmulti xml-content (fn [^XmlReader xml] (.NodeType xml)))
@@ -61,51 +62,96 @@
      res#))
 
 (def url-prefixes
-  ["http://search.maven.org/remotecontent?filepath="
+  ["http://central.maven.org/maven2/"
+   "http://search.maven.org/remotecontent?filepath="
+   "https://oss.sonatype.org/content/repositories/snapshots/"
+   "https://repo1.maven.org/maven2/"
    "https://clojars.org/repo/"])
 
-(defn base-url [group artifact version]
+(defn snapshot-timestamp
+  [group artifact version]
+  (if-let [metadata (metadata-url group artifact version)]
+    (->> (download-string metadata)
+         read-xml
+         make-map
+         :metadata
+         :versioning
+         :snapshot
+         ((juxt :timestamp :buildNumber))
+         (string/join "-"))))
+
+(defn short-base-url [group artifact version]
   (let [group (string/replace group "." "/")]
    (str group "/"
         artifact "/"
-        version "/"
-        artifact "-"
-        version)))
+        version "/")))
 
-(defn jar-url [group artifact version] (str (base-url group artifact version) ".jar"))
-(defn jar-urls [group artifact version] (map #(str % (jar-url group artifact version)) url-prefixes))
-(defn pom-url [group artifact version] (str (base-url group artifact version) ".pom"))
-(defn pom-urls [group artifact version] (map #(str % (pom-url group artifact version)) url-prefixes))
+(defn base-url [group artifact version]
+  (str (short-base-url group artifact version)
+       artifact "-"
+       version))
 
-(defn download-file-or-nil [url file]
+(defn url-exists? [^String url]
+  (let [req ^HttpWebRequest (WebRequest/Create url)]
+    (try
+      (set! (.Method req) "HEAD")
+      (set! (.Timeout req) 1000)
+      (.GetResponse req)
+      true
+      (catch WebException c
+        false))))
+
+(defn base-metadata-url [group artifact version]
+  (str (short-base-url group artifact version) "maven-metadata.xml"))
+
+(defn metadata-urls [group artifact version]
+  (->> (map #(str % (base-metadata-url group artifact version)) url-prefixes)
+       (filter url-exists?)))
+
+(defn metadata-url [group artifact version]
+  (first (metadata-urls group artifact version)))
+
+(defn base-jar-url [group artifact version]
+  (string/replace (str (base-url group artifact version) ".jar")
+                  #"-SNAPSHOT.jar"
+                  (str "-" (snapshot-timestamp group artifact version) ".jar")))
+
+(defn base-pom-url [group artifact version]
+  (string/replace (str (base-url group artifact version) ".pom")
+                  #"-SNAPSHOT.pom"
+                  (str "-" (snapshot-timestamp group artifact version) ".pom")))
+
+(defn jar-urls [group artifact version]
+  (->> (map #(str % (base-jar-url group artifact version)) url-prefixes)
+       (filter url-exists?)))
+
+(defn pom-urls [group artifact version]
+  (->> (map #(str % (base-pom-url group artifact version)) url-prefixes)
+       (filter url-exists?)))
+
+(defn jar-url [group artifact version]
+  (first (jar-urls group artifact version)))
+(defn pom-url [group artifact version]
+  (first (pom-urls group artifact version)))
+
+(defn download-file [url file]
   (with-open [wc (WebClient.)]
     (try (.. wc (DownloadFile url file))
       file
       (catch System.Net.WebException e
         nil))))
 
-(defn download-file [urls file]
-  (->> urls
-       (map #(download-file-or-nil % file))
-       (remove nil?)
-       first))
-
-(defn download-string-or-nil [url]
+(defn download-string [url]
   (with-open [wc (WebClient.)]
-    (try (.. wc (DownloadString url))
+    (try
+      (.. wc (DownloadString url))
       (catch System.Net.WebException e
         nil))))
 
-(defn download-string [urls]
-  (->> urls
-       (map download-string-or-nil)
-       (remove nil?)
-       first))
-
 (defn dependencies
   [[group artifact version]]
-  (let [poms (pom-urls group artifact version)]
-    (->> (download-string poms)
+  (let [pom (pom-url group artifact version)]
+    (->> (download-string pom)
          read-xml 
          make-map
          :project
@@ -148,21 +194,34 @@
     (str temp-dir "/Jars")
     (Path/GetFullPath
       (download-file
-        (jar-urls group artifact version)
+        (jar-url group artifact version)
         (str (gensym (str group "-" artifact "-" version "-")) ".jar")))))
 
 (defn download-jars
   [group-artifact-version]
-  (->> (all-unique-dependencies group-artifact-version)
-       (concat [group-artifact-version])
-       (map download-jar)))
+  (doall (->> (all-unique-dependencies group-artifact-version)
+              (concat [group-artifact-version])
+              (map download-jar))))
 
 (defn should-extract? [^ZipEntry e]
-  (not (or (re-find #"^META-INF" (.Name e))
-           (re-find #"^project\.clj" (.Name e)))))
+  (not (or (re-find #"^META-INF" (.FileName e))
+           (re-find #"^project\.clj" (.FileName e))
+           (re-find #"/$" (.FileName e)))))
+
+(defn make-directories [^ZipEntry e base]
+  (Directory/CreateDirectory
+    (->> (string/split (.FileName e) #"/")
+         (drop-last 1)
+         (string/join (str Path/DirectorySeparatorChar))
+         (conj [base])
+         (string/join (str Path/DirectorySeparatorChar))))
+  e)
 
 (defn install [group-artifact-version]
-  (doseq [jar (download-jars group-artifact-version)]
-    (Packages/ExtractZipFile jar "Assets" should-extract?)))
-
-;; (install ["thi.ng" "geom-voxel" "0.0.770"])
+  (dorun
+    (->> (download-jars group-artifact-version)
+         (mapcat #(seq (ZipFile/Read %)))
+         (filter should-extract?)
+         (map #(make-directories % "Assets"))
+         ;; TODO do better than silently overwriting 
+         (map #(.Extract % "Assets" ExtractExistingFileAction/OverwriteSilently)))))
