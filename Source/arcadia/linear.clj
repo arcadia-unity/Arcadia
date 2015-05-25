@@ -339,9 +339,14 @@
      Vector2 (v2scale a# ~b)
      Vector4 (v4scale a# ~b)))
 
+;; ============================================================
+;; more rotation
+
+(defn point-pivot ^Vector3 [^Vector3 pt, ^Vector3 piv, ^Quaternion rot]
+  (v3+ (qv* rot (v3- pt piv))
+    piv))
+
 ;; TODO: all the other stuff (normalize, orthonormalize (nice!), magnitude, sqrmagnitude, lerp, etc)
-
-
 ;; ============================================================
 ;; tests
 
@@ -368,3 +373,16 @@
          (v4 1 2 3 4)
          (v4 1 2 3 4))
       (v4 3.0, 6.0, 9.0, 12.0))))
+
+(test/deftest test-rotation
+  (test/is
+    (= (point-pivot
+         (v3 0 0 1)
+         (v3 0)
+         (aa 90 1 0 0))
+      (v3 0 0 1))
+    (= (point-pivot
+         (v3 0 0 1)
+         (v3 10)
+         (aa 90 1 0 0))
+      (v3 0 0 1))))
