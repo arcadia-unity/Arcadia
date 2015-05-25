@@ -276,11 +276,11 @@
 ;; and then there's this
 ;; inline etc this stuff when time allows
 
-(defn qq* ^Quaternion
-  ([^Quaternion a ^Quaternion b]
-   (Quaternion/op_Multiply a b))
-  ([^Quaternion a ^Quaternion b & cs]
-   (reduce qq* (qq* a b) cs)))
+(defn qq* 
+  (^Quaternion [^Quaternion a ^Quaternion b]
+    (Quaternion/op_Multiply a b))
+  (^Quaternion [^Quaternion a ^Quaternion b & cs]
+    (reduce qq* (qq* a b) cs)))
 
 (defn qv* ^Vector3 [^Quaternion a ^Vector3 b]
   (Quaternion/op_Multiply a b))
@@ -348,7 +348,7 @@
 ;; ============================================================
 ;; tests
 
-(defn run-tests []
+(defn- run-tests []
   (binding [test/*test-out* *out*]
     (test/run-tests)))
 
