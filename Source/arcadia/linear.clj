@@ -290,7 +290,7 @@
     UnityEngine.Vector3 (Quaternion/op_Multiply a b)
     UnityEngine.Quaternion (Quaternion/op_Multiply a b)))
 
-(defn qe ^Quaternion [^Vector3 v]
+(defn euler ^Quaternion [^Vector3 v]
   (Quaternion/Euler v))
 
 (defn euler-angles ^Vector3 [^Quaternion q]
@@ -308,7 +308,7 @@
   ([^Vector3 here, ^Vector3 there, ^Vector3 up]
      (Quaternion/LookRotation (v- there here) up)))
 
-;; this gives some weird SIGILL problem
+  ;; this gives some weird SIGILL problem
 ;; (defn angle-axis [^Double angle, ^Vector3 axis]
 ;;   (Quaternion/AngleAxis angle, axis))
 
