@@ -318,11 +318,8 @@
 (defn qforward ^Vector3 [^Quaternion q]
   (q* q Vector3/forward))
 
-(defn aa
-  (^Quaternion [ang v]
-    (angle-axis ang v))
-  (^Quaternion [ang x y z]
-    (angle-axis ang (v3 x y z))))
+(defn aa ^Quaternion [ang x y z]
+  (angle-axis ang (v3 x y z)))
 
 ;; ============================================================
 ;; scale
