@@ -13,21 +13,44 @@
 
 ;; TODO account for multiple/different files
 (defn should-update-from? [f]
-  (and (not (nil? f))
-       (File/Exists f)
-       (< (or @last-read-time 0)
-          (.Ticks (File/GetLastWriteTime f)))))
+  (and f
+    (File/Exists f)
+    (< (or @last-read-time 0)
+      (.Ticks (File/GetLastWriteTime f)))))
+
+;; should probably make all this noise a bit more functional
+(defn configuration-file-paths []
+  [ClojureConfiguration/configFilePath
+   ClojureConfiguration/userConfigFilePath])
+
+(defn- deep-merge-maps [& ms]
+  (apply merge-with
+    (fn [v1 v2]
+      (if (and (map? v1) (map? v2))
+        (deep-merge-maps v1 v2)
+        v2))
+    ms))
 
 (defn update! 
-  ([] (update! ClojureConfiguration/configFilePath))
-  ([f]
-   (if (should-update-from? f)
-     (do
-       (reset! last-read-time (.Ticks DateTime/Now))
-       (reset! configuration (edn/read-string (File/ReadAllText f)))))))
+  ([] (update! (configuration-file-paths)))
+  ([fs]
+   (->> fs
+     (keep
+       (fn [f]
+         (when (File/Exists f)
+           (let [f2 (edn/read-string (File/ReadAllText f))]
+             (reset! last-read-time (.Ticks DateTime/Now))
+             f2))))
+     (apply deep-merge-maps {})
+     (reset! configuration))))
+
+(defn checked-update! []
+  (if (some should-update-from? (configuration-file-paths))
+    (update!)
+    @configuration))
 
 ;; update as soon as the file is required
-(update!)
+(checked-update!)
 
 (declare widgets)
 
@@ -73,5 +96,5 @@
             (File/WriteAllText config-file
                                (binding [pprint/*print-pretty* true]
                                  (with-out-str (pprint/pprint new-configuration))))
-            (update!)))))
+            (checked-update!)))))
     (EditorGUILayout/EndVertical)))

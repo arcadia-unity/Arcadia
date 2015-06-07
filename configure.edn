@@ -1,3 +1,14 @@
+;; This file constitutes hard-coded defaults for Arcadia options. To
+;; override this file, place an edn file containing a map literal at
+;; Assets/AracadiaConfig/configure.edn. That file will be merged into
+;; this one, with submaps merged recursively. Some standard options are given in comments below.
+
 {:compiler {:warn-on-reflection true, :unchecked-math false, :enabled true, :debug true},
- :injections (do (use 'arcadia.core) (use 'clojure.repl)),
- :verbose true}
+ :verbose true
+
+ ;; :injections are forms that are evaluated before the Arcadia REPL
+ ;; evaluates each input form. They are useful for requiring or using
+ ;; common namespaces.
+ ;; example:
+ ;;  :injections (do (use 'arcadia.core) (use 'clojure.repl))
+ }

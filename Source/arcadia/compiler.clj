@@ -85,7 +85,8 @@
          (correct-ns? file))))
 
 (defn import-asset [asset]
-  (let [verbose (@configuration :verbose)
+  (let [config @configuration
+        verbose (config :verbose)
         {:keys [assemblies
                 load-path
                 warn-on-reflection
@@ -93,7 +94,7 @@
                 compiler-options
                 enabled
                 debug]}
-        (@configuration :compiler)
+        (config :compiler)
         assemblies (or assemblies
                        (assemblies-path))]
     (if (and enabled (should-compile? asset))
@@ -106,7 +107,7 @@
                     *unchecked-math* unchecked-math
                     *compiler-options* compiler-options
                     *err* errors]
-            (if (@configuration :verbose)
+            (if (config :verbose)
               (Debug/Log
                 (str "Compiling " (name namespace) "...")))
             (compile namespace)
@@ -117,7 +118,7 @@
             (Debug/LogError (str (.. e InnerException Message) " (at " (.FileSource e) ":" (.Line e) ")")))
           (catch Exception e
             (Debug/LogException e)))
-      (if (@configuration :verbose)
+      (if (config :verbose)
         (Debug/LogWarning (str "Skipping " asset ", "
                                (cond (not enabled)
                                      "compiler is disabled"

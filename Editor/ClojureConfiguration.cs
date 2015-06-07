@@ -8,6 +8,9 @@ public class ClojureConfigurationObject : ScriptableObject {}
 [CustomEditor(typeof(ClojureConfigurationObject))]
 public class ClojureConfiguration : Editor {
   public static string configFilePath = "Assets/Arcadia/configure.edn";  
+  
+  public static string userConfigFilePath = "Assets/ArcadiaConfig/configure.edn";  
+
   static ClojureConfigurationObject _clojureConfigurationObject;
     
   [MenuItem ("Arcadia/Configuration...")]
