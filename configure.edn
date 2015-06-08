@@ -11,4 +11,6 @@
  ;; common namespaces.
  ;; example:
  ;;  :injections (do (use 'arcadia.core) (use 'clojure.repl))
+
+ :detect-leiningen-projects true
  }

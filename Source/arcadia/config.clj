@@ -1,15 +1,19 @@
 (ns arcadia.config
   (:require [clojure.edn :as edn]
             [clojure.pprint :as pprint]
-            [clojure.data :as data])
+            [clojure.data :as data]
+            clojure.string)
   (:import
     [System DateTime]
-    [System.IO File]
+    [System.IO File FileInfo DirectoryInfo Path]
     [UnityEngine Debug]
     [UnityEditor EditorGUI EditorGUILayout]))
 
 (def configuration (atom {}))
 (def last-read-time (atom 0))
+
+(defn- combine-paths [& ps]
+  (reduce #(Path/Combine %1 %2) ps))
 
 ;; TODO account for multiple/different files
 (defn should-update-from? [f]
@@ -51,6 +55,60 @@
 
 ;; update as soon as the file is required
 (checked-update!)
+
+;; TODO: put this function somewhere sensible
+(defn- dedup-by [f coll]
+  (letfn [(step [prv coll2]
+            (lazy-seq
+              (when-let [[x & rst] (seq coll2)]
+                (let [v (f x)]
+                  (if (prv v)
+                    (step prv rst)
+                    (cons x (step (conj prv v) rst)))))))]
+    (step #{} coll)))
+
+;; also in arcadia.compiler (which requires this namespace, so there
+;; you go). should probably consolidate
+(defn- load-path []
+  (seq (.Invoke (.GetMethod clojure.lang.RT "GetFindFilePaths"
+                            (enum-or BindingFlags/Static BindingFlags/NonPublic))
+         clojure.lang.RT nil)))
+
+(defn- leiningen-project-file? [^FileInfo fi]
+  (= "project.clj" (.Name fi)))
+
+(defn- leiningen-structured-directory? [^DirectoryInfo di]
+  (boolean
+    (some leiningen-project-file?
+      (.GetFiles di))))
+
+(defn- leiningen-project-files []
+  (vec
+    (for [^DirectoryInfo di (.GetDirectories (DirectoryInfo. "Assets"))
+          :when (leiningen-structured-directory? di)
+          ^FileInfo fi (.GetFiles di)
+          :when (leiningen-project-file? fi)]
+      fi)))
+
+(defn- leiningen-project-sourcepaths [^FileInfo fi]
+  (let [p (Path/GetDirectoryName (.FullName fi))]
+    (map #(combine-paths p %)
+      (or (:source-paths (edn/read-string (slurp fi))) ["src"]))))
+
+;; ono phase "leiningen" is in code
+(defn- leiningen-loadpaths []
+  (mapcat leiningen-project-sourcepaths
+    (leiningen-project-files)))
+
+(defn configured-loadpath
+  ([] (configured-loadpath @configuration))
+  ([config]
+   (clojure.string/join ":"
+     (dedup-by identity
+       (concat
+         (when (:detect-leiningen-projects config)
+           (leiningen-loadpaths))
+         (load-path))))))
 
 (declare widgets)
 

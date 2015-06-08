@@ -49,10 +49,17 @@ namespace Arcadia {
           Path.GetFullPath(VariadicCombine(clojureDllFolder, "..", "Source")) + ":" +
           Path.GetFullPath(Application.dataPath) + ":" +
           Path.GetFullPath(VariadicCombine(clojureDllFolder, "..", "Libraries")));
-        Debug.Log("Load Path is " + Environment.GetEnvironmentVariable("CLOJURE_LOAD_PATH"));
       } catch(InvalidOperationException e) {
         throw new SystemException("Error Loading Arcadia! Arcadia expects exactly one Arcadia folder (a folder with Clojure.dll in it)");
       }
+
+      //phase 2
+      RT.load("arcadia/config");
+      RT.var("arcadia.config","update!").invoke();
+      String clp = (String) RT.var("arcadia.config", "configured-loadpath").invoke();
+      Environment.SetEnvironmentVariable("CLOJURE_LOAD_PATH", clp);
+      Debug.Log("Load Path is " + Environment.GetEnvironmentVariable("CLOJURE_LOAD_PATH"));
+
     }
     
     static void StartREPL() {
