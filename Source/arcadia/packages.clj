@@ -219,9 +219,10 @@
 
 (defn install [group-artifact-version]
   (dorun
-    (->> (download-jars group-artifact-version)
-      (mapcat #(seq (ZipFile/Read %)))
-      (filter should-extract?)
-      (map #(make-directories % "Assets/Arcadia/Libraries"))
-      ;; TODO do better than silently overwriting 
-      (map #(.Extract % "Assets/Arcadia/Libraries" ExtractExistingFileAction/OverwriteSilently)))))
+    (->> group-artifact-version
+         download-jars 
+         (mapcat #(seq (ZipFile/Read %)))
+         (filter should-extract?)
+         (map #(make-directories % "Assets/Arcadia/Libraries"))
+         ;; TODO do better than silently overwriting 
+         (map #(.Extract % "Assets/Arcadia/Libraries" ExtractExistingFileAction/OverwriteSilently)))))

@@ -1,5 +1,6 @@
 (ns arcadia.config
-  (:require [clojure.edn :as edn]
+  (:require [arcadia.packages :as packages]
+            [clojure.edn :as edn]
             [clojure.pprint :as pprint]
             [clojure.data :as data]
             clojure.string)
@@ -82,7 +83,7 @@
     (some leiningen-project-file?
       (.GetFiles di))))
 
-(defn- leiningen-project-files []
+(defn leiningen-project-files []
   (vec
     (for [^DirectoryInfo di (.GetDirectories (DirectoryInfo. "Assets"))
           :when (leiningen-structured-directory? di)
@@ -93,7 +94,7 @@
 (defn- leiningen-project-sourcepaths [^FileInfo fi]
   (let [p (Path/GetDirectoryName (.FullName fi))]
     (map #(combine-paths p %)
-      (or (:source-paths (edn/read-string (slurp fi))) ["src"]))))
+      (or (:source-paths (read-string (slurp fi))) ["src"]))))
 
 ;; ono phase "leiningen" is in code
 (defn- leiningen-loadpaths []
@@ -103,12 +104,54 @@
 (defn configured-loadpath
   ([] (configured-loadpath @configuration))
   ([config]
-   (clojure.string/join ":"
-     (dedup-by identity
-       (concat
-         (when (:detect-leiningen-projects config)
-           (leiningen-loadpaths))
-         (load-path))))))
+   (clojure.string/join
+     Path/PathSeparator
+     (when (:detect-leiningen-projects config)
+       (leiningen-loadpaths)))))
+
+(defn normalize [coords]
+  (let [artifact (name (first coords))
+        group (or (namespace (first coords)) artifact)
+        version (last coords)]
+    [group artifact version]))
+
+(defn version-sequence [v]
+  (-> v
+      (clojure.string/split #"[\.\-]")
+      (concat (repeat 0))
+      (->> (take 4)
+           (map #(if (= % "SNAPSHOT") -1
+                   (int %))))))
+
+(defn version-newer? [a b]
+  (->> (map #(if (= %1 %2) nil (> %1 %2))
+            (version-sequence a)
+            (version-sequence b))
+       (remove nil?)
+       first
+       boolean))
+
+(defn coordinate-newer? [a b]
+  (version-newer? (last a)
+                  (last b)))
+
+(defn install-leiningen-dependencies!
+  ([] (install-leiningen-dependencies! (leiningen-project-files)))
+  ([project-files] 
+   (->> project-files
+        (map slurp)
+        (map read-string)
+        (map #(drop 3 %))
+        (map #(apply hash-map %))
+        (mapcat :dependencies)
+        (remove #(= (first %) 'org.clojure/clojure))
+        (group-by first)
+        vals
+        (map #(sort (comparator coordinate-newer?) %))
+        (map first)
+        (map normalize)
+        (map packages/install)
+        dorun)))
 
 (declare widgets)
 
