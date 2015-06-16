@@ -1,4 +1,10 @@
-(ns arcadia.introspection)
+(ns arcadia.introspection
+  (:refer-clojure :exclude [methods])
+  (:require [clojure.pprint :as pprint]
+            [clojure.test :as test]
+            [arcadia.core :as ac])
+  (:import [System.Reflection
+            MonoMethod MonoProperty MonoField]))
 
 (def inclusive-binding-flag
   (enum-or
@@ -7,10 +13,8 @@
     BindingFlags/Public
     BindingFlags/NonPublic))
 
-(defn- type? [x]
-  (instance? System.MonoType x))
-
-(defn fuzzy-finder-fn [name-fn resource-fn]
+;; private until I'm sure this is the right namespace - tsg
+(defn- fuzzy-finder-fn [name-fn resource-fn]
   (fn [string-or-regex]
     (let [f (if (instance? System.Text.RegularExpressions.Regex string-or-regex)
               #(re-find string-or-regex (name-fn %))
@@ -19,77 +23,75 @@
                    (.Contains n s))))]
       (filter f (resource-fn)))))
 
+;; for example:
 ;; (def fuzzy-materials
 ;;   (fuzzy-finder-fn
 ;;     (fn [^Material m]
 ;;       (.name m))
 ;;     #(Resources/FindObjectsOfTypeAll Material)))
 
-(defn fuzzy-methods [^Type t, sr]
-  ((fuzzy-finder-fn
-     (fn [^System.Reflection.MonoMethod m]
-       (.Name m))
-     #(.GetMethods t inclusive-binding-flag))
-   sr))
+(defn methods
+  ([^Type t]
+   (letfn [(nf [^MonoMethod m] (.Name m))]
+     (sort-by nf
+       (.GetMethods t inclusive-binding-flag))))
+  ([^Type t, sr]
+   (letfn [(nf [^MonoMethod m] (.Name m))]
+     (sort-by nf
+       ((fuzzy-finder-fn
+          nf
+          #(.GetMethods t inclusive-binding-flag))
+        sr)))))
 
-;; hackishly disable stupid paredit-killing thing until I have time to
-;; fix that problem correctly in emacs. Also left-justify the columns
-;; because we aren't fucking animals.
-(defn print-table-2
-  "Prints a collection of maps in a textual table. Prints table headings
-   ks, and then a line of output for each row, corresponding to the keys
-   in ks. If ks are not specified, use the keys of the first item in rows."
-  {:added "1.3"}
-  ([ks rows]
-     (let [s (with-out-str
-               (when (seq rows)
-                 (let [widths (map
-                                (fn [k]
-                                  (apply max (count (str k)) (map #(count (str (get % k))) rows)))
-                                ks)
-                       spacers (map #(apply str (repeat % "-")) widths)
-                       fmts (map #(str "%-" % "s") widths)
-                       fmt-row (fn [leader divider trailer row]
-                                 (str leader
-                                   (apply str (interpose divider
-                                                (for [[col fmt] (map vector (map #(get row %) ks) fmts)]
-                                                  (format fmt (str col)))))
-                                   trailer))]
-                   (println)
-                   (println (fmt-row "| " " | " " |" (zipmap ks ks)))
-                   (println (fmt-row "|-" "-+-" "-|" (zipmap ks spacers)))
-                   (doseq [row rows]
-                     (println (fmt-row "| " " | " " |" row))))))]
-       (print
-         (if (odd? (count (re-seq #"\|" s)))
-           (str s "|")
-           s))))
-  ([rows] (print-table-2 (keys (first rows)) rows)))
+(defn properties
+  ([^Type t]
+   (letfn [(nf [^MonoProperty p] (.Name p))]
+     (sort-by nf
+       (.GetProperties t inclusive-binding-flag))))
+  ([^Type t, sr]
+   (letfn [(nf [^MonoProperty p] (.Name p))]
+     (sort-by nf
+       ((fuzzy-finder-fn
+          nf
+          #(.GetProperties t inclusive-binding-flag))
+        sr)))))
 
+(defn fields
+  ([^Type t]
+   (letfn [(nf [^MonoField f] (.Name f))]
+     (sort-by nf
+       (.GetFields t inclusive-binding-flag))))
+  ([^Type t, sr]
+   (letfn [(nf [^MonoField f] (.Name f))]
+     (sort-by nf
+       ((fuzzy-finder-fn
+          nf
+          #(.GetFields t inclusive-binding-flag))
+        sr)))))
 
+(defn constructors [^Type t]
+  (.GetConstructors t))
 
-;; update all this to use fuzzy finders
+(defn members
+  ([^Type t]
+   (sort-by
+     #(condcast-> % x
+        MonoMethod (.Name x)
+        MonoProperty (.Name x)
+        MonoField (.Name x))
+     (concat
+       (fields t)
+       (properties t)
+       (methods t))))
+  ([^Type t, sr]
+   (sort-by
+     #(condcast-> % x
+        MonoMethod (.Name x)
+        MonoProperty (.Name x)
+        MonoField (.Name x))
+     (concat
+       (fields t sr)
+       (properties t sr)
+       (methods t sr)))))
 
-(defn print-properties [x & opts]
-  (let [^Type t (if (type? x) x (class x))]
-    (->> (apply clojure.reflect/reflect t opts)
-      :members
-      (filter #(instance? clojure.reflect.Property %))
-      (sort-by :name)
-      (print-table-2))))
-
-(defn print-fields [x]
-  (->> (.GetFields x)
-    (map (fn [^System.Reflection.MonoField f]
-           (.Name f)))
-    (map println)
-    doall))
-
-;; check this scoops up statics etc
-(defn print-methods [x & opts]
-  (let [^Type t (if (type? x) x (class x))]
-    (->> (apply clojure.reflect/reflect t opts)
-      :members
-      (filter #(instance? clojure.reflect.Method %))
-      (sort-by :name)
-      (print-table-2 [:name :return-type :parameter-types :flags :declaring-class]))))
+;; TODO: printing conveniences, aproprint, version of apropos returning richer data, etc
