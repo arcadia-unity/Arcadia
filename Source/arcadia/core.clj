@@ -30,8 +30,7 @@
 ;; lifecycle
 ;; ============================================================
 
-;; this one's really handy
-(defn destroyed? [^UnityEngine.Object x]
+(defn null-obj? [^UnityEngine.Object x]
   (UnityEngine.Object/op_Equality x nil))
 
 (defn ia?
@@ -79,7 +78,7 @@
          (when (and (bound-var? (resolve (quote ~name)))
                  (or (instance? UnityEngine.GameObject ~name)
                    (instance? UnityEngine.Component ~name))
-                 (not (destroyed? ~name)))
+                 (not (null-obj? ~name)))
            (destroy ~name))
          (def ~name bldg#)))
      v#))
@@ -468,28 +467,30 @@
 
 (defn- gc-rt [obj t env]
   (let [implref (known-implementer-reference? obj 'GetComponent env)
-        t-tr (type-of-reference t env)]
-    (cond
-      (isa? t-tr Type)
-      (if implref
-        `(.GetComponent ~obj (~'type-args ~t))
-        `(condcast-> ~obj obj#
-           UnityEngine.GameObject (.GetComponent obj# (~'type-args ~t))
-           UnityEngine.Component (.GetComponent obj# (~'type-args ~t))))
+        t-tr (type-of-reference t env)
+        bod  (cond
+               (isa? t-tr Type)
+               (if implref
+                 `(.GetComponent ~obj (~'type-args ~t))
+                 `(condcast-> ~obj obj#
+                    UnityEngine.GameObject (.GetComponent obj# (~'type-args ~t))
+                    UnityEngine.Component (.GetComponent obj# (~'type-args ~t))))
 
-      (isa? t-tr String)
-      (if implref
-        `(.GetComponent ~obj ~t)
-        `(condcast-> ~obj obj#
-           UnityEngine.GameObject (.GetComponent obj# ~t)
-           UnityEngine.Component (.GetComponent obj# ~t)))
-      
-      :else
-      (if implref
-        `(condcast-> ~t t#
-           Type (.GetComponent ~obj t#)
-           String (.GetComponent ~obj t#))
-        (gc-default-body obj t)))))
+               (isa? t-tr String)
+               (if implref
+                 `(.GetComponent ~obj ~t)
+                 `(condcast-> ~obj obj#
+                    UnityEngine.GameObject (.GetComponent obj# ~t)
+                    UnityEngine.Component (.GetComponent obj# ~t)))
+               
+               :else
+               (if implref
+                 `(condcast-> ~t t#
+                    Type (.GetComponent ~obj t#)
+                    String (.GetComponent ~obj t#))
+                 (gc-default-body obj t)))]
+    `(let [retval# ~bod]
+       (when (not (null-obj? retval#)) retval#))))
 
 (defmacro get-component* [obj t]
   (if (not-every? symbol? [obj t])
@@ -506,7 +507,9 @@
              (list 'arcadia.core/get-component* gameobject type))
    :inline-arities #{2}}
   [obj t]
-  (gc-default-body-mac obj t))
+  (let [retval (gc-default-body-mac obj t)]
+    (when (not (null-obj? retval))
+      retval)))
 
 (defn add-component 
   "Add a component to a gameobject
