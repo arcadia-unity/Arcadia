@@ -71,6 +71,7 @@
         (var-get v)))))
 
 ;; this one could use some more work
+;; also the bound-var test doesn't seem to work in the repl on defscn stuff from user
 (defmacro defscn [name & body]
   `(let [v# (declare ~name)]
      (when-not-ia

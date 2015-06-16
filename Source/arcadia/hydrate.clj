@@ -1,4 +1,5 @@
 (ns arcadia.hydrate
+  (:use [arcadia.core])
   (:require [arcadia.internal.map-utils :as mu]
             [arcadia.reflect :as r]
             [clojure.string :as string]
@@ -202,6 +203,12 @@
     (array-type?
       (ensure-type sym))))
 
+                        ;; (into-array ~element-type 
+                        ;;   (map          ; grumble
+                        ;;     (fn [element-spec#]
+                        ;;       (hydrate element-spec# ~element-type)) ; hmurk not sure about this
+                        ;;     ~valsym))
+
 ;; the general tack taken here might be misguided. Do we want to
 ;; support map-based array hydration?
 (defn- standard-array-set-clause [setable ctx]
@@ -211,15 +218,39 @@
           element-type (ensure-symbol   ; meh
                          (.GetElementType
                            (ensure-type setable-type)))
-          ressym           (with-meta (gensym "hydrate-result_")
-                             {:tag setable-type})]
-      `(let [~ressym (if (instance? ~setable-type ~valsym)
-                       ~valsym
-                       (into-array ~element-type 
-                         (map           ; grumble
-                           (fn [element-spec#]
-                             (hydrate element-spec# ~element-type)) ; hmurk not sure about this
-                           ~valsym)))]
+          ressym       (with-meta (gensym "result_")
+                         {:tag setable-type})]
+      `(let [~ressym (cond
+                       (or (nil? ~valsym)
+                         (instance? ~setable-type ~valsym))
+                       ~valsym          ; arrays blow each other away
+
+                       (vector? ~valsym)
+                       (let [preval#  (. ~targsym ~name)
+                             prvcnt#  (count preval#)
+                             vcnt#    (count ~valsym)
+                             mx#      (max prvcnt# vcnt#)
+                             ar#      (make-array ~element-type mx#)]
+                         (dotimes [i# mx#]
+                           (if (< i# vcnt#)
+                             (let [spc# (nth ~valsym i#)
+                                   v# (if (< i# prvcnt#)
+                                        (let [specval# (nth ~valsym i#)]
+                                          (if (instance? ~element-type specval#)
+                                            specval#
+                                            (populate!
+                                              (aget preval# i#)
+                                              specval#
+                                              ~element-type)))
+                                        (hydrate (nth ~valsym i#) ~element-type))]
+                               (aset ar# i# v#))
+                             (aset ar# i# preval#)))
+                         ar#)
+
+                       :else (throw
+                               (Exception.
+                                 (str "Expects array or vector, instead got "
+                                   ~setable-type))))]
          (set! (. ~targsym ~name) ~ressym)))))
 
 ;; could break things up into different kinds of context (setable,
@@ -240,13 +271,15 @@
       (standard-array-set-clause setable ctx)
       (let [name         (:name setable)
             setable-type (type-for-setable setable)
-            ressym       (with-meta (gensym "hydrate-result_")
+            ressym       (with-meta (gensym "result_")
                            {:tag setable-type})]
-        `(let [~ressym (if (or (nil? ~valsym)
-                             (instance? ~setable-type ~valsym))
-                         ~valsym
-                         (hydrate ~valsym ~setable-type))]
-           (when-not (identical? (. ~targsym ~name) ~ressym) ; filters out large class of stupid errors
+        `(let [prevsym# (. ~targsym ~name)
+               ~ressym (cond
+                         (instance? ~setable-type ~valsym) ~valsym
+                         (nil? ~valsym) ~valsym
+                         (nil? prevsym#) (hydrate ~valsym ~setable-type)
+                         :else (populate! prevsym# ~valsym ~setable-type))]
+           (when-not (identical? prevsym# ~ressym)
              (set! (. ~targsym ~name) ~ressym)))))))
 
 (defn- populater-key-clauses
@@ -500,10 +533,24 @@
         (hydrate-game-object
           (assoc-in-mv spec [:transform 0 :parent] trns))))))
 
+
+;; careful treating transforms as sequences, don't quite understand
+;; the concurent/lazy semantics here. would be much more comfortable
+;; with some introp function that returns an array, if such a thing can be found
 (defn- game-object-children [^GameObject obj]
   (let [^Transform trns (.GetComponent obj UnityEngine.Transform)]
-    (for [^Transform trns' trns]
-      (.gameObject trns'))))
+    (into [] ;; right?
+      (for [^Transform trns' trns]
+        (.gameObject trns')))))
+
+(defn- populate-game-object-children
+  [^UnityEngine.GameObject obj, specs]
+  (dorun ;; make faster later I guess
+    (map populate!
+      (concat (game-object-children obj)
+        (repeatedly #(set-parent (GameObject.) obj)))
+      specs))
+  obj)
 
 (defn- playing? []
   UnityEngine.Application/isPlaying)
@@ -515,7 +562,7 @@
         (.Destroy child)
         (.DestroyImmediate child)))))
 
-(defn- game-object-prepopulate [^GameObject obj, spec]
+(defn- game-object-prehydrate [^GameObject obj, spec]
   (as-> spec spec
     (if-let [t (first (:transform spec))] ;; obsoletes resolve-type-key
       (do (populate! (.GetComponent obj UnityEngine.Transform) t)
@@ -524,6 +571,18 @@
     (if-let [cs (:children spec)]
       (do ;;(clear-game-object-children obj)
           (hydrate-game-object-children obj cs)
+          (dissoc spec :children))
+      spec)))
+
+(defn- game-object-prepopulate [^GameObject obj, spec]
+  (as-> spec spec
+    (if-let [t (first (:transform spec))] ;; obsoletes resolve-type-key
+      (do (populate! (.GetComponent obj UnityEngine.Transform) t)
+          (dissoc spec :transform))
+      spec)
+    (if-let [cs (:children spec)]
+      (do ;;(clear-game-object-children obj)
+          (populate-game-object-children obj cs)
           (dissoc spec :children))
       spec)))
 
@@ -552,7 +611,7 @@
       (transform-prepopulate-helper-mac trns spec :local-scale        localScale       Vector3))))
 
 ;; for now this does it like a merge. This might be a horrible idea.
-(defn- game-object-populate-case-default-fn [ctx]
+(defn- game-object-hydrate-case-default-fn [ctx]
   (mu/checked-keys [[targsym keysym valsym] ctx]
     `(do
        (if-let [^System.MonoType t# (resolve-type-flag ~keysym)]
@@ -576,6 +635,31 @@
            (hydrate-game-object-children ~targsym ~valsym)))
        ~targsym)))
 
+;; copypaste hydrate case, except for the children clause. cloze soon.
+(defn- game-object-populate-case-default-fn [ctx]
+  (mu/checked-keys [[targsym keysym valsym] ctx]
+    `(do
+       (if-let [^System.MonoType t# (resolve-type-flag ~keysym)]
+         (if (same-or-subclass? UnityEngine.Component t#)
+           (let [vspecs# ~valsym]
+             (if (vector? vspecs#)
+               (let [^Array preobjs# (.GetComponents ~targsym t#) ;; I hate this manyness thing
+                     pocnt#  (count preobjs#)]
+                 (dotimes [i# (count vspecs#)]
+                   (-> (if (< i# pocnt#)
+                         (aget preobjs# i#)
+                         (.AddComponent ~targsym t#))
+                     (populate! (nth vspecs# i#) t#))))
+               (throw
+                 (Exception.
+                   (str
+                     "GameObject population for " t# 
+                     " at spec-key " ~keysym
+                     " requires vector"))))))
+         (if (= :children ~keysym)
+           (populate-game-object-children ~targsym ~valsym)))
+       ~targsym)))
+
 (defmacro ^:private populate-game-object-mac []
   (populater-form 'UnityEngine.GameObject
     {:populater-form-opts
@@ -594,12 +678,12 @@
   (hydrater-form 'UnityEngine.GameObject
     {:populater-form-opts
      {:reducing-form-opts
-      {:case-default-fn game-object-populate-case-default-fn}}
+      {:case-default-fn game-object-hydrate-case-default-fn}}
      
      :prepopulater-form-fn
      (fn hydrate-prepopulater-form-fn [ctx]
        (mu/checked-keys [[initsym specsym] ctx]
-         `(game-object-prepopulate ~initsym ~specsym)))}))
+         `(game-object-prehydrate ~initsym ~specsym)))}))
 
 (def ^:private hydrate-game-object
   (hydrate-game-object-mac))
@@ -1136,8 +1220,10 @@ Aspires to be idempotent with hydrate, ie,
        (if (or (vector? spec) (map? spec))
          (if-let [cfn (get (@hydration-database :populaters) t)]
            (cfn inst spec)
-           (throw (Exception. (str "No populater found for type " t))))
-         (throw (Exception. "spec neither vector nor map"))))))
+           (throw (Exception. (str "No populater found for type " type))))
+         (throw (Exception.
+                  (str "spec neither vector nor map, instead type is "
+                    (type spec))))))))
 
 ;; ============================================================
 ;; structural manipulation functions
@@ -1402,3 +1488,14 @@ out: {:box-collider [{:extents [0 0 0],
           {:box-collider [nil]})))))
 
 ;; merge stuff --------------------------------------------------------
+
+(test/deftest- test-merge-populate
+  (test/testing "populate-game-object!"
+    (let [spec {:name "parent-object"
+                :children [{:name "child-object-1"}
+                           {:name "child-object-2"}]}]
+      (with-temporary-object [^GameObject obj (hydrate spec)]
+        (populate! obj {:children [{:name "child-object-3"}]})
+        (test/is
+          (= (count (seq (.GetComponent obj UnityEngine.Transform)))
+            2))))))
