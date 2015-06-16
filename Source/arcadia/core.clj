@@ -33,36 +33,6 @@
 (defn null-obj? [^UnityEngine.Object x]
   (UnityEngine.Object/op_Equality x nil))
 
-(defn ia?
-  "Stands for in-aot?, which is too many characters when we start
-  stringing it into larger constructions. Returns true if and only if
-  compiler is currently AOT-ing. Very useful for controling side
-  effects to the scene graph."
-  []
-  (boolean *compile-files*))
-
-(defmacro if-ia [& body]
-  `(if (ia?)
-     ~@body))
-
-(defmacro when-ia [& body]
-  (when (ia?)
-    ~@body))
-
-(defmacro when-not-ia [& body]
-  `(when-not (ia?)
-     ~@body))
-
-(defmacro def-ia [& body]
-  `(let [v# (declare ~name)]
-     (when-ia (def ~name ~@body))
-     v#))
-
-(defmacro def-not-ia [name & body]
-  `(let [v# (declare ~name)]
-     (when-not-ia (def ~name ~@body))
-     v#))
-
 (defn bound-var? [v]
   (and (var? v)
     (not
@@ -73,7 +43,7 @@
 ;; also the bound-var test doesn't seem to work in the repl on defscn stuff from user
 (defmacro defscn [name & body]
   `(let [v# (declare ~name)]
-     (when-not-ia
+     (when (not *compile-files*)
        (let [bldg# (do ~@body)]
          (when (and (bound-var? (resolve (quote ~name)))
                  (or (instance? UnityEngine.GameObject ~name)
