@@ -75,7 +75,7 @@
 (defn members
   ([^Type t]
    (sort-by
-     #(condcast-> % x
+     #(ac/condcast-> % x
         MonoMethod (.Name x)
         MonoProperty (.Name x)
         MonoField (.Name x))
@@ -85,7 +85,7 @@
        (methods t))))
   ([^Type t, sr]
    (sort-by
-     #(condcast-> % x
+     #(ac/condcast-> % x
         MonoMethod (.Name x)
         MonoProperty (.Name x)
         MonoField (.Name x))
