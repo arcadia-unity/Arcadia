@@ -62,12 +62,20 @@ namespace Arcadia {
       try {
         Debug.Log("Setting Load Path...");
         string clojureDllFolder = GetClojureDllFolder();
+        string basicLoadPath = Path.GetFullPath(VariadicCombine(clojureDllFolder, "..", "Compiled")) + Path.PathSeparator +
+                               Path.GetFullPath(VariadicCombine(clojureDllFolder, "..", "Source")) + Path.PathSeparator +
+                               Path.GetFullPath(Application.dataPath) + Path.PathSeparator +
+                               Path.GetFullPath(VariadicCombine(clojureDllFolder, "..", "Libraries"));
         
-        Environment.SetEnvironmentVariable("CLOJURE_LOAD_PATH",
-          Path.GetFullPath(VariadicCombine(clojureDllFolder, "..", "Compiled")) + ":" +
-          Path.GetFullPath(VariadicCombine(clojureDllFolder, "..", "Source")) + ":" +
-          Path.GetFullPath(Application.dataPath));
+        Environment.SetEnvironmentVariable("CLOJURE_LOAD_PATH", basicLoadPath);
+        
+        //phase 2
+        RT.load("arcadia/config");
+        RT.var("arcadia.config","update!").invoke();
+        string configuredLoadPath = (string) RT.var("arcadia.config", "configured-loadpath").invoke();
+        Environment.SetEnvironmentVariable("CLOJURE_LOAD_PATH", configuredLoadPath + Path.PathSeparator + basicLoadPath);
         Debug.Log("Load Path is " + Environment.GetEnvironmentVariable("CLOJURE_LOAD_PATH"));
+        
       } catch(InvalidOperationException e) {
         throw new SystemException("Error Loading Arcadia! Arcadia expects exactly one Arcadia folder (a folder with Clojure.dll in it)");
       }

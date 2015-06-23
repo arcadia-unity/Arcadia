@@ -5,6 +5,7 @@ using System;
 
 class ClojureAssetPostprocessor : AssetPostprocessor {
     static public void OnPostprocessAllAssets(String[] importedAssets, String[] deletedAssets, String[] movedAssets, String[] movedFromAssetPaths) {
+        Arcadia.Initialization.SetClojureLoadPath();
         RT.load("arcadia/compiler");
         RT.var("arcadia.compiler", "import-assets").invoke(importedAssets);
         // TODO support deleting and moving assets

@@ -125,7 +125,7 @@
                                      (not (first-form-is-ns? asset))
                                      "first form is not ns"
                                      (not (correct-ns? asset))
-                                     "namespace in ns form does not match file name"
+                                     (str "namespace in ns form does not match file name (" (asset->ns asset) ")")
                                      :else
                                      "not sure why")))))))
 

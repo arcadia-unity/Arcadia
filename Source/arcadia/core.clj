@@ -162,9 +162,20 @@
               (require (quote ~(ns-name *ns*))))
        %)))
 
+(defn- process-static-ctor [impl ns-squirrel-sym]
+  (let [this (with-meta (first (impl :args))
+                        {:tag 'clojure.lang.IStaticConstructor})]
+    (update-in impl [:fntail]
+               #(cons `(.StaticConstructor ~this) %))))
+
 (defn- require-trigger-method? [mimpl]
   (boolean
     (#{'Awake 'OnDrawGizmosSelected 'OnDrawGizmos 'Start}
+     (:name mimpl))))
+
+(defn- require-static-ctor? [mimpl]
+  (boolean
+    (#{'Awake}
      (:name mimpl))))
 
 (defn- collapse-method [impl]
@@ -202,22 +213,30 @@
         (normalize-method-implementations impls))
       (ensure-has-method {:name 'Start})
       (ensure-has-method {:name 'Awake})
-      (ensure-has-method
-        {:name 'OnAfterDeserialize
-         :interface 'UnityEngine.ISerializationCallbackReceiver
-         :args '[this]
-         :fntail '[(require 'arcadia.core)
-                   (arcadia.core/default-on-after-deserialize this)]})
-      
-      (ensure-has-method
-        {:name 'OnBeforeSerialize
-         :interface 'UnityEngine.ISerializationCallbackReceiver
-         :args '[this]
-         :fntail '[(require 'arcadia.core)
-                   (arcadia.core/default-on-before-serialize this)]})
+;      (ensure-has-method
+;        {:name 'OnAfterDeserialize
+;         :interface 'UnityEngine.ISerializationCallbackReceiver
+;         :args '[this]
+;         :fntail '[(if UnityEngine.Application/isEditor
+;                     (.StaticConstructor ^clojure.lang.IStaticConstructor this))
+;                   (require 'arcadia.core)
+;                   (arcadia.core/default-on-after-deserialize this)]})
+;
+;      (ensure-has-method
+;        {:name 'OnBeforeSerialize
+;         :interface 'UnityEngine.ISerializationCallbackReceiver
+;         :args '[this]
+;         :fntail '[(if UnityEngine.Application/isEditor
+;                     (.StaticConstructor ^clojure.lang.IStaticConstructor this))
+;                   (require 'arcadia.core)
+;                   (arcadia.core/default-on-before-serialize this)]})
       (map (fn [impl]
              (if (require-trigger-method? impl)
                (process-require-trigger impl ns-squirrel-sym)
+               impl)))
+      (map (fn [impl]
+             (if (require-static-ctor? impl)
+               (process-static-ctor impl ns-squirrel-sym)
                impl)))
       (group-by :interface)
       (mapcat
