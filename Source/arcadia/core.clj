@@ -325,20 +325,22 @@
                         (str "symbol does not resolve to a type")))))
     :else (throw
             (Exception.
-              (str "expects type or symbol")))))
+              (str "expects type or type symbol")))))
 
 (defn- tag-type [x]
   (when-let [t (:tag (meta x))]
     (ensure-type t)))
 
 (defn- type-of-reference [x env]
-  (or (tag-type x)
-    (and (symbol? x)
+  (if (symbol? x)
+    (or (tag-type x)
       (if (contains? env x)
         (type-of-local-reference x env) ; local
         (let [v (resolve x)] ;; dubious
-          (when (not (and (var? v) (fn? (var-get v))))
-            (tag-type v))))))) 
+          (if (not (and (var? v) (fn? (var-get v))))
+            (tag-type v)
+            (type x)))))
+    (type x))) 
 
 ;; ============================================================
 ;; condcast->
@@ -360,13 +362,10 @@
   (maximize (comparator same-or-subclass?)
     (remove nil? types)))
 
-(def ccc-log (atom []))
-
 (defn- contract-condcast-clauses [expr xsym clauses env]
   (let [etype (most-specific-type
                 (type-of-reference expr env)
                 (tag-type xsym))]
-    (swap! ccc-log conj etype)
     (if etype
       (if-let [[_ then] (first
                           (filter #(= etype (ensure-type (first %)))
@@ -396,11 +395,12 @@
     (cond
       (= 0 (count clauses))
       `(let [~xsym ~expr]
-         ~default) ;; might be nil obvi
+         ~@default) ;; might be nil obvi
 
       (= 1 (count clauses)) ;; corresponds to exact type match. janky but fine
       `(let [~xsym ~expr]
-         ~@clauses)
+         ~@clauses
+         ~@default)
 
       :else
       `(let [~xsym ~expr]
@@ -411,7 +411,8 @@
                  (fn [[t then]]
                    `[(instance? ~t ~xsym)
                      (let [~(with-meta xsym {:tag t}) ~xsym]
-                       ~then)]))))))))
+                       ~then)])))
+           ~@default)))))
 
 ;; ============================================================
 ;; get-component
