@@ -57,7 +57,7 @@
 ;; defcomponent 
 ;; ============================================================
 
-(defmacro defleaked [var]
+(defmacro ^:private defleaked [var]
   `(def ~(with-meta (symbol (name var)) {:private true})
      (var-get (find-var '~var))))
 
