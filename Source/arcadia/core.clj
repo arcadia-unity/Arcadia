@@ -639,21 +639,14 @@
   
   * type - The type to search for, a Type")
 
-(defwrapper object-named GameObject Find
-  "Finds a game object by name and returns it.
-  
-  * name - The name of the object to find, a String")
-
-(defn object-named
+(defn ^GameObject object-named
   "Finds first GameObject in scene the name of which matches name parameter, which can be a string or a regular expression, or nil if no match can be found. 
   
   Name type:
   String - Finds first GameObject the name of which exactly matches name parameter.
   Regex - Finds first GameObject the name of which matches on (re-find <name parameter> (.name <GameObject instance>)).
 
-  Note that this is not the most efficient way to manage references into the scene graph.
-
-  See also objects-named."
+  Note that this is not the most efficient way to manage references into the scene graph. See also objects-named."
   [name]
   (condcast-> name name
     String (GameObject/Find name)
