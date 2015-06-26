@@ -423,82 +423,34 @@
 (defn- dedup-by [f coll]
   (map peek (vals (group-by f coll))))
 
-;; maybe we should be passing full method sigs around rather than
-;; method names. 
-(defn- known-implementer-reference? [x method-name env]
-  (boolean
-    (when-let [tor (type-of-reference x env)]
-      (type-has-method? tor method-name))))
-
-(defn- raise-args [[head & rst]]
-  (let [gsyms (repeatedly (count rst) gensym)]
-    `(let [~@(interleave gsyms rst)]
-       ~(cons head gsyms))))
-
-(defn- raise-non-symbol-args [[head & rst]]
-  (let [bndgs (zipmap 
-                (remove symbol? rst)
-                (repeatedly gensym))]
-    `(let [~@(mapcat reverse bndgs)]
-       ~(cons head (replace bndgs rst)))))
-
-(defn- gc-default-body [obj t]
-  `(condcast-> ~t t2#
-     Type   (condcast-> ~obj obj2#
-              UnityEngine.GameObject (.GetComponent obj2# t2#)
-              UnityEngine.Component (.GetComponent obj2# t2#))
-     String (condcast-> ~obj obj2#
-              UnityEngine.GameObject (.GetComponent obj2# t2#)
-              UnityEngine.Component (.GetComponent obj2# t2#))))
-
-(defmacro ^:private gc-default-body-mac [obj t]
-  (gc-default-body obj t))
-
-(defn- gc-rt [obj t env]
-  (let [implref (known-implementer-reference? obj 'GetComponent env)
-        t-tr (type-of-reference t env)
-        bod  (cond
-               (isa? t-tr Type)
-               (if implref
-                 `(.GetComponent ~obj (~'type-args ~t))
-                 `(condcast-> ~obj obj#
-                    UnityEngine.GameObject (.GetComponent obj# (~'type-args ~t))
-                    UnityEngine.Component (.GetComponent obj# (~'type-args ~t))))
-
-               (isa? t-tr String)
-               (if implref
-                 `(.GetComponent ~obj ~t)
-                 `(condcast-> ~obj obj#
-                    UnityEngine.GameObject (.GetComponent obj# ~t)
-                    UnityEngine.Component (.GetComponent obj# ~t)))
-               
-               :else
-               (if implref
-                 `(condcast-> ~t t#
-                    Type (.GetComponent ~obj t#)
-                    String (.GetComponent ~obj t#))
-                 (gc-default-body obj t)))]
-    `(let [retval# ~bod]
-       (when (not (null-obj? retval#)) retval#))))
-
-(defmacro get-component* [obj t]
-  (if (not-every? symbol? [obj t])
-    (raise-non-symbol-args
-      (list 'arcadia.core/get-component* obj t))
-    (gc-rt obj t &env)))
+;; have to dance around a bit thanks to type-args
+(defn- get-component-inline-fn [x-expr type-expr]
+  (let [[tfrm, tf] (if (type-name? type-expr)
+                     [(list 'type-args type-expr), identity]
+                     (let [tsym (with-meta (gensym "type_") {:tag 'System.MonoType})]
+                       [tsym, (fn [expr]
+                                `(let [~tsym ~type-expr]
+                                   ~expr))]))
+        x-sym (gensym "x_")]
+    `(condcast-> ~x-expr ~x-sym
+       UnityEngine.GameObject ~(tf `(.GetComponent ~x-sym ~tfrm))
+       UnityEngine.Component ~(tf `(.GetComponent (.gameObject ~x-sym) ~tfrm))
+       (throw (ArgumentException.
+                (str "Expects x to be GameObject or Component, instead got " (type ~x-sym)))))))
 
 (defn get-component
-  "Returns the component of Type type if the game object has one attached, nil if it doesn't.
-  
-  * obj - the object to query, a GameObject or Component
-  * type - the type of the component to get, a Type or String"
-  {:inline (fn [gameobject type]
-             (list 'arcadia.core/get-component* gameobject type))
+  "Returns the component of Type t if x, a GameObject or Component, has one attached, nil if it doesn't. Inlines to most efficient form given local type information.
+
+  For reasons of performance and sanity, differs from Unity's (.GetComponent <obj> <t>) in that t must be a Type (cannot be a String). Future versions may also accept Strings for t if this becomes a problem."
+  {:inline (fn [x t]
+             (get-component-inline-fn x t))
    :inline-arities #{2}}
-  [obj t]
-  (let [retval (gc-default-body-mac obj t)]
-    (when (not (null-obj? retval))
-      retval)))
+  ([x, ^Type t]
+   (condcast-> x x
+     UnityEngine.GameObject (.GetComponent x t)
+     UnityEngine.Component (.GetComponent (.gameObject x) t)
+     (throw (ArgumentException.
+              (str "Expects x to be GameObject or Component, instead got " (type x)))))))
 
 (defn add-component 
   "Add a component to a gameobject
