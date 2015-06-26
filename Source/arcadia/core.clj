@@ -333,15 +333,13 @@
     (ensure-type t)))
 
 (defn- type-of-reference [x env]
-  (if (symbol? x)
+  (when (symbol? x)
     (or (tag-type x)
       (if (contains? env x)
         (type-of-local-reference x env) ; local
         (let [v (resolve x)] ;; dubious
-          (if (not (and (var? v) (fn? (var-get v))))
-            (tag-type v)
-            (type x)))))
-    (type x))) 
+          (when (not (and (var? v) (fn? (var-get v))))
+            (tag-type v))))))) 
 
 ;; ============================================================
 ;; condcast->
@@ -364,9 +362,9 @@
     (remove nil? types)))
 
 (defn- contract-condcast-clauses [expr xsym clauses env]
-  (let [etype (most-specific-type
-                (type-of-reference expr env)
-                (tag-type xsym))]
+  (let [expr-tor (type-of-reference expr env)
+        xsym-tor (type-of-reference xsym env)
+        etype (most-specific-type expr-tor xsym-tor)]
     (if etype
       (if-let [[_ then] (first
                           (filter #(= etype (ensure-type (first %)))
@@ -380,11 +378,7 @@
           (apply concat)))
       clauses)))
 
-;; note this takes an optional default value. This macro is potentially
-;; annoying in the case that you want to branch on a supertype, for
-;; instance, but the cast would remove interface information. Use with
-;; this in mind.
-(defmacro condcast-> [expr xsym & clauses]
+(defmacro cc* [expr xsym & clauses]
   (let [[clauses default] (if (even? (count clauses))
                             [clauses nil] 
                             [(butlast clauses)
@@ -395,25 +389,29 @@
                   expr xsym clauses &env)]
     (cond
       (= 0 (count clauses))
-      `(let [~xsym ~expr]
-         ~@default) ;; might be nil obvi
+      (last default) ;; might be nil obvi
 
       (= 1 (count clauses)) ;; corresponds to exact type match. janky but fine
-      `(let [~xsym ~expr]
-         ~@clauses
-         ~@default)
+      (first clauses)
 
       :else
-      `(let [~xsym ~expr]
-         (cond
-           ~@(->> clauses
-               (partition 2)
-               (mapcat
-                 (fn [[t then]]
-                   `[(instance? ~t ~xsym)
-                     (let [~(with-meta xsym {:tag t}) ~xsym]
-                       ~then)])))
-           ~@default)))))
+      `(cond
+         ~@(->> clauses
+             (partition 2)
+             (mapcat
+               (fn [[t then]]
+                 `[(instance? ~t ~xsym)
+                   (let [~(with-meta xsym {:tag t}) ~xsym]
+                     ~then)])))
+         ~@default))))
+
+;; note this takes an optional default value. This macro is potentially
+;; annoying in the case that you want to branch on a supertype, for
+;; instance, but the cast would remove interface information. Use with
+;; this in mind.
+(defmacro condcast-> [expr xsym & clauses]
+  `(let [~xsym ~expr] ; binding important for &env in cc*
+     (cc* ~expr ~xsym ~@clauses)))
 
 ;; ============================================================
 ;; get-component
