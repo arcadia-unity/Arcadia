@@ -87,21 +87,29 @@
                   (catch Exception e
                     (str e)))
           bytes (.GetBytes Encoding/UTF8 (str result "\n" (ns-name (:*ns* @default-repl-env)) "=> "))]
-            (try
-              (.Send socket bytes (.Length bytes) destination)
-              (catch SocketException e
-                (let [estr (str (.ToString e)
-                                "\n"
-                                (ns-name (:*ns* @default-repl-env))
-                                "=> ")
-                      ebytes (.GetBytes Encoding/UTF8 estr)]
-                  (.Send socket ebytes (.Length ebytes) destination)))))))
+      (try
+        (do
+          (Debug/Log "Sending result")
+          (let [res (.Send socket bytes (.Length bytes) destination)]
+            (Debug/Log "Sent result")
+            res))
+        (catch SocketException e
+          (let [estr (str (.ToString e)
+                       "\n"
+                       (ns-name (:*ns* @default-repl-env))
+                       "=> ")
+                ebytes (.GetBytes Encoding/UTF8 estr)]
+            (Debug/Log "Sending result")
+            (let [res (.Send socket ebytes (.Length ebytes) destination)]
+              (Debug/Log "Sent result")
+              res)))))))
 
 (defn- listen-and-block [^UdpClient socket]
   (let [sender (IPEndPoint. IPAddress/Any 0)
         incoming-bytes (.Receive socket (by-ref sender))]
-    (if (> (.Length incoming-bytes) 0) 
+    (when (> (.Length incoming-bytes) 0)
       (let [incoming-code (.GetString Encoding/UTF8 incoming-bytes 0 (.Length incoming-bytes))]
+        (Debug/Log (str "bytes received: " incoming-code))
         (.Enqueue work-queue [incoming-code socket sender])))))
 
 (defn start-server [^long port]

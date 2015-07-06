@@ -11,12 +11,34 @@ namespace Arcadia {
     static Initialization() {
       Initialize();
     }
-      
+
+    public static String GetClojureDllFolder(){
+    try {
+      return
+        Path.GetDirectoryName(
+          AssetDatabase.GetAllAssetPaths()
+            .Where(s => System.Text.RegularExpressions.Regex.IsMatch(s, ".*/Clojure.dll$")) // for compatibility with 4.3
+            .Single());
+	}catch(InvalidOperationException e){
+       	 throw new SystemException("Error Loading Arcadia! Arcadia expects exactly one Arcadia folder (a folder with Clojure.dll in it)");
+	}
+    }
+
+    public static void ensureCompiledFolder(){
+     string maybeCompiled = Path.GetFullPath(VariadicCombine(GetClojureDllFolder(), "..", "Compiled"));
+     if(!Directory.Exists(maybeCompiled)){
+	Debug.Log("Creating Compiled");
+        Directory.CreateDirectory(maybeCompiled);
+     }
+    }
+
+
     [MenuItem ("Arcadia/Initialization/Rerun")]
     public static void Initialize() {
       Debug.Log("Starting Arcadia...");
       
       CheckSettings();
+      ensureCompiledFolder();
       SetClojureLoadPath();
       StartREPL();
       
@@ -39,10 +61,7 @@ namespace Arcadia {
     public static void SetClojureLoadPath() {
       try {
         Debug.Log("Setting Load Path...");
-        string clojureDllFolder = Path.GetDirectoryName(
-          AssetDatabase.GetAllAssetPaths()
-            .Where(s => System.Text.RegularExpressions.Regex.IsMatch(s, ".*/Clojure.dll$")) // for compatibility with 4.3
-            .Single());
+        string clojureDllFolder = GetClojureDllFolder();
         
         Environment.SetEnvironmentVariable("CLOJURE_LOAD_PATH",
           Path.GetFullPath(VariadicCombine(clojureDllFolder, "..", "Compiled")) + ":" +

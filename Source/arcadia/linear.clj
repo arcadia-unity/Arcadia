@@ -52,7 +52,8 @@
                               (cond
                                 unary-expr (list [(first args)] unary-expr)
                                 unary-op `([~(first args)]
-                                           (~unary-op ~(first args))))
+                                           (list (quote ~unary-op)
+                                             ~(first args))))
                               `([x# & xs#]
                                 (nestl (quote ~op)
                                   (cons x# xs#)))])}
@@ -116,28 +117,64 @@
 ;; ============================================================
 ;; constructors
 
-(defmacro ^:private def-v-ctr
-  ([name vtype arity]
-   `(def-v-ctr ~name ~vtype ~arity ~(symbol (str vtype "/zero"))))
-  ([name vtype arity zero-expr]
-   (let [args (mtag (vec (take arity (im/classy-args))) vtype)
-         zargs (mtag [] vtype)
-         frm0 zero-expr]
-     `(defn ~name 
-        {:inline-arities #{0 ~arity}
-         :inline (fn
-                   (~zargs '~frm0)
-                   (~args `(new ~~vtype ~~@args)))}
-        (~zargs ~frm0)
-        (~args (new ~vtype ~@args))))))
+(defn v2
+  {:inline-arities #{0 1 2}
+   :inline (fn
+             ([] `UnityEngine.Vector2/one)
+             ([x]
+              `(let [x# ~x]
+                 (UnityEngine.Vector2. x# x#)))
+             ([x y]
+              `(UnityEngine.Vector2. ~x ~y)))}
+  (^UnityEngine.Vector2 []
+    UnityEngine.Vector2/one)
+  (^UnityEngine.Vector2 [x]
+    (UnityEngine.Vector2. x x))
+  (^UnityEngine.Vector2 [x y]
+   (UnityEngine.Vector2. x y)))
 
-(def-v-ctr v2 UnityEngine.Vector2 2)
+(defn v3
+  {:inline-arities #{0 1 3}
+   :inline (fn
+             ([] `UnityEngine.Vector3/one)
+             ([x]
+              `(let [x# ~x]
+                 (UnityEngine.Vector3. x# x# x#)))
+             ([x y z]
+              `(UnityEngine.Vector3. ~x ~y ~z)))}
+  (^UnityEngine.Vector3 []
+    UnityEngine.Vector3/one)
+  (^UnityEngine.Vector3 [x]
+    (UnityEngine.Vector3. x x x))
+  (^UnityEngine.Vector3 [x y z]
+   (UnityEngine.Vector3. x y z)))
 
-(def-v-ctr v3 UnityEngine.Vector3 3)
+(defn v4
+  {:inline-arities #{0 1 4}
+   :inline (fn
+             ([] `UnityEngine.Vector4/one)
+             ([x]
+              `(let [x# ~x]
+                 (UnityEngine.Vector4. x# x# x# x#)))
+             ([x y z w]
+              `(UnityEngine.Vector4. ~x ~y ~z ~w)))}
+  (^UnityEngine.Vector4 []
+    UnityEngine.Vector4/one)
+  (^UnityEngine.Vector4 [x]
+    (UnityEngine.Vector4. x x x x))
+  (^UnityEngine.Vector4 [x y z w]
+   (UnityEngine.Vector4. x y z w)))
 
-(def-v-ctr v4 UnityEngine.Vector4 4)
-
-(def-v-ctr qt UnityEngine.Quaternion 4 UnityEngine.Quaternion/identity)
+(defn qt
+  {:inline-arities #{0 4}
+   :inline (fn
+             ([] `UnityEngine.Quaternion/identity)
+             ([a b c d]
+              `(UnityEngine.Quaternion. ~a ~b ~c ~d)))}
+  (^UnityEngine.Quaternion []
+    UnityEngine.Quaternion/identity)
+  (^UnityEngine.Quaternion [a b c d]
+   (UnityEngine.Quaternion. a b c d)))
 
 ;; ============================================================
 ;; +
@@ -170,15 +207,18 @@
 
 (def-vop-lower v2-
   {:op UnityEngine.Vector2/op_Subtraction
-   :return-type UnityEngine.Vector2/op_Subtraction})
+   :return-type UnityEngine.Vector2/op_Subtraction
+   :unary-op UnityEngine.Vector3/op_UnaryNegation})
 
 (def-vop-lower v3-
   {:op UnityEngine.Vector3/op_Subtraction
-   :return-type UnityEngine.Vector3/op_Subtraction})
+   :return-type UnityEngine.Vector3/op_Subtraction
+   :unary-op UnityEngine.Vector3/op_UnaryNegation})
 
 (def-vop-lower v4- 
   {:op UnityEngine.Vector4/op_Subtraction
-   :return-type UnityEngine.Vector4/op_Subtraction})
+   :return-type UnityEngine.Vector4/op_Subtraction
+   :unary-op UnityEngine.Vector3/op_UnaryNegation})
 
 (def-vop-higher v-
   {:op -})
@@ -236,8 +276,11 @@
 ;; and then there's this
 ;; inline etc this stuff when time allows
 
-(defn qq* ^Quaternion [^Quaternion a ^Quaternion b]
-  (Quaternion/op_Multiply a b))
+(defn qq* 
+  (^Quaternion [^Quaternion a ^Quaternion b]
+    (Quaternion/op_Multiply a b))
+  (^Quaternion [^Quaternion a ^Quaternion b & cs]
+    (reduce qq* (qq* a b) cs)))
 
 (defn qv* ^Vector3 [^Quaternion a ^Vector3 b]
   (Quaternion/op_Multiply a b))
@@ -247,7 +290,7 @@
     UnityEngine.Vector3 (Quaternion/op_Multiply a b)
     UnityEngine.Quaternion (Quaternion/op_Multiply a b)))
 
-(defn qe ^Quaternion [^Vector3 v]
+(defn euler ^Quaternion [^Vector3 v]
   (Quaternion/Euler v))
 
 (defn euler-angles ^Vector3 [^Quaternion q]
@@ -265,7 +308,7 @@
   ([^Vector3 here, ^Vector3 there, ^Vector3 up]
      (Quaternion/LookRotation (v- there here) up)))
 
-;; this gives some weird SIGILL problem
+  ;; this gives some weird SIGILL problem
 ;; (defn angle-axis [^Double angle, ^Vector3 axis]
 ;;   (Quaternion/AngleAxis angle, axis))
 
@@ -275,11 +318,8 @@
 (defn qforward ^Vector3 [^Quaternion q]
   (q* q Vector3/forward))
 
-(defn aa
-  (^Quaternion [ang v]
-    (angle-axis ang v))
-  (^Quaternion [ang x y z]
-    (angle-axis ang (v3 x y z))))
+(defn aa ^Quaternion [ang x y z]
+  (angle-axis ang (v3 x y z)))
 
 ;; ============================================================
 ;; scale
@@ -299,13 +339,18 @@
      Vector2 (v2scale a# ~b)
      Vector4 (v4scale a# ~b)))
 
+;; ============================================================
+;; more rotation
+
+(defn point-pivot ^Vector3 [^Vector3 pt, ^Vector3 piv, ^Quaternion rot]
+  (v3+ (qv* rot (v3- pt piv))
+    piv))
+
 ;; TODO: all the other stuff (normalize, orthonormalize (nice!), magnitude, sqrmagnitude, lerp, etc)
-
-
 ;; ============================================================
 ;; tests
 
-(defn run-tests []
+(defn- run-tests []
   (binding [test/*test-out* *out*]
     (test/run-tests)))
 
@@ -328,3 +373,16 @@
          (v4 1 2 3 4)
          (v4 1 2 3 4))
       (v4 3.0, 6.0, 9.0, 12.0))))
+
+(test/deftest test-rotation
+  (test/is
+    (= (point-pivot
+         (v3 0 0 1)
+         (v3 0)
+         (aa 90 1 0 0))
+      (v3 0 0 1))
+    (= (point-pivot
+         (v3 0 0 1)
+         (v3 10)
+         (aa 90 1 0 0))
+      (v3 0 0 1))))

@@ -10,7 +10,8 @@
             MonoBehaviour
             GameObject
             Component
-            PrimitiveType]))
+            PrimitiveType]
+           [System.Text.RegularExpressions Regex]))
 
 (defn- regex? [x]
   (instance? System.Text.RegularExpressions.Regex x))
@@ -30,39 +31,8 @@
 ;; lifecycle
 ;; ============================================================
 
-;; this one's really handy
-(defn destroyed? [^UnityEngine.Object x]
+(defn null-obj? [^UnityEngine.Object x]
   (UnityEngine.Object/op_Equality x nil))
-
-(defn ia?
-  "Stands for in-aot?, which is too many characters when we start
-  stringing it into larger constructions. Returns true if and only if
-  compiler is currently AOT-ing. Very useful for controling side
-  effects to the scene graph."
-  []
-  (boolean *compile-files*))
-
-(defmacro if-ia [& body]
-  `(if (ia?)
-     ~@body))
-
-(defmacro when-ia [& body]
-  (when (ia?)
-    ~@body))
-
-(defmacro when-not-ia [& body]
-  `(when-not (ia?)
-     ~@body))
-
-(defmacro def-ia [& body]
-  `(let [v# (declare ~name)]
-     (when-ia (def ~name ~@body))
-     v#))
-
-(defmacro def-not-ia [name & body]
-  `(let [v# (declare ~name)]
-     (when-not-ia (def ~name ~@body))
-     v#))
 
 (defn bound-var? [v]
   (and (var? v)
@@ -71,14 +41,15 @@
         (var-get v)))))
 
 ;; this one could use some more work
+;; also the bound-var test doesn't seem to work in the repl on defscn stuff from user
 (defmacro defscn [name & body]
   `(let [v# (declare ~name)]
-     (when-not-ia
+     (when (not *compile-files*)
        (let [bldg# (do ~@body)]
          (when (and (bound-var? (resolve (quote ~name)))
                  (or (instance? UnityEngine.GameObject ~name)
                    (instance? UnityEngine.Component ~name))
-                 (not (destroyed? ~name)))
+                 (not (null-obj? ~name)))
            (destroy ~name))
          (def ~name bldg#)))
      v#))
@@ -87,7 +58,7 @@
 ;; defcomponent 
 ;; ============================================================
 
-(defmacro defleaked [var]
+(defmacro ^:private defleaked [var]
   `(def ~(with-meta (symbol (name var)) {:private true})
      (var-get (find-var '~var))))
 
@@ -192,9 +163,20 @@
               (require (quote ~(ns-name *ns*))))
        %)))
 
+(defn- process-static-ctor [impl ns-squirrel-sym]
+  (let [this (with-meta (first (impl :args))
+                        {:tag 'clojure.lang.IStaticConstructor})]
+    (update-in impl [:fntail]
+               #(cons `(.StaticConstructor ~this) %))))
+
 (defn- require-trigger-method? [mimpl]
   (boolean
     (#{'Awake 'OnDrawGizmosSelected 'OnDrawGizmos 'Start}
+     (:name mimpl))))
+
+(defn- require-static-ctor? [mimpl]
+  (boolean
+    (#{'Awake}
      (:name mimpl))))
 
 (defn- collapse-method [impl]
@@ -232,22 +214,30 @@
         (normalize-method-implementations impls))
       (ensure-has-method {:name 'Start})
       (ensure-has-method {:name 'Awake})
-      (ensure-has-method
-        {:name 'OnAfterDeserialize
-         :interface 'UnityEngine.ISerializationCallbackReceiver
-         :args '[this]
-         :fntail '[(require 'arcadia.core)
-                   (arcadia.core/default-on-after-deserialize this)]})
-      
-      (ensure-has-method
-        {:name 'OnBeforeSerialize
-         :interface 'UnityEngine.ISerializationCallbackReceiver
-         :args '[this]
-         :fntail '[(require 'arcadia.core)
-                   (arcadia.core/default-on-before-serialize this)]})
+;      (ensure-has-method
+;        {:name 'OnAfterDeserialize
+;         :interface 'UnityEngine.ISerializationCallbackReceiver
+;         :args '[this]
+;         :fntail '[(if UnityEngine.Application/isEditor
+;                     (.StaticConstructor ^clojure.lang.IStaticConstructor this))
+;                   (require 'arcadia.core)
+;                   (arcadia.core/default-on-after-deserialize this)]})
+;
+;      (ensure-has-method
+;        {:name 'OnBeforeSerialize
+;         :interface 'UnityEngine.ISerializationCallbackReceiver
+;         :args '[this]
+;         :fntail '[(if UnityEngine.Application/isEditor
+;                     (.StaticConstructor ^clojure.lang.IStaticConstructor this))
+;                   (require 'arcadia.core)
+;                   (arcadia.core/default-on-before-serialize this)]})
       (map (fn [impl]
              (if (require-trigger-method? impl)
                (process-require-trigger impl ns-squirrel-sym)
+               impl)))
+      (map (fn [impl]
+             (if (require-static-ctor? impl)
+               (process-static-ctor impl ns-squirrel-sym)
                impl)))
       (group-by :interface)
       (mapcat
@@ -336,15 +326,15 @@
                         (str "symbol does not resolve to a type")))))
     :else (throw
             (Exception.
-              (str "expects type or symbol")))))
+              (str "expects type or type symbol")))))
 
 (defn- tag-type [x]
   (when-let [t (:tag (meta x))]
     (ensure-type t)))
 
 (defn- type-of-reference [x env]
-  (or (tag-type x)
-    (and (symbol? x)
+  (when (symbol? x)
+    (or (tag-type x)
       (if (contains? env x)
         (type-of-local-reference x env) ; local
         (let [v (resolve x)] ;; dubious
@@ -371,13 +361,10 @@
   (maximize (comparator same-or-subclass?)
     (remove nil? types)))
 
-(def ccc-log (atom []))
-
 (defn- contract-condcast-clauses [expr xsym clauses env]
-  (let [etype (most-specific-type
-                (type-of-reference expr env)
-                (tag-type xsym))]
-    (swap! ccc-log conj etype)
+  (let [expr-tor (type-of-reference expr env)
+        xsym-tor (type-of-reference xsym env)
+        etype (most-specific-type expr-tor xsym-tor)]
     (if etype
       (if-let [[_ then] (first
                           (filter #(= etype (ensure-type (first %)))
@@ -391,11 +378,7 @@
           (apply concat)))
       clauses)))
 
-;; note this takes an optional default value. This macro is potentially
-;; annoying in the case that you want to branch on a supertype, for
-;; instance, but the cast would remove interface information. Use with
-;; this in mind.
-(defmacro condcast-> [expr xsym & clauses]
+(defmacro cc* [expr xsym & clauses]
   (let [[clauses default] (if (even? (count clauses))
                             [clauses nil] 
                             [(butlast clauses)
@@ -406,23 +389,29 @@
                   expr xsym clauses &env)]
     (cond
       (= 0 (count clauses))
-      `(let [~xsym ~expr]
-         ~default) ;; might be nil obvi
+      (last default) ;; might be nil obvi
 
       (= 1 (count clauses)) ;; corresponds to exact type match. janky but fine
-      `(let [~xsym ~expr]
-         ~@clauses)
+      (first clauses)
 
       :else
-      `(let [~xsym ~expr]
-         (cond
-           ~@(->> clauses
-               (partition 2)
-               (mapcat
-                 (fn [[t then]]
-                   `[(instance? ~t ~xsym)
-                     (let [~(with-meta xsym {:tag t}) ~xsym]
-                       ~then)]))))))))
+      `(cond
+         ~@(->> clauses
+             (partition 2)
+             (mapcat
+               (fn [[t then]]
+                 `[(instance? ~t ~xsym)
+                   (let [~(with-meta xsym {:tag t}) ~xsym]
+                     ~then)])))
+         ~@default))))
+
+;; note this takes an optional default value. This macro is potentially
+;; annoying in the case that you want to branch on a supertype, for
+;; instance, but the cast would remove interface information. Use with
+;; this in mind.
+(defmacro condcast-> [expr xsym & clauses]
+  `(let [~xsym ~expr] ; binding important for &env in cc*
+     (cc* ~expr ~xsym ~@clauses)))
 
 ;; ============================================================
 ;; get-component
@@ -434,78 +423,34 @@
 (defn- dedup-by [f coll]
   (map peek (vals (group-by f coll))))
 
-;; maybe we should be passing full method sigs around rather than
-;; method names. 
-(defn- known-implementer-reference? [x method-name env]
-  (boolean
-    (when-let [tor (type-of-reference x env)]
-      (type-has-method? tor method-name))))
-
-(defn- raise-args [[head & rst]]
-  (let [gsyms (repeatedly (count rst) gensym)]
-    `(let [~@(interleave gsyms rst)]
-       ~(cons head gsyms))))
-
-(defn- raise-non-symbol-args [[head & rst]]
-  (let [bndgs (zipmap 
-                (remove symbol? rst)
-                (repeatedly gensym))]
-    `(let [~@(mapcat reverse bndgs)]
-       ~(cons head (replace bndgs rst)))))
-
-(defn- gc-default-body [obj t]
-  `(condcast-> ~t t2#
-     Type   (condcast-> ~obj obj2#
-              UnityEngine.GameObject (.GetComponent obj2# t2#)
-              UnityEngine.Component (.GetComponent obj2# t2#))
-     String (condcast-> ~obj obj2#
-              UnityEngine.GameObject (.GetComponent obj2# t2#)
-              UnityEngine.Component (.GetComponent obj2# t2#))))
-
-(defmacro ^:private gc-default-body-mac [obj t]
-  (gc-default-body obj t))
-
-(defn- gc-rt [obj t env]
-  (let [implref (known-implementer-reference? obj 'GetComponent env)
-        t-tr (type-of-reference t env)]
-    (cond
-      (isa? t-tr Type)
-      (if implref
-        `(.GetComponent ~obj (~'type-args ~t))
-        `(condcast-> ~obj obj#
-           UnityEngine.GameObject (.GetComponent obj# (~'type-args ~t))
-           UnityEngine.Component (.GetComponent obj# (~'type-args ~t))))
-
-      (isa? t-tr String)
-      (if implref
-        `(.GetComponent ~obj ~t)
-        `(condcast-> ~obj obj#
-           UnityEngine.GameObject (.GetComponent obj# ~t)
-           UnityEngine.Component (.GetComponent obj# ~t)))
-      
-      :else
-      (if implref
-        `(condcast-> ~t t#
-           Type (.GetComponent ~obj t#)
-           String (.GetComponent ~obj t#))
-        (gc-default-body obj t)))))
-
-(defmacro get-component* [obj t]
-  (if (not-every? symbol? [obj t])
-    (raise-non-symbol-args
-      (list 'arcadia.core/get-component* obj t))
-    (gc-rt obj t &env)))
+;; have to dance around a bit thanks to type-args
+(defn- get-component-inline-fn [x-expr type-expr]
+  (let [[tfrm, tf] (if (type-name? type-expr)
+                     [(list 'type-args type-expr), identity]
+                     (let [tsym (with-meta (gensym "type_") {:tag 'System.MonoType})]
+                       [tsym, (fn [expr]
+                                `(let [~tsym ~type-expr]
+                                   ~expr))]))
+        x-sym (gensym "x_")]
+    `(condcast-> ~x-expr ~x-sym
+       UnityEngine.GameObject ~(tf `(.GetComponent ~x-sym ~tfrm))
+       UnityEngine.Component ~(tf `(.GetComponent (.gameObject ~x-sym) ~tfrm))
+       (throw (ArgumentException.
+                (str "Expects x to be GameObject or Component, instead got " (type ~x-sym)))))))
 
 (defn get-component
-  "Returns the component of Type type if the game object has one attached, nil if it doesn't.
-  
-  * obj - the object to query, a GameObject or Component
-  * type - the type of the component to get, a Type or String"
-  {:inline (fn [gameobject type]
-             (list 'arcadia.core/get-component* gameobject type))
+  "Returns the component of Type t if x, a GameObject or Component, has one attached, nil if it doesn't. Inlines to most efficient form given local type information.
+
+  For reasons of performance and sanity, differs from Unity's (.GetComponent <obj> <t>) in that t must be a Type (cannot be a String). Future versions may also accept Strings for t if this becomes a problem."
+  {:inline (fn [x t]
+             (get-component-inline-fn x t))
    :inline-arities #{2}}
-  [obj t]
-  (gc-default-body-mac obj t))
+  ([x, ^Type t]
+   (condcast-> x x
+     UnityEngine.GameObject (.GetComponent x t)
+     UnityEngine.Component (.GetComponent (.gameObject x) t)
+     (throw (ArgumentException.
+              (str "Expects x to be GameObject or Component, instead got " (type x)))))))
 
 (defn add-component 
   "Add a component to a gameobject
@@ -646,16 +591,34 @@
   
   * type - The type to search for, a Type")
 
-(defwrapper object-named GameObject Find
-  "Finds a game object by name and returns it.
+(defn ^GameObject object-named
+  "Finds first GameObject in scene the name of which matches name parameter, which can be a string or a regular expression, or nil if no match can be found. 
   
-  * name - The name of the object to find, a String")
+  Name type:
+  String - Finds first GameObject the name of which exactly matches name parameter.
+  Regex - Finds first GameObject the name of which matches on (re-find <name parameter> (.name <GameObject instance>)).
+
+  Note that this is not the most efficient way to manage references into the scene graph. See also objects-named."
+  [name]
+  (condcast-> name name
+    String (GameObject/Find name)
+    Regex (first
+            (for [^GameObject obj (objects-typed GameObject)
+                  :when (re-find name (.name obj))]
+              obj))
+    (throw (Exception. (str "Expects String or Regex, instead got " (type name))))))
 
 ;; type-hinting of condcast isn't needed here, but seems a good habit to get into
 (defn objects-named
-  "Finds game objects by name.
+  "Finds all GameObjects in scene the name of which match name parameter, which can be a string or a regular expression, or nil if no match can be found. 
   
-  * name - the name of the objects to find, can be A String or regex"
+  Name type:
+  String - Finds all GameObjects the name of which exactly match name parameter.
+  Regex - Finds all GameObjects the name of which match on (re-find <name parameter> (.name <GameObject instance>)).
+
+  Note that this is not the most efficient way to manage references into the scene graph.
+
+  See also objects-named."
   [name]
   (condcast-> name name
     System.String
@@ -665,11 +628,10 @@
     
     System.Text.RegularExpressions.Regex
     (for [^GameObject obj (objects-typed GameObject)
-          :when (re-matches name (.name obj))]
+          :when (re-find name (.name obj))]
       obj)
     
-   ; (throw (Exception. (str "Expects String or Regex, instead got " (type name))))
-    ))
+    (throw (Exception. (str "Expects String or Regex, instead got " (type name))))))
 
 (defwrapper object-tagged GameObject FindWithTag
   "Returns one active GameObject tagged tag. Returns null if no GameObject was found.
