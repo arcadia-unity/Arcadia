@@ -93,7 +93,7 @@
 (defn- leiningen-project-sourcepaths [^FileInfo fi]
   (let [p (Path/GetDirectoryName (.FullName fi))]
     (map #(combine-paths p %)
-      (or (:source-paths (edn/read-string (slurp fi))) ["src"]))))
+      (or (:source-paths (edn/read-string (slurp fi))) ["src" "test"]))))
 
 ;; ono phase "leiningen" is in code
 (defn- leiningen-loadpaths []
