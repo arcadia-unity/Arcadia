@@ -31,8 +31,9 @@
 ;; lifecycle
 ;; ============================================================
 
-(defn null-obj? [^UnityEngine.Object x]
-  (UnityEngine.Object/op_Equality x nil))
+(definline null-obj? [x]
+  `(let [x# ~x]
+     (UnityEngine.Object/op_Equality x# nil)))
 
 (defn bound-var? [v]
   (and (var? v)
