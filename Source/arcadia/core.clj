@@ -425,6 +425,7 @@
   (map peek (vals (group-by f coll))))
 
 ;; have to dance around a bit thanks to type-args
+;; might well have to use a C# helper function to really do this with good type information
 (defn- get-component-inline-fn [x-expr type-expr]
   (let [[tfrm, tf] (if (type-name? type-expr)
                      [(list 'type-args type-expr), identity]
@@ -433,11 +434,12 @@
                                 `(let [~tsym ~type-expr]
                                    ~expr))]))
         x-sym (gensym "x_")]
-    `(condcast-> ~x-expr ~x-sym
-       UnityEngine.GameObject ~(tf `(.GetComponent ~x-sym ~tfrm))
-       UnityEngine.Component ~(tf `(.GetComponent (.gameObject ~x-sym) ~tfrm))
-       (throw (ArgumentException.
-                (str "Expects x to be GameObject or Component, instead got " (type ~x-sym)))))))
+    `(let [res# (condcast-> ~x-expr ~x-sym
+                  UnityEngine.GameObject ~(tf `(.GetComponent ~x-sym ~tfrm))
+                  UnityEngine.Component ~(tf `(.GetComponent (.gameObject ~x-sym) ~tfrm))
+                  (throw (ArgumentException.
+                           (str "Expects x to be GameObject or Component, instead got " (type ~x-sym)))))]
+       (when-not (null-obj? res#) res#))))
 
 (defn get-component
   "Returns the component of Type t if x, a GameObject or Component, has one attached, nil if it doesn't. Inlines to most efficient form given local type information.
@@ -447,11 +449,12 @@
              (get-component-inline-fn x t))
    :inline-arities #{2}}
   ([x, ^Type t]
-   (condcast-> x x
-     UnityEngine.GameObject (.GetComponent x t)
-     UnityEngine.Component (.GetComponent (.gameObject x) t)
-     (throw (ArgumentException.
-              (str "Expects x to be GameObject or Component, instead got " (type x)))))))
+   (let [res (condcast-> x x
+               UnityEngine.GameObject (.GetComponent x t)
+               UnityEngine.Component (.GetComponent (.gameObject x) t)
+               (throw (ArgumentException.
+                        (str "Expects x to be GameObject or Component, instead got " (type x)))))]
+     (when-not (null-obj? res) res))))
 
 (defn add-component 
   "Add a component to a gameobject
