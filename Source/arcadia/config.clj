@@ -2,12 +2,14 @@
   (:require [clojure.edn :as edn]
             [clojure.pprint :as pprint]
             [clojure.data :as data]
+            [clojure.clr.io :as io]
             clojure.string)
   (:import
-    [System DateTime]
-    [System.IO File FileInfo DirectoryInfo Path]
-    [UnityEngine Debug]
-    [UnityEditor EditorGUI EditorGUILayout]))
+   ClojureConfiguration
+   [System DateTime]
+   [System.IO File FileInfo DirectoryInfo Path]
+   [UnityEngine Debug]
+   [UnityEditor EditorGUI EditorGUILayout]))
 
 (def configuration (atom {}))
 (def last-read-time (atom 0))
@@ -22,10 +24,23 @@
     (< (or @last-read-time 0)
       (.Ticks (File/GetLastWriteTime f)))))
 
-;; should probably make all this noise a bit more functional
-(defn configuration-file-paths []
+(defn- standard-project-files []
   [ClojureConfiguration/configFilePath
    ClojureConfiguration/userConfigFilePath])
+
+(declare leiningen-project-files)
+
+(defn configuration-files []
+  (vec
+    (filter string?
+      (concat
+        (leiningen-project-files)
+        (standard-project-files)))))
+
+;; should probably make all this noise a bit more functional
+;; (defn configuration-file-paths []
+;;   [ClojureConfiguration/configFilePath
+;;    ClojureConfiguration/userConfigFilePath])
 
 (defn- deep-merge-maps [& ms]
   (apply merge-with
@@ -35,26 +50,41 @@
         v2))
     ms))
 
+(defn- read-lein-project-file [file]
+  (let [f (->> (slurp file)
+            (str "'") ;; leiningen allows unquotes, we don't yet
+            load-string)]
+    (reset! last-read-time (.Ticks DateTime/Now))
+    f))
+
+(defn- load-leiningen-configuration-map [file]
+  (select-keys
+    (apply hash-map (rest (read-lein-project-file file)))
+    [:dependencies]))
+
+(defn- load-basic-configuration-map [file]
+  (let [f2 (edn/read-string (File/ReadAllText file))]
+    (reset! last-read-time (.Ticks DateTime/Now))
+    f2))
+
+(defn- configuration-maps []
+  (vec
+    (concat
+      (map load-leiningen-configuration-map (leiningen-project-files))
+      (map load-basic-configuration-map
+        (filter #(File/Exists %) (standard-project-files))))))
+
 (defn update! 
-  ([] (update! (configuration-file-paths)))
-  ([fs]
-   (->> fs
-     (keep
-       (fn [f]
-         (when (File/Exists f)
-           (let [f2 (edn/read-string (File/ReadAllText f))]
-             (reset! last-read-time (.Ticks DateTime/Now))
-             f2))))
+  ([] (update! (configuration-maps)))
+  ([ms]
+   (->> ms
      (apply deep-merge-maps {})
      (reset! configuration))))
 
 (defn checked-update! []
-  (if (some should-update-from? (configuration-file-paths))
+  (if (some should-update-from? (configuration-files))
     (update!)
     @configuration))
-
-;; update as soon as the file is required
-(checked-update!)
 
 ;; TODO: put this function somewhere sensible
 (defn- dedup-by [f coll]
@@ -74,24 +104,28 @@
                             (enum-or BindingFlags/Static BindingFlags/NonPublic))
          clojure.lang.RT nil)))
 
-(defn- leiningen-project-file? [^FileInfo fi]
-  (= "project.clj" (.Name fi)))
+(defn- leiningen-project-file? [fi]
+  (= "project.clj" (.Name (clojure.clr.io/as-file fi))))
 
 (defn- leiningen-structured-directory? [^DirectoryInfo di]
   (boolean
     (some leiningen-project-file?
       (.GetFiles di))))
 
+(defn- leiningen-project-directories []
+  (->> (.GetDirectories (DirectoryInfo. "Assets"))
+    (filter leiningen-structured-directory?)
+    vec))
+
 (defn- leiningen-project-files []
   (vec
-    (for [^DirectoryInfo di (.GetDirectories (DirectoryInfo. "Assets"))
-          :when (leiningen-structured-directory? di)
+    (for [^DirectoryInfo di (leiningen-project-directories)
           ^FileInfo fi (.GetFiles di)
           :when (leiningen-project-file? fi)]
-      fi)))
+      (.FullName fi))))
 
-(defn- leiningen-project-sourcepaths [^FileInfo fi]
-  (let [p (Path/GetDirectoryName (.FullName fi))]
+(defn- leiningen-project-sourcepaths [fi]
+  (let [p (Path/GetDirectoryName (.FullName (io/as-file fi)))]
     (map #(combine-paths p %)
       (or (:source-paths (edn/read-string (slurp fi))) ["src" "test"]))))
 
@@ -109,6 +143,11 @@
          (when (:detect-leiningen-projects config)
            (leiningen-loadpaths))
          (load-path))))))
+
+;; !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+;; update as soon as the file is required!
+;; !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+(checked-update!)
 
 (declare widgets)
 
