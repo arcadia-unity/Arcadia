@@ -166,22 +166,12 @@
                (take-while seq (iterate #(mapcat dependencies %)
                                         (dependencies [group artifact version]))))))
 
-(defn version-number [s]
-  (->> (string/split s #"\.")
-       (map #(Int32/Parse %))
-       reverse
-       (interleave (map #(Math/Pow 100 %) (range)))
-       (partition 2)
-       (map (partial apply *))
-       (apply +)
-       int))
-
 (defn most-recent-versions [deps]
   (->> (group-by (juxt first second) deps)
      vals
      (map (fn [vs] (->> vs
-                        (sort-by #(version-number (last %)))
-                        last)))))
+                     (sort-by #(last %))
+                     last)))))
 
 (defn all-unique-dependencies [group-artifact-version]
   (-> group-artifact-version
