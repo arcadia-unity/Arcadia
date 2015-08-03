@@ -3,6 +3,7 @@
             [clojure.pprint :as pprint]
             [clojure.data :as data]
             [clojure.clr.io :as io]
+            [arcadia.packages :as packages]
             clojure.string)
   (:import
    ClojureConfiguration
@@ -11,18 +12,30 @@
    [UnityEngine Debug]
    [UnityEditor EditorGUI EditorGUILayout]))
 
+;; also in arcadia.compiler (which requires this namespace, so there
+;; you go). should probably consolidate
+(defn- load-path []
+  (seq (.Invoke (.GetMethod clojure.lang.RT "GetFindFilePaths"
+                            (enum-or BindingFlags/Static BindingFlags/NonPublic))
+         clojure.lang.RT nil)))
+
 (def configuration (atom {}))
 (def last-read-time (atom 0))
+
+(defn- file-exists? [file]
+  (.Exists (io/as-file file)))
 
 (defn- combine-paths [& ps]
   (reduce #(Path/Combine %1 %2) ps))
 
 ;; TODO account for multiple/different files
 (defn should-update-from? [f]
-  (and f
-    (File/Exists f)
-    (< (or @last-read-time 0)
-      (.Ticks (File/GetLastWriteTime f)))))
+  (boolean
+    (let [f (io/as-file f)]
+      (and f
+        (file-exists? f)
+        (< (or @last-read-time 0)
+          (.Ticks (.LastWriteTime f)))))))
 
 (defn- standard-project-files []
   [ClojureConfiguration/configFilePath
@@ -32,10 +45,9 @@
 
 (defn configuration-files []
   (vec
-    (filter string?
-      (concat
-        (leiningen-project-files)
-        (standard-project-files)))))
+    (concat
+      (leiningen-project-files)
+      (standard-project-files))))
 
 ;; should probably make all this noise a bit more functional
 ;; (defn configuration-file-paths []
@@ -57,13 +69,23 @@
     (reset! last-read-time (.Ticks DateTime/Now))
     f))
 
+;; stupid for now, expand to deal with exclusions etc
+(defn- normalize-lein-coordinate [coord]
+  (vec
+    (take 3
+      (map str
+        (if (< (count coord) 3)
+          (cons (first coord) coord)
+          coord)))))
+
 (defn- load-leiningen-configuration-map [file]
-  (select-keys
-    (apply hash-map (rest (read-lein-project-file file)))
-    [:dependencies]))
+  (-> (apply hash-map (rest (read-lein-project-file file)))
+    (select-keys [:dependencies])
+    (update :dependencies
+      #(mapv normalize-lein-coordinate %))))
 
 (defn- load-basic-configuration-map [file]
-  (let [f2 (edn/read-string (File/ReadAllText file))]
+  (let [f2 (edn/read-string (slurp file))]
     (reset! last-read-time (.Ticks DateTime/Now))
     f2))
 
@@ -72,13 +94,37 @@
     (concat
       (map load-leiningen-configuration-map (leiningen-project-files))
       (map load-basic-configuration-map
-        (filter #(File/Exists %) (standard-project-files))))))
+        (filter file-exists? (standard-project-files))))))
+
+(defn- merge-with-keyed
+  "Like merge-with, but f takes shared key as first argument: (f key v1
+  v2)"
+  [f & maps]
+  (when (some identity maps)
+    (let [merge-entry (fn [m e]
+			(let [k (key e) v (val e)]
+			  (if (contains? m k)
+			    (assoc m k (f k (get m k) v)) 
+			    (assoc m k v))))
+          merge2 (fn [m1 m2]
+		   (reduce merge-entry (or m1 {}) (seq m2)))]
+      (reduce merge2 maps))))
+
+(defn- merge-configuration-maps [& maps]
+  (apply merge-with-keyed
+    (fn [k v1 v2]
+      (if (= k :dependencies)
+        (vec
+          (packages/most-recent-versions
+            (concat v1 v2)))
+        v2))
+    maps))
 
 (defn update! 
   ([] (update! (configuration-maps)))
   ([ms]
    (->> ms
-     (apply deep-merge-maps {})
+     (apply merge-configuration-maps {})
      (reset! configuration))))
 
 (defn checked-update! []
@@ -96,13 +142,6 @@
                     (step prv rst)
                     (cons x (step (conj prv v) rst)))))))]
     (step #{} coll)))
-
-;; also in arcadia.compiler (which requires this namespace, so there
-;; you go). should probably consolidate
-(defn- load-path []
-  (seq (.Invoke (.GetMethod clojure.lang.RT "GetFindFilePaths"
-                            (enum-or BindingFlags/Static BindingFlags/NonPublic))
-         clojure.lang.RT nil)))
 
 (defn- leiningen-project-file? [fi]
   (= "project.clj" (.Name (clojure.clr.io/as-file fi))))
@@ -122,7 +161,7 @@
     (for [^DirectoryInfo di (leiningen-project-directories)
           ^FileInfo fi (.GetFiles di)
           :when (leiningen-project-file? fi)]
-      (.FullName fi))))
+      fi)))
 
 (defn- leiningen-project-sourcepaths [fi]
   (let [p (Path/GetDirectoryName (.FullName (io/as-file fi)))]
