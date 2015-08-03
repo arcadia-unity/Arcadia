@@ -1,8 +1,9 @@
 (ns arcadia.packages
-  (:require [clojure.string :as string])
+  (:require [clojure.string :as string]
+            [clojure.clr.io :as io])
   (:import XmlReader
            [System.Net WebClient WebException WebRequest HttpWebRequest]
-           [System.IO Directory Path File StringReader]
+           [System.IO Directory DirectoryInfo Path File FileInfo StringReader]
            [Ionic.Zip ZipEntry ZipFile ExtractExistingFileAction]))
 
 ;; xml reading
@@ -207,11 +208,35 @@
          (string/join (str Path/DirectorySeparatorChar))))
   e)
 
+(def library-directory "Assets/Arcadia/Libraries")
+
 (defn install [group-artifact-version]
   (dorun
     (->> (download-jars group-artifact-version)
       (mapcat #(seq (ZipFile/Read %)))
       (filter should-extract?)
-      (map #(make-directories % "Assets/Arcadia/Libraries"))
+      (map #(make-directories % library-directory))
       ;; TODO do better than silently overwriting 
-      (map #(.Extract % "Assets/Arcadia/Libraries" ExtractExistingFileAction/OverwriteSilently)))))
+      (map #(.Extract % library-directory ExtractExistingFileAction/OverwriteSilently)))))
+
+(def library-manifest-name "manifest.edn")
+
+;; can't find how to do this with spit, don't want to waste more time
+(defn- write-or-overwrite-file [file, contents]
+  (File/WriteAllText (.FullName (io/as-file file)) contents))
+
+(defn- as-directory ^DirectoryInfo [x]
+  (if (instance? DirectoryInfo x)
+    (DirectoryInfo. x)))
+
+(defn- write-library-manifest
+  ([]
+   (write-library-manifest "{}"))
+  ([contents]
+   (write-or-overwrite-file library-manifest-name contents)))
+
+(defn flush-libraries []
+  (doseq [^FileInfo fi (as-directory library-directory)
+          :when (not (= library-manifest-name (.Name fi)))]
+    (.Delete fi))
+  (write-library-manifest))
