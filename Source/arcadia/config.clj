@@ -79,19 +79,29 @@
           coord)))))
 
 (defn- load-leiningen-configuration-map [file]
-  (-> (apply hash-map (rest (read-lein-project-file file)))
-    (select-keys [:dependencies])
-    (update :dependencies
-      (fn [ds]
-        (->> ds
-          (map normalize-lein-coordinate)
-          (remove #(= ["org.clojure/clojure" "org.clojure/clojure"]
-                     (take 2 %))))))))
+  (let [[_ name version & rst] (read-lein-project-file file)
+        m (apply hash-map rst)]
+    (-> m 
+      (select-keys [:dependencies :source-paths])
+      (assoc
+        :path (.FullName (io/as-file file)),
+        :name (str name),
+        :version version,
+        :type :leiningen)
+      (update :dependencies
+        (fn [ds]
+          (->> ds
+            (map normalize-lein-coordinate)
+            (remove #(= ["org.clojure/clojure" "org.clojure/clojure"]
+                       (take 2 %)))))))))
 
 (defn- load-basic-configuration-map [file]
   (let [f2 (edn/read-string (slurp file))]
     (reset! last-read-time (.Ticks DateTime/Now))
-    f2))
+    (assert (map? f2))
+    (assoc f2
+      :type :basic,
+      :path (.FullName (io/as-file file)))))
 
 (defn- configuration-maps []
   (vec
@@ -127,9 +137,15 @@
 (defn update! 
   ([] (update! (configuration-maps)))
   ([ms]
-   (->> ms
-     (apply merge-configuration-maps {})
-     (reset! configuration))))
+   (let [m (->> ms
+             (map #(if-not (= :basic (:type %))
+                     (select-keys % [:dependencies])
+                     %))
+             (apply merge-configuration-maps {}))]
+     (reset! configuration
+       (-> m
+         (dissoc :path :name)
+         (assoc :sources ms))))))
 
 (defn checked-update! []
   (if (some should-update-from? (configuration-files))
