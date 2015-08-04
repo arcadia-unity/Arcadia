@@ -85,7 +85,7 @@
       (fn [ds]
         (->> ds
           (map normalize-lein-coordinate)
-          (remove #(= '["org.clojure/clojure" "org.clojure/clojure"]
+          (remove #(= ["org.clojure/clojure" "org.clojure/clojure"]
                      (take 2 %))))))))
 
 (defn- load-basic-configuration-map [file]
