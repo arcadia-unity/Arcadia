@@ -82,7 +82,11 @@
   (-> (apply hash-map (rest (read-lein-project-file file)))
     (select-keys [:dependencies])
     (update :dependencies
-      #(mapv normalize-lein-coordinate %))))
+      (fn [ds]
+        (->> ds
+          (map normalize-lein-coordinate)
+          (remove #(= '["org.clojure/clojure" "org.clojure/clojure"]
+                     (take 2 %))))))))
 
 (defn- load-basic-configuration-map [file]
   (let [f2 (edn/read-string (slurp file))]
