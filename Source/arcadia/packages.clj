@@ -2,6 +2,7 @@
   (:require [clojure.string :as string]
             [clojure.clr.io :as io])
   (:import XmlReader
+           [UnityEngine Debug]
            [System.Net WebClient WebException WebRequest HttpWebRequest]
            [System.IO Directory DirectoryInfo Path File FileInfo FileSystemInfo StringReader Path]
            [Ionic.Zip ZipEntry ZipFile ExtractExistingFileAction]))
@@ -222,6 +223,7 @@
     d))
 
 (defn install [group-artifact-version]
+  (Debug/Log (str "Installing " (prn-str group-artifact-version)))
   (dorun
     (->> (download-jars group-artifact-version)
       (mapcat #(seq (ZipFile/Read %)))
