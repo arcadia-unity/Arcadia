@@ -151,7 +151,7 @@
     @configuration))
 
 (defn deps []
-  (checked-update!)
+  (update!)
   (doseq [c (:dependencies @configuration)]
     (packages/install c)))
 
