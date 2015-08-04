@@ -188,15 +188,14 @@
           :when (leiningen-project-file? fi)]
       fi)))
 
-(defn- leiningen-project-sourcepaths [fi]
-  (let [p (Path/GetDirectoryName (.FullName (io/as-file fi)))]
-    (map #(combine-paths p %)
-      (or (:source-paths (edn/read-string (slurp fi))) ["src" "test"]))))
-
-;; ono phase "leiningen" is in code
 (defn- leiningen-loadpaths []
-  (mapcat leiningen-project-sourcepaths
-    (leiningen-project-files)))
+  (let [config @configuration]
+    (for [m (:sources config)
+          :when (= :leiningen (:type m))
+          :let [p (Path/GetDirectoryName (.FullName (io/as-file (:path m))))]
+          sp (map #(combine-paths p %)
+               (or (:source-paths m) ["src" "test"]))]
+      sp)))
 
 (defn configured-loadpath
   ([] (configured-loadpath @configuration))
