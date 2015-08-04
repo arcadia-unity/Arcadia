@@ -3,7 +3,7 @@
             [clojure.clr.io :as io])
   (:import XmlReader
            [System.Net WebClient WebException WebRequest HttpWebRequest]
-           [System.IO Directory DirectoryInfo Path File FileInfo StringReader]
+           [System.IO Directory DirectoryInfo Path File FileInfo FileSystemInfo StringReader Path]
            [Ionic.Zip ZipEntry ZipFile ExtractExistingFileAction]))
 
 ;; xml reading
@@ -171,7 +171,7 @@
   (->> (group-by (juxt first second) deps)
      vals
      (map (fn [vs] (->> vs
-                     (sort-by #(last %))
+                     (sort-by last)
                      last)))))
 
 (defn all-unique-dependencies [group-artifact-version]
@@ -227,16 +227,33 @@
 
 (defn- as-directory ^DirectoryInfo [x]
   (if (instance? DirectoryInfo x)
+    x
     (DirectoryInfo. x)))
 
 (defn- write-library-manifest
   ([]
    (write-library-manifest "{}"))
   ([contents]
-   (write-or-overwrite-file library-manifest-name contents)))
+   (write-or-overwrite-file
+     (Path/Combine
+       library-directory
+       library-manifest-name)
+     contents)))
+
+;; oh for condcast->. Put this somewhere.
+(defn- delete-fsi [^FileSystemInfo fsi]
+  (condp instance? fsi
+    DirectoryInfo (let [^DirectoryInfo fsi fsi]
+                    (.Delete fsi true))
+    FileInfo (let [^DirectoryInfo fsi fsi]
+               (.Delete fsi))
+    (throw (Exception. "Expects instance of FileSystemInfo"))))
 
 (defn flush-libraries []
-  (doseq [^FileInfo fi (as-directory library-directory)
-          :when (not (= library-manifest-name (.Name fi)))]
-    (.Delete fi))
+  (let [d (as-directory library-directory)]
+    (doseq [^FileSystemInfo fi (concat
+                                 (.GetDirectories d)
+                                 (.GetFiles d))
+            :when (not= library-manifest-name (.Name fi))]
+      (delete-fsi fi)))
   (write-library-manifest))

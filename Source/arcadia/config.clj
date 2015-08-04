@@ -12,6 +12,18 @@
    [UnityEngine Debug]
    [UnityEditor EditorGUI EditorGUILayout]))
 
+;; ============================================================
+;; global state
+;; ============================================================
+
+(def configuration (atom {}))
+
+(def ^:private last-read-time (atom nil))
+
+;; ============================================================
+;; utils
+;; ============================================================
+
 ;; also in arcadia.compiler (which requires this namespace, so there
 ;; you go). should probably consolidate
 (defn- load-path []
@@ -19,143 +31,12 @@
                             (enum-or BindingFlags/Static BindingFlags/NonPublic))
          clojure.lang.RT nil)))
 
-(def configuration (atom {}))
-(def last-read-time (atom 0))
-
 (defn- file-exists? [file]
   (.Exists (io/as-file file)))
 
 (defn- combine-paths [& ps]
   (reduce #(Path/Combine %1 %2) ps))
 
-;; TODO account for multiple/different files
-(defn should-update-from? [f]
-  (boolean
-    (let [f (io/as-file f)]
-      (and f
-        (file-exists? f)
-        (< (or @last-read-time 0)
-          (.Ticks (.LastWriteTime f)))))))
-
-(defn- standard-project-files []
-  [ClojureConfiguration/configFilePath
-   ClojureConfiguration/userConfigFilePath])
-
-(declare leiningen-project-files)
-
-(defn configuration-files []
-  (vec
-    (concat
-      (leiningen-project-files)
-      (standard-project-files))))
-
-;; should probably make all this noise a bit more functional
-;; (defn configuration-file-paths []
-;;   [ClojureConfiguration/configFilePath
-;;    ClojureConfiguration/userConfigFilePath])
-
-(defn- deep-merge-maps [& ms]
-  (apply merge-with
-    (fn [v1 v2]
-      (if (and (map? v1) (map? v2))
-        (deep-merge-maps v1 v2)
-        v2))
-    ms))
-
-(defn- read-lein-project-file [file]
-  (let [f (edn/read-string (slurp file))] ;; does not cover all leiningen files
-    (reset! last-read-time (.Ticks DateTime/Now))
-    f))
-
-;; stupid for now, expand to deal with exclusions etc
-(defn- normalize-lein-coordinate [coord]
-  (vec
-    (take 3
-      (map str
-        (if (< (count coord) 3)
-          (cons (first coord) coord)
-          coord)))))
-
-(defn- load-leiningen-configuration-map [file]
-  (let [[_ name version & rst] (read-lein-project-file file)
-        m (apply hash-map rst)]
-    (-> m 
-      (select-keys [:dependencies :source-paths])
-      (assoc
-        :path (.FullName (io/as-file file)),
-        :name (str name),
-        :version version,
-        :type :leiningen)
-      (update :dependencies
-        (fn [ds]
-          (->> ds
-            (map normalize-lein-coordinate)
-            (remove #(= ["org.clojure/clojure" "org.clojure/clojure"]
-                       (take 2 %)))))))))
-
-(defn- load-basic-configuration-map [file]
-  (let [f2 (edn/read-string (slurp file))]
-    (reset! last-read-time (.Ticks DateTime/Now))
-    (assert (map? f2))
-    (assoc f2
-      :type :basic,
-      :path (.FullName (io/as-file file)))))
-
-(defn- configuration-maps []
-  (vec
-    (concat
-      (map load-leiningen-configuration-map (leiningen-project-files))
-      (map load-basic-configuration-map
-        (filter file-exists? (standard-project-files))))))
-
-(defn- merge-with-keyed
-  "Like merge-with, but f takes shared key as first argument: (f key v1
-  v2)"
-  [f & maps]
-  (when (some identity maps)
-    (let [merge-entry (fn [m e]
-			(let [k (key e) v (val e)]
-			  (if (contains? m k)
-			    (assoc m k (f k (get m k) v)) 
-			    (assoc m k v))))
-          merge2 (fn [m1 m2]
-		   (reduce merge-entry (or m1 {}) (seq m2)))]
-      (reduce merge2 maps))))
-
-(defn- merge-configuration-maps [& maps]
-  (apply merge-with-keyed
-    (fn [k v1 v2]
-      (if (= k :dependencies)
-        (vec
-          (packages/most-recent-versions
-            (concat v1 v2)))
-        v2))
-    maps))
-
-(defn update! 
-  ([] (update! (configuration-maps)))
-  ([ms]
-   (let [m (->> ms
-             (map #(if-not (= :basic (:type %))
-                     (select-keys % [:dependencies])
-                     %))
-             (apply merge-configuration-maps {}))]
-     (reset! configuration
-       (-> m
-         (dissoc :path :name)
-         (assoc :sources ms))))))
-
-(defn checked-update! []
-  (if (some should-update-from? (configuration-files))
-    (update!)
-    @configuration))
-
-(defn deps []
-  (update!)
-  (doseq [c (:dependencies @configuration)]
-    (packages/install c)))
-
-;; TODO: put this function somewhere sensible
 (defn- dedup-by [f coll]
   (letfn [(step [prv coll2]
             (lazy-seq
@@ -166,8 +47,79 @@
                     (cons x (step (conj prv v) rst)))))))]
     (step #{} coll)))
 
+;; ============================================================
+;; basic configuration
+;; ============================================================
+
+;; TODO account for multiple/different files
+(defn- should-update-from? [f]
+  (boolean
+    (let [f (io/as-file f)]
+      (and f
+        (file-exists? f)
+        (< (or @last-read-time 0)
+          (.Ticks (.LastWriteTime f)))))))
+
+(defn- standard-project-files []
+  (->> [ClojureConfiguration/configFilePath
+        ClojureConfiguration/userConfigFilePath]
+    (map io/as-file)
+    (filter file-exists?)
+    vec))
+
+;; stupid for now, expand to deal with exclusions etc
+(defn- normalize-coordinate [coord]
+  (vec
+    (take 3
+      (map str
+        (if (< (count coord) 3)
+          (cons (first coord) coord)
+          coord)))))
+
+(defn- process-coordinates [coords]
+  (->> coords
+    (map normalize-coordinate)
+    (remove #(= ["org.clojure/clojure" "org.clojure/clojure"]
+               (take 2 %)))
+    vec))
+
+(defn- load-basic-configuration-map [file]
+  (let [f2 (edn/read-string (slurp file))]
+    (reset! last-read-time (.Ticks DateTime/Now))
+    (assert (map? f2))
+    (-> f2
+      (assoc
+        :type :basic,
+        :path (.FullName (io/as-file file)))
+      (update :dependencies process-coordinates))))
+
+;; ============================================================
+;; leiningen processing
+;; ============================================================
+
+(defn- detect-leiningen-projects? []
+  (boolean
+    (:detect-leiningen-projects @configuration)))
+
+(defn- read-lein-project-file [file]
+  (let [f (edn/read-string (slurp file))] ;; does not cover all leiningen files
+    (reset! last-read-time (.Ticks DateTime/Now))
+    f))
+
+(defn- load-leiningen-configuration-map [file]
+  (let [[_ name version & rst] (read-lein-project-file file)
+        m (apply hash-map rst)]
+    (-> m 
+      (select-keys [:dependencies :source-paths])
+      (assoc
+        :type :leiningen
+        :path (.FullName (io/as-file file)),
+        :name (str name),
+        :version version,)
+      (update :dependencies process-coordinates))))
+
 (defn- leiningen-project-file? [fi]
-  (= "project.clj" (.Name (clojure.clr.io/as-file fi))))
+  (= "project.clj" (.Name (io/as-file fi))))
 
 (defn- leiningen-structured-directory? [^DirectoryInfo di]
   (boolean
@@ -188,27 +140,104 @@
 
 (defn- leiningen-loadpaths []
   (let [config @configuration]
-    (for [m (:sources config)
+    (for [m (:config-maps config)
           :when (= :leiningen (:type m))
           :let [p (Path/GetDirectoryName (.FullName (io/as-file (:path m))))]
-          sp (map #(combine-paths p %)
-               (or (:source-paths m) ["src" "test"]))]
-      sp)))
+          sp (or (:source-paths m) ["src" "test"])]
+      (combine-paths p sp))))
+
+;; ============================================================
+;; public api
+;; ============================================================
+
+(defn configuration-files
+  "Returns a vector of all configuration files on disk."
+  []
+  (vec
+    (concat
+      (when (detect-leiningen-projects?)
+        (leiningen-project-files))
+      (standard-project-files))))
+
+(defn configuration-maps
+  "Returns a vector of all maps corresponding to configuration files on disk."
+  []
+  (vec
+    (concat
+      (when (detect-leiningen-projects?)
+        (map load-leiningen-configuration-map (leiningen-project-files)))
+      (map load-basic-configuration-map (standard-project-files)))))
 
 (defn configured-loadpath
+  "Computes loadpath, taking state of arcadia.config/configuration into
+  account as of last update!."
   ([] (configured-loadpath @configuration))
   ([config]
    (clojure.string/join ":"
-     (dedup-by identity
+     (dedup-by identity ;; preserves order, unlike set
        (concat
          (when (:detect-leiningen-projects config)
            (leiningen-loadpaths))
          (load-path))))))
 
-;; !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-;; update as soon as the file is required!
-;; !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-(checked-update!)
+(defn compute-configuration
+  "Returns a map suitable for the state of
+  arcadia.configuration/configuration. With no argument, computes using
+  configuration files on disk. If supplied a collection of
+  configuration maps, computes from those. Use to test configuration
+  options."
+  ([]
+   (compute-configuration (configuration-maps)))
+  ([maps]
+   (let [deps (->> maps
+                (mapcat :dependencies)
+                packages/most-recent-versions)]
+     (-> (reduce merge maps)
+       (dissoc :type :path :source-paths :name :version)
+       (assoc
+         :dependencies deps
+         :config-maps (vec maps))))))
+
+(defn update!
+  "Update the configuration atom (arcadia.config/configuration). If
+  maps are not provided, reads them from configuration files on
+  disk. See also: 
+  configuration-files
+  configuration-maps
+  checked-update!"
+  ([] (update! (configuration-maps)))
+  ([maps]
+   (reset! configuration (compute-configuration maps))))
+
+(defn checked-update!
+  "Update the configuration atom (arcadia.config/configuration) if
+  configuration files have changed since last read. Reads from disk."
+  []
+  (if (some should-update-from? (configuration-files))
+    (update!)
+    @configuration))
+
+(defn deps
+  "Recomputes and installs dependencies, as specified by configuration
+  files on disk."
+  []
+  (update!)
+  (packages/flush-libraries) ;; until we have better caching story
+  (doseq [c (:dependencies @configuration)]
+    (packages/install c)))
+
+;; ============================================================
+;; static initializer
+;; ============================================================
+
+;; load basic configuration to see whether we're detecting leiningen files.
+(update! (map load-basic-configuration-map (standard-project-files)))
+;; update again (note that checked-update! wouldn't work here).
+(update!)
+
+;; ============================================================
+;; UI
+;; ============================================================
 
 (declare widgets)
 
