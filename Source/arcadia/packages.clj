@@ -208,7 +208,18 @@
          (string/join (str Path/DirectorySeparatorChar))))
   e)
 
+(defn- as-directory ^DirectoryInfo [x]
+  (if (instance? DirectoryInfo x)
+    x
+    (DirectoryInfo. x)))
+
 (def library-directory "Assets/Arcadia/Libraries")
+
+(defn ensure-library-directory ^DirectoryInfo []
+  (let [d (as-directory library-directory)]
+    (when-not (.Exists d)
+      (.Create d))
+    d))
 
 (defn install [group-artifact-version]
   (dorun
@@ -225,18 +236,13 @@
 (defn- write-or-overwrite-file [file, contents]
   (File/WriteAllText (.FullName (io/as-file file)) contents))
 
-(defn- as-directory ^DirectoryInfo [x]
-  (if (instance? DirectoryInfo x)
-    x
-    (DirectoryInfo. x)))
-
 (defn- write-library-manifest
   ([]
    (write-library-manifest "{}"))
   ([contents]
    (write-or-overwrite-file
      (Path/Combine
-       library-directory
+       (.FullName (ensure-library-directory))
        library-manifest-name)
      contents)))
 
@@ -245,15 +251,18 @@
   (condp instance? fsi
     DirectoryInfo (let [^DirectoryInfo fsi fsi]
                     (.Delete fsi true))
-    FileInfo (let [^DirectoryInfo fsi fsi]
+    FileInfo (let [^FileInfo fsi fsi]
                (.Delete fsi))
     (throw (Exception. "Expects instance of FileSystemInfo"))))
 
 (defn flush-libraries []
-  (let [d (as-directory library-directory)]
+  (let [d (ensure-library-directory)]
     (doseq [^FileSystemInfo fi (concat
                                  (.GetDirectories d)
                                  (.GetFiles d))
-            :when (not= library-manifest-name (.Name fi))]
+            :when (not
+                    (#{library-manifest-name
+                       (str library-manifest-name ".meta")}
+                     (.Name fi)))]
       (delete-fsi fi)))
   (write-library-manifest))

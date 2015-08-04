@@ -12,6 +12,11 @@ public class ClojureConfiguration : Editor {
   public static string userConfigFilePath = "Assets/ArcadiaConfig/configure.edn";  
 
   static ClojureConfigurationObject _clojureConfigurationObject;
+
+  [MenuItem ("Arcadia/Import Dependencies")]
+  public static void ImportDependencies () {
+    RT.var("arcadia.config", "deps").invoke();
+  }
     
   [MenuItem ("Arcadia/Configuration...")]
   public static void Init () {

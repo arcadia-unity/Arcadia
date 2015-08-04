@@ -224,6 +224,7 @@
   (update!)
   (packages/flush-libraries) ;; until we have better caching story
   (doseq [c (:dependencies @configuration)]
+    (Debug/Log (str "Installing " (prn-str c)))
     (packages/install c)))
 
 ;; ============================================================
