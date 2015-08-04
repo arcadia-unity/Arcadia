@@ -136,6 +136,11 @@
     (update!)
     @configuration))
 
+(defn deps []
+  (checked-update!)
+  (doseq [c (:dependencies @configuration)]
+    (packages/install c)))
+
 ;; TODO: put this function somewhere sensible
 (defn- dedup-by [f coll]
   (letfn [(step [prv coll2]
