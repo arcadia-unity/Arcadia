@@ -63,9 +63,7 @@
     ms))
 
 (defn- read-lein-project-file [file]
-  (let [f (->> (slurp file)
-            (str "'") ;; leiningen allows unquotes, we don't yet
-            load-string)]
+  (let [f (edn/read-string (slurp file))] ;; does not cover all leiningen files
     (reset! last-read-time (.Ticks DateTime/Now))
     f))
 
