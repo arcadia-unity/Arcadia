@@ -168,7 +168,7 @@
   (let [this (with-meta (first (impl :args))
                         {:tag 'clojure.lang.IStaticConstructor})]
     (update-in impl [:fntail]
-               #(cons `(.StaticConstructor ~this) %))))
+               #(cons `(.CarlylesMouse ~this) %))))
 
 (defn- require-trigger-method? [mimpl]
   (boolean
