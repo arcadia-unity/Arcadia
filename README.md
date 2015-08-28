@@ -6,7 +6,9 @@ Status
 ------
 Arcadia is alpha-quality software, and shouldn't be used for anything important yet.
 
-Primary work is done on the rapidly evolving [develop branch](https://github.com/arcadia-unity/Arcadia/tree/develop). Use that for bleeding edge features.
+Until the next release, the most reliable branch is [```unstable```](https://github.com/arcadia-unity/Arcadia/tree/unstable). This is where we put versions of Arcadia we're relatively confident aren't grossly broken, and is the best place to get started. As the name implies, ```unstable``` (and everything else, at least until the next release) is potentially subject to breaking changes.
+
+Primary work is done on the rapidly evolving [```develop``` branch](https://github.com/arcadia-unity/Arcadia/tree/develop). Use that for bleeding edge features.
 
 Community
 ---------
