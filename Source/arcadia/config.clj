@@ -101,10 +101,30 @@
   (boolean
     (:detect-leiningen-projects @configuration)))
 
+(defn- ensure-readable-project-file [file-name, raw-file]
+  (let [stringless (clojure.string/replace
+                     raw-file
+                     #"(\".*?((\\\\+)|[^\\])\")|\"\"" ;; fancy string matcher
+                     "")
+        problem (cond
+                  (re-find #"~" stringless)
+                  "'~' found"
+
+                  (re-find #"#" stringless)
+                  "'#' found")]
+    (when problem
+      (throw
+        (Exception.
+          (str "Unsupported file "
+            (.FullName (io/as-file file-name))
+            ": " problem))))))
+
 (defn- read-lein-project-file [file]
-  (let [f (edn/read-string (slurp file))] ;; does not cover all leiningen files
-    (reset! last-read-time (.Ticks DateTime/Now))
-    f))
+  (let [raw (slurp file)]
+    (ensure-readable-project-file file raw)
+    (let [f (read-string raw)]
+      (reset! last-read-time (.Ticks DateTime/Now))
+      f)))
 
 (defn- load-leiningen-configuration-map [file]
   (let [[_ name version & rst] (read-lein-project-file file)
