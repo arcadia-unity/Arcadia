@@ -1,4 +1,4 @@
-(ns #SCRIPTNAME#
+(ns #NAMESPACE#
   (:use arcadia.core)
   (:import [UnityEngine Debug]))
 
