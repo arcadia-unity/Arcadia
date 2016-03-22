@@ -5,8 +5,11 @@ $input = ""
 $input.force_encoding("UTF-8")
 $s = UDPSocket.new
 
+$remote_host = ARGV[0] || "localhost"
+$remote_port = ARGV[1] || 11211
+
 def repl_send code, strip_nil=false
-  $s.send code, 0, "localhost", 11211
+  $s.send code, 0, $remote_host, $remote_port
   $s.wait
   out = $s.recv($s.nread)
   print strip_nil ? out.gsub(/\s*nil$/, "\n") : out
