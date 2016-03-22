@@ -129,9 +129,14 @@
                                      :else
                                      "not sure why")))))))
 
+(defn import-asset [asset]
+  (Debug/Log (str "Loading " asset))
+  (require (asset->ns asset) :reload))
+
 (defn import-assets [imported]
   (doseq [asset (clj-files imported)]
-    (import-asset asset)))
+    (import-asset asset)
+    #_ (import-asset asset)))
 
 (defn delete-assets [deleted]
   (doseq [asset (clj-files deleted)]
