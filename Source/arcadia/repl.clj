@@ -93,15 +93,16 @@
                      (Debug/Log (str e#)))))
              ~frm))))))
 
+ ; need some stuff in here about read-eval maybe
 (defn repl-eval-print [repl-env s]
-  (let [frm (read-string s)] ; need some stuff in here about read-eval maybe
-    (with-config-compiler-bindings ; maybe... very dubious about the wisdom of this
-      (with-env-bindings repl-env 
-        {:result (try
-                   (eval-to-string frm)
-                   (catch Exception e
-                     (str e)))
-         :env (env-map)}))))
+  (with-config-compiler-bindings ; maybe... very dubious about the wisdom of this
+    (with-env-bindings repl-env
+        (let [frm (read-string s)]
+          {:result (try
+                     (eval-to-string frm)
+                     (catch Exception e
+                       (str e)))
+           :env (env-map)}))))
 
 (def work-queue (Queue/Synchronized (Queue.)))
 
