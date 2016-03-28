@@ -1,6 +1,7 @@
 (ns arcadia.repl
   (:refer-clojure :exclude [with-bindings])
   (:require [clojure.main :as main]
+            [clojure.string :as str]
             [arcadia.config :refer [configuration]])
   (:import
     [UnityEngine Debug]
@@ -10,6 +11,16 @@
     [System.Net.Sockets UdpClient SocketException]
     [System.Threading Thread ThreadStart]
     [System.Text Encoding]))
+
+;; ============================================================
+
+;; utter kludge hack to help with poorly-understood bug where types
+;; defined in namespace 'user are only accessible if (ns user) has
+;; been evaluated in current session
+
+
+(ns user)
+(ns arcadia.repl)
 
 ;; ============================================================
 ;; macros
@@ -79,13 +90,17 @@
 (defn env-map []
   (pack-env-bindings))
 
+(defn read-string* [s]
+  (when-not (str/blank? s)
+    (read-string s)))
+
 (defn eval-to-string [frm]
   (with-out-str
     (binding [*err* *out*]
       (prn
         (eval
           `(do
-             ~(when-let [inj (read-string
+             ~(when-let [inj (read-string*
                                (pr-str (@configuration :injections)))]
                 `(try
                    ~inj
@@ -97,7 +112,7 @@
 (defn repl-eval-print [repl-env s]
   (with-config-compiler-bindings ; maybe... very dubious about the wisdom of this
     (with-env-bindings repl-env
-        (let [frm (read-string s)]
+      (let [frm (read-string* s)]
           {:result (try
                      (eval-to-string frm)
                      (catch Exception e
