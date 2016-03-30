@@ -515,6 +515,7 @@
 ;; ============================================================
 ;; parent/child
 ;; ============================================================
+;; (this is obsolete now)
 
 (defn unparent ^GameObject [^GameObject child]
   (set! (.parent (.transform child)) nil)
@@ -673,3 +674,235 @@
   "Returns a list of active GameObjects tagged tag. Returns empty array if no GameObject was found.
   
   * tag - the tag to seach for, a String")
+
+;; ============================================================
+;; ensure component etc
+
+(definline obj-nil [x]
+  `(let [x# ~x]
+     (when-not (null-obj? x#) x#)))
+
+(def keep-obj-nil
+  (keep obj-nil))
+
+
+;; ============================================================
+;; protocols are fast now, so this:
+
+
+;; ------------------------------------------------------------
+;; IEntityComponent
+
+(defprotocol IEntityComponent
+  (cmpt [this c-or-cs])
+  (cmpts [this c-or-cs])
+  (cmpt+ [this c-or-cs])
+  (cmpt- [this c-or-cs]))
+
+
+(defmacro ^:private do-reduce [[x coll] & body]
+  `(do
+     (reduce
+       (fn [_# ~x]
+         ~@body
+         nil)
+       ~coll)
+     nil))
+
+(defmacro ^:private do-components [[x access] & body]
+  `(let [^|UnityEngine.Component[]| ar# ~access
+         c# (int (count ar#))]
+     (loop [i# (int 0)]
+       (when (< i# c#)
+         (let [^Component ~x (aget ar# i#)]
+           (do ~@body)
+           (recur (inc i#)))))))
+
+(extend-protocol IEntityComponent
+  GameObject
+  (cmpt [this c-or-cs]
+    (if (type? c-or-cs)
+      (obj-nil (.GetComponent this c-or-cs))
+      (into []
+        (map #(obj-nil (.GetComponent this %)))
+        c-or-cs)))
+  (cmpts [this c-or-cs]
+    (if (type? c-or-cs)
+      (into [] keep-obj-nil (.GetComponents this c-or-cs))
+      (into []
+        (map #(into [] keep-obj-nil (.GetComponents this %)))
+        c-or-cs)))
+  (cmpt+ [this c-or-cs]
+    (if (type? c-or-cs)
+      (.AddComponent this c-or-cs)
+      (into []
+        (map #(.AddComponent this %))
+        c-or-cs)))
+  (cmpt- [this c-or-cs]
+    (if (type? c-or-cs)
+      (do-components [x (.GetComponents this c-or-cs)]
+        (when-not (null-obj? x)
+          (destroy x)))
+      (do-reduce [c c-or-cs]
+        (do-components [x (.GetComponents this c)]
+          (when-not (null-obj? x)
+            (destroy x))))))
+
+  ;; exactly the same:
+  Component
+  (cmpt [this c-or-cs]
+    (if (type? c-or-cs)
+      (obj-nil (.GetComponent this c-or-cs))
+      (into []
+        (map #(obj-nil (.GetComponent this %)))
+        c-or-cs)))
+  (cmpts [this c-or-cs]
+    (if (type? c-or-cs)
+      (into [] keep-obj-nil (.GetComponents this c-or-cs))
+      (into []
+        (map #(into [] keep-obj-nil (.GetComponents this %)))
+        c-or-cs)))
+  (cmpt+ [this c-or-cs]
+    (if (type? c-or-cs)
+      (.AddComponent this c-or-cs)
+      (into []
+        (map #(.AddComponent this %))
+        c-or-cs)))
+  (cmpt- [this c-or-cs]
+    (if (type? c-or-cs)
+      (do-components [x (.GetComponents this c-or-cs)]
+        (when-not (null-obj? x)
+          (destroy x)))
+      (do-reduce [c c-or-cs]
+        (do-components [x (.GetComponents this c)]
+          (when-not (null-obj? x)
+            (destroy x))))))
+  
+  clojure.lang.Var
+  (cmpt [this c-or-cs]
+    (cmpt (var-get this) c-or-cs))
+  (cmpts [this c-or-cs]
+    (cmpts (var-get this) c-or-cs))
+  (cmpt+ [this c-or-cs]
+    (cmpt+ (var-get this) c-or-cs))
+  (cmpt- [this c-or-cs]
+    (cmpt- (var-get this) c-or-cs)))
+
+;; ------------------------------------------------------------
+;; repercussions
+
+;; the need for the following manglings makes me think there might be
+;; unintended consequences to accepting both multiple types and single
+;; types; mushes up the type signature of these functions
+
+(definline ^:private nil-or-empty? [x]
+  `(let [x# ~x]
+     (or (nil? x#)
+       (and
+         (coll? x#) ;; or something
+         (empty? x#)))))
+
+(defn ensure-component ^Component [x ^Type t]
+  (let [c (.GetComponent x t)]
+    (if (null-obj? c)
+      (.AddComponent x t)
+      c)))
+
+(defn ensure-cmpt [x c-or-cs]
+  (let [c (cmpt x c-or-cs)]
+    (if (type? c-or-cs)
+      ())))
+
+;; ------------------------------------------------------------
+;; happy macros
+
+(defn- meta-tag [x t]
+  (vary-meta x assoc :tag t))
+
+(defn- gentagged
+  ([t]
+   (meta-tag (gensym) t))
+  ([s t]
+   (meta-tag (gensym s) t)))
+
+(defmacro with-gob [[gob-name x] & body]
+  `(let [~gob-name (gobj ~x)]
+     ~@body))
+
+(defmacro with-cmpt
+  ([gob cmpt-name-types & body]
+   (assert (vector? cmpt-name-types))
+   (assert (even? (count cmpt-name-types)))
+   (let [gobsym (gentagged "gob__" 'GameObject)
+         parts (->> cmpt-name-types
+                 (partition 2)
+                 reverse
+                 (reduce
+                   (fn [expr [cmpt-name cmpt-type]]
+                     `(let [~(meta-tag cmpt-name cmpt-type) (cmpt ~gobsym ~cmpt-type)]
+                        ~expr))
+                   (cons 'do body)))]
+     `(with-gob [~gobsym ~gob]
+        ~parts))))
+
+(defmacro if-cmpt
+  ([gob [cmpt-name cmpt-type] then]
+   `(with-cmpt ~gob [~cmpt-name ~cmpt-type]
+      (when ~cmpt-name
+        ~then)))
+  ([gob [cmpt-name cmpt-type] then else]
+   `(with-cmpt ~gob [~cmpt-name ~cmpt-type]
+      (if ~cmpt-name
+        ~then
+        ~else))))
+
+;; ------------------------------------------------------------
+;; ISceneGraph
+
+(defprotocol ISceneGraph
+  (gobj ^GameObject [this])
+  (children [this])
+  (parent ^GameObject [this])
+  (child+ ^GameObject [this child]) ; returns child
+  (child- ^GameObject [this child]))
+
+(extend-protocol ISceneGraph
+  GameObject
+  (gobj [this]
+    this)
+  (children [this]
+    (into [] (.transform this)))
+  (parent [this]
+    (.. this parent GameObject))
+  (child+ [this child]
+    (let [^GameObject c (gobj child)]
+      (.SetParent (.transform c) nil true)
+      c))
+  (child- [this child]
+    (let [^GameObject c (gobj child)]
+      (.SetParent (.transform c) nil true)
+      c))
+
+  Component
+  (gobj [^Component this]
+    (.gameObject this))
+  (children [^Component this]
+    (into [] (.. this gameObject transform)))
+  (parent [^Component this]
+    (.. this gameObject parent))
+  (child+ [this child]
+    (child+ (.gameObject this) child))
+  (child- [this child]
+    (child- (.gameObject this) child))
+
+  clojure.lang.Var
+  (gobj [this]
+    (gobj (var-get this)))
+  (children [this]
+    (children (var-get this)))
+  (parent [this]
+    (parent (var-get this)))
+  (child+ [this child]
+    (child+ (var-get this) child))
+  (child- [this child]
+    (child- (var-get this) child)))
