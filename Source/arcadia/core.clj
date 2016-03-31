@@ -20,11 +20,27 @@
 ;; application
 ;; ============================================================
 
+(defonce ^:private editor-available
+  (boolean
+    (try
+      (import UnityEditor.EditorApplication)
+      (catch NullReferenceException e
+        nil))))
+
+;; can't use the obvious macro, because we want this logic to avoid
+;; being expanded away at AOT
+;; however we end up dealing with eval will have to at least allow it
+;; to show up in code
+(def ^:private in-editor
+  (if editor-available
+    (eval `(UnityEditor.EditorApplication/isPlaying))
+    false))
+
 (defn editor? 
   "Returns true if called from within the editor. Notably, calls
   from the REPL are considered to be form within the editor"
   []
-  Application/isEditor)
+  in-editor)
 
 ;; ============================================================
 ;; lifecycle
@@ -694,11 +710,10 @@
 ;; IEntityComponent
 
 (defprotocol IEntityComponent
-  (cmpt [this c-or-cs])
-  (cmpts [this c-or-cs])
-  (cmpt+ [this c-or-cs])
-  (cmpt- [this c-or-cs]))
-
+  (cmpt [this t])
+  (cmpts [this t])
+  (cmpt+ [this t])
+  (cmpt- [this t]))
 
 (defmacro ^:private do-reduce [[x coll] & body]
   `(do
@@ -720,98 +735,45 @@
 
 (extend-protocol IEntityComponent
   GameObject
-  (cmpt [this c-or-cs]
-    (if (type? c-or-cs)
-      (obj-nil (.GetComponent this c-or-cs))
-      (into []
-        (map #(obj-nil (.GetComponent this %)))
-        c-or-cs)))
-  (cmpts [this c-or-cs]
-    (if (type? c-or-cs)
-      (into [] keep-obj-nil (.GetComponents this c-or-cs))
-      (into []
-        (map #(into [] keep-obj-nil (.GetComponents this %)))
-        c-or-cs)))
-  (cmpt+ [this c-or-cs]
-    (if (type? c-or-cs)
-      (.AddComponent this c-or-cs)
-      (into []
-        (map #(.AddComponent this %))
-        c-or-cs)))
-  (cmpt- [this c-or-cs]
-    (if (type? c-or-cs)
-      (do-components [x (.GetComponents this c-or-cs)]
-        (when-not (null-obj? x)
-          (destroy x)))
-      (do-reduce [c c-or-cs]
-        (do-components [x (.GetComponents this c)]
-          (when-not (null-obj? x)
-            (destroy x))))))
+  (cmpt [this t]
+    (obj-nil (.GetComponent this t)))
+  (cmpts [this t]
+    (into [] keep-obj-nil (.GetComponents this t)))
+  (cmpt+ [this t]
+    (.AddComponent this t))
+  (cmpt- [this t]
+    (do-components [x (.GetComponents this t)]
+      (when-not (null-obj? x)
+        (destroy x))))
 
   ;; exactly the same:
   Component
-  (cmpt [this c-or-cs]
-    (if (type? c-or-cs)
-      (obj-nil (.GetComponent this c-or-cs))
-      (into []
-        (map #(obj-nil (.GetComponent this %)))
-        c-or-cs)))
-  (cmpts [this c-or-cs]
-    (if (type? c-or-cs)
-      (into [] keep-obj-nil (.GetComponents this c-or-cs))
-      (into []
-        (map #(into [] keep-obj-nil (.GetComponents this %)))
-        c-or-cs)))
-  (cmpt+ [this c-or-cs]
-    (if (type? c-or-cs)
-      (.AddComponent this c-or-cs)
-      (into []
-        (map #(.AddComponent this %))
-        c-or-cs)))
-  (cmpt- [this c-or-cs]
-    (if (type? c-or-cs)
-      (do-components [x (.GetComponents this c-or-cs)]
-        (when-not (null-obj? x)
-          (destroy x)))
-      (do-reduce [c c-or-cs]
-        (do-components [x (.GetComponents this c)]
-          (when-not (null-obj? x)
-            (destroy x))))))
+  (cmpt [this t]
+    (obj-nil (.GetComponent this t)))
+  (cmpts [this t]
+    (into [] keep-obj-nil (.GetComponents this t)))
+  (cmpt+ [this t]
+    (.AddComponent this t))
+  (cmpt- [this t]
+    (do-components [x (.GetComponents this t)]
+      (when-not (null-obj? x)
+        (destroy x)))) 
   
   clojure.lang.Var
-  (cmpt [this c-or-cs]
-    (cmpt (var-get this) c-or-cs))
-  (cmpts [this c-or-cs]
-    (cmpts (var-get this) c-or-cs))
-  (cmpt+ [this c-or-cs]
-    (cmpt+ (var-get this) c-or-cs))
-  (cmpt- [this c-or-cs]
-    (cmpt- (var-get this) c-or-cs)))
+  (cmpt [this t]
+    (cmpt (var-get this) t))
+  (cmpts [this t]
+    (cmpts (var-get this) t))
+  (cmpt+ [this t]
+    (cmpt+ (var-get this) t))
+  (cmpt- [this t]
+    (cmpt- (var-get this) t)))
 
 ;; ------------------------------------------------------------
 ;; repercussions
 
-;; the need for the following manglings makes me think there might be
-;; unintended consequences to accepting both multiple types and single
-;; types; mushes up the type signature of these functions
-
-(definline ^:private nil-or-empty? [x]
-  `(let [x# ~x]
-     (or (nil? x#)
-       (and
-         (coll? x#) ;; or something
-         (empty? x#)))))
-
-(defn ensure-component ^Component [x ^Type t]
-  (let [c (.GetComponent x t)]
-    (if (null-obj? c)
-      (.AddComponent x t)
-      c)))
-
-(defn ensure-cmpt [x c-or-cs]
-  (let [c (cmpt x c-or-cs)]
-    (if (type? c-or-cs)
-      ())))
+(defn ensure-cmpt ^Component [x ^Type t]
+  (or (cmpt x t) (cmpt+ x t)))
 
 ;; ------------------------------------------------------------
 ;; happy macros
