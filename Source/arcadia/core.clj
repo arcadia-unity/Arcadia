@@ -796,16 +796,13 @@
    (assert (vector? cmpt-name-types))
    (assert (even? (count cmpt-name-types)))
    (let [gobsym (gentagged "gob__" 'GameObject)
-         parts (->> cmpt-name-types
+         dcls  (->> cmpt-name-types
                  (partition 2)
-                 reverse
-                 (reduce
-                   (fn [expr [cmpt-name cmpt-type]]
-                     `(let [~(meta-tag cmpt-name cmpt-type) (cmpt ~gobsym ~cmpt-type)]
-                        ~expr))
-                   (cons 'do body)))]
+                 (mapcat (fn [[n t]]
+                           [(meta-tag n t) `(cmpt ~gobsym ~t)])))]
      `(with-gob [~gobsym ~gob]
-        ~parts))))
+        (let [~@dcls]
+          ~body)))))
 
 (defmacro if-cmpt
   ([gob [cmpt-name cmpt-type] then]
