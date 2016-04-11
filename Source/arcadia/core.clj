@@ -825,7 +825,9 @@
   (gobj ^GameObject [this])
   (children [this])
   (parent ^GameObject [this])
-  (child+ ^GameObject [this child]) ; returns child
+  (child+ ^GameObject
+    [this child]
+    [this child transform-to])
   (child- ^GameObject [this child]))
 
 (extend-protocol ISceneGraph
@@ -837,13 +839,15 @@
   (parent [this]
     (.. this parent GameObject))
   (child+ [this child]
+    (child+ this child false))
+  (child+ [this child transform-to]
     (let [^GameObject c (gobj child)]
-      (.SetParent (.transform c) nil true)
-      c))
+      (.SetParent (.transform c) (.transform this) transform-to)
+      this))
   (child- [this child]
     (let [^GameObject c (gobj child)]
-      (.SetParent (.transform c) nil true)
-      c))
+      (.SetParent (.transform c) nil false)
+      this))
 
   Component
   (gobj [^Component this]
@@ -854,6 +858,8 @@
     (.. this gameObject parent))
   (child+ [this child]
     (child+ (.gameObject this) child))
+  (child+ [this child transform-to]
+    (child+ (.gameObject this) child transform-to))
   (child- [this child]
     (child- (.gameObject this) child))
 
@@ -866,5 +872,7 @@
     (parent (var-get this)))
   (child+ [this child]
     (child+ (var-get this) child))
+  (child+ [this child transform-to]
+    (child+ (var-get this) child transform-to))
   (child- [this child]
     (child- (var-get this) child)))
