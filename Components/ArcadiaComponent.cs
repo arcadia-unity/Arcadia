@@ -18,7 +18,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
   [SerializeField]
   public string serializedVar;
   
-  // if fn is a var, store in serializedVar
+  // if fn is a var, store in serializedVar 
   public void OnBeforeSerialize()
   {
     Var v = fn as Var;
@@ -34,10 +34,12 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
     if(serializedVar != "")
     {
       Symbol sym = Symbol.intern(serializedVar);
-      string libName = sym.Namespace.Replace(".", "/").Replace("-", "_");
-      Debug.Log("Loading " + libName);
-      RT.load(libName);
-      fn = Var.intern(Symbol.intern(sym.Namespace), Symbol.intern(sym.Name));
+      RT.var("clojure.core", "require").invoke(Symbol.intern(sym.Namespace));
+      fn = RT.var(sym.Namespace, sym.Name);
+      // string libName = sym.Namespace.Replace(".", "/").Replace("-", "_");
+      // Debug.Log("Loading " + libName);
+      // RT.load(libName);
+      // fn = Var.intern(Symbol.intern(sym.Namespace), Symbol.intern(sym.Name));
     }
   }
 }
