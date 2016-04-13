@@ -23,7 +23,7 @@
 (defonce ^:private editor-available
   (boolean
     (try
-      (import UnityEditor.EditorApplication)
+      (import 'UnityEditor.EditorApplication)
       (catch NullReferenceException e
         nil))))
 
@@ -43,11 +43,19 @@
   in-editor)
 
 ;; ============================================================
-;; lifecycle
-;; ============================================================
+;; null obj stuff
 
 (defn null-obj? [^UnityEngine.Object x]
   (UnityEngine.Object/op_Equality x nil))
+
+
+(definline obj-nil [x]
+  `(let [x# ~x]
+     (when-not (null-obj? x#) x#)))
+
+;; ============================================================
+;; lifecycle
+;; ============================================================
 
 (defn bound-var? [v]
   (and (var? v)
@@ -691,16 +699,6 @@
   
   * tag - the tag to seach for, a String")
 
-;; ============================================================
-;; ensure component etc
-
-(definline obj-nil [x]
-  `(let [x# ~x]
-     (when-not (null-obj? x#) x#)))
-
-(def keep-obj-nil
-  (keep obj-nil))
-
 
 ;; ============================================================
 ;; protocols are fast now, so this:
@@ -738,26 +736,24 @@
   (cmpt [this t]
     (obj-nil (.GetComponent this t)))
   (cmpts [this t]
-    (into [] keep-obj-nil (.GetComponents this t)))
+    (into [] (.GetComponents this t)))
   (cmpt+ [this t]
     (.AddComponent this t))
   (cmpt- [this t]
     (do-components [x (.GetComponents this t)]
-      (when-not (null-obj? x)
-        (destroy x))))
+      (destroy x)))
 
   ;; exactly the same:
   Component
   (cmpt [this t]
     (obj-nil (.GetComponent this t)))
   (cmpts [this t]
-    (into [] keep-obj-nil (.GetComponents this t)))
+    (into [] (.GetComponents this t)))
   (cmpt+ [this t]
     (.AddComponent this t))
   (cmpt- [this t]
     (do-components [x (.GetComponents this t)]
-      (when-not (null-obj? x)
-        (destroy x)))) 
+      (destroy x))) 
   
   clojure.lang.Var
   (cmpt [this t]
@@ -774,46 +770,6 @@
 
 (defn ensure-cmpt ^Component [x ^Type t]
   (or (cmpt x t) (cmpt+ x t)))
-
-;; ------------------------------------------------------------
-;; happy macros
-
-(defn- meta-tag [x t]
-  (vary-meta x assoc :tag t))
-
-(defn- gentagged
-  ([t]
-   (meta-tag (gensym) t))
-  ([s t]
-   (meta-tag (gensym s) t)))
-
-(defmacro with-gob [[gob-name x] & body]
-  `(let [~gob-name (gobj ~x)]
-     ~@body))
-
-(defmacro with-cmpt
-  ([gob cmpt-name-types & body]
-   (assert (vector? cmpt-name-types))
-   (assert (even? (count cmpt-name-types)))
-   (let [gobsym (gentagged "gob__" 'GameObject)
-         dcls  (->> cmpt-name-types
-                 (partition 2)
-                 (mapcat (fn [[n t]]
-                           [(meta-tag n t) `(cmpt ~gobsym ~t)])))]
-     `(with-gob [~gobsym ~gob]
-        (let [~@dcls]
-          ~body)))))
-
-(defmacro if-cmpt
-  ([gob [cmpt-name cmpt-type] then]
-   `(with-cmpt ~gob [~cmpt-name ~cmpt-type]
-      (when ~cmpt-name
-        ~then)))
-  ([gob [cmpt-name cmpt-type] then else]
-   `(with-cmpt ~gob [~cmpt-name ~cmpt-type]
-      (if ~cmpt-name
-        ~then
-        ~else))))
 
 ;; ------------------------------------------------------------
 ;; ISceneGraph
@@ -873,3 +829,49 @@
     (child+ (var-get this) child transform-to))
   (child- [this child]
     (child- (var-get this) child)))
+
+;; ------------------------------------------------------------
+;; happy macros
+
+(defn- meta-tag [x t]
+  (vary-meta x assoc :tag t))
+
+(defn- gentagged
+  ([t]
+   (meta-tag (gensym) t))
+  ([s t]
+   (meta-tag (gensym s) t)))
+
+(defmacro with-gobj [[gob-name x] & body]
+  `(let [~gob-name (gobj ~x)]
+     ~@body))
+
+(defmacro with-cmpt
+  ([gob cmpt-name-types & body]
+   (assert (vector? cmpt-name-types))
+   (assert (even? (count cmpt-name-types)))
+   (let [gobsym (gentagged "gob__" 'GameObject)
+         dcls  (->> cmpt-name-types
+                 (partition 2)
+                 (mapcat (fn [[n t]]
+                           [(meta-tag n t) `(cmpt ~gobsym ~t)])))]
+     `(with-gob [~gobsym ~gob]
+        (let [~@dcls]
+          ~body)))))
+
+(defmacro if-cmpt
+  ([gob [cmpt-name cmpt-type] then]
+   `(with-cmpt ~gob [~cmpt-name ~cmpt-type]
+      (when ~cmpt-name
+        ~then)))
+  ([gob [cmpt-name cmpt-type] then else]
+   `(with-cmpt ~gob [~cmpt-name ~cmpt-type]
+      (if ~cmpt-name
+        ~then
+        ~else))))
+
+;; ============================================================
+;; traversal
+
+(defn gobj-seq [x]
+  (tree-seq identity children (gobj x)))
