@@ -189,11 +189,32 @@ public class ArcadiaStateEditor : Editor {
     string editorResult = EditorGUILayout.TextArea(oString, GUILayout.ExpandHeight(true), GUILayout.ExpandWidth(true));
     return RT.var("clojure.core", "read-string").invoke(editorResult);
   }
+  
+  [SerializeField]
+  string customEditorVar = "";
+  object DrawCustomWidget(object o) {
+    customEditorVar = EditorGUILayout.TextField("Var", (string)customEditorVar);
+    if(customEditorVar.Length > 0) {
+      Symbol sym = Symbol.intern(customEditorVar);
+      if(sym.Namespace != null) {
+        Symbol nssym = Symbol.intern(sym.Namespace);
+        if(nssym != null) {
+          RT.var("clojure.core", "require").invoke(nssym);
+          Var fn = RT.var(sym.Namespace, sym.Name);
+          if(fn.isBound) {
+            return fn.invoke(o);
+          }
+        }
+      }
+    }
+    
+    return o;
+  }
     
   int tab = 0;
   
   public override void OnInspectorGUI () {
-    tab = Tabs(new [] {"Static", "Dynamic", "Raw"}, tab);
+    tab = Tabs(new [] {"Static", "Dynamic", "Raw", "Custom"}, tab);
     switch(tab) {
       case 0:
       ((ArcadiaState)target).state = DrawStaticWidget("", ((ArcadiaState)target).state);
@@ -205,6 +226,10 @@ public class ArcadiaStateEditor : Editor {
       
       case 2:
       ((ArcadiaState)target).state = DrawRawWidget(((ArcadiaState)target).state);
+      break;
+      
+      case 3:
+      ((ArcadiaState)target).state = DrawCustomWidget(((ArcadiaState)target).state);
       break;
     }
   }
