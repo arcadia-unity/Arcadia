@@ -15,6 +15,8 @@ public class ClojureRepl : EditorWindow {
   
   [DllImport ("ForceEditorUpdates")]
   private static extern void StartForcingEditorApplicationUpdates();
+  // [DllImport ("ForceEditorUpdates")]
+  // private static extern void StopForcingEditorApplicationUpdates();
   
   static ClojureRepl() {
     RT.load("arcadia/repl");
@@ -48,6 +50,16 @@ public class ClojureRepl : EditorWindow {
     RT.var("arcadia.repl", "stop-server").invoke(replSocket);
     replSocket = null;
     EditorApplication.update -= ClojureRepl.Update;
+  }
+  
+  void OnFocus() {
+    // Debug.Log("StopForcingEditorApplicationUpdates");
+    // StopForcingEditorApplicationUpdates();
+  }
+  
+  void OnLostFocus() {
+    // Debug.Log("StartForcingEditorApplicationUpdates");
+    // StartForcingEditorApplicationUpdates();
   }
 
   void OnGUI () {
