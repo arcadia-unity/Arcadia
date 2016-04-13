@@ -116,7 +116,7 @@
   must either be an instance of LineNumberingPushbackReader or duplicate
   its behavior of both supporting .unread and collapsing all of CR, LF, and
   CRLF to a single \\newline."
-  [s]
+  [^clojure.lang.PushbackTextReader s]
   (let [c (.Read s)]                             ;;; .read
     (cond
      (= c (int \newline)) :line-start
@@ -132,7 +132,7 @@
   instance of LineNumberingPushbackReader or duplicate its behavior of both
   supporting .unread and collapsing all of CR, LF, and CRLF to a single
   \\newline."
-  [s]
+  [^clojure.lang.PushbackTextReader s]
   (loop [c (.Read s)]							;;; .read
     (cond
      (= c (int \newline)) :line-start
@@ -168,7 +168,7 @@
   "Default :caught hook for repl"
   [e]
   (let [ex (repl-exception e)
-        tr (get-stack-trace ex)
+        ^|System.Diagnostics.StackFrame[]| tr (get-stack-trace ex)
         el (when-not (zero? (count tr)) (aget tr 0))]
 	(binding [*out* *err*]
       (println (str (-> ex class .Name)           ;;; .getSimpleName

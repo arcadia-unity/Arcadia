@@ -106,7 +106,8 @@
    (let [lb (:logical-block token)]
     (dosync
      (when-let [^String prefix (:prefix lb)] 
-       (.Write (getf :base) prefix))
+       (let [^TextWriter b (getf :base)]
+         (.Write b prefix)))
      (let [col (get-column (getf :base))]
        (ref-set (:start-col lb) col)
        (ref-set (:indent lb) col)))))
@@ -114,7 +115,8 @@
 (defmethod write-token :end-block-t [^TextWriter this token]
   (when-let [cb (getf :logical-block-callback)] (cb :end))
   (when-let [^String suffix (:suffix (:logical-block token))] 
-    (.Write (getf :base) suffix)))
+    (let [^TextWriter b (getf :base)]
+      (.Write b suffix))))
 
 (defmethod write-token :indent-t [^TextWriter this token]
   (let [lb (:logical-block token)]
@@ -125,7 +127,8 @@
 		  :current (get-column (getf :base)))))))
 
 (defmethod write-token :buffer-blob [^TextWriter this token]
-  (.Write (getf :base) ^String (:data token)))
+  (let [^TextWriter b (getf :base)]
+    (.Write b ^String (:data token))))
 
 (defmethod write-token :nl-t [^TextWriter this token]
 ;  (prlabel wt @(:done-nl (:logical-block token)))
@@ -135,19 +138,22 @@
                 @(:done-nl (:logical-block token))))
     (emit-nl this token)
     (if-let [^String tws (getf :trailing-white-space)]
-      (.Write (getf :base) tws)))
+      (let [^TextWriter b (getf :base)]
+        (.Write b tws))))
   (dosync (setf :trailing-white-space nil)))
 
 (defn- write-tokens [^TextWriter this tokens force-trailing-whitespace]
   (doseq [token tokens]
     (if-not (= (:type-tag token) :nl-t)
       (if-let [^String tws (getf :trailing-white-space)]
-	(.Write (getf :base) tws)))
+        (let [^TextWriter b (getf :base)]
+          (.Write b tws))))
     (write-token this token)
     (setf :trailing-white-space (:trailing-white-space token)))
   (let [^String tws (getf :trailing-white-space)] 
     (when (and force-trailing-whitespace tws)
-      (.Write (getf :base) tws)
+      (let [^TextWriter b (getf :base)]
+        (.Write b tws))
       (setf :trailing-white-space nil))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -225,15 +231,18 @@
            (recur (:parent lb)))))))
 
 (defn- emit-nl [^TextWriter this nl]
-  (.Write (getf :base) (pp-newline))
+  (let [^TextWriter b (getf :base)]
+    (.Write b (pp-newline)))
   (dosync (setf :trailing-white-space nil))
   (let [lb (:logical-block nl)
         ^String prefix (:per-line-prefix lb)] 
     (if prefix 
-      (.Write (getf :base) prefix))
+      (let [^TextWriter b (getf :base)]
+        (.Write b prefix)))
     (let [^String istr (apply str (repeat (- @(:indent lb) (count prefix))
 					  \space))] 
-      (.Write (getf :base) istr))
+      (let [^TextWriter b (getf :base)]
+        (.Write b istr)))
     (update-nl-state lb)))
 
 (defn- split-at-newline [tokens]
@@ -315,7 +324,8 @@
 (defn- write-white-space [^TextWriter this]
   (when-let [^String tws (getf :trailing-white-space)]
     ; (prlabel wws (str "*" tws "*"))
-    (.Write (getf :base) tws)
+    (let [^TextWriter b (getf :base)]
+      (.Write b tws))
 	(dosync 
       (setf :trailing-white-space nil))))
     
@@ -323,7 +333,8 @@
 ;;; making the appropriate adjustments. Return the remainder of the string
 (defn- write-initial-lines 
   [^TextWriter this ^String s] 
-  (let [lines (.Split #"\n" s )]                                                      ;;; (.Split s "\n" -1)
+  (let [lines (.Split #"\n" s )
+        ^TextWriter b (getf :base)]                                                      ;;; (.Split s "\n" -1)
     (if (= (count lines) 1)
       s
       (dosync 
@@ -337,22 +348,22 @@
              (write-buffered-output this))
 		   (do
 		     (write-white-space this)
-             (.Write (getf :base) l)))
-         (.Write (getf :base) (int \newline))
+             (.Write b l)))
+         (.Write b (int \newline))
          (doseq [^String l (next (butlast lines))]
-           (.Write (getf :base) l)
-           (.Write (getf :base) (pp-newline))
+           (.Write b l)
+           (.Write b (pp-newline))
            (if prefix
-             (.Write (getf :base) prefix)))
+             (.Write b prefix)))
          (setf :buffering :writing)
          (last lines))))))
 
 
 (defn- p-write-char [^TextWriter this c]  (let [c (int c)]   ;;; replacing type hint ^Int32 c
   (if (= (getf :mode) :writing)
-    (do 
+    (let [^TextWriter b (getf :base)] 
       (write-white-space this)
-      (.Write (getf :base) c))
+      (.Write b c))
     (if (= c \newline)
       (write-initial-lines this "\n")
       (let [oldpos (getf :pos)
@@ -394,9 +405,9 @@
                   mode (getf :mode)]
               (dosync
                (if (= mode :writing)
-                 (do
+                 (let [^TextWriter b (getf :base)]
                    (write-white-space this)
-                   (.Write (getf :base) s)
+                   (.Write b s)
                    (setf :trailing-white-space white-space))
                  (let [oldpos (getf :pos)
                        newpos (+ oldpos (count s0))]
@@ -440,7 +451,8 @@
          (write-white-space this)
           (when-let [cb (getf :logical-block-callback)] (cb :start))
           (if prefix 
-           (.Write (getf :base) prefix))
+            (let [^TextWriter b (getf :base)]
+              (.Write b prefix)))
          (let [col (get-column (getf :base))]
            (ref-set (:start-col lb) col)
            (ref-set (:indent lb) col)))
@@ -457,7 +469,8 @@
        (do
          (write-white-space this)
          (if suffix
-           (.Write (getf :base) suffix))
+           (let [^TextWriter b (getf :base)]
+             (.Write b suffix)))
          (when-let [cb (getf :logical-block-callback)] (cb :end)))
        (let [oldpos (getf :pos)
              newpos (+ oldpos (if suffix (count suffix) 0))]

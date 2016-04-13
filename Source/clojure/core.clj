@@ -1679,7 +1679,7 @@
   "Removes the method of multimethod associated	with dispatch-value."
   {:added "1.0"
    :static true}
- [multifn dispatch-val]
+ [^clojure.lang.MultiFn multifn dispatch-val]
  (. multifn removeMethod dispatch-val))
 
 (defn prefer-method
@@ -1687,7 +1687,7 @@
    when there is a conflict"  
   {:added "1.0"
    :static true}
-  [multifn dispatch-val-x dispatch-val-y]
+  [^clojure.lang.MultiFn multifn dispatch-val-x dispatch-val-y]
   (. multifn preferMethod dispatch-val-x dispatch-val-y))
 
 (defn methods
@@ -2337,7 +2337,7 @@
   {:added "1.1"
    :static true}
  ([^clojure.lang.Ref ref]
-   (.getMinHistory ref))
+   (.MinHistory ref))     ;;; was (.getMinHistory ref)
  ([^clojure.lang.Ref ref n]
    (.setMinHistory ref n)))
 
@@ -2346,7 +2346,7 @@
   {:added "1.1"
    :static true}
  ([^clojure.lang.Ref ref]
-   (.getMaxHistory ref))
+   (.MaxHistory ref))     ;;; was (.getMaxHistory ref)
  ([^clojure.lang.Ref ref n]
    (.setMaxHistory ref n)))
 
@@ -3520,12 +3520,12 @@
    :static true}
   [x] (cond
        (decimal? x) x
-       (float? x) (BigDecimal/Create (double x))                                          ;;; (. BigDecimal valueOf (double x))
-       (ratio? x) (/ (BigDecimal/Create (.numerator ^clojure.lang.Ratio x)) (.denominator ^clojure.lang.Ratio x))     ;;; (/ (BigDecimal. (.numerator ^clojure.lang.Ratio x)) (.denominator ^clojure.lang.Ratio x))
-       (instance? clojure.lang.BigInt x) (.ToBigDecimal ^clojure.lang.BigInt x)           ;;; .ToBigDecimal
-       (instance? BigInteger x) (BigDecimal/Create ^BigInteger x)                         ;;; (BigDecimal. ^BigInteger x)
-       (number? x) (BigDecimal/Create (long x))                                           ;;; (BigDecimal/valueOf (long x))
-       :else  (BigDecimal/Create x)))                                                     ;;; (BigDecimal. x)))
+       (float? x) (BigDecimal/Create (double x))                                                                  ;;; (. BigDecimal valueOf (double x))
+       (ratio? x) (/ (BigDecimal/Create (.numerator ^clojure.lang.Ratio x)) (.denominator ^clojure.lang.Ratio x)) ;;; (/ (BigDecimal. (.numerator ^clojure.lang.Ratio x)) (.denominator ^clojure.lang.Ratio x))
+       (instance? clojure.lang.BigInt x) (.ToBigDecimal ^clojure.lang.BigInt x)                                   ;;; .ToBigDecimal
+       (instance? BigInteger x) (BigDecimal/Create ^BigInteger x)                                                 ;;; (BigDecimal. ^BigInteger x)
+       (number? x) (BigDecimal/Create (long x))                                                                   ;;; (BigDecimal/valueOf (long x))
+       :else  (throw (ArgumentException. (str "Cannot coerce object of type " (.GetType x) " to BigDecimal")))))  ;;; (BigDecimal. x)))
 	   
 (def ^:dynamic ^{:private true} print-initialized false)
 
@@ -3742,36 +3742,38 @@
 (defn aget
   "Returns the value at the index/indices. Works on Java arrays of all
   types."
-  {:inline (fn [a i] `(. clojure.lang.RT (aget ~a (int ~i))))
+  {:inline (fn [^System.Array a i] `(. clojure.lang.RT (aget ~a (int ~i))))
    :inline-arities #{2}
    :added "1.0"}
-  ([array idx]
+  ([^System.Array array ^long idx]
    (clojure.lang.Reflector/prepRet (.GetElementType (class array)) (. array (GetValue idx))))  ;;; was .getComponentType (. Array (get array idx)))  
   ([array idx & idxs]
-   (apply aget (aget array idx) idxs)))
+   (let [^System.Array a array]
+     (apply aget (aget a (int idx)) idxs))))
 
 (defn aset
   "Sets the value at the index/indices. Works on Java arrays of
   reference types. Returns val."
-  {:inline (fn [a i v] `(. clojure.lang.RT (aset ~a (int ~i) ~v)))
+  {:inline (fn [^System.Array a i v] `(. clojure.lang.RT (aset ~a (int ~i) ~v)))
    :inline-arities #{3}
    :added "1.0"}
-  ([array idx val]
-   (. array (SetValue val idx))  ;;; was     (. Array (set array idx val))
+  ([^System.Array array idx val]
+   (. array (SetValue val (int idx)))  ;;; was     (. Array (set array idx val))
    val)
-  ([array idx idx2 & idxv]
-   (apply aset (aget array idx) idx2 idxv)))
+  ([^System.Array array idx idx2 & idxv]
+   (apply aset (aget array (int idx)) idx2 idxv)))
 
 (defmacro
   ^{:private true}
   def-aset [name method coerce]
-    `(defn ~name
-       {:arglists '([~'array ~'idx ~'val] [~'array ~'idx ~'idx2 & ~'idxv])}
-       ([array# idx# val#]
-        (. clojure.lang.ArrayHelper (~method array# idx# (~coerce val#)))        ;;; Array -> ArrayHelper so we can provide the overloads below.
-        val#)
-       ([array# idx# idx2# & idxv#]
-        (apply ~name (aget array# idx#) idx2# idxv#))))
+  `(defn ~name
+     {:arglists '([~'array ~'idx ~'val] [~'array ~'idx ~'idx2 & ~'idxv])}
+     ([array# idx# val#]
+      (. clojure.lang.ArrayHelper (~method array# idx# (~coerce val#)))        ;;; Array -> ArrayHelper so we can provide the overloads below.
+      val#)
+     ([array# idx# idx2# & idxv#]
+      (let [^System.Array array# array#]
+        (apply ~name (aget array# (int idx#)) idx2# idxv#)))))
 
 (def-aset
   ^{:doc "Sets the value at the index/indices. Works on arrays of int. Returns val."
@@ -3824,10 +3826,12 @@
   ([^Type type len]                                                     ;;; ^Class
    (. Array (CreateInstance type (int len))))                            ;;; newInstance
   ([^Type type dim & more-dims]                                        ;;; ^Class
-   (let [ a  (. Array (CreateInstance Array (int dim)))]       ;;;    [dims (cons dim more-dims)
+   (let [d (int dim)
+         ^System.Type t System.Array
+         ^System.Array a (Array/CreateInstance t d)]       ;;;    [dims (cons dim more-dims)
                                                                ;;;     ^"[I" dimarray (make-array (. Integer TYPE)  (count dims))]
       (dotimes [i dim]                                         ;;;       (dotimes [i (alength dimarray)]
-          (aset a i (apply make-array type more-dims)))        ;;;   (aset-int dimarray i (nth dims i)))
+          (aset a (int i) (apply make-array type more-dims)))        ;;;   (aset-int dimarray i (nth dims i)))
       a)))                                                     ;;; (. Array (newInstance type dimarray)))))
 
 (defn to-array-2d
@@ -3838,7 +3842,7 @@
    :added "1.0"
    :static true}
   [^System.Collections.ICollection coll]                                              ;;; ^java.util.Collection
-    (let [ret  (make-array Object (.Count coll))]      ;;; NEED BETTER TYPING HERE (make-array (. Class (forName "[Ljava.lang.Object;")) (. coll (size)))]
+    (let [^System.Array ret (make-array Object (.Count coll))]      ;;; NEED BETTER TYPING HERE (make-array (. Class (forName "[Ljava.lang.Object;")) (. coll (size)))]
       (loop [i 0 xs (seq coll)]
         (when xs
           (aset ret i (to-array (first xs)))
@@ -4011,7 +4015,7 @@
    :static true}
   [ns]
   (let [ns (the-ns ns)]
-    (filter-key val (fn [ v] (and (instance? clojure.lang.Var v)    ;;;  removed the tag on v:  ^clojure.lang.Var
+    (filter-key val (fn [^clojure.lang.Var v] (and (instance? clojure.lang.Var v)    ;;;  removed the tag on v:  ^clojure.lang.Var
                                  (= ns (.ns v))
                                  (.isPublic v)))
                 (ns-map ns))))
@@ -4567,9 +4571,9 @@
   "Create an instance of ExceptionInfo, a RuntimeException subclass
    that carries a map of additional data."
   {:added "1.4"}
-  ([msg map]
+  ([^System.String msg ^clojure.lang.IPersistentMap map]
      (ExceptionInfo. msg map))
-  ([msg map cause]
+  ([^System.String msg ^clojure.lang.IPersistentMap map ^System.Exception cause]
      (ExceptionInfo. msg map cause)))
 
 (defn ex-data
@@ -4837,7 +4841,7 @@
   {:private true}
   [^clojure.lang.Sorted sc test key]
   (fn [e]
-    (test (.. sc comparator (compare (. sc entryKey e) key)) 0)))
+    (test (.. sc comparator (Compare (. sc entryKey e) key)) 0)))
 
 (defn subseq
   "sc must be a sorted collection, test(s) one of <, <=, > or
@@ -7271,7 +7275,7 @@
 
 (deftype Eduction [xform coll]
    System.Collections.IEnumerable                                                                    ;;; Iterable
-   (GetEnumerator [_] (.GetEnumerator ^System.Collections.ICollection (sequence xform coll)))        ;;; iterator  .iterator ^java.util.Collection
+   (GetEnumerator [_] (.GetEnumerator ^System.Collections.IEnumerable (sequence xform coll)))        ;;; iterator  .iterator ^java.util.Collection
 
    clojure.lang.Seqable
    (seq [_] (seq (sequence xform coll)))

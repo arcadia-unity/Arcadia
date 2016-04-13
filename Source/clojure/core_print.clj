@@ -360,7 +360,7 @@
 
 ;;; ADDED LINES
 (defmethod print-method clojure.lang.Ratio [o  ^System.IO.TextWriter w]   (.Write w (str o)))
-(defmethod print-dup clojure.lang.BigInteger [o w] 
+(defmethod print-dup clojure.lang.BigInteger [o ^System.IO.TextWriter w] 
   (.Write w "#=(clojure.lang.BigInteger/Parse ")
   (print-dup (str o) w)
   (.Write w ")"))

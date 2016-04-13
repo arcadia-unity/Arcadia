@@ -58,9 +58,10 @@ Design notes for clojure.string:
   replacement)                                                    ;;; TODO:  a no-op until I figure out the CLR equivalent -- (Matcher/quoteReplacement (.toString ^CharSequence replacement)))
 
 (defn- replace-by
-  [^String s re f]
-  (.Replace re s                                                              ;;; (let [m (re-matcher re s)]
-     ^MatchEvaluator (gen-delegate MatchEvaluator [m] (f (re-groups-direct m)))))   ;;;    (if (.find m)
+  [^String s ^Regex re f]
+  (let [^MatchEvaluator me (gen-delegate MatchEvaluator [m] (f (re-groups-direct m)))]
+    (.Replace re s me)))                                                         ;;; (let [m (re-matcher re s)]
+                                                                              ;;;    (if (.find m)
                                                                               ;;;      (let [buffer (StringBuffer. (.length s))]
                                                                               ;;;        (loop [found true]
                                                                               ;;;           (if found
@@ -95,13 +96,13 @@ Design notes for clojure.string:
    (clojure.string/replace \"Almost Pig Latin\" #\"\\b(\\w)(\\w+)\\b\" \"$2$1ay\")
    -> \"lmostAay igPay atinLay\""
   {:added "1.2"}
-  [^String s match replacement]
+  [^String s ^Regex match replacement]
   (let []   ;                                                                                  ;;; [s (.toString s)]
     (cond 
      (instance? Char match) (.Replace s ^Char match ^Char replacement)                         ;;;  Character  .replace
      (instance? String match) (.Replace s ^String match ^String replacement)                   ;;; .replace
      (instance? Regex match) (if (string? replacement)                                         ;;; Pattern
-                               (.Replace match s replacement)                                  ;;; (.replaceAll (re-matcher ^Pattern match s)
+                               (.Replace match s ^String replacement)                                  ;;; (.replaceAll (re-matcher ^Pattern match s)
 							                                                                   ;;;     (.toString ^CharSequence replacement))
                                (replace-by s match replacement))
      :else (throw (ArgumentException. (str "Invalid match arg: " match))))))                   ;;; IllegalArgumentException
@@ -109,12 +110,14 @@ Design notes for clojure.string:
 (defn- replace-first-by
   [^String s ^Regex re f]                                                       ;;; Pattern
                                                                                 ;;; (let [m (re-matcher re s)]
-  (.Replace re s                                                                ;;;   (if (.find m)
-     ^MatchEvaluator (gen-delegate MatchEvaluator [m] (f (re-groups-direct m)))      ;;;     (let [buffer (StringBuffer. (.length s))
-      1))                                                                       ;;;           rep (Matcher/quoteReplacement (f (re-groups m)))]
+  (let [^MatchEvaluator me (gen-delegate MatchEvaluator [m] (f (re-groups-direct m)))]
+    (.Replace re s me 1)))
+                                                                              ;;;   (if (.find m)
+                                                                              ;;;     (let [buffer (StringBuffer. (.length s))
+                                                                              ;;;           rep (Matcher/quoteReplacement (f (re-groups m)))]
                                                                                 ;;;        (.appendReplacement m buffer rep)
                                                                                 ;;;        (.appendTail m buffer)
-                                                                                ;;;        (str buffer))
+                                                                                ;;;        (str buffer)))
                                                                                 ;;;     s)))
 
 (defn- replace-first-char

@@ -112,8 +112,8 @@ Halloway."}
   [& args]
   (let [[cmd opts] (parse-args args)
         {:keys [in in-enc out-enc]} opts
-        proc (Process/Start
-              (make-process-info cmd out-enc (:env opts) (:dir opts)))]
+        ^ProcessStartInfo process-info (make-process-info cmd out-enc (:env opts) (:dir opts))
+        proc (Process/Start process-info)]
     (future
      (with-open [stdin (.StandardInput proc)]
        (when in

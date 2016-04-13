@@ -208,7 +208,7 @@ http://www.lispworks.com/documentation/HyperSpec/Body/22_c.htm
   (cond
    (integer? x) true
    (decimal? x) true  ;;;  TODO: FIX THIS (>= (.ulp (.stripTrailingZeros (bigdec 0))) 1) ; true iff no fractional part       DM: ???????  doesn't mention x!!!
-   (float? x)   (= x (Math/Floor x))                                                             ;;; Math/floor
+   (float? x)   (= x (Math/Floor (float x)))                                                             ;;; Math/floor
    (ratio? x)   (let [^clojure.lang.Ratio r x]
                   (= 0 (rem (.numerator r) (.denominator r))))
    :else        false))
@@ -684,8 +684,8 @@ string, or one character longer."
         fixed-repr (get-fixed rounded-mantissa (if expanded (inc scaled-exp) scaled-exp) d)
         fixed-repr (if (and w d
                             (>= d 1)
-                            (= (.get_Chars fixed-repr 0) \0)                                      ;;; .charAt
-                            (= (.get_Chars fixed-repr 1) \.)                                      ;;; .charAt
+                            (= (.get_Chars ^System.String fixed-repr 0) \0)                                      ;;; .charAt
+                            (= (.get_Chars ^System.String fixed-repr 1) \.)                                      ;;; .charAt
                             (> (count fixed-repr) (- w (if add-sign 1 0))))
                      (subs fixed-repr 1)  ; chop off leading 0
                      fixed-repr)

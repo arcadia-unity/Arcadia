@@ -19,7 +19,7 @@
 
 (defn- use-method
   "Installs a function as a new method of multimethod associated with dispatch-value. "
-  [multifn dispatch-val func]
+  [^clojure.lang.MultiFn multifn dispatch-val func]
   (. multifn addMethod dispatch-val func))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
