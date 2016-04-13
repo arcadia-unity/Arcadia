@@ -54,9 +54,9 @@ Mailing List
 ------------
 The mailing list is [here](https://groups.google.com/forum/#!forum/arcadia-unity).
 
-IRC
+Gitter
 ---
-The IRC channel for Arcadia is #arcadiaunity on freenode, if we're online we're usually on the channel.
+The [gitter chat](https://gitter.im/arcadia-unity/Arcadia) for the project, if we're online we're usually on the channel.
 
 Name
 -----
