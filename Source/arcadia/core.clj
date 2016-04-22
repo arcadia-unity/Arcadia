@@ -12,10 +12,6 @@
             Component
             PrimitiveType]))
 
-(defn- regex? [x]
-  (instance? System.Text.RegularExpressions.Regex x))
-
-
 ;; ============================================================
 ;; application
 ;; ============================================================
