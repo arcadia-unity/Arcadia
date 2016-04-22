@@ -4,7 +4,6 @@
             arcadia.literals
             arcadia.internal.editor-interop)
   (:import [UnityEngine
-            Object
             Vector3
             Quaternion
             Application
@@ -193,11 +192,11 @@
 
 (definline instantiate
   "Clones the object original and returns the clone."
-  ([^Object original]
+  ([^UnityEngine.Object original]
    (UnityEngine.Object/Instantiate original))
-  ([^Object original ^Vector3 position]
+  ([^UnityEngine.Object original ^Vector3 position]
    (UnityEngine.Object/Instantiate original position Quaternion/identity))
-  ([^Object original ^Vector3 position ^Quaternion rotation]
+  ([^UnityEngine.Object original ^Vector3 position ^Quaternion rotation]
    (UnityEngine.Object/Instantiate original position rotation)))
 
 (defn create-primitive
