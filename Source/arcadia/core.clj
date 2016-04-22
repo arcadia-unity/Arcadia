@@ -239,11 +239,8 @@
   "Finds a game object by name and returns it."
   [^String n] (GameObject/Find n))
 
-;; type-hinting of condcast isn't needed here, but seems a good habit to get into
 (defn objects-named
-  "Finds game objects by name.
-  
-  * name - the name of the objects to find, can be A String or regex"
+  "Finds game objects by name."
   [name]
   (condcast-> name name
     System.String
