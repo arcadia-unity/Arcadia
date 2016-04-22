@@ -183,11 +183,7 @@
                      (let [~(with-meta xsym {:tag t}) ~xsym]
                        ~then)]))))))))
 
-;; ============================================================
-;; get-component
-;; ============================================================
-
-(defn- camels-to-hyphens [s]
+(defn camels-to-hyphens [s]
   (string/replace s #"([a-z])([A-Z])" "$1-$2"))
 
 (defn- dedup-by [f coll]
