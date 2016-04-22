@@ -1,11 +1,12 @@
 (ns arcadia.core
   (:require [clojure.string :as string]
             [arcadia.reflect :as r]
-            [arcadia.internal.map-utils :as mu]
-            arcadia.messages
             arcadia.literals
             arcadia.internal.editor-interop)
   (:import [UnityEngine
+            Object
+            Vector3
+            Quaternion
             Application
             MonoBehaviour
             GameObject
