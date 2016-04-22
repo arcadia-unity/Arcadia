@@ -45,6 +45,7 @@
   (UnityEngine.Object/op_Equality x nil))
 
 
+;; TODO better name
 (definline obj-nil [x]
   `(let [x# ~x]
      (when-not (null-obj? x#) x#)))
