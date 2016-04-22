@@ -190,8 +190,16 @@
 ;; wrappers
 ;; ============================================================
 
-(definline instantiate
+;; definline does not support arity overloaded functions... 
+(defn instantiate
   "Clones the object original and returns the clone."
+  {:inline (fn
+             ([^UnityEngine.Object original]
+              `(UnityEngine.Object/Instantiate ~original))
+             ([^UnityEngine.Object original ^Vector3 position]
+              `(UnityEngine.Object/Instantiate ~original ~position Quaternion/identity))
+             ([^UnityEngine.Object original ^Vector3 position ^Quaternion rotation]
+              `(UnityEngine.Object/Instantiate ~original ~position ~rotation)))}
   ([^UnityEngine.Object original]
    (UnityEngine.Object/Instantiate original))
   ([^UnityEngine.Object original ^Vector3 position]
@@ -229,15 +237,15 @@
 
 (definline object-typed
   "Returns the first active loaded object of Type type."
-  [^Type t] (UnityEngine.Object/FindObjectOfType t))
+  [^Type t] `(UnityEngine.Object/FindObjectOfType ~t))
 
 (definline objects-typed
   "Returns a list of all active loaded objects of Type type."
-  [^Type t] (UnityEngine.Object/FindObjectsOfType t))
+  [^Type t] `(UnityEngine.Object/FindObjectsOfType ~t))
 
 (definline object-named
   "Finds a game object by name and returns it."
-  [^String n] (GameObject/Find n))
+  [^String n] `(GameObject/Find ~n))
 
 (defn objects-named
   "Finds game objects by name."
@@ -255,11 +263,11 @@
 
 (definline object-tagged
   "Returns one active GameObject tagged tag. Returns null if no GameObject was found."
-  [^String t] (GameObject/FindWithTag t))
+  [^String t] `(GameObject/FindWithTag ~t))
 
 (definline objects-tagged
   "Returns a list of active GameObjects tagged tag. Returns empty array if no GameObject was found."
-  [^String t] (GameObject/FindGameObjectsWithTag t))
+  [^String t] `(GameObject/FindGameObjectsWithTag ~t))
 
 ;; ------------------------------------------------------------
 ;; IEntityComponent
