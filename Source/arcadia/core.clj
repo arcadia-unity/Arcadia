@@ -133,13 +133,10 @@
   (maximize (comparator same-or-subclass?)
     (remove nil? types)))
 
-(def ccc-log (atom []))
-
 (defn- contract-condcast-clauses [expr xsym clauses env]
   (let [etype (most-specific-type
                 (type-of-reference expr env)
                 (tag-type xsym))]
-    (swap! ccc-log conj etype)
     (if etype
       (if-let [[_ then] (first
                           (filter #(= etype (ensure-type (first %)))
