@@ -190,69 +190,14 @@
 ;; wrappers
 ;; ============================================================
 
-(defn- hintable-type [t]
-  (cond (= t System.Single) System.Double
-    (= t System.Int32) System.Int64
-    (= t System.Boolean) nil
-    :else t))
-
-(defmacro ^:private defwrapper
-  "Wrap static methods of C# classes
-  
-  * class - the C# class to wrap, a Symbol
-  * method - the C# method to wrap, a Symbol
-  * docstring - the documentation for the wrapped method, a String
-  * name - the name of the corresponding Clojure function, a Symbol
-  
-  Used internally to wrap parts of the Unity API, but generally useful."
-  ([class]
-   `(do ~@(map (fn [m]
-          `(defwrapper
-             ~class
-             ~(symbol (.Name m))
-             ~(str "TODO No documentation for " class "/" (.Name m))))
-        (->>
-          (.GetMethods
-            (resolve class)
-            (enum-or BindingFlags/Public BindingFlags/Static))
-          (remove #(or (.IsSpecialName %) (.IsGenericMethod %)))))))
-  ([class method docstring]
-   `(defwrapper
-     ~(symbol (string/lower-case
-                (camels-to-hyphens (str method))))
-     ~class
-     ~method
-     ~docstring))
-  ([name class method docstring & body]
-   `(defn ~name
-      ~(str docstring (let [link-name (str (.Name (resolve class)) "." method)]
-                        (str "\n\nSee also ["
-                        link-name
-                        "](http://docs.unity3d.com/ScriptReference/"
-                        link-name
-                        ".html) in Unity's reference.")))
-      ~@(->> (.GetMethods
-               (resolve class)
-               (enum-or BindingFlags/Public BindingFlags/Static))
-             (filter #(= (.Name %) (str method)))
-             (remove #(.IsGenericMethod %))
-             (dedup-by #(.Length (.GetParameters %)))
-             (map (fn [m]
-                    (let [params (map #(with-meta (symbol (.Name %))
-                                                  {:tag (hintable-type (.ParameterType %))})
-                                      (.GetParameters m))] 
-                      (list (with-meta (vec params) {:tag (hintable-type (.ReturnType m))})
-                            `(~(symbol (str class "/" method)) ~@params))))))
-      ~@body)))
-
-(defwrapper instantiate UnityEngine.Object Instantiate
-  "Clones the object original and returns the clone.
-  
-  * original the object to clone, GameObject or Component
-  * position the position to place the clone in space, a Vector3
-  * rotation the rotation to apply to the clone, a Quaternion"
-  ([^UnityEngine.Object original ^UnityEngine.Vector3 position]
-   (UnityEngine.Object/Instantiate original position Quaternion/identity)))
+(definline instantiate
+  "Clones the object original and returns the clone."
+  ([^Object original]
+   (UnityEngine.Object/Instantiate original))
+  ([^Object original ^Vector3 position]
+   (UnityEngine.Object/Instantiate original position Quaternion/identity))
+  ([^Object original ^Vector3 position ^Quaternion rotation]
+   (UnityEngine.Object/Instantiate original position rotation)))
 
 (defn create-primitive
   "Creates a game object with a primitive mesh renderer and appropriate collider.
@@ -282,20 +227,17 @@
   ([^UnityEngine.Object obj ^double t]
    (UnityEngine.Object/Destroy obj t)))
 
-(defwrapper object-typed UnityEngine.Object FindObjectOfType
-  "Returns the first active loaded object of Type type.
-  
-  * type - The type to search for, a Type")
+(definline object-typed
+  "Returns the first active loaded object of Type type."
+  [^Type t] (UnityEngine.Object/FindObjectOfType t))
 
-(defwrapper objects-typed UnityEngine.Object FindObjectsOfType
-  "Returns a list of all active loaded objects of Type type.
-  
-  * type - The type to search for, a Type")
+(definline objects-typed
+  "Returns a list of all active loaded objects of Type type."
+  [^Type t] (UnityEngine.Object/FindObjectsOfType t))
 
-(defwrapper object-named GameObject Find
-  "Finds a game object by name and returns it.
-  
-  * name - The name of the object to find, a String")
+(definline object-named
+  "Finds a game object by name and returns it."
+  [^String n] (GameObject/Find n))
 
 ;; type-hinting of condcast isn't needed here, but seems a good habit to get into
 (defn objects-named
@@ -312,25 +254,15 @@
     System.Text.RegularExpressions.Regex
     (for [^GameObject obj (objects-typed GameObject)
           :when (re-matches name (.name obj))]
-      obj)
-    
-   ; (throw (Exception. (str "Expects String or Regex, instead got " (type name))))
-    ))
+      obj)))
 
-(defwrapper object-tagged GameObject FindWithTag
-  "Returns one active GameObject tagged tag. Returns null if no GameObject was found.
-  
-  * tag - the tag to seach for, a String")
+(definline object-tagged
+  "Returns one active GameObject tagged tag. Returns null if no GameObject was found."
+  [^String t] (GameObject/FindWithTag t))
 
-(defwrapper objects-tagged GameObject FindGameObjectsWithTag
-  "Returns a list of active GameObjects tagged tag. Returns empty array if no GameObject was found.
-  
-  * tag - the tag to seach for, a String")
-
-
-;; ============================================================
-;; protocols are fast now, so this:
-
+(definline objects-tagged
+  "Returns a list of active GameObjects tagged tag. Returns empty array if no GameObject was found."
+  [^String t] (GameObject/FindGameObjectsWithTag t))
 
 ;; ------------------------------------------------------------
 ;; IEntityComponent
