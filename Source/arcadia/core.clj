@@ -2,7 +2,7 @@
   (:require [clojure.string :as string]
             [arcadia.reflect :as r]
             arcadia.literals
-            arcadia.internal.editor-interop)
+            [arcadia.internal.macro :as im])
   (:import [UnityEngine
             Vector3
             Quaternion
@@ -117,76 +117,6 @@
           (when (not (and (var? v) (fn? (var-get v))))
             (tag-type v))))))) 
 
-;; ============================================================
-;; condcast->
-;; ============================================================
-
-(defn- maximize
-  ([xs]
-   (maximize (comparator >) xs))
-  ([compr xs]
-   (when (seq xs)
-     (reduce
-       (fn [mx x]
-         (if (= 1 (compr mx x))
-           x
-           mx))
-       xs))))
-
-(defn- most-specific-type ^Type [& types]
-  (maximize (comparator same-or-subclass?)
-    (remove nil? types)))
-
-(defn- contract-condcast-clauses [expr xsym clauses env]
-  (let [etype (most-specific-type
-                (type-of-reference expr env)
-                (tag-type xsym))]
-    (if etype
-      (if-let [[_ then] (first
-                          (filter #(= etype (ensure-type (first %)))
-                            (partition 2 clauses)))]
-        [then]
-        (->> clauses
-          (partition 2)
-          (filter
-            (fn [[t _]]
-              (same-or-subclass? etype (ensure-type t))))
-          (apply concat)))
-      clauses)))
-
-;; note this takes an optional default value. This macro is potentially
-;; annoying in the case that you want to branch on a supertype, for
-;; instance, but the cast would remove interface information. Use with
-;; this in mind.
-(defmacro condcast-> [expr xsym & clauses]
-  (let [[clauses default] (if (even? (count clauses))
-                            [clauses nil] 
-                            [(butlast clauses)
-                             [:else
-                              `(let [~xsym ~expr]
-                                 ~(last clauses))]])
-        clauses (contract-condcast-clauses
-                  expr xsym clauses &env)]
-    (cond
-      (= 0 (count clauses))
-      `(let [~xsym ~expr]
-         ~default) ;; might be nil obvi
-
-      (= 1 (count clauses)) ;; corresponds to exact type match. janky but fine
-      `(let [~xsym ~expr]
-         ~@clauses)
-
-      :else
-      `(let [~xsym ~expr]
-         (cond
-           ~@(->> clauses
-               (partition 2)
-               (mapcat
-                 (fn [[t then]]
-                   `[(instance? ~t ~xsym)
-                     (let [~(with-meta xsym {:tag t}) ~xsym]
-                       ~then)]))))))))
-
 (defn camels-to-hyphens [s]
   (string/replace s #"([a-z])([A-Z])" "$1-$2"))
 
@@ -254,7 +184,7 @@
 (defn objects-named
   "Finds game objects by name."
   [name]
-  (condcast-> name name
+  (im/condcast-> name name
     System.String
     (for [^GameObject obj (objects-typed GameObject)
           :when (= (.name obj) name)]

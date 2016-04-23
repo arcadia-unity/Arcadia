@@ -2,7 +2,7 @@
   (:refer-clojure :exclude [methods])
   (:require [clojure.pprint :as pprint]
             [clojure.test :as test]
-            [arcadia.core :as ac])
+            [arcadia.internal.macro :as im])
   (:import [System.Reflection
             MonoMethod MonoProperty MonoField]))
 
@@ -75,7 +75,7 @@
 (defn members
   ([^Type t]
    (sort-by
-     #(ac/condcast-> % x
+     #(im/condcast-> % x
         MonoMethod (.Name x)
         MonoProperty (.Name x)
         MonoField (.Name x))
@@ -85,7 +85,7 @@
        (methods t))))
   ([^Type t, sr]
    (sort-by
-     #(ac/condcast-> % x
+     #(im/condcast-> % x
         MonoMethod (.Name x)
         MonoProperty (.Name x)
         MonoField (.Name x))

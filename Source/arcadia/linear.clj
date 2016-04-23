@@ -86,7 +86,7 @@
           f (fn f [op n]
               (let [[a :as args2] (take n args)]
                 (list (vec args2)
-                  `(condcast-> ~a ~asym
+                  `(im/condcast-> ~a ~asym
                      UnityEngine.Vector3 ~(nfn `v3 args2)
                      UnityEngine.Vector2 ~(nfn `v2 args2)
                      UnityEngine.Vector4 ~(nfn `v4 args2)))))
@@ -95,7 +95,7 @@
                                      #(< 1 %))
                    :inline `(fn ~'checked-keys-inliner [a# & args2#]
                               (let [nfn# ~nfnform]
-                                `(condcast-> ~a# ~'~asym
+                                `(im/condcast-> ~a# ~'~asym
                                    UnityEngine.Vector3 ~(nfn# `v3 args2#)
                                    UnityEngine.Vector2 ~(nfn# `v2 args2#)
                                    UnityEngine.Vector4 ~(nfn# `v4 args2#))))}
@@ -245,7 +245,7 @@
 
 ;; this one requires some more thought, of course
 (definline v* [a b]
-  `(condcast-> ~a a#
+  `(im/condcast-> ~a a#
      UnityEngine.Vector3 (v3* a# ~b)
      UnityEngine.Vector2 (v2* a# ~b)
      UnityEngine.Vector4 (v4* a# ~b)))
@@ -266,7 +266,7 @@
      (UnityEngine.Vector4/op_Division ~a b#)))
 
 (definline vdiv [a b]
-  `(condcast-> ~a a#
+  `(im/condcast-> ~a a#
      UnityEngine.Vector3 (v3div a# ~b)
      UnityEngine.Vector2 (v2div a# ~b)
      UnityEngine.Vector4 (v4div a# ~b)))
@@ -286,7 +286,7 @@
   (Quaternion/op_Multiply a b))
 
 (defn q* [^Quaternion a b]
-  (condcast-> b b
+  (im/condcast-> b b
     UnityEngine.Vector3 (Quaternion/op_Multiply a b)
     UnityEngine.Quaternion (Quaternion/op_Multiply a b)))
 
@@ -334,7 +334,7 @@
   `(UnityEngine.Vector4/Scale ~a ~b))
 
 (definline vscale [a b]
-  `(condcast-> ~a a#
+  `(im/condcast-> ~a a#
      Vector3 (v3scale a# ~b)
      Vector2 (v2scale a# ~b)
      Vector4 (v4scale a# ~b)))
