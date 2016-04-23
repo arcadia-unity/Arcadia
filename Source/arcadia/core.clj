@@ -10,11 +10,15 @@
             MonoBehaviour
             GameObject
             Component
-            PrimitiveType]))
+            PrimitiveType
+            Debug]))
 
 ;; ============================================================
 ;; application
 ;; ============================================================
+
+(defn log [& args]
+  (Debug/Log (apply str args)))
 
 (defonce ^:private editor-available
   (boolean
