@@ -1,0 +1,6 @@
+{ :repl/injections (use 'clojure.repl)
+                  
+  :compiler/verbose true
+  :compiler/warn-on-reflection true
+  :compiler/on-file-change :reload }
+
