@@ -1,9 +1,12 @@
 (ns arcadia.core
   (:require [clojure.string :as string]
-            [arcadia.reflect :as r]
+            [arcadia.internal.messages :refer [messages]]
+            [arcadia.internal.editor-interop :refer [camels-to-hyphens]]
             arcadia.literals
             [arcadia.internal.macro :as im])
-  (:import [UnityEngine
+  (:import ArcadiaBehaviour
+           ArcadiaState
+           [UnityEngine
             Vector3
             Quaternion
             Application
@@ -308,3 +311,90 @@
 
 (defn gobj-seq [x]
   (tree-seq identity children (gobj x)))
+
+
+;; ============================================================
+;; hooks
+
+(defn- message-keyword [m]
+  (-> m str camels-to-hyphens string/lower-case keyword))
+
+(def hook-types
+  (->> messages
+       keys
+       (mapcat #(vector (message-keyword %)
+                        (RT/classForName (str % "Hook"))))
+       (apply hash-map)))
+
+(defn- ensure-hook-type [hook]
+  (or (hook-types hook)
+      (throw (ArgumentException. (str hook " is not a valid Arcadia hook")))))
+
+(defn hook+
+  "Attach hook a Clojure function to a Unity message on `obj`. The funciton `f`
+  will be invoked every time the message identified by `hook` is sent by Unity. `f`
+  must have the same arity as the expected Unity message."
+  [obj hook f]
+  (let [hook-type (ensure-hook-type hook)
+        hook* (cmpt+ obj hook-type)]
+    (set! (.fn hook*) f)
+    obj))
+
+(defn hook-
+  "Remove all `hook` components attached to `obj`"
+  [obj hook]
+  (let [hook-type (ensure-hook-type hook)]
+    (cmpt- obj hook-type)
+    obj))
+
+(defn hook
+  "Return the `hook` component attached to `obj`. If there is more one component,
+  then behavior is the same as `cmpt`."
+  [obj hook]
+  (let [hook-type (ensure-hook-type hook)]
+    (cmpt obj hook-type)))
+
+(defn hooks [obj hook]
+  "Return all components for `hook` attached to `obj`"
+  (let [hook-type (ensure-hook-type hook)]
+    (cmpts obj hook-type)))
+
+(defn hook?
+  ([t hook] (= (type t)
+               (ensure-hook-type hook)))
+  ([t] (isa? (type t)
+             ArcadiaBehaviour)))
+
+;; ============================================================
+;; state
+
+(defn- initialize-state [go]
+  (cmpt- go ArcadiaState)
+  (let [c (cmpt+ go ArcadiaState)]
+    (set! (.state c) {})
+    c))
+
+(defn- ensure-state [go]
+  (or (cmpt go ArcadiaState)
+      (initialize-state go)))
+
+(defn state
+  ([go] (state go ::anonymous))
+  ([go kw]
+   (if-let [c (cmpt go ArcadiaState)]
+     (get (.state c) kw))))
+
+(defn set-state
+  ([go v] (set-state go ::anonymous v))
+  ([go kw v]
+   (let [c (ensure-state go)]
+     (set! (.state c) (assoc (.state c) kw v))
+     v)))
+
+(defn swap-state
+  ([go f] (swap-state go ::anonymous f))
+  ([go kw f]
+   (let [c (ensure-state go)
+         s (state go kw)]
+     (set! (.state c)
+           (assoc-in (.state c) [kw] (f s))))))

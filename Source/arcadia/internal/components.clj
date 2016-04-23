@@ -1,6 +1,8 @@
-(ns arcadia.components
+(ns
+  ^{:doc "Generates the C# implementation of the Arcadia hooks"}
+  arcadia.internal.components
   (:require [clojure.string :as string]
-             [arcadia.messages :as messages]))
+            [arcadia.messages :as messages]))
 
 ;; TODO path seperators
 (def path "Assets/Arcadia/Components/")

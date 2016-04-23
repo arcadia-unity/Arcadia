@@ -1,10 +1,7 @@
-(ns arcadia.messages)
+(ns ^{:doc "Data structure for all unity messages. Must be manually maintained."}
+  arcadia.internal.messages)
 
 ;; from http://docs.unity3d.com/ScriptReference/MonoBehaviour.html
-
-;; ============================================================
-;; message map
-;; ============================================================
 (def messages
   '{Awake []
     FixedUpdate []
@@ -66,24 +63,3 @@
     Reset []
     Start []
     Update []})
-
-;; ============================================================
-;; interfaces
-;; ============================================================
-(defmacro emit-message-interface [message args]
-  `(definterface ~(symbol (str "I" message))
-     (~message ~(mapv #(vary-meta %2 assoc :tag %1)
-                      args
-                      (repeatedly gensym)))))
-
-(defmacro emit-message-interfaces []
-  `(do
-     ~@(map (fn [[msg args]]
-              `(emit-message-interface ~msg ~args))
-            messages)))
-
-;; emit an interface for every unity message, based on the message map
-;; Update ==> (definterface IUpdate (Update []))
-;; OnTriggerEnter ==> (definterface IOnTriggerEnter (OnTriggerEnter [^UnityEngine.Collider x]))
-
-(emit-message-interfaces)

@@ -1,4 +1,6 @@
-(ns arcadia.compiler
+(ns ^{:doc "Integration with the Unity compiler pipeline"
+      :author "Tims Gardner and Ramsey Nasser"}
+  arcadia.compiler
   (:require [arcadia.config :refer [configuration]]
             clojure.string)
   (:import [System IO.Path IO.File IO.StringWriter Environment]
