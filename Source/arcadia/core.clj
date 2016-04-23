@@ -45,8 +45,8 @@
 ;; ============================================================
 ;; null obj stuff
 
-(defn null-obj? [^UnityEngine.Object x]
-  (UnityEngine.Object/op_Equality x nil))
+(definline null-obj? [^UnityEngine.Object x]
+  `(UnityEngine.Object/op_Equality ~x nil))
 
 
 ;; TODO better name
