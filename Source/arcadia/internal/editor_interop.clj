@@ -2,6 +2,9 @@
   (:import [System.IO File]
            [System.Reflection FieldInfo]))
 
+(defn camels-to-hyphens [s]
+  (string/replace s #"([a-z])([A-Z])" "$1-$2"))
+
 (defn touch-dlls [^System.String folder]
   (doseq [dll (Directory/GetFiles folder "*.dll")]
     (File/SetLastWriteTime dll DateTime/Now)))

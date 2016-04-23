@@ -1,6 +1,7 @@
 (ns arcadia.hydrate
   (:use [arcadia.core])
   (:require [arcadia.internal.map-utils :as mu]
+            [arcadia.internal.editor-interop :refer [camels-to-hyphens]]
             [arcadia.reflect :as r]
             [clojure.string :as string]
             [clojure.test :as test]
@@ -52,9 +53,6 @@
     (type-symbol? x)
     (.IsValueType
       (ensure-type x))))
-
-(defn- camels-to-hyphens [s]
-  (string/replace s #"([a-z])([A-Z])" "$1-$2"))
 
 (defn- nice-keyword [s]
   (keyword
