@@ -121,16 +121,15 @@
 (defn objects-named
   "Finds game objects by name."
   [name]
-  (im/condcast-> name name
-    System.String
-    (for [^GameObject obj (objects-typed GameObject)
-          :when (= (.name obj) name)]
-      obj)
-    
-    System.Text.RegularExpressions.Regex
-    (for [^GameObject obj (objects-typed GameObject)
-          :when (re-matches name (.name obj))]
-      obj)))
+  (cond (= (type name) System.String)
+        (for [^GameObject obj (objects-typed GameObject)
+              :when (= (.name obj) name)]
+          obj)
+        
+        (= (type name) System.Text.RegularExpressions.Regex)
+        (for [^GameObject obj (objects-typed GameObject)
+              :when (re-matches name (.name obj))]
+          obj)))
 
 (definline object-tagged
   "Returns one active GameObject tagged tag. Returns null if no GameObject was found."

@@ -76,20 +76,14 @@
 (defn members
   ([^Type t]
    (sort-by
-     #(im/condcast-> % x
-        MonoMethod (.Name x)
-        MonoProperty (.Name x)
-        MonoField (.Name x))
+     #(.Name %)
      (concat
        (fields t)
        (properties t)
        (methods t))))
   ([^Type t, sr]
    (sort-by
-     #(im/condcast-> % x
-        MonoMethod (.Name x)
-        MonoProperty (.Name x)
-        MonoField (.Name x))
+     #(.Name %)
      (concat
        (fields t sr)
        (properties t sr)

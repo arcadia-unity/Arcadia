@@ -75,45 +75,6 @@
          ~optspec
          ~@body))))
 
-(defmacro ^:private def-vop-higher [name opts]
-  (mu/checked-keys [[op] opts]
-    (let [{:keys [doc unary-op]} opts
-          asym (gensym "a")
-          args (im/classy-args)
-          nfnform `(fn ~'nfn [v# rargs#]
-                     (list* (symbol (str v# '~op)) '~asym rargs#))
-          nfn (eval nfnform)
-          f (fn f [op n]
-              (let [[a :as args2] (take n args)]
-                (list (vec args2)
-                  `(im/condcast-> ~a ~asym
-                     UnityEngine.Vector3 ~(nfn `v3 args2)
-                     UnityEngine.Vector2 ~(nfn `v2 args2)
-                     UnityEngine.Vector4 ~(nfn `v4 args2)))))
-          optspec {:inline-arities (if unary-op
-                                     #(< 0 %)
-                                     #(< 1 %))
-                   :inline `(fn ~'checked-keys-inliner [a# & args2#]
-                              (let [nfn# ~nfnform]
-                                `(im/condcast-> ~a# ~'~asym
-                                   UnityEngine.Vector3 ~(nfn# `v3 args2#)
-                                   UnityEngine.Vector2 ~(nfn# `v2 args2#)
-                                   UnityEngine.Vector4 ~(nfn# `v4 args2#))))}
-          ;{}
-          body (remove nil?
-                 (concat
-                   [(when unary-op
-                      (f unary-op 1))]
-                   (for [n (range 2 20)]
-                     (f op n))
-                   [(list (conj (vec (take 19 args)) '& 'more)
-                      (list `reduce name
-                        (list* name (take 19 args))
-                        'more))]))]
-      `(defn ~name ~@(when doc [doc])
-         ~optspec
-         ~@body))))
-
 ;; ============================================================
 ;; constructors
 
@@ -197,11 +158,6 @@
    :nullary-expr UnityEngine.Vector4/zero
    :unary-expr a})
 
-(def-vop-higher v+
-  {:op +
-   :unary-op Identity ; bit klunky for now
-   })
-
 ;; ============================================================
 ;; -
 
@@ -219,9 +175,6 @@
   {:op UnityEngine.Vector4/op_Subtraction
    :return-type UnityEngine.Vector4/op_Subtraction
    :unary-op UnityEngine.Vector3/op_UnaryNegation})
-
-(def-vop-higher v-
-  {:op -})
 
 ;; undecided whether to support variadic versions of these
 ;; non-associative multiply and divide ops (eg force associativity, at
@@ -243,13 +196,6 @@
   `(let [b# (float ~b)]
      (UnityEngine.Vector4/op_Multiply ~a b#)))
 
-;; this one requires some more thought, of course
-(definline v* [a b]
-  `(im/condcast-> ~a a#
-     UnityEngine.Vector3 (v3* a# ~b)
-     UnityEngine.Vector2 (v2* a# ~b)
-     UnityEngine.Vector4 (v4* a# ~b)))
-
 ;; ============================================================
 ;; div
 
@@ -265,30 +211,25 @@
   `(let [b# (float ~b)]
      (UnityEngine.Vector4/op_Division ~a b#)))
 
-(definline vdiv [a b]
-  `(im/condcast-> ~a a#
-     UnityEngine.Vector3 (v3div a# ~b)
-     UnityEngine.Vector2 (v2div a# ~b)
-     UnityEngine.Vector4 (v4div a# ~b)))
-
 ;; ============================================================
 ;; Quaternions
 ;; and then there's this
 ;; inline etc this stuff when time allows
 
 (defn qq* 
+  {:inline (fn [a b]
+             `(Quaternion/op_Multiply ~a ~b))
+  :inline-arities #{2}}
   (^Quaternion [^Quaternion a ^Quaternion b]
     (Quaternion/op_Multiply a b))
   (^Quaternion [^Quaternion a ^Quaternion b & cs]
     (reduce qq* (qq* a b) cs)))
 
-(defn qv* ^Vector3 [^Quaternion a ^Vector3 b]
-  (Quaternion/op_Multiply a b))
+(definline qv* ^Vector3 [^Quaternion a ^Vector3 b]
+  `(Quaternion/op_Multiply ~a ~b))
 
-(defn q* [^Quaternion a b]
-  (im/condcast-> b b
-    UnityEngine.Vector3 (Quaternion/op_Multiply a b)
-    UnityEngine.Quaternion (Quaternion/op_Multiply a b)))
+(definline q* [a b]
+  `(Quaternion/op_Multiply ~a ~b))
 
 (defn euler ^Quaternion [^Vector3 v]
   (Quaternion/Euler v))
@@ -332,12 +273,6 @@
 
 (definline v4scale [a b]
   `(UnityEngine.Vector4/Scale ~a ~b))
-
-(definline vscale [a b]
-  `(im/condcast-> ~a a#
-     Vector3 (v3scale a# ~b)
-     Vector2 (v2scale a# ~b)
-     Vector4 (v4scale a# ~b)))
 
 ;; ============================================================
 ;; more rotation
