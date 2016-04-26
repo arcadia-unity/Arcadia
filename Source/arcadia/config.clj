@@ -7,7 +7,7 @@
     [System.IO File]
     [UnityEngine Debug]))
 
-(def configuration (atom {}))
+(defonce configuration (atom {}))
 
 (defn default-config 
   "Built in Arcadia default configuration file. Never changes."
