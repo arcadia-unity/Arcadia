@@ -1,4 +1,5 @@
 (ns arcadia.internal.editor-interop
+  (:require [clojure.string :as string])
   (:import [System.IO File]
            [System.Reflection FieldInfo]))
 
