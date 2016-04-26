@@ -18,6 +18,10 @@
                                ClojureConfiguration/defaultConfigFilePath
                                " does not exist")))))
 
+(defn user-config-file 
+  "Path to the user defined configuration file"
+  [] ClojureConfiguration/userConfigFilePath)
+
 (defn user-config
   "User supplied configuration file"
   [] (if (File/Exists ClojureConfiguration/userConfigFilePath)
