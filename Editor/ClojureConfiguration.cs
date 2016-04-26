@@ -9,7 +9,6 @@ public class ClojureConfigurationObject : ScriptableObject {}
 [CustomEditor(typeof(ClojureConfigurationObject))]
 public class ClojureConfiguration : Editor {
   public const string defaultConfigFilePath = "Assets/Arcadia/configuration.edn";  
-  public static IPersistentMap inspectorConfigMap;
   public static string userConfigFilePath = "Assets/configuration.edn";  
 
   static ClojureConfigurationObject _clojureConfigurationObject;
@@ -21,10 +20,7 @@ public class ClojureConfiguration : Editor {
     
   [MenuItem ("Arcadia/Configuration...")]
   public static void Init () {
-    RT.load("arcadia/config");
-    if(inspectorConfigMap == null)
-      inspectorConfigMap = (IPersistentMap)RT.var("arcadia.config", "default-config").invoke();
-    
+    RT.load("arcadia/config");    
     RT.var("arcadia.config", "update!").invoke();
     
     if(_clojureConfigurationObject == null)
