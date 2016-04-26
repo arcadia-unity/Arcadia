@@ -1,9 +1,6 @@
 (ns arcadia.linear
   (:use arcadia.core)
-  (:require [arcadia.internal.meval :as mvl]
-            [clojure.zip :as zip]
-            [arcadia.internal.map-utils :as mu]
-            [arcadia.internal.zip-utils :as zu]
+  (:require [arcadia.internal.map-utils :as mu]
             [arcadia.internal.macro :as im]
             [clojure.test :as test])
   (:import [UnityEngine Vector2 Vector3 Vector4 Quaternion]))
