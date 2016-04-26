@@ -276,9 +276,3 @@
                      (.Name fi)))]
       (delete-fsi fi)))
   (write-library-manifest))
-
-(use 'arcadia.linear)
-
-(defn mul []
-  (v3+ (v3) (v3- (v3) (v3))))
-
