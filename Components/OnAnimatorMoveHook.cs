@@ -1,9 +1,9 @@
 using UnityEngine;
 using clojure.lang;
 
-public class OnAnimatorMoveHook : ArcadiaBehaviour
+public class OnAnimatorMoveHook : ArcadiaBehaviour   
 {
-  void OnAnimatorMove()
+  public void OnAnimatorMove()
   {
     if(fn != null)
       fn.invoke(gameObject);

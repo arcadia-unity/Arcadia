@@ -1,9 +1,9 @@
 using UnityEngine;
 using clojure.lang;
 
-public class OnBecameVisibleHook : ArcadiaBehaviour
+public class OnBecameVisibleHook : ArcadiaBehaviour   
 {
-  void OnBecameVisible()
+  public void OnBecameVisible()
   {
     if(fn != null)
       fn.invoke(gameObject);

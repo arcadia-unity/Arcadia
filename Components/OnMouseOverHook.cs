@@ -1,9 +1,9 @@
 using UnityEngine;
 using clojure.lang;
 
-public class OnMouseOverHook : ArcadiaBehaviour
+public class OnMouseOverHook : ArcadiaBehaviour   
 {
-  void OnMouseOver()
+  public void OnMouseOver()
   {
     if(fn != null)
       fn.invoke(gameObject);

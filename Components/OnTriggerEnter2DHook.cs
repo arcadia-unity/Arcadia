@@ -1,11 +1,11 @@
 using UnityEngine;
 using clojure.lang;
 
-public class OnTriggerEnter2DHook : ArcadiaBehaviour
+public class OnTriggerEnter2DHook : ArcadiaBehaviour   
 {
-  void OnTriggerEnter2D(UnityEngine.Collider2D G__18659)
+  public void OnTriggerEnter2D(UnityEngine.Collider2D a)
   {
     if(fn != null)
-      fn.invoke(gameObject, G__18659);
+      fn.invoke(gameObject, a);
   }
 }

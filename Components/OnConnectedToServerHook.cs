@@ -1,9 +1,9 @@
 using UnityEngine;
 using clojure.lang;
 
-public class OnConnectedToServerHook : ArcadiaBehaviour
+public class OnConnectedToServerHook : ArcadiaBehaviour   
 {
-  void OnConnectedToServer()
+  public void OnConnectedToServer()
   {
     if(fn != null)
       fn.invoke(gameObject);

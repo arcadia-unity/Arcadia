@@ -1,9 +1,9 @@
 using UnityEngine;
 using clojure.lang;
 
-public class OnDrawGizmosSelectedHook : ArcadiaBehaviour
+public class OnDrawGizmosSelectedHook : ArcadiaBehaviour   
 {
-  void OnDrawGizmosSelected()
+  public void OnDrawGizmosSelected()
   {
     if(fn != null)
       fn.invoke(gameObject);

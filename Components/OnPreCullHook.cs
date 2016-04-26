@@ -1,9 +1,9 @@
 using UnityEngine;
 using clojure.lang;
 
-public class OnPreCullHook : ArcadiaBehaviour
+public class OnPreCullHook : ArcadiaBehaviour   
 {
-  void OnPreCull()
+  public void OnPreCull()
   {
     if(fn != null)
       fn.invoke(gameObject);

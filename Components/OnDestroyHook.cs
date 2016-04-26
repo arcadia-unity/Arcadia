@@ -1,9 +1,9 @@
 using UnityEngine;
 using clojure.lang;
 
-public class OnDestroyHook : ArcadiaBehaviour
+public class OnDestroyHook : ArcadiaBehaviour   
 {
-  void OnDestroy()
+  public void OnDestroy()
   {
     if(fn != null)
       fn.invoke(gameObject);

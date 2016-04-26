@@ -1,11 +1,11 @@
 using UnityEngine;
 using clojure.lang;
 
-public class OnMasterServerEventHook : ArcadiaBehaviour
+public class OnMasterServerEventHook : ArcadiaBehaviour   
 {
-  void OnMasterServerEvent(UnityEngine.MasterServerEvent G__18670)
+  public void OnMasterServerEvent(UnityEngine.MasterServerEvent a)
   {
     if(fn != null)
-      fn.invoke(gameObject, G__18670);
+      fn.invoke(gameObject, a);
   }
 }

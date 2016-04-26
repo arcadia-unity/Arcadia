@@ -1,9 +1,9 @@
 using UnityEngine;
 using clojure.lang;
 
-public class OnValidateHook : ArcadiaBehaviour
+public class OnValidateHook : ArcadiaBehaviour   
 {
-  void OnValidate()
+  public void OnValidate()
   {
     if(fn != null)
       fn.invoke(gameObject);

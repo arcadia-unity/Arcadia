@@ -1,9 +1,9 @@
 using UnityEngine;
 using clojure.lang;
 
-public class OnMouseDownHook : ArcadiaBehaviour
+public class OnMouseDownHook : ArcadiaBehaviour   
 {
-  void OnMouseDown()
+  public void OnMouseDown()
   {
     if(fn != null)
       fn.invoke(gameObject);

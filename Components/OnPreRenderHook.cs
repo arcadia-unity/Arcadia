@@ -1,9 +1,9 @@
 using UnityEngine;
 using clojure.lang;
 
-public class OnPreRenderHook : ArcadiaBehaviour
+public class OnPreRenderHook : ArcadiaBehaviour   
 {
-  void OnPreRender()
+  public void OnPreRender()
   {
     if(fn != null)
       fn.invoke(gameObject);

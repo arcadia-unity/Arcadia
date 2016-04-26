@@ -1,11 +1,11 @@
 using UnityEngine;
 using clojure.lang;
 
-public class OnNetworkInstantiateHook : ArcadiaBehaviour
+public class OnNetworkInstantiateHook : ArcadiaBehaviour   
 {
-  void OnNetworkInstantiate(UnityEngine.NetworkMessageInfo G__18646)
+  public void OnNetworkInstantiate(UnityEngine.NetworkMessageInfo a)
   {
     if(fn != null)
-      fn.invoke(gameObject, G__18646);
+      fn.invoke(gameObject, a);
   }
 }

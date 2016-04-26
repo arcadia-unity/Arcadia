@@ -1,11 +1,11 @@
 using UnityEngine;
 using clojure.lang;
 
-public class OnCollisionStayHook : ArcadiaBehaviour
+public class OnCollisionStayHook : ArcadiaBehaviour   
 {
-  void OnCollisionStay(UnityEngine.Collision G__18645)
+  public void OnCollisionStay(UnityEngine.Collision a)
   {
     if(fn != null)
-      fn.invoke(gameObject, G__18645);
+      fn.invoke(gameObject, a);
   }
 }

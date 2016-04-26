@@ -1,11 +1,11 @@
 using UnityEngine;
 using clojure.lang;
 
-public class OnPlayerDisconnectedHook : ArcadiaBehaviour
+public class OnPlayerDisconnectedHook : ArcadiaBehaviour   
 {
-  void OnPlayerDisconnected(UnityEngine.NetworkPlayer G__18671)
+  public void OnPlayerDisconnected(UnityEngine.NetworkPlayer a)
   {
     if(fn != null)
-      fn.invoke(gameObject, G__18671);
+      fn.invoke(gameObject, a);
   }
 }

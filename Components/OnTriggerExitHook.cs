@@ -1,11 +1,11 @@
 using UnityEngine;
 using clojure.lang;
 
-public class OnTriggerExitHook : ArcadiaBehaviour
+public class OnTriggerExitHook : ArcadiaBehaviour   
 {
-  void OnTriggerExit(UnityEngine.Collider G__18648)
+  public void OnTriggerExit(UnityEngine.Collider a)
   {
     if(fn != null)
-      fn.invoke(gameObject, G__18648);
+      fn.invoke(gameObject, a);
   }
 }

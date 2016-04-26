@@ -1,11 +1,11 @@
 using UnityEngine;
 using clojure.lang;
 
-public class OnJointBreakHook : ArcadiaBehaviour
+public class OnJointBreakHook : ArcadiaBehaviour   
 {
-  void OnJointBreak(System.Single G__18669)
+  public void OnJointBreak(System.Single a)
   {
     if(fn != null)
-      fn.invoke(gameObject, G__18669);
+      fn.invoke(gameObject, a);
   }
 }

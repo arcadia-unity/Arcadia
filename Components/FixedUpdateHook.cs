@@ -1,9 +1,9 @@
 using UnityEngine;
 using clojure.lang;
 
-public class FixedUpdateHook : ArcadiaBehaviour
+public class FixedUpdateHook : ArcadiaBehaviour   
 {
-  void FixedUpdate()
+  public void FixedUpdate()
   {
     if(fn != null)
       fn.invoke(gameObject);

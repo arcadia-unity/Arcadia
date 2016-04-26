@@ -1,11 +1,11 @@
 using UnityEngine;
 using clojure.lang;
 
-public class OnControllerColliderHitHook : ArcadiaBehaviour
+public class OnControllerColliderHitHook : ArcadiaBehaviour   
 {
-  void OnControllerColliderHit(UnityEngine.ControllerColliderHit G__18657)
+  public void OnControllerColliderHit(UnityEngine.ControllerColliderHit a)
   {
     if(fn != null)
-      fn.invoke(gameObject, G__18657);
+      fn.invoke(gameObject, a);
   }
 }

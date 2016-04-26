@@ -1,9 +1,9 @@
 using UnityEngine;
 using clojure.lang;
 
-public class OnMouseExitHook : ArcadiaBehaviour
+public class OnMouseExitHook : ArcadiaBehaviour   
 {
-  void OnMouseExit()
+  public void OnMouseExit()
   {
     if(fn != null)
       fn.invoke(gameObject);

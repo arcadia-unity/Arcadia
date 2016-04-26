@@ -1,11 +1,11 @@
 using UnityEngine;
 using clojure.lang;
 
-public class OnApplicationPauseHook : ArcadiaBehaviour
+public class OnApplicationPauseHook : ArcadiaBehaviour   
 {
-  void OnApplicationPause(System.Boolean G__18647)
+  public void OnApplicationPause(System.Boolean a)
   {
     if(fn != null)
-      fn.invoke(gameObject, G__18647);
+      fn.invoke(gameObject, a);
   }
 }

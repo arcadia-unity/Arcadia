@@ -1,9 +1,9 @@
 using UnityEngine;
 using clojure.lang;
 
-public class OnDisableHook : ArcadiaBehaviour
+public class OnDisableHook : ArcadiaBehaviour   
 {
-  void OnDisable()
+  public void OnDisable()
   {
     if(fn != null)
       fn.invoke(gameObject);

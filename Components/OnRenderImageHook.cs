@@ -1,11 +1,11 @@
 using UnityEngine;
 using clojure.lang;
 
-public class OnRenderImageHook : ArcadiaBehaviour
+public class OnRenderImageHook : ArcadiaBehaviour   
 {
-  void OnRenderImage(UnityEngine.RenderTexture G__18655, UnityEngine.RenderTexture G__18656)
+  public void OnRenderImage(UnityEngine.RenderTexture a, UnityEngine.RenderTexture b)
   {
     if(fn != null)
-      fn.invoke(gameObject, G__18655, G__18656);
+      fn.invoke(gameObject, a, b);
   }
 }

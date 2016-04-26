@@ -1,9 +1,9 @@
 using UnityEngine;
 using clojure.lang;
 
-public class OnMouseUpAsButtonHook : ArcadiaBehaviour
+public class OnMouseUpAsButtonHook : ArcadiaBehaviour   
 {
-  void OnMouseUpAsButton()
+  public void OnMouseUpAsButton()
   {
     if(fn != null)
       fn.invoke(gameObject);
