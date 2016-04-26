@@ -38,11 +38,18 @@ namespace Arcadia {
       Debug.Log("Starting Arcadia...");
       
       CheckSettings();
+      LoadConfig();
       ensureCompiledFolder();
       SetClojureLoadPath();
       StartREPL();
       
       Debug.Log("Arcadia Started!");    
+    }
+    
+    public static void LoadConfig() {
+      Debug.Log("Loading configuration...");
+      RT.load("arcadia/config");
+      RT.var("arcadia.config", "update!").invoke();
     }
     
     public static void CheckSettings() {
