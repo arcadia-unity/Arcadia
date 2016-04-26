@@ -13,10 +13,10 @@ public class ClojureRepl : EditorWindow {
   private static UdpClient replSocket;
   
   
+#if UNITY_EDITOR_OSX
   [DllImport ("ForceEditorUpdates")]
   private static extern void StartForcingEditorApplicationUpdates();
-  // [DllImport ("ForceEditorUpdates")]
-  // private static extern void StopForcingEditorApplicationUpdates();
+#endif
   
   static ClojureRepl() {
     RT.load("arcadia/repl");
@@ -42,7 +42,9 @@ public class ClojureRepl : EditorWindow {
   public static void StartREPL () {
     replSocket = (UdpClient)RT.var("arcadia.repl", "start-server").invoke(11211);
     EditorApplication.update += ClojureRepl.Update;
+#if UNITY_EDITOR_OSX
     StartForcingEditorApplicationUpdates();
+#endif
   }
 
   [MenuItem ("Arcadia/REPL/Stop &#r")]
