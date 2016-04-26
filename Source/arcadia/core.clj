@@ -20,7 +20,9 @@
 ;; application
 ;; ============================================================
 
-(defn log [& args]
+(defn log
+  "Log message to the Unity console. Arguments are combined into a string."
+  [& args]
   (Debug/Log (apply str args)))
 
 (defonce ^:private editor-available
@@ -48,7 +50,13 @@
 ;; ============================================================
 ;; null obj stuff
 
-(definline null-obj? [^UnityEngine.Object x]
+(definline null-obj?
+  "Is `x` nil?
+  
+  This test is complicated by the fact that Unity uses
+  a custom null object that evaluates to `true` in normal circumstances.
+  `null-obj?` will return `true` if `x` is nil or Unity's null object."
+  [^UnityEngine.Object x]
   `(UnityEngine.Object/op_Equality ~x nil))
 
 
@@ -79,10 +87,9 @@
    (UnityEngine.Object/Instantiate original position rotation)))
 
 (defn create-primitive
-  "Creates a game object with a primitive mesh renderer and appropriate collider.
-  
-  * prim - the kind of primitive to create, a Keyword or a PrimitiveType.
-           Keyword can be one of :sphere :capsule :cylinder :cube :plane :quad"
+  "Creates a game object with a primitive mesh renderer and appropriate
+  collider. `prim` can be a PrimitiveType or one of :sphere :capsule
+  :cylinder :cube :plane :quad"
   [prim]
   (if (= PrimitiveType (type prim))
     (GameObject/CreatePrimitive prim)
@@ -95,10 +102,8 @@
                                   :quad     PrimitiveType/Quad))))
 
 (defn destroy 
-  "Removes a gameobject, component or asset.
-  
-  * obj - the object to destroy, a GameObject, Component, or Asset
-  * t   - timeout before destroying object, a float"
+  "Removes a gameobject, component or asset. When called with `t`, the removal
+  happens after `t` seconds."
   ([^UnityEngine.Object obj]
    (if (editor?)
     (UnityEngine.Object/DestroyImmediate obj)
@@ -107,19 +112,19 @@
    (UnityEngine.Object/Destroy obj t)))
 
 (definline object-typed
-  "Returns the first active loaded object of Type type."
+  "Returns the first active loaded object of Type `type`."
   [^Type t] `(UnityEngine.Object/FindObjectOfType ~t))
 
 (definline objects-typed
-  "Returns a list of all active loaded objects of Type type."
+  "Returns an array of all active loaded objects of Type `type`."
   [^Type t] `(UnityEngine.Object/FindObjectsOfType ~t))
 
 (definline object-named
-  "Finds a game object by name and returns it."
-  [^String n] `(GameObject/Find ~n))
+  "Returns one GameObject named `name`."
+  [^String name] `(GameObject/Find ~n))
 
 (defn objects-named
-  "Finds game objects by name."
+  "Returns a sequence of all GameObjects named `name`."
   [name]
   (cond (= (type name) System.String)
         (for [^GameObject obj (objects-typed GameObject)
@@ -132,21 +137,27 @@
           obj)))
 
 (definline object-tagged
-  "Returns one active GameObject tagged tag. Returns null if no GameObject was found."
+  "Returns one active GameObject tagged tag."
   [^String t] `(GameObject/FindWithTag ~t))
 
 (definline objects-tagged
-  "Returns a list of active GameObjects tagged tag. Returns empty array if no GameObject was found."
+  "Returns an array of active GameObjects tagged tag. Returns empty array if no GameObject was found."
   [^String t] `(GameObject/FindGameObjectsWithTag ~t))
 
 ;; ------------------------------------------------------------
 ;; IEntityComponent
 
 (defprotocol IEntityComponent
-  (cmpt [this t])
-  (cmpts [this t])
-  (cmpt+ [this t])
-  (cmpt- [this t]))
+  "Common protocol for everything in Unity that supports attached
+  components."
+  (cmpt [this t]
+    "Returns the first component typed `t` attached to the object")
+  (cmpts [this t]
+    "Returns a vector of all components typed `t` attached to the object")
+  (cmpt+ [this t]
+    "Adds a component of type `t` to the object and returns the new instance")
+  (cmpt- [this t]
+    "Removes all components of type `t` from the object and returns the object"))
 
 (defmacro ^:private do-reduce [[x coll] & body]
   `(do
@@ -203,20 +214,32 @@
 ;; ------------------------------------------------------------
 ;; repercussions
 
-(defn ensure-cmpt ^Component [x ^Type t]
+(defn ensure-cmpt
+  "If `obj` has a component of type `t`, returns is. Otherwise, adds
+  a component of type `t` and returns the new instance."
+  ^Component [obj ^Type t]
   (or (cmpt x t) (cmpt+ x t)))
 
 ;; ------------------------------------------------------------
 ;; ISceneGraph
 
 (defprotocol ISceneGraph
-  (gobj ^GameObject [this])
-  (children [this])
-  (parent ^GameObject [this])
+  "Common protocol for everything in Unity that is part of the scene
+  graph hierarchy."
+  (gobj ^GameObject [this]
+        "")
+  (children [this]
+    "Returns all objects under `this` object in the hierarchy.")
+  (parent ^GameObject [this]
+          "Returns the object that contains `this` object, or `nil` if it is
+          at the top of the hierarchy.")
   (child+ ^GameObject
     [this child]
-    [this child transform-to])
-  (child- ^GameObject [this child]))
+    [this child transform-to]
+    "Moves `child` to under `this` object in the hierarchy, optionally
+    recalculating its local transform.")
+  (child- ^GameObject [this child]
+          "Move `child` from under `this` object ti the top of the hierarchy"))
 
 (extend-protocol ISceneGraph
   GameObject
@@ -295,6 +318,7 @@
           ~body)))))
 
 (defmacro if-cmpt
+  "Execute body of code if `gob` has a component of type `cmpt-type`"
   ([gob [cmpt-name cmpt-type] then]
    `(with-cmpt ~gob [~cmpt-name ~cmpt-type]
       (when ~cmpt-name
@@ -319,6 +343,7 @@
   (-> m str camels-to-hyphens string/lower-case keyword))
 
 (def hook-types
+  "Map of keywords to hook component types"
   (->> (merge messages
               interface-messages)
        keys
@@ -380,12 +405,14 @@
       (initialize-state go)))
 
 (defn state
+  "Returns the state of object `go`."
   ([go] (state go ::anonymous))
   ([go kw]
    (if-let [c (cmpt go ArcadiaState)]
      (get (deref (.state c)) kw))))
 
 (defn set-state
+  "Sets the state of object `go`."
   ([go v] (set-state go ::anonymous v))
   ([go kw v]
    (let [c (ensure-state go)]
@@ -393,6 +420,7 @@
      v)))
 
 (defn swap-state
+  "Updates the state of object `go` with funciton `f`."
   ([go f] (swap-state go ::anonymous f))
   ([go kw f]
    (let [c (ensure-state go)
