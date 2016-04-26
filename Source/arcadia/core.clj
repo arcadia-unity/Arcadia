@@ -370,7 +370,7 @@
 (defn- initialize-state [go]
   (cmpt- go ArcadiaState)
   (let [c (cmpt+ go ArcadiaState)]
-    (set! (.state c) {})
+    (set! (.state c) (atom {}))
     c))
 
 (defn- ensure-state [go]
@@ -381,13 +381,13 @@
   ([go] (state go ::anonymous))
   ([go kw]
    (if-let [c (cmpt go ArcadiaState)]
-     (get (.state c) kw))))
+     (get (deref (.state c)) kw))))
 
 (defn set-state
   ([go v] (set-state go ::anonymous v))
   ([go kw v]
    (let [c (ensure-state go)]
-     (set! (.state c) (assoc (.state c) kw v))
+     (reset! (.state c) (assoc (deref (.state c)) kw v))
      v)))
 
 (defn swap-state
@@ -395,5 +395,6 @@
   ([go kw f]
    (let [c (ensure-state go)
          s (state go kw)]
-     (set! (.state c)
-           (assoc-in (.state c) [kw] (f s))))))
+     (swap! (.state c)
+            update-in [kw] f)
+     (state go kw))))
