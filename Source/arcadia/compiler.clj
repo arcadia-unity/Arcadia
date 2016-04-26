@@ -1,7 +1,9 @@
 (ns ^{:doc "Integration with the Unity compiler pipeline"
       :author "Tims Gardner and Ramsey Nasser"}
   arcadia.compiler
-  (:require [arcadia.config :refer [configuration]]
+  (:require [arcadia.config
+             :refer [configuration]
+             :as config]
             clojure.string)
   (:import [System IO.Path IO.File IO.StringWriter Environment]
            [UnityEngine Debug]
@@ -54,6 +56,10 @@
 
 (defn clj-file? [path]
   (boolean (re-find #"\.clj$" path)))
+
+(defn config-file? [path]
+  (= path
+     (config/user-config-file)))
 
 (defn clj-files [paths]
   (filter clj-file? paths))
@@ -140,6 +146,9 @@
   (require (asset->ns asset) :reload))
 
 (defn import-assets [imported]
+  (when (some config-file? imported)
+    (Debug/Log (str "Updating config"))
+    (config/update!))
   (doseq [asset (clj-files imported)]
     (import-asset asset)
     #_ (import-asset asset)))
