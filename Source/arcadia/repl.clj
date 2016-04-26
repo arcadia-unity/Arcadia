@@ -101,11 +101,11 @@
         (eval
           `(do
              ~(when-let [inj (read-string*
-                               (pr-str (@configuration :injections)))]
+                               (pr-str (@configuration :repl/injections)))]
                 `(try
                    ~inj
                    (catch Exception e#
-                     (Debug/Log (str e#)))))
+                     (UnityEngine.Debug/Log (str e#)))))
              ~frm))))))
 
  ; need some stuff in here about read-eval maybe
