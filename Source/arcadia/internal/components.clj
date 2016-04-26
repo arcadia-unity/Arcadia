@@ -2,7 +2,7 @@
   ^{:doc "Generates the C# implementation of the Arcadia hooks"}
   arcadia.internal.components
   (:require [clojure.string :as string]
-            [arcadia.messages :as messages]))
+            [arcadia.internal.messages :as messages]))
 
 ;; TODO path seperators
 (def path "Assets/Arcadia/Components/")
@@ -13,31 +13,43 @@
 (defn component-file [message]
   (str path (component-name message) ".cs"))
 
-(defn component-source [message args]
-  (let [arg-names (repeatedly (count args) gensym)]
+(def alphabet
+  (->> (range \a \z)
+       (map (comp str char))))
+
+(defn component-source
+  ([message args] (component-source message args nil))
+  ([message args interface]
+  (let [arg-names (take (count args) alphabet)]
     (str
 "using UnityEngine;
-using clojure.lang;
+" (if interface
+    (str "using " (.Namespace (RT/classForName interface)) ";\n"))
+"using clojure.lang;
 
-public class " (component-name message) " : ArcadiaBehaviour
+public class " (component-name message) " : ArcadiaBehaviour" (if interface (str ", " interface))
+"   
 {
-  void " message "(" (string/join ", " (map #(str %1 " " %2) args arg-names)) ")
+  public void " message "(" (string/join ", " (map #(str %1 " " %2) args arg-names)) ")
   {
-    if(!System.String.IsNullOrEmpty(ns))
-    {
-      Var v = (Var)RT.var(ns, var);
-      if(v.isBound)
-        ((IFn)v.getRawRoot()).invoke(" (string/join ", " (concat ['gameObject] arg-names)) ");
-    }
+    if(fn != null)
+      fn.invoke(" (string/join ", " (concat ['gameObject] arg-names)) ");
   }
-}")))
+}"))))
 
-(defn write-component! [message args]
-  (spit (component-file message)
-        (component-source message args)
-        :encoding "UTF-8"
-        :write true))
+(defn write-component!
+  ([message args] (write-component! message args nil))
+  ([message args interface]
+   (spit (component-file message)
+         (component-source message args interface)
+         :encoding "UTF-8"
+         :write true)))
 
 (defn write-components! []
   (doseq [[message args] messages/messages]
-    (write-component! message args)))
+    (write-component! message args))
+  
+  (doseq [[message args] messages/interface-messages]
+    (let [interface (namespace message)
+          message (name message)]
+      (write-component! message args interface))))

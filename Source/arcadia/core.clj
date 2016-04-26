@@ -1,6 +1,6 @@
 (ns arcadia.core
   (:require [clojure.string :as string]
-            [arcadia.internal.messages :refer [messages]]
+            [arcadia.internal.messages :refer [messages interface-messages]]
             [arcadia.internal.editor-interop :refer [camels-to-hyphens]]
             arcadia.literals
             [arcadia.internal.macro :as im])
@@ -319,8 +319,10 @@
   (-> m str camels-to-hyphens string/lower-case keyword))
 
 (def hook-types
-  (->> messages
+  (->> (merge messages
+              interface-messages)
        keys
+       (map name)
        (mapcat #(vector (message-keyword %)
                         (RT/classForName (str % "Hook"))))
        (apply hash-map)))

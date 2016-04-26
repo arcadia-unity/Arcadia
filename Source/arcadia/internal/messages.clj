@@ -63,3 +63,18 @@
     Reset []
     Start []
     Update []})
+
+;; from http://docs.unity3d.com/460/Documentation/ScriptReference/EventSystems.EventTrigger.html
+(def interface-messages
+  '{IDeselectHandler/OnDeselect [BaseEventData]
+    IDragHandler/OnDrag [PointerEventData]
+    IDropHandler/OnDrop [PointerEventData]
+    IMoveHandler/OnMove [AxisEventData]
+    IPointerClickHandler/OnPointerClick [PointerEventData]
+    IPointerDownHandler/OnPointerDown [PointerEventData]
+    IPointerEnterHandler/OnPointerEnter [PointerEventData]
+    IPointerExitHandler/OnPointerExit [PointerEventData]
+    IPointerUpHandler/OnPointerUp [PointerEventData]
+    IScrollHandler/OnScroll [PointerEventData]
+    ISelectHandler/OnSelect [BaseEventData]
+    IUpdateSelectedHandler/OnUpdateSelected [BaseEventData]})
