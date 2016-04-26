@@ -247,7 +247,7 @@
   ([^Vector3 here, ^Vector3 there]
      (qlookat here there Vector3/up))
   ([^Vector3 here, ^Vector3 there, ^Vector3 up]
-     (Quaternion/LookRotation (v- there here) up)))
+     (Quaternion/LookRotation (v3- there here) up)))
 
   ;; this gives some weird SIGILL problem
 ;; (defn angle-axis [^Double angle, ^Vector3 axis]
