@@ -1,561 +1,82 @@
 (ns arcadia.core
   (:require [clojure.string :as string]
-            [arcadia.reflect :as r]
-            [arcadia.internal.map-utils :as mu]
-            arcadia.messages
+            [arcadia.internal.messages :refer [messages]]
+            [arcadia.internal.editor-interop :refer [camels-to-hyphens]]
             arcadia.literals
-            arcadia.internal.editor-interop)
-  (:import [UnityEngine
+            [arcadia.internal.macro :as im])
+  (:import ArcadiaBehaviour
+           ArcadiaState
+           [UnityEngine
+            Vector3
+            Quaternion
             Application
             MonoBehaviour
             GameObject
             Component
-            PrimitiveType]
-           [System.Text.RegularExpressions Regex]))
-
-(defn- regex? [x]
-  (instance? System.Text.RegularExpressions.Regex x))
-
+            PrimitiveType
+            Debug]))
 
 ;; ============================================================
 ;; application
 ;; ============================================================
 
+(defn log [& args]
+  (Debug/Log (apply str args)))
+
+(defonce ^:private editor-available
+  (boolean
+    (try
+      (import 'UnityEditor.EditorApplication)
+      (catch NullReferenceException e
+        nil))))
+
+;; can't use the obvious macro, because we want this logic to avoid
+;; being expanded away at AOT
+;; however we end up dealing with eval will have to at least allow it
+;; to show up in code
+(def ^:private in-editor
+  (if editor-available
+    (eval `(UnityEditor.EditorApplication/isPlaying))
+    false))
+
 (defn editor? 
   "Returns true if called from within the editor. Notably, calls
   from the REPL are considered to be form within the editor"
   []
-  Application/isEditor)
+  in-editor)
 
 ;; ============================================================
-;; lifecycle
-;; ============================================================
+;; null obj stuff
 
-(definline null-obj? [x]
+(definline null-obj? [^UnityEngine.Object x]
+  `(UnityEngine.Object/op_Equality ~x nil))
+
+
+;; TODO better name
+(definline obj-nil [x]
   `(let [x# ~x]
-     (UnityEngine.Object/op_Equality x# nil)))
-
-(defn bound-var? [v]
-  (and (var? v)
-    (not
-      (instance? clojure.lang.Var+Unbound
-        (var-get v)))))
-
-;; this one could use some more work
-;; also the bound-var test doesn't seem to work in the repl on defscn stuff from user
-(defmacro defscn [name & body]
-  `(let [v# (declare ~name)]
-     (when (not *compile-files*)
-       (let [bldg# (do ~@body)]
-         (when (and (bound-var? (resolve (quote ~name)))
-                 (or (instance? UnityEngine.GameObject ~name)
-                   (instance? UnityEngine.Component ~name))
-                 (not (null-obj? ~name)))
-           (destroy ~name))
-         (def ~name bldg#)))
-     v#))
-
-;; ============================================================
-;; defcomponent 
-;; ============================================================
-
-(defmacro ^:private defleaked [var]
-  `(def ~(with-meta (symbol (name var)) {:private true})
-     (var-get (find-var '~var))))
-
-(defleaked clojure.core/validate-fields)
-(defleaked clojure.core/parse-opts+specs)
-(defleaked clojure.core/build-positional-factory)
-
-(defn- emit-defclass* 
-  "Do not use this directly - use defcomponent"
-  [tagname name extends assem fields interfaces methods]
-  (assert (and (symbol? extends) (symbol? assem)))
-  (let [classname (with-meta
-                    (symbol
-                      (str (namespace-munge *ns*) "." name))
-                    (meta name))
-        interfaces (conj interfaces 'clojure.lang.IType)]
-    `(defclass*
-       ~tagname ~classname
-       ~extends ~assem
-       ~fields 
-       :implements ~interfaces 
-       ~@methods)))
-
-;; ported from deftype. should remove opts+specs, bizarre as a key. 
-(defn- component-defform [{:keys [name fields constant opts+specs ns-squirrel-sym]}]
-  (validate-fields fields name)
-  (let [gname name ;?
-        [interfaces methods opts] (parse-opts+specs opts+specs)
-        ns-part (namespace-munge *ns*)
-        classname (symbol (str ns-part "." gname))
-        hinted-fields fields
-        fields (vec (map #(with-meta % nil) fields))
-        [field-args over] (split-at 20 fields)
-        frm `(do
-               ~(emit-defclass*
-                  name
-                  gname
-                  'UnityEngine.MonoBehaviour
-                  'UnityEngine
-                  (vec hinted-fields)
-                  (vec interfaces)
-                  methods)
-               (import ~classname)
-               ~(build-positional-factory gname classname fields)
-               ~classname)]
-    (if constant
-      `(when-not (instance? System.MonoType (resolve (quote ~name)))
-         ~frm)
-      frm)))
-
-(defn- normalize-method-implementations [mimpls]
-  (for [[[interface] impls] (partition 2
-                             (partition-by symbol? mimpls))
-        [name args & fntail] impls]
-    (mu/lit-map interface name args fntail)))
-
-(defn- find-message-interface-symbol [s]
-  (when (contains? arcadia.messages/messages s) ;; bit janky
-    (symbol (str "arcadia.messages.I" s))))
-
-(defn- awake-method? [{:keys [name]}]
-  (= name 'Awake))
-
-(defn- normalize-message-implementations [msgimpls]
-  (for [[name args & fntail] msgimpls
-        :let [interface (find-message-interface-symbol name)]]
-    (mu/lit-map interface name args fntail)))
-
-(defn- process-method [{:keys [name args fntail]}]
-  `(~name ~args ~@fntail))
-
-;; (defn- ensure-has-message [interface-symbol args mimpls]
-;;   (if (some #(= (:name %) interface-symbol) mimpls)
-;;     mimpls
-;;     (cons {:interface (find-message-interface-symbol interface-symbol)
-;;            :name     interface-symbol
-;;            :args     args
-;;            :fntail   nil}
-;;       mimpls)))
-
-(defn- ensure-has-method [{msg-name :name,
-                           :keys [args interface]
-                           :or {args '[_]},
-                           :as default},
-                          mimpls]
-  (let [{:keys [interface]
-         :or {interface (find-message-interface-symbol msg-name)}} default]
-    (assert interface "Must declare interface or use known message name")
-    (if (some #(= (:name %) msg-name) mimpls)
-      mimpls
-      (cons
-        (merge {:interface interface
-                :name     msg-name
-                :args     args
-                :fntail   nil}
-          default)
-        mimpls))))
-
-(defn- process-require-trigger [impl ns-squirrel-sym]
-  (update-in impl [:fntail]
-    #(cons `(do
-              (require (quote ~(ns-name *ns*))))
-       %)))
-
-(defn- process-static-ctor [impl ns-squirrel-sym]
-  (let [this (with-meta (first (impl :args))
-                        {:tag 'clojure.lang.IStaticConstructor})]
-    (update-in impl [:fntail]
-               #(cons `(.CarlylesMouse ~this) %))))
-
-(defn- require-trigger-method? [mimpl]
-  (boolean
-    (#{'Awake 'OnDrawGizmosSelected 'OnDrawGizmos 'Start}
-     (:name mimpl))))
-
-(defn- require-static-ctor? [mimpl]
-  (boolean
-    (#{'Awake}
-     (:name mimpl))))
-
-(defn- collapse-method [impl]
-  (mu/checked-keys [[name args fntail] impl]
-    `(~name ~args ~@fntail)))
-
-(defn default-on-after-deserialize [this]
-  (require 'arcadia.literals)
-  (try 
-    (doseq [[field-name field-value]
-            (eval (read-string (. this _serialized_data)))]
-      (.. this
-          GetType
-          (GetField field-name)
-          (SetValue this field-value)))
-    (catch ArgumentException e
-      (throw (ArgumentException. (str 
-                                   "Could not deserialize "
-                                   this
-                                   ". EDN might be invalid."))))))
-
-(defn default-on-before-serialize [this]
-  (let [field-map (arcadia.internal.editor-interop/field-map this)
-        serializable-fields (mapv #(.Name %) (arcadia.internal.editor-interop/serializable-fields this))
-        field-map-to-serialize (apply dissoc field-map serializable-fields)]
-    (set! (. this _serialized_data) (pr-str field-map-to-serialize))))
-
-(defn- process-defcomponent-method-implementations [mimpls ns-squirrel-sym]
-  (let [[msgimpls impls] ((juxt take-while drop-while)
-                          (complement symbol?)
-                          mimpls)]
-    (->>
-      (concat
-        (normalize-message-implementations msgimpls)
-        (normalize-method-implementations impls))
-      (ensure-has-method {:name 'Start})
-      (ensure-has-method {:name 'Awake})
-;      (ensure-has-method
-;        {:name 'OnAfterDeserialize
-;         :interface 'UnityEngine.ISerializationCallbackReceiver
-;         :args '[this]
-;         :fntail '[(if UnityEngine.Application/isEditor
-;                     (.StaticConstructor ^clojure.lang.IStaticConstructor this))
-;                   (require 'arcadia.core)
-;                   (arcadia.core/default-on-after-deserialize this)]})
-;
-;      (ensure-has-method
-;        {:name 'OnBeforeSerialize
-;         :interface 'UnityEngine.ISerializationCallbackReceiver
-;         :args '[this]
-;         :fntail '[(if UnityEngine.Application/isEditor
-;                     (.StaticConstructor ^clojure.lang.IStaticConstructor this))
-;                   (require 'arcadia.core)
-;                   (arcadia.core/default-on-before-serialize this)]})
-      (map (fn [impl]
-             (if (require-trigger-method? impl)
-               (process-require-trigger impl ns-squirrel-sym)
-               impl)))
-      (map (fn [impl]
-             (if (require-static-ctor? impl)
-               (process-static-ctor impl ns-squirrel-sym)
-               impl)))
-      (group-by :interface)
-      (mapcat
-        (fn [[k impls]]
-          (cons k (map collapse-method impls)))))))
-
-
-(defmacro defcomponent*
-  "Defines a new component. See defcomponent for version with defonce
-  semantics."
-  [name fields & method-impls]
-  (let [fields2 (mapv #(vary-meta % assoc :unsynchronized-mutable true) fields) ;make all fields mutable
-        ns-squirrel-sym (gensym (str "ns-required-state-for-" name "_"))
-        method-impls2 (process-defcomponent-method-implementations method-impls ns-squirrel-sym)]
-    (component-defform
-      {:name name
-       :fields fields2
-       :opts+specs method-impls2
-       :ns-squirrel-sym ns-squirrel-sym})))
-
-(defmacro defcomponent
-  "Defines a new component. defcomponent forms will not evaluate if
-  name is already bound, thus avoiding redefining the name of an
-  existing type (possibly with live instances). For redefinable
-  defcomponent, use defcomponent*."
-  [name fields & method-impls] 
-  (let [fields2 (conj (mapv #(vary-meta % assoc :unsynchronized-mutable true) fields) ;make all fields mutable
-                      (with-meta '_serialized_data {:tag 'String
-                                                    :unsynchronized-mutable true
-                                                    UnityEngine.HideInInspector {}}))
-        ns-squirrel-sym (gensym (str "ns-required-state-for-" name "_"))
-        method-impls2 (process-defcomponent-method-implementations method-impls ns-squirrel-sym)]
-    (component-defform
-      {:name name
-       :constant true
-       :fields fields2
-       :opts+specs method-impls2
-       :ns-squirrel-sym ns-squirrel-sym})))
-
-
-;; ============================================================
-;; type utils
-;; ============================================================
-
-(defn- same-or-subclass? [^Type a ^Type b]
-  (or (= a b)
-    (.IsSubclassOf a b)))
-
-;; put elsewhere
-(defn- some-2
-  "Uses reduced, should be faster + less garbage + more general than clojure.core/some"
-  [pred coll]
-  (reduce #(when (pred %2) (reduced %2)) nil coll))
-
-(defn- in? [x coll]
-  (boolean (some-2 #(= x %) coll)))
- ; reference to tagged var, or whatever 
-
-;; really ought to be testing for arity as well
-(defn- type-has-method? [t mth]
-  (in? (symbol mth) (map :name (r/methods t :ancestors true))))
-
-(defn- type-name? [x]
-  (boolean
-    (and (symbol? x)
-      (when-let [y (resolve x)]
-        (instance? System.MonoType y)))))
-
-(defn- type-of-local-reference [x env]
-  (assert (contains? env x))
-  (let [lclb ^clojure.lang.CljCompiler.Ast.LocalBinding (env x)]
-    (when (.get_HasClrType lclb)
-      (.get_ClrType lclb))))
-
-(defn- type? [x]
-  (instance? System.MonoType x))
-
-(defn- ensure-type [x]
-  (cond
-    (type? x) x
-    (symbol? x) (let [xt (resolve x)]
-                  (if (type? xt)
-                    xt
-                    (throw
-                      (Exception.
-                        (str "symbol does not resolve to a type")))))
-    :else (throw
-            (Exception.
-              (str "expects type or type symbol")))))
-
-(defn- tag-type [x]
-  (when-let [t (:tag (meta x))]
-    (ensure-type t)))
-
-(defn- type-of-reference [x env]
-  (when (symbol? x)
-    (or (tag-type x)
-      (if (contains? env x)
-        (type-of-local-reference x env) ; local
-        (let [v (resolve x)] ;; dubious
-          (when (not (and (var? v) (fn? (var-get v))))
-            (tag-type v))))))) 
-
-;; ============================================================
-;; condcast->
-;; ============================================================
-
-(defn- maximize
-  ([xs]
-   (maximize (comparator >) xs))
-  ([compr xs]
-   (when (seq xs)
-     (reduce
-       (fn [mx x]
-         (if (= 1 (compr mx x))
-           x
-           mx))
-       xs))))
-
-(defn- most-specific-type ^Type [& types]
-  (maximize (comparator same-or-subclass?)
-    (remove nil? types)))
-
-(defn- contract-condcast-clauses [expr xsym clauses env]
-  (let [expr-tor (type-of-reference expr env)
-        xsym-tor (type-of-reference xsym env)
-        etype (most-specific-type expr-tor xsym-tor)]
-    (if etype
-      (if-let [[_ then] (first
-                          (filter #(= etype (ensure-type (first %)))
-                            (partition 2 clauses)))]
-        [then]
-        (->> clauses
-          (partition 2)
-          (filter
-            (fn [[t _]]
-              (same-or-subclass? etype (ensure-type t))))
-          (apply concat)))
-      clauses)))
-
-(defmacro cc* [expr xsym & clauses]
-  (let [[clauses default] (if (even? (count clauses))
-                            [clauses nil] 
-                            [(butlast clauses)
-                             [:else
-                              `(let [~xsym ~expr]
-                                 ~(last clauses))]])
-        clauses (contract-condcast-clauses
-                  expr xsym clauses &env)]
-    (cond
-      (= 0 (count clauses))
-      (last default) ;; might be nil obvi
-
-      (= 1 (count clauses)) ;; corresponds to exact type match. janky but fine
-      (first clauses)
-
-      :else
-      `(cond
-         ~@(->> clauses
-             (partition 2)
-             (mapcat
-               (fn [[t then]]
-                 `[(instance? ~t ~xsym)
-                   (let [~(with-meta xsym {:tag t}) ~xsym]
-                     ~then)])))
-         ~@default))))
-
-;; note this takes an optional default value. This macro is potentially
-;; annoying in the case that you want to branch on a supertype, for
-;; instance, but the cast would remove interface information. Use with
-;; this in mind.
-(defmacro condcast-> [expr xsym & clauses]
-  `(let [~xsym ~expr] ; binding important for &env in cc*
-     (cc* ~expr ~xsym ~@clauses)))
-
-;; ============================================================
-;; get-component
-;; ============================================================
-
-(defn- camels-to-hyphens [s]
-  (string/replace s #"([a-z])([A-Z])" "$1-$2"))
-
-(defn- dedup-by [f coll]
-  (map peek (vals (group-by f coll))))
-
-;; have to dance around a bit thanks to type-args
-;; might well have to use a C# helper function to really do this with good type information
-(defn- get-component-inline-fn [x-expr type-expr]
-  (let [[tfrm, tf] (if (type-name? type-expr)
-                     [(list 'type-args type-expr), identity]
-                     (let [tsym (with-meta (gensym "type_") {:tag 'System.MonoType})]
-                       [tsym, (fn [expr]
-                                `(let [~tsym ~type-expr]
-                                   ~expr))]))
-        x-sym (gensym "x_")]
-    `(let [res# (condcast-> ~x-expr ~x-sym
-                  UnityEngine.GameObject ~(tf `(.GetComponent ~x-sym ~tfrm))
-                  UnityEngine.Component ~(tf `(.GetComponent (.gameObject ~x-sym) ~tfrm))
-                  (throw (ArgumentException.
-                           (str "Expects x to be GameObject or Component, instead got " (type ~x-sym)))))]
-       (when-not (null-obj? res#) res#))))
-
-(defn get-component
-  "Returns the component of Type t if x, a GameObject or Component, has one attached, nil if it doesn't. Inlines to most efficient form given local type information.
-
-  For reasons of performance and sanity, differs from Unity's (.GetComponent <obj> <t>) in that t must be a Type (cannot be a String). Future versions may also accept Strings for t if this becomes a problem."
-  {:inline (fn [x t]
-             (get-component-inline-fn x t))
-   :inline-arities #{2}}
-  ([x, ^Type t]
-   (let [res (condcast-> x x
-               UnityEngine.GameObject (.GetComponent x t)
-               UnityEngine.Component (.GetComponent (.gameObject x) t)
-               (throw (ArgumentException.
-                        (str "Expects x to be GameObject or Component, instead got " (type x)))))]
-     (when-not (null-obj? res) res))))
-
-(defn add-component 
-  "Add a component to a gameobject
-  
-  * gameobject - the GameObject recieving the component, a GameObject
-  * type       - the type of the component, a Type"
-  {:inline (fn [gameobject type]
-             `(.AddComponent ~gameobject ~type))
-   :inline-arities #{2}}
-  [^GameObject gameobject ^Type type]
-  (.AddComponent gameobject type))
-
-
-;; ============================================================
-;; parent/child
-;; ============================================================
-
-(defn unparent ^GameObject [^GameObject child]
-  (set! (.parent (.transform child)) nil)
-  child)
-
-(defn unchild ^GameObject [^GameObject parent ^GameObject child]
-  (when (= parent (.parent (.transform child)))
-    (unparent child))
-  parent)
-
-(defn set-parent ^GameObject [^GameObject child ^GameObject parent]
-  (set! (.parent (.transform child)) (.transform parent))
-  child)
-
-(defn set-child ^GameObject [^GameObject parent child]
-  (set-parent child parent)
-  parent)
+     (when-not (null-obj? x#) x#)))
 
 ;; ============================================================
 ;; wrappers
 ;; ============================================================
 
-(defn- hintable-type [t]
-  (cond (= t System.Single) System.Double
-    (= t System.Int32) System.Int64
-    (= t System.Boolean) nil
-    :else t))
-
-(defmacro ^:private defwrapper
-  "Wrap static methods of C# classes
-  
-  * class - the C# class to wrap, a Symbol
-  * method - the C# method to wrap, a Symbol
-  * docstring - the documentation for the wrapped method, a String
-  * name - the name of the corresponding Clojure function, a Symbol
-  
-  Used internally to wrap parts of the Unity API, but generally useful."
-  ([class]
-   `(do ~@(map (fn [m]
-          `(defwrapper
-             ~class
-             ~(symbol (.Name m))
-             ~(str "TODO No documentation for " class "/" (.Name m))))
-        (->>
-          (.GetMethods
-            (resolve class)
-            (enum-or BindingFlags/Public BindingFlags/Static))
-          (remove #(or (.IsSpecialName %) (.IsGenericMethod %)))))))
-  ([class method docstring]
-   `(defwrapper
-     ~(symbol (string/lower-case
-                (camels-to-hyphens (str method))))
-     ~class
-     ~method
-     ~docstring))
-  ([name class method docstring & body]
-   `(defn ~name
-      ~(str docstring (let [link-name (str (.Name (resolve class)) "." method)]
-                        (str "\n\nSee also ["
-                        link-name
-                        "](http://docs.unity3d.com/ScriptReference/"
-                        link-name
-                        ".html) in Unity's reference.")))
-      ~@(->> (.GetMethods
-               (resolve class)
-               (enum-or BindingFlags/Public BindingFlags/Static))
-             (filter #(= (.Name %) (str method)))
-             (remove #(.IsGenericMethod %))
-             (dedup-by #(.Length (.GetParameters %)))
-             (map (fn [m]
-                    (let [params (map #(with-meta (symbol (.Name %))
-                                                  {:tag (hintable-type (.ParameterType %))})
-                                      (.GetParameters m))] 
-                      (list (with-meta (vec params) {:tag (hintable-type (.ReturnType m))})
-                            `(~(symbol (str class "/" method)) ~@params))))))
-      ~@body)))
-
-(defwrapper instantiate UnityEngine.Object Instantiate
-  "Clones the object original and returns the clone.
-  
-  * original the object to clone, GameObject or Component
-  * position the position to place the clone in space, a Vector3
-  * rotation the rotation to apply to the clone, a Quaternion"
-  ([^UnityEngine.Object original ^UnityEngine.Vector3 position]
-   (UnityEngine.Object/Instantiate original position Quaternion/identity)))
+;; definline does not support arity overloaded functions... 
+(defn instantiate
+  "Clones the object original and returns the clone."
+  {:inline (fn
+             ([^UnityEngine.Object original]
+              `(UnityEngine.Object/Instantiate ~original))
+             ([^UnityEngine.Object original ^Vector3 position]
+              `(UnityEngine.Object/Instantiate ~original ~position Quaternion/identity))
+             ([^UnityEngine.Object original ^Vector3 position ^Quaternion rotation]
+              `(UnityEngine.Object/Instantiate ~original ~position ~rotation)))}
+  ([^UnityEngine.Object original]
+   (UnityEngine.Object/Instantiate original))
+  ([^UnityEngine.Object original ^Vector3 position]
+   (UnityEngine.Object/Instantiate original position Quaternion/identity))
+  ([^UnityEngine.Object original ^Vector3 position ^Quaternion rotation]
+   (UnityEngine.Object/Instantiate original position rotation)))
 
 (defn create-primitive
   "Creates a game object with a primitive mesh renderer and appropriate collider.
@@ -585,64 +106,295 @@
   ([^UnityEngine.Object obj ^double t]
    (UnityEngine.Object/Destroy obj t)))
 
-(defwrapper object-typed UnityEngine.Object FindObjectOfType
-  "Returns the first active loaded object of Type type.
-  
-  * type - The type to search for, a Type")
+(definline object-typed
+  "Returns the first active loaded object of Type type."
+  [^Type t] `(UnityEngine.Object/FindObjectOfType ~t))
 
-(defwrapper objects-typed UnityEngine.Object FindObjectsOfType
-  "Returns a list of all active loaded objects of Type type.
-  
-  * type - The type to search for, a Type")
+(definline objects-typed
+  "Returns a list of all active loaded objects of Type type."
+  [^Type t] `(UnityEngine.Object/FindObjectsOfType ~t))
 
-(defn ^GameObject object-named
-  "Finds first GameObject in scene the name of which matches name parameter, which can be a string or a regular expression, or nil if no match can be found. 
-  
-  Name type:
-  String - Finds first GameObject the name of which exactly matches name parameter.
-  Regex - Finds first GameObject the name of which matches on (re-find <name parameter> (.name <GameObject instance>)).
+(definline object-named
+  "Finds a game object by name and returns it."
+  [^String n] `(GameObject/Find ~n))
 
-  Note that this is not the most efficient way to manage references into the scene graph. See also objects-named."
-  [name]
-  (condcast-> name name
-    String (GameObject/Find name)
-    Regex (first
-            (for [^GameObject obj (objects-typed GameObject)
-                  :when (re-find name (.name obj))]
-              obj))
-    (throw (Exception. (str "Expects String or Regex, instead got " (type name))))))
-
-;; type-hinting of condcast isn't needed here, but seems a good habit to get into
 (defn objects-named
-  "Finds all GameObjects in scene the name of which match name parameter, which can be a string or a regular expression, or nil if no match can be found. 
-  
-  Name type:
-  String - Finds all GameObjects the name of which exactly match name parameter.
-  Regex - Finds all GameObjects the name of which match on (re-find <name parameter> (.name <GameObject instance>)).
-
-  Note that this is not the most efficient way to manage references into the scene graph.
-
-  See also objects-named."
+  "Finds game objects by name."
   [name]
-  (condcast-> name name
-    System.String
-    (for [^GameObject obj (objects-typed GameObject)
-          :when (= (.name obj) name)]
-      obj)
-    
-    System.Text.RegularExpressions.Regex
-    (for [^GameObject obj (objects-typed GameObject)
-          :when (re-find name (.name obj))]
-      obj)
-    
-    (throw (Exception. (str "Expects String or Regex, instead got " (type name))))))
+  (cond (= (type name) System.String)
+        (for [^GameObject obj (objects-typed GameObject)
+              :when (= (.name obj) name)]
+          obj)
+        
+        (= (type name) System.Text.RegularExpressions.Regex)
+        (for [^GameObject obj (objects-typed GameObject)
+              :when (re-matches name (.name obj))]
+          obj)))
 
-(defwrapper object-tagged GameObject FindWithTag
-  "Returns one active GameObject tagged tag. Returns null if no GameObject was found.
-  
-  * tag - the tag to seach for, a String")
+(definline object-tagged
+  "Returns one active GameObject tagged tag. Returns null if no GameObject was found."
+  [^String t] `(GameObject/FindWithTag ~t))
 
-(defwrapper objects-tagged GameObject FindGameObjectsWithTag
-  "Returns a list of active GameObjects tagged tag. Returns empty array if no GameObject was found.
+(definline objects-tagged
+  "Returns a list of active GameObjects tagged tag. Returns empty array if no GameObject was found."
+  [^String t] `(GameObject/FindGameObjectsWithTag ~t))
+
+;; ------------------------------------------------------------
+;; IEntityComponent
+
+(defprotocol IEntityComponent
+  (cmpt [this t])
+  (cmpts [this t])
+  (cmpt+ [this t])
+  (cmpt- [this t]))
+
+(defmacro ^:private do-reduce [[x coll] & body]
+  `(do
+     (reduce
+       (fn [_# ~x]
+         ~@body
+         nil)
+       ~coll)
+     nil))
+
+(defmacro ^:private do-components [[x access] & body]
+  `(let [^|UnityEngine.Component[]| ar# ~access
+         c# (int (count ar#))]
+     (loop [i# (int 0)]
+       (when (< i# c#)
+         (let [^Component ~x (aget ar# i#)]
+           (do ~@body)
+           (recur (inc i#)))))))
+
+(extend-protocol IEntityComponent
+  GameObject
+  (cmpt [this t]
+    (obj-nil (.GetComponent this t)))
+  (cmpts [this t]
+    (into [] (.GetComponents this t)))
+  (cmpt+ [this t]
+    (.AddComponent this t))
+  (cmpt- [this t]
+    (do-components [x (.GetComponents this t)]
+      (destroy x)))
+
+  ;; exactly the same:
+  Component
+  (cmpt [this t]
+    (obj-nil (.GetComponent this t)))
+  (cmpts [this t]
+    (into [] (.GetComponents this t)))
+  (cmpt+ [this t]
+    (.AddComponent this t))
+  (cmpt- [this t]
+    (do-components [x (.GetComponents this t)]
+      (destroy x))) 
   
-  * tag - the tag to seach for, a String")
+  clojure.lang.Var
+  (cmpt [this t]
+    (cmpt (var-get this) t))
+  (cmpts [this t]
+    (cmpts (var-get this) t))
+  (cmpt+ [this t]
+    (cmpt+ (var-get this) t))
+  (cmpt- [this t]
+    (cmpt- (var-get this) t)))
+
+;; ------------------------------------------------------------
+;; repercussions
+
+(defn ensure-cmpt ^Component [x ^Type t]
+  (or (cmpt x t) (cmpt+ x t)))
+
+;; ------------------------------------------------------------
+;; ISceneGraph
+
+(defprotocol ISceneGraph
+  (gobj ^GameObject [this])
+  (children [this])
+  (parent ^GameObject [this])
+  (child+ ^GameObject
+    [this child]
+    [this child transform-to])
+  (child- ^GameObject [this child]))
+
+(extend-protocol ISceneGraph
+  GameObject
+  (gobj [this]
+    this)
+  (children [this]
+    (into [] (.transform this)))
+  (parent [this]
+    (.. this parent GameObject))
+  (child+ [this child]
+    (child+ this child false))
+  (child+ [this child transform-to]
+    (let [^GameObject c (gobj child)]
+      (.SetParent (.transform c) (.transform this) transform-to)
+      this))
+  (child- [this child]
+    (let [^GameObject c (gobj child)]
+      (.SetParent (.transform c) nil false)
+      this))
+
+  Component
+  (gobj [^Component this]
+    (.gameObject this))
+  (children [^Component this]
+    (into [] (.. this gameObject transform)))
+  (parent [^Component this]
+    (.. this gameObject parent))
+  (child+ [this child]
+    (child+ (.gameObject this) child))
+  (child+ [this child transform-to]
+    (child+ (.gameObject this) child transform-to))
+  (child- [this child]
+    (child- (.gameObject this) child))
+
+  clojure.lang.Var
+  (gobj [this]
+    (gobj (var-get this)))
+  (children [this]
+    (children (var-get this)))
+  (parent [this]
+    (parent (var-get this)))
+  (child+ [this child]
+    (child+ (var-get this) child))
+  (child+ [this child transform-to]
+    (child+ (var-get this) child transform-to))
+  (child- [this child]
+    (child- (var-get this) child)))
+
+;; ------------------------------------------------------------
+;; happy macros
+
+(defn- meta-tag [x t]
+  (vary-meta x assoc :tag t))
+
+(defn- gentagged
+  ([t]
+   (meta-tag (gensym) t))
+  ([s t]
+   (meta-tag (gensym s) t)))
+
+(defmacro with-gobj [[gob-name x] & body]
+  `(let [~gob-name (gobj ~x)]
+     ~@body))
+
+(defmacro with-cmpt
+  ([gob cmpt-name-types & body]
+   (assert (vector? cmpt-name-types))
+   (assert (even? (count cmpt-name-types)))
+   (let [gobsym (gentagged "gob__" 'GameObject)
+         dcls  (->> cmpt-name-types
+                 (partition 2)
+                 (mapcat (fn [[n t]]
+                           [(meta-tag n t) `(cmpt ~gobsym ~t)])))]
+     `(with-gob [~gobsym ~gob]
+        (let [~@dcls]
+          ~body)))))
+
+(defmacro if-cmpt
+  ([gob [cmpt-name cmpt-type] then]
+   `(with-cmpt ~gob [~cmpt-name ~cmpt-type]
+      (when ~cmpt-name
+        ~then)))
+  ([gob [cmpt-name cmpt-type] then else]
+   `(with-cmpt ~gob [~cmpt-name ~cmpt-type]
+      (if ~cmpt-name
+        ~then
+        ~else))))
+
+;; ============================================================
+;; traversal
+
+(defn gobj-seq [x]
+  (tree-seq identity children (gobj x)))
+
+
+;; ============================================================
+;; hooks
+
+(defn- message-keyword [m]
+  (-> m str camels-to-hyphens string/lower-case keyword))
+
+(def hook-types
+  (->> messages
+       keys
+       (mapcat #(vector (message-keyword %)
+                        (RT/classForName (str % "Hook"))))
+       (apply hash-map)))
+
+(defn- ensure-hook-type [hook]
+  (or (hook-types hook)
+      (throw (ArgumentException. (str hook " is not a valid Arcadia hook")))))
+
+(defn hook+
+  "Attach hook a Clojure function to a Unity message on `obj`. The funciton `f`
+  will be invoked every time the message identified by `hook` is sent by Unity. `f`
+  must have the same arity as the expected Unity message."
+  [obj hook f]
+  (let [hook-type (ensure-hook-type hook)
+        hook* (cmpt+ obj hook-type)]
+    (set! (.fn hook*) f)
+    obj))
+
+(defn hook-
+  "Remove all `hook` components attached to `obj`"
+  [obj hook]
+  (let [hook-type (ensure-hook-type hook)]
+    (cmpt- obj hook-type)
+    obj))
+
+(defn hook
+  "Return the `hook` component attached to `obj`. If there is more one component,
+  then behavior is the same as `cmpt`."
+  [obj hook]
+  (let [hook-type (ensure-hook-type hook)]
+    (cmpt obj hook-type)))
+
+(defn hooks [obj hook]
+  "Return all components for `hook` attached to `obj`"
+  (let [hook-type (ensure-hook-type hook)]
+    (cmpts obj hook-type)))
+
+(defn hook?
+  ([t hook] (= (type t)
+               (ensure-hook-type hook)))
+  ([t] (isa? (type t)
+             ArcadiaBehaviour)))
+
+;; ============================================================
+;; state
+
+(defn- initialize-state [go]
+  (cmpt- go ArcadiaState)
+  (let [c (cmpt+ go ArcadiaState)]
+    (set! (.state c) (atom {}))
+    c))
+
+(defn- ensure-state [go]
+  (or (cmpt go ArcadiaState)
+      (initialize-state go)))
+
+(defn state
+  ([go] (state go ::anonymous))
+  ([go kw]
+   (if-let [c (cmpt go ArcadiaState)]
+     (get (deref (.state c)) kw))))
+
+(defn set-state
+  ([go v] (set-state go ::anonymous v))
+  ([go kw v]
+   (let [c (ensure-state go)]
+     (reset! (.state c) (assoc (deref (.state c)) kw v))
+     v)))
+
+(defn swap-state
+  ([go f] (swap-state go ::anonymous f))
+  ([go kw f]
+   (let [c (ensure-state go)
+         s (state go kw)]
+     (swap! (.state c)
+            update-in [kw] f)
+     (state go kw))))

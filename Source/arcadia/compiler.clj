@@ -1,4 +1,6 @@
-(ns arcadia.compiler
+(ns ^{:doc "Integration with the Unity compiler pipeline"
+      :author "Tims Gardner and Ramsey Nasser"}
+  arcadia.compiler
   (:require [arcadia.config :refer [configuration]]
             clojure.string)
   (:import [System IO.Path IO.File IO.StringWriter Environment]
@@ -131,6 +133,10 @@
 
 (defn import-asset [asset]
   (Debug/Log (str "Compiling " asset))
+  (require (asset->ns asset) :reload))
+
+(defn import-asset [asset]
+  (Debug/Log (str "Loading " asset))
   (require (asset->ns asset) :reload))
 
 (defn import-assets [imported]

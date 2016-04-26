@@ -1,8 +1,9 @@
-(ns arcadia.introspection
+(ns ^{:doc "C# Introspection functionality, useful for hacking the Unity API."}
+  arcadia.introspection
   (:refer-clojure :exclude [methods])
   (:require [clojure.pprint :as pprint]
             [clojure.test :as test]
-            [arcadia.core :as ac])
+            [arcadia.internal.macro :as im])
   (:import [System.Reflection
             MonoMethod MonoProperty MonoField]))
 
@@ -75,20 +76,14 @@
 (defn members
   ([^Type t]
    (sort-by
-     #(ac/condcast-> % x
-        MonoMethod (.Name x)
-        MonoProperty (.Name x)
-        MonoField (.Name x))
+     #(.Name %)
      (concat
        (fields t)
        (properties t)
        (methods t))))
   ([^Type t, sr]
    (sort-by
-     #(ac/condcast-> % x
-        MonoMethod (.Name x)
-        MonoProperty (.Name x)
-        MonoField (.Name x))
+     #(.Name %)
      (concat
        (fields t sr)
        (properties t sr)

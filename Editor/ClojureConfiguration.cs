@@ -3,13 +3,14 @@ using UnityEngine;
 using UnityEditor;
 using clojure.lang;
 
+
 public class ClojureConfigurationObject : ScriptableObject {}
 
 [CustomEditor(typeof(ClojureConfigurationObject))]
 public class ClojureConfiguration : Editor {
-  public static string configFilePath = "Assets/Arcadia/configure.edn";  
-  
-  public static string userConfigFilePath = "Assets/ArcadiaConfig/configure.edn";  
+  public const string defaultConfigFilePath = "Assets/Arcadia/configuration.edn";  
+  public static IPersistentMap inspectorConfigMap;
+  public static string userConfigFilePath = "Assets/configuration.edn";  
 
   static ClojureConfigurationObject _clojureConfigurationObject;
 
@@ -20,15 +21,20 @@ public class ClojureConfiguration : Editor {
     
   [MenuItem ("Arcadia/Configuration...")]
   public static void Init () {
+    RT.load("arcadia/config");
+    if(inspectorConfigMap == null)
+      inspectorConfigMap = (IPersistentMap)RT.var("arcadia.config", "default-config").invoke();
+    
+    RT.var("arcadia.config", "update!").invoke();
+    
     if(_clojureConfigurationObject == null)
       _clojureConfigurationObject = ScriptableObject.CreateInstance<ClojureConfigurationObject>();
       
-    RT.var("arcadia.config", "update!").invoke();
     Selection.activeObject = _clojureConfigurationObject;
   }
 
   public override void OnInspectorGUI () {
-    configFilePath = EditorGUILayout.TextField("Config File Path", configFilePath);
+    userConfigFilePath = EditorGUILayout.TextField("Configuration File", userConfigFilePath);
     RT.var("arcadia.config", "render-gui").invoke();
   } 
 }

@@ -8,13 +8,22 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
   public string edn;
   public object state;
   
+  static IFn prStr;
+  static IFn readString;
+  
+  static ArcadiaState()
+  {
+    prStr = (IFn)RT.var("clojure.core", "pr-str");
+    readString = (IFn)RT.var("clojure.core", "read-string");
+  }
+  
   public void OnBeforeSerialize()
   {
-    edn = (string)((IFn)RT.var("clojure.core", "pr-str")).invoke(state);
+    edn = (string)prStr.invoke(state);
   }
   
   public void OnAfterDeserialize()
   {
-    state = (object)((IFn)RT.var("clojure.edn", "read-string")).invoke(edn);
+    state = (object)readString.invoke(edn);
   }
 }

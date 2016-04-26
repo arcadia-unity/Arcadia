@@ -222,6 +222,14 @@
       (.Create d))
     d))
 
+(defn normalize-coordinates [group-artifact-version]
+  (case (count group-artifact-version)
+    3 group-artifact-version
+    2 (let [[group-artifact version] group-artifact-version]
+        
+        )
+    (throw (Exception. (str "Package coordinates must be vectors with 2 or 3 elements, got " group-artifact-version)))))
+
 (defn install [group-artifact-version]
   (Debug/Log (str "Installing " (prn-str group-artifact-version)))
   (dorun
@@ -268,3 +276,9 @@
                      (.Name fi)))]
       (delete-fsi fi)))
   (write-library-manifest))
+
+(use 'arcadia.linear)
+
+(defn mul []
+  (v3+ (v3) (v3- (v3) (v3))))
+

@@ -533,18 +533,97 @@
   ([] nil)
   ([a] a) 
   ([^Type a ^Type b]                                 ;;; Class
-     (if (.IsAssignableFrom a b) b a)))                ;;; isAssignableFrom
-    
+   (if (.IsAssignableFrom a b) b a)))                ;;; isAssignableFrom
+
+;; ============================================================
+;; topological sort, adapted from Alan Dipert's implementation
+
+(defn- without
+  "Returns set s with x removed."
+  [s x] (disj s x))
+
+(defn- take-1
+  "Returns the pair [element, s'] where s' is set s with element removed."
+  [s] {:pre [(not (empty? s))]}
+  (let [item (first s)]
+    [item (without s item)]))
+
+(defn- no-incoming
+  "Returns the set of nodes in graph g for which there are no incoming
+  edges, where g is a map of nodes to sets of nodes."
+  [g]
+  (let [nodes (set (keys g))
+        have-incoming (set (apply concat (vals g)))]
+    (reduce1 disj nodes have-incoming)))
+
+(defn- union* [s1 s2]
+  (into1 s1 s2))
+
+(defn- normalize
+  "Returns g with empty outgoing edges added for nodes with incoming
+  edges only.  Example: {:a #{:b}} => {:a #{:b}, :b #{}}"
+  [g]
+  (let [have-incoming (reduce1 union* #{} (vals g))]
+    (reduce1 #(if (get % %2) % (assoc % %2 #{})) g have-incoming)))
+
+(defn- intersection* [s1 s2]
+  (set
+    (filter #(and (s1 %) (s2 %))
+      (concat s1 s2))))
+
+(defn- kahn-sort
+  "Proposes a topological sort for directed graph g using Kahn's
+   algorithm, where g is a map of nodes to sets of nodes. If g is
+   cyclic, returns nil."
+  ([g]
+   (kahn-sort (normalize g) [] (no-incoming g)))
+  ([g l s]
+   (if (empty? s)
+     (when (every? empty? (vals g)) l)
+     (let [[n s'] (take-1 s)
+           m (g n)
+           g' (reduce1 #(update-in % [n] without %2) g m)]
+       (recur g' (conj l n) (union* s' (intersection* (no-incoming g') m)))))))
+
+;; ============================================================
+
+(defonce type-chain-cache
+  (atom {}))
+
+(defn- sorted-interfaces [c]
+  (let [sups (filter #(.IsInterface ^Type %) (supers c))]
+    (kahn-sort
+      (zipmap sups (map #(set (bases %)) sups)))))
+
+(defn- type-chain ^|System.Type[]| [^Type c]
+  (or (get @type-chain-cache c)
+    (let [chain (into-array Type
+                  (concat
+                    (->> c
+                      (iterate #(.BaseType %))
+                      (take-while #(not= System.Object %)))
+                    (sorted-interfaces c)
+                    [System.Object]))]
+      (swap! type-chain-cache assoc c chain)
+      chain)))
+
+;; rewrite:
 (defn find-protocol-impl [protocol x]
   (if (instance? (:on-interface protocol) x)
     x
     (let [c (class x)
-          impl #(get (:impls protocol) %)]
-      (or (impl c)
-          (and c (or (first (remove nil? (map impl (butlast (super-chain c)))))
-                     (when-let [t (reduce1 pref (filter impl (disj (supers c) Object)))]
-                       (impl t))
-                     (impl Object)))))))
+          impls (:impls protocol)]
+      (or (get impls c)
+        (and c
+          (let [^|System.Type[]| chain (type-chain c)
+                n (int (count chain))]
+            (loop [i (int 0)]
+              (when (< i n)
+                (let [t (aget chain i)]
+                  (or (impls t)
+                    (recur (inc i))))))))))))
+
+;; ============================================================
 
 (defn find-protocol-method [protocol methodk x]
   (get (find-protocol-impl protocol x) methodk))

@@ -1,6 +1,0 @@
-(ns #SCRIPTNAME#
-  (:use arcadia.core)
-  (:import [UnityEngine Debug]))
-
-(defn foo []
-  )

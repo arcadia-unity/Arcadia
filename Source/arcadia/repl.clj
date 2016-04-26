@@ -1,6 +1,7 @@
 (ns arcadia.repl
   (:refer-clojure :exclude [with-bindings])
   (:require [clojure.main :as main]
+            [clojure.string :as str]
             [arcadia.config :refer [configuration]])
   (:import
     [UnityEngine Debug]
@@ -11,98 +12,143 @@
     [System.Threading Thread ThreadStart]
     [System.Text Encoding]))
 
-(defn env-map []
-  {:*ns* *ns*
-   :debug (-> @configuration :compiler :debug)
-   :*warn-on-reflection* (-> @configuration :compiler :warn-on-reflection)
-   :*math-context* *math-context*
-   :*print-meta* *print-meta*
-   :*print-length* *print-length*
-   :*print-level* *print-level*
-   :*data-readers* *data-readers*
-   :*default-data-reader-fn* *default-data-reader-fn*
-   :*command-line-args* *command-line-args*
-   :*unchecked-math* (-> @configuration :compiler :unchecked-math)
-   :*assert* *assert*})
+;; ============================================================
 
-(defn update-repl-env [repl-env]
-  (swap! repl-env #(merge % (env-map))))
+;; utter kludge hack to help with poorly-understood bug where types
+;; defined in namespace 'user are only accessible if (ns user) has
+;; been evaluated in current session
 
-(defmacro with-bindings
+
+(ns user)
+(ns arcadia.repl)
+
+;; ============================================================
+;; macros
+
+(defmacro with-packed-bindings [pack dynsyms & body]
+  (assert (every? symbol? dynsyms))
+  (let [packsym (gensym "env__")
+        bndgs (->> dynsyms
+                (mapcat
+                  (fn [k] [k `(get ~packsym ~(keyword (name k)) ~k)]))
+                vec)]
+    `(let [~packsym ~pack]
+       (binding ~bndgs
+         ~@body))))
+
+(defmacro pack-bindings [binding-symbols]
+  (assert (every? symbol? binding-symbols))
+  (zipmap
+    (map #(keyword (name %)) binding-symbols)
+    binding-symbols))
+
+(defonce env-binding-symbols
+  `[*ns*
+    *math-context*
+    *print-meta* 
+    *print-length*
+    *print-level* 
+    *data-readers*
+    *default-data-reader-fn*
+    *command-line-args*
+    *assert*])
+
+(defmacro with-env-bindings
   "Executes body in the context of thread-local bindings for several vars
   that often need to be set!"
   [repl-env & body]
-  `(let [re# ~repl-env]
-     (when (not (instance? clojure.lang.Atom re#))
-       (throw (ArgumentException. "repl-env must be an atom")))
-     (let [e# @re#]
-       (binding [*ns* (:*ns* e#)
-                 *warn-on-reflection* (:*warn-on-reflection* e#)
-                 *math-context* (:*math-context* e#)
-                 *print-meta* (:*print-meta* e#)
-                 *print-length* (:*print-length* e#)
-                 *print-level* (:*print-level* e#)
-                 *data-readers* (:*data-readers* e#)
-                 *default-data-reader-fn* (:*default-data-reader-fn* e#)
-                 *command-line-args* (:*command-line-args* e#)
-                 *unchecked-math* (:*unchecked-math* e#)
-                 *debug* true
-                 *assert* (:*assert* e#)]
-         ~@body))))
+  `(with-packed-bindings ~repl-env ~env-binding-symbols
+     ~@body))
 
+(defmacro pack-env-bindings []
+  `(pack-bindings ~env-binding-symbols))
+
+(defonce config-binding-symbols
+  `[*ns*
+    ~'*debug* ;; is this namespace qualified or not?
+    *warn-on-reflection*
+    *unchecked-math*])
+
+(defmacro with-config-compiler-bindings [& body]
+  `(with-packed-bindings (:compiler @configuration) ~config-binding-symbols
+     ~@body))
+
+(defmacro pack-config-bindings []
+  `(pack-bindings ~config-binding-symbols))
+
+;; ============================================================
+;; state
+
+(def ip-map
+  (atom {}))
+
+;; ============================================================
+;; details
+
+;; not AT ALL sure we should be trumping these dynamic vars with configuration
+;; in fact not sure why we are at all
+(defn env-map []
+  (pack-env-bindings))
+
+(defn read-string* [s]
+  (when-not (str/blank? s)
+    (read-string s)))
+
+(defn eval-to-string [frm]
+  (with-out-str
+    (binding [*err* *out*]
+      (prn
+        (eval
+          `(do
+             ~(when-let [inj (read-string*
+                               (pr-str (@configuration :injections)))]
+                `(try
+                   ~inj
+                   (catch Exception e#
+                     (Debug/Log (str e#)))))
+             ~frm))))))
+
+ ; need some stuff in here about read-eval maybe
 (defn repl-eval-print [repl-env s]
-  (with-bindings repl-env
-    (let [frm (read-string s)] ;; need some stuff in here about read-eval maybe
-      (with-out-str
-        (binding [*err* *out*] ;; not sure about this
-          (prn
-            (let [res (eval
-                        `(do ~(when-let [inj (read-string (pr-str (@configuration :injections)))]
-                                `(try ~inj (catch Exception e# e#)))
-                             ~frm))]
-              (update-repl-env repl-env)
-              res)))))))
-
-(def default-repl-env
-  (binding [*ns* (find-ns 'user)
-            *print-length* 50]
-    (doto (atom {}) (arcadia.repl/update-repl-env))))
-
-(defn repl-eval-string
-  ([s] (repl-eval-string s *out*))
-  ([s out]
-     (binding [*out* out]
-       (repl-eval-print default-repl-env s))))
+  (with-config-compiler-bindings ; maybe... very dubious about the wisdom of this
+    (with-env-bindings repl-env
+      (let [frm (read-string* s)]
+          {:result (try
+                     (eval-to-string frm)
+                     (catch Exception e
+                       (str e)))
+           :env (env-map)}))))
 
 (def work-queue (Queue/Synchronized (Queue.)))
+
 (def server-running (atom false))
+
+(defn byte-str [& xs]
+  (.GetBytes Encoding/UTF8 (apply str xs)))
 
 (defn eval-queue []
   (while (> (.Count work-queue) 0)
-    (let [[code socket destination] (.Dequeue work-queue)
-          result (try
-                    (repl-eval-string code)
-                  (catch EndOfStreamException e
-                    "")
-                  (catch Exception e
-                    (str e)))
-          bytes (.GetBytes Encoding/UTF8 (str result "\n" (ns-name (:*ns* @default-repl-env)) "=> "))]
+    (let [ip-map* @ip-map]
       (try
-        (do
+        (let [[code socket destination] (.Dequeue work-queue)    ; get work from queue
+              env1 (or (ip-map* destination)                     ; lookup env for destination ip
+                     (assoc (env-map) :*ns* (find-ns 'user)))    ; default to user
+              {:keys [result], env2 :env} (binding [*out* *out*] ; guard from downstream bindings
+                                            (repl-eval-print env1 code))
+              send (fn [s]                                       ; return result with prompt
+                     (let [bytes (byte-str s "\n" (ns-name (:*ns* env2)) "=> ")]
+                       (.Send socket bytes (.Length bytes) destination)))]
+          (swap! ip-map assoc destination env2)                  ; update ip-map with new env
           (Debug/Log "Sending result")
-          (let [res (.Send socket bytes (.Length bytes) destination)]
+          (let [res (try
+                      (send result)
+                      (catch SocketException e
+                        (Debug/Log (str "SocketException encountered:\n" e))
+                        (send (.ToString e))))]
             (Debug/Log "Sent result")
             res))
-        (catch SocketException e
-          (let [estr (str (.ToString e)
-                       "\n"
-                       (ns-name (:*ns* @default-repl-env))
-                       "=> ")
-                ebytes (.GetBytes Encoding/UTF8 estr)]
-            (Debug/Log "Sending result")
-            (let [res (.Send socket ebytes (.Length ebytes) destination)]
-              (Debug/Log "Sent result")
-              res)))))))
+        (catch Exception e
+          (Debug/Log (str e)))))))
 
 (defn- listen-and-block [^UdpClient socket]
   (let [sender (IPEndPoint. IPAddress/Any 0)
