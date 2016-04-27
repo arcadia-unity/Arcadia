@@ -32,12 +32,12 @@ class ClojureAssetPostprocessor : AssetPostprocessor {
         // RT.var("arcadia.compiler", "move-assets").invoke(movedAssets);
     }
     
-      [MenuItem ("Arcadia/Reload Assets")]
+      [MenuItem ("Arcadia/Compiler/Reload Assets")]
       public static void ReloadAssets () {
         AssetDatabase.Refresh();
       }
       
-      [MenuItem ("Arcadia/Force Reload Assets")]
+      [MenuItem ("Arcadia/Compiler/Force Reload Assets")]
       public static void ForceReloadAssets () {
         AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
       }

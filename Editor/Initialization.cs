@@ -46,12 +46,14 @@ namespace Arcadia {
       Debug.Log("Arcadia Started!");    
     }
     
+    [MenuItem ("Arcadia/Initialization/Load Configuration")]
     public static void LoadConfig() {
       Debug.Log("Loading configuration...");
       RT.load("arcadia/config");
       RT.var("arcadia.config", "update!").invoke();
     }
     
+    [MenuItem ("Arcadia/Initialization/Setup Player Settings")]
     public static void CheckSettings() {
       Debug.Log("Checking Unity Settings...");
       if(PlayerSettings.apiCompatibilityLevel != ApiCompatibilityLevel.NET_2_0) {
@@ -65,6 +67,7 @@ namespace Arcadia {
       }
     }
 
+    [MenuItem ("Arcadia/Initialization/Update Clojure Load Path")]
     public static void SetClojureLoadPath() {
       try {
         Debug.Log("Setting Load Path...");
