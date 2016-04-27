@@ -121,7 +121,7 @@
 
 (definline object-named
   "Returns one GameObject named `name`."
-  [^String name] `(GameObject/Find ~n))
+  [^String name] `(GameObject/Find ~name))
 
 (defn objects-named
   "Returns a sequence of all GameObjects named `name`."
@@ -218,7 +218,7 @@
   "If `obj` has a component of type `t`, returns is. Otherwise, adds
   a component of type `t` and returns the new instance."
   ^Component [obj ^Type t]
-  (or (cmpt x t) (cmpt+ x t)))
+  (or (cmpt obj t) (cmpt+ obj t)))
 
 ;; ------------------------------------------------------------
 ;; ISceneGraph
