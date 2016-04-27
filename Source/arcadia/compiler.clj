@@ -1,4 +1,6 @@
-(ns ^{:doc "Integration with the Unity compiler pipeline"
+(ns ^{:doc "Integration with the Unity compiler pipeline. Typical
+           Arcadia users will not need to use this namespace,
+           but the machinery is exposed for those who do."
       :author "Tims Gardner and Ramsey Nasser"}
   arcadia.compiler
   (:require [arcadia.config
@@ -9,7 +11,9 @@
            [UnityEngine Debug]
            [UnityEditor AssetDatabase ImportAssetOptions PlayerSettings ApiCompatibilityLevel]))
 
-(defn assemblies-path []
+(defn assemblies-path
+  "Path where compiled Clojure assemblies are placed."
+  []
   (let [clj-dll-folder (Path/GetDirectoryName (.Location (.Assembly clojure.lang.RT)))
         arcadia-folder (Path/Combine clj-dll-folder "..")
         compiled-folder (Path/Combine arcadia-folder "Compiled")]
@@ -24,8 +28,8 @@
 (defn rests
   "Returns a sequence of all rests of the input sequence
   
-  => (rests [1 2 3 4 5 6 7])
-  ((1 2 3 4 5 6 7) (2 3 4 5 6 7) (3 4 5 6 7) (4 5 6 7) (5 6 7) (6 7) (7))"
+      => (rests [1 2 3 4 5 6 7])
+      ((1 2 3 4 5 6 7) (2 3 4 5 6 7) (3 4 5 6 7) (4 5 6 7) (5 6 7) (6 7) (7))"
   [s]
   (->> (seq s)
        (iterate rest)
@@ -54,10 +58,14 @@
        (map #(clojure.string/join "/" %))
        (filter #(clojure.lang.RT/FindFile %))))
 
-(defn clj-file? [path]
+(defn clj-file?
+  "Is `path` a Clojure file?"
+  [path]
   (boolean (re-find #"\.clj$" path)))
 
-(defn config-file? [path]
+(defn config-file?
+  "Is `path` the configuration file?"
+  [path]
   (= path
      (config/user-config-file)))
 
