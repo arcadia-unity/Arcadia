@@ -855,9 +855,9 @@
                  (partition 2)
                  (mapcat (fn [[n t]]
                            [(meta-tag n t) `(cmpt ~gobsym ~t)])))]
-     `(with-gob [~gobsym ~gob]
+     `(with-gobj [~gobsym ~gob]
         (let [~@dcls]
-          ~body)))))
+          ~@body)))))
 
 (defmacro if-cmpt
   ([gob [cmpt-name cmpt-type] then]
