@@ -313,9 +313,9 @@
                  (partition 2)
                  (mapcat (fn [[n t]]
                            [(meta-tag n t) `(cmpt ~gobsym ~t)])))]
-     `(with-gob [~gobsym ~gob]
+     `(with-gobj [~gobsym ~gob]
         (let [~@dcls]
-          ~body)))))
+          ~@body)))))
 
 (defmacro if-cmpt
   "Execute body of code if `gob` has a component of type `cmpt-type`"
