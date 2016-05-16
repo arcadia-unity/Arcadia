@@ -34,8 +34,10 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
     if(serializedVar != "")
     {
       Symbol sym = Symbol.intern(serializedVar);
-      RT.var("clojure.core", "require").invoke(Symbol.intern(sym.Namespace));
-      fn = RT.var(sym.Namespace, sym.Name);
+      if(sym.Namespace != null) {
+        RT.var("clojure.core", "require").invoke(Symbol.intern(sym.Namespace));
+        fn = RT.var(sym.Namespace, sym.Name);
+      }
       // string libName = sym.Namespace.Replace(".", "/").Replace("-", "_");
       // Debug.Log("Loading " + libName);
       // RT.load(libName);
