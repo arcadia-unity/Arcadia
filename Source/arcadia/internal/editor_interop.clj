@@ -3,6 +3,12 @@
   (:import [System.IO File]
            [System.Reflection FieldInfo]))
 
+(defn all-user-namespaces []
+  (->> (all-ns)
+       (remove #(.. % Name ToString (StartsWith "clojure")))
+       (remove #(.. % Name ToString (StartsWith "arcadia")))
+       into-array))
+
 (defn camels-to-hyphens [s]
   (string/replace s #"([a-z])([A-Z])" "$1-$2"))
 

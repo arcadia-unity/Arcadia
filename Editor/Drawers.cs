@@ -1,17 +1,43 @@
 using System;
+using System.Linq;
 using System.Collections;
 using UnityEditor;
 using UnityEngine;
 using clojure.lang;
 
-
-// [CustomEditor(typeof(ArcadiaComponent), true)]
-// public class ArcadiaComponentEditor : Editor {  
-//   public override void OnInspectorGUI () {
-//     EditorGUILayout.LabelField("ArcadiaComponentEditor");
-//     Debug.Log(target);
-//   }
-// }
+[CustomEditor(typeof(ArcadiaBehaviour), true)]
+public class ArcadiaBehaviourEditor : Editor {  
+  int selectedVar = 0;
+  void PopupInspector() {
+    RT.var("clojure.core", "require").invoke(Symbol.intern("arcadia.internal.editor-interop"));
+    Namespace[] namespaces = (Namespace[])RT.var("arcadia.internal.editor-interop", "all-user-namespaces").invoke();
+    string[] fullyQualifiedVars = namespaces.
+      SelectMany(ns => ns.getMappings().
+              Select((IMapEntry me) => me.val()).
+              Where(v => v.GetType() == typeof(Var) &&
+                         ((Var)v).Namespace == ns).
+              Select(v => v.ToString().Substring(2))).
+      ToArray();
+    EditorGUILayout.Space();
+    selectedVar = EditorGUILayout.Popup("Function", selectedVar, fullyQualifiedVars);
+    
+    ArcadiaBehaviour ab = (ArcadiaBehaviour)target;
+    ab.serializedVar = fullyQualifiedVars[selectedVar];
+    ab.OnAfterDeserialize();
+  }
+  
+  void TextInspector() {
+    EditorGUILayout.Space();
+    ArcadiaBehaviour ab = (ArcadiaBehaviour)target;
+    ab.serializedVar = EditorGUILayout.TextField("Function", ab.serializedVar);
+    ab.OnAfterDeserialize();
+  }
+  
+  public override void OnInspectorGUI () {
+    PopupInspector();
+    // TextInspector();
+  }
+}
 
 [CustomEditor(typeof(ArcadiaState), true)]
 public class ArcadiaStateEditor : Editor {
