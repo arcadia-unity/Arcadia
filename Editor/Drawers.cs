@@ -34,8 +34,18 @@ public class ArcadiaBehaviourEditor : Editor {
   }
   
   public override void OnInspectorGUI () {
-    PopupInspector();
-    // TextInspector();
+    var inspectorConfig = ClojureConfiguration.Get("editor", "hooks-inspector");
+    
+    if(inspectorConfig == Keyword.intern(null, "drop-down")) {
+      PopupInspector();
+    } else if(inspectorConfig == Keyword.intern(null, "text")) {
+      TextInspector();
+    } else {
+      EditorGUILayout.HelpBox("Invalid value for :editor/hooks-inspector in configuration file." +
+                              "Expected :text or :drop-down, got " + inspectorConfig.ToString() +
+                              ". Showing text inspector.", MessageType.Warning);
+      TextInspector();
+    }
   }
 }
 

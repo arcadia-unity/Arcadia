@@ -19,6 +19,12 @@ public class ClojureConfiguration : Editor {
     RT.var("arcadia.config", "deps").invoke();
   }
   */
+  
+  public static object Get(string ns, string name) {
+    var configAtom = (Atom)RT.var("arcadia.config", "configuration").deref();
+    var configIfn = (IFn)configAtom.deref();
+    return (Keyword)configIfn.invoke(Keyword.intern(ns, name));
+  }
     
   [MenuItem ("Arcadia/Configuration...")]
   public static void Init () {
