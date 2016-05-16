@@ -2,14 +2,14 @@ using System.Linq;
 using UnityEngine;
 using UnityEditor;
 using clojure.lang;
-
+using Arcadia;
 
 public class ClojureConfigurationObject : ScriptableObject {}
 
 [CustomEditor(typeof(ClojureConfigurationObject))]
 public class ClojureConfiguration : Editor {
-  public const string defaultConfigFilePath = "Assets/Arcadia/configuration.edn";  
-  public static string userConfigFilePath = "Assets/configuration.edn";  
+  public static string defaultConfigFilePath = Initialization.VariadicPathCombine("Assets", "Arcadia", "configuration.edn");
+  public static string userConfigFilePath = Initialization.VariadicPathCombine("Assets", "configuration.edn");
 
   static ClojureConfigurationObject _clojureConfigurationObject;
 

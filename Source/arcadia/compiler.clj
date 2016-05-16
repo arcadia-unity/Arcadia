@@ -38,6 +38,9 @@
 (defmacro if-> [v & body]
   `(if ~v (-> ~v ~@body)))
 
+(def dir-seperator-re
+  (re-pattern (str Path/DirectorySeparatorChar)))
+
 (defn path->ns
   "Returns a namespace from a path
   
@@ -46,16 +49,16 @@
   [p]
   (if-> p
         (clojure.string/replace #"\.clj$" "")
-        (clojure.string/replace #"\/" ".")
+        (clojure.string/replace dir-seperator-re ".")
         (clojure.string/replace "_" "-")))
 
 (defn relative-to-load-path
   "Sequence of subpaths relative to the load path, shortest first"
   [path]
-  (->> (clojure.string/split path #"\/")
+  (->> (clojure.string/split path dir-seperator-re)
        rests
        reverse
-       (map #(clojure.string/join "/" %))
+       (map #(clojure.string/join Path/DirectorySeparatorChar %))
        (filter #(clojure.lang.RT/FindFile %))))
 
 (defn clj-file?
@@ -162,5 +165,5 @@
     #_ (import-asset asset)))
 
 (defn delete-assets [deleted]
-  (doseq [asset (clj-files deleted)]
-    ))
+  (doseq [asset (clj-files deleted)]))
+    
