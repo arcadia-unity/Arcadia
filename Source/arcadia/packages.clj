@@ -1,5 +1,6 @@
 (ns arcadia.packages
   (:require [clojure.string :as string]
+            [arcadia.compiler :refer [dir-seperator-re]]
             [clojure.clr.io :as io])
   (:import XmlReader
            [UnityEngine Debug]
@@ -202,7 +203,7 @@
 
 (defn make-directories [^ZipEntry e base]
   (Directory/CreateDirectory
-    (->> (string/split (.FileName e) #"/")
+    (->> (string/split (.FileName e) dir-seperator-re)
          (drop-last 1)
          (string/join (str Path/DirectorySeparatorChar))
          (conj [base])
