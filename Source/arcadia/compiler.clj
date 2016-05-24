@@ -8,6 +8,7 @@
              :as config]
             clojure.string)
   (:import [System IO.Path IO.File IO.StringWriter Environment]
+           [System.Text.RegularExpressions Regex]
            [UnityEngine Debug]
            [UnityEditor AssetDatabase ImportAssetOptions PlayerSettings ApiCompatibilityLevel]))
 
@@ -39,7 +40,7 @@
   `(if ~v (-> ~v ~@body)))
 
 (def dir-seperator-re
-  (re-pattern (str Path/DirectorySeparatorChar)))
+  (re-pattern (Regex/Escape (str Path/DirectorySeparatorChar))))
 
 (defn path->ns
   "Returns a namespace from a path
