@@ -150,12 +150,11 @@
                                         "not sure why")))))))
 
 (defn import-asset [asset]
-  (Debug/Log (str "Compiling " asset))
-  (require (asset->ns asset) :reload))
-
-(defn import-asset [asset]
-  (Debug/Log (str "Loading " asset))
-  (require (asset->ns asset) :reload))
+  (if (should-compile? asset)
+    (do
+      (Debug/Log (str "Loading " asset))
+      (require (asset->ns asset) :reload))
+    (Debug/Log (str "Not Loading " asset))))
 
 (defn import-assets [imported]
   (when (some config-file? imported)
