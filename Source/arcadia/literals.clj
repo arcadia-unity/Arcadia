@@ -97,3 +97,14 @@
    UnityEngine.NetworkPlayer
    UnityEngine.Keyframe
    UnityEngine.MatchTargetWeightMask])
+
+;; AnimationCurve is a little different
+(.addMethod print-method
+            UnityEngine.AnimationCurve
+            (fn [v w]
+              (.Write w
+                      (str "#unity/AnimationCurve "
+                           [(into [] (.keys v))]))))
+
+(defn parse-AnimationCurve [v]
+  (new UnityEngine.AnimationCurve (into-array (map eval (first v)))))
