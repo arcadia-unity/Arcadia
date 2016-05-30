@@ -137,6 +137,9 @@
 
 (defmethod value-widget Rect [v] 
   (EditorGUILayout/RectField v nil))
+
+(defmethod value-widget UnityEngine.Object [v] 
+  (EditorGUILayout/ObjectField v (type v) true nil))
  
 (def types-unity-can-serialize
   [System.Int32
