@@ -36,8 +36,8 @@
   (EditorGUILayout/PrefixLabel
     #_
     (str k)
-    (title-case (name k))
     #_
+    (title-case (name k))
     (if (namespace k)
       (str "::" (name k))
       (str k))))
@@ -63,7 +63,9 @@
            rect* (Rect. (+ 3 (.x rect)) (.y rect) (.width rect) (.height rect))
            style (.. (EditorGUIUtility/GetBuiltinSkin EditorSkin/Inspector)
                      (FindStyle "IN TitleText"))]
-       (GUI/Toggle rect* true (title-case title) style)))))
+       #_ 
+       (GUI/Toggle rect* true (title-case title) style)
+       (GUI/Toggle rect* true title style)))))
 
 (defn end-state-group [] 
   (GUILayoutUtility/GetRect 20 2)
