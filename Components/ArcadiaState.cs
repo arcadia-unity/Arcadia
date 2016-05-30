@@ -4,9 +4,8 @@ using clojure.lang;
 
 public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 {
-  [TextArea(3,10)]
-  public string edn;
-  public object state;
+  public string edn = "{}";
+  public Atom state = new Atom(PersistentHashMap.EMPTY);
   
   static IFn prStr;
   static IFn readString;
@@ -19,11 +18,11 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
   
   public void OnBeforeSerialize()
   {
-    edn = (string)prStr.invoke(state);
+    edn = (string)prStr.invoke(state.deref());
   }
   
   public void OnAfterDeserialize()
   {
-    state = (object)readString.invoke(edn);
+    state = new Atom((object)readString.invoke(edn));
   }
 }
