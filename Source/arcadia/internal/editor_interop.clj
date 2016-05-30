@@ -88,10 +88,12 @@
            (grouped-state-map state))))
 
 (defn state-inspector! [atm]
-  (let [state @atm
-        state* (state-inspector state)]
-    (when-not (= state state*)
-      (reset! atm state*))))
+  (let [state @atm]
+    (if (empty? state)
+      (EditorGUILayout/HelpBox "Empty" MessageType/Info)
+      (let [state* (state-inspector state)]
+        (when-not (= state state*)
+          (reset! atm state*))))))
 
 (defmethod value-widget String [v]
   (EditorGUILayout/TextField (str v) nil))
