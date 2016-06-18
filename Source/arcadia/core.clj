@@ -246,9 +246,11 @@
   (gobj [this]
     this)
   (children [this]
-    (into [] (.transform this)))
+    (into []
+      (map (fn [^Transform tr] (.gameObject tr)))
+      (.transform this)))
   (parent [this]
-    (.. this parent GameObject))
+    (.. this transform parent gameObject))
   (child+ [this child]
     (child+ this child false))
   (child+ [this child transform-to]
