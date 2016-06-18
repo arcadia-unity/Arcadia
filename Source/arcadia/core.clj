@@ -408,25 +408,25 @@
 
 (defn state
   "Returns the state of object `go`."
-  ([go] (state go ::anonymous))
   ([go kw]
-   (if-let [c (cmpt go ArcadiaState)]
-     (get (deref (.state c)) kw))))
+   (kw (state go)))
+  ([go] (if-let [c (ensure-state go)]
+          (deref (.state c)))))
 
-(defn set-state
-  "Sets the state of object `go`."
-  ([go v] (set-state go ::anonymous v))
+(defn set-state!
+  "Updates the state of object `go` with funciton `f`."
   ([go kw v]
    (let [c (ensure-state go)]
-     (reset! (.state c) (assoc (deref (.state c)) kw v))
-     v)))
+     (swap! (.state c) assoc kw v))))
 
-(defn swap-state
+(defn remove-state!
   "Updates the state of object `go` with funciton `f`."
-  ([go f] (swap-state go ::anonymous f))
-  ([go kw f]
-   (let [c (ensure-state go)
-         s (state go kw)]
-     (swap! (.state c)
-            update-in [kw] f)
-     (state go kw))))
+  ([go kw]
+   (let [c (ensure-state go)]
+     (swap! (.state c) dissoc kw))))
+
+(defn update-state!
+  "Updates the state of object `go` with funciton `f`."
+  ([go kw f & args]
+   (let [c (ensure-state go)]
+     (apply swap! (.state c) update kw f args))))

@@ -8,6 +8,7 @@
              :as config]
             clojure.string)
   (:import [System IO.Path IO.File IO.StringWriter Environment]
+           [System.Text.RegularExpressions Regex]
            [UnityEngine Debug]
            [UnityEditor AssetDatabase ImportAssetOptions PlayerSettings ApiCompatibilityLevel]))
 
@@ -38,6 +39,9 @@
 (defmacro if-> [v & body]
   `(if ~v (-> ~v ~@body)))
 
+(def dir-seperator-re
+  (re-pattern (Regex/Escape (str Path/DirectorySeparatorChar))))
+
 (defn path->ns
   "Returns a namespace from a path
   
@@ -46,16 +50,16 @@
   [p]
   (if-> p
         (clojure.string/replace #"\.clj$" "")
-        (clojure.string/replace #"\/" ".")
+        (clojure.string/replace dir-seperator-re ".")
         (clojure.string/replace "_" "-")))
 
 (defn relative-to-load-path
   "Sequence of subpaths relative to the load path, shortest first"
   [path]
-  (->> (clojure.string/split path #"\/")
+  (->> (clojure.string/split path dir-seperator-re)
        rests
        reverse
-       (map #(clojure.string/join "/" %))
+       (map #(clojure.string/join Path/DirectorySeparatorChar %))
        (filter #(clojure.lang.RT/FindFile %))))
 
 (defn clj-file?
@@ -146,12 +150,11 @@
                                         "not sure why")))))))
 
 (defn import-asset [asset]
-  (Debug/Log (str "Compiling " asset))
-  (require (asset->ns asset) :reload))
-
-(defn import-asset [asset]
-  (Debug/Log (str "Loading " asset))
-  (require (asset->ns asset) :reload))
+  (if (should-compile? asset)
+    (do
+      (Debug/Log (str "Loading " asset))
+      (require (asset->ns asset) :reload))
+    (Debug/Log (str "Not Loading " asset))))
 
 (defn import-assets [imported]
   (when (some config-file? imported)
@@ -162,5 +165,5 @@
     #_ (import-asset asset)))
 
 (defn delete-assets [deleted]
-  (doseq [asset (clj-files deleted)]
-    ))
+  (doseq [asset (clj-files deleted)]))
+    

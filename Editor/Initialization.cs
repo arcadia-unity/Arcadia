@@ -25,7 +25,7 @@ namespace Arcadia {
     }
 
     public static void ensureCompiledFolder(){
-     string maybeCompiled = Path.GetFullPath(VariadicCombine(GetClojureDllFolder(), "..", "Compiled"));
+     string maybeCompiled = Path.GetFullPath(VariadicPathCombine(GetClojureDllFolder(), "..", "Compiled"));
      if(!Directory.Exists(maybeCompiled)){
 	Debug.Log("Creating Compiled");
         Directory.CreateDirectory(maybeCompiled);
@@ -74,10 +74,10 @@ namespace Arcadia {
         string clojureDllFolder = GetClojureDllFolder();
         
         Environment.SetEnvironmentVariable("CLOJURE_LOAD_PATH",
-          Path.GetFullPath(VariadicCombine(clojureDllFolder, "..", "Compiled")) + ":" +
-          Path.GetFullPath(VariadicCombine(clojureDllFolder, "..", "Source")) + ":" +
-          Path.GetFullPath(Application.dataPath) + ":" +
-          Path.GetFullPath(VariadicCombine(clojureDllFolder, "..", "Libraries")));
+          Path.GetFullPath(VariadicPathCombine(clojureDllFolder, "..", "Compiled")) + Path.PathSeparator +
+          Path.GetFullPath(VariadicPathCombine(clojureDllFolder, "..", "Source")) + Path.PathSeparator +
+          Path.GetFullPath(Application.dataPath) + Path.PathSeparator +
+          Path.GetFullPath(VariadicPathCombine(clojureDllFolder, "..", "Libraries")));
       } catch(InvalidOperationException e) {
         throw new SystemException("Error Loading Arcadia! Arcadia expects exactly one Arcadia folder (a folder with Clojure.dll in it)");
       }
@@ -90,7 +90,7 @@ namespace Arcadia {
     }
     
     // old mono...
-    static string VariadicCombine(params string[] paths) {
+    public static string VariadicPathCombine(params string[] paths) {
       string path = "";
       foreach(string p in paths) {
         path = Path.Combine(path, p);

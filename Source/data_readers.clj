@@ -1,8 +1,10 @@
-{unity/GradientAlphaKey      arcadia.literals/parse-GradientAlphaKey
+{unity/Object                arcadia.literals/parse-Object
+ unity/GradientAlphaKey      arcadia.literals/parse-GradientAlphaKey
  unity/Bounds                arcadia.literals/parse-Bounds
  unity/Rect                  arcadia.literals/parse-Rect
  unity/Vector2               arcadia.literals/parse-Vector2
  unity/Keyframe              arcadia.literals/parse-Keyframe
+ unity/AnimationCurve        arcadia.literals/parse-AnimationCurve
  unity/GradientColorKey      arcadia.literals/parse-GradientColorKey
  unity/NetworkPlayer         arcadia.literals/parse-NetworkPlayer
  unity/LOD                   arcadia.literals/parse-LOD

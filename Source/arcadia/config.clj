@@ -1,7 +1,5 @@
 (ns arcadia.config
-  (:require [clojure.edn :as edn]
-            [clojure.pprint :as pprint]
-            [clojure.data :as data])
+  (:require [clojure.edn :as edn])
   (:import
     [System DateTime]
     [System.IO File]

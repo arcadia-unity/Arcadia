@@ -1,0 +1,38 @@
+#include <Cocoa/Cocoa.h>
+#include <mono/metadata/appdomain.h>
+#include <mono/metadata/assembly.h>
+#include <mono/metadata/image.h>
+#include <mono/metadata/class.h>
+#include <mono/metadata/object.h>
+
+// http://www.jerrodputman.com/2010/01/10/the-unityobjective-c-divide/
+
+MonoMethod *update_method;
+
+void call_update_functions() {
+  mono_runtime_invoke(update_method, NULL, NULL, NULL);  
+  
+  dispatch_after_f(
+    dispatch_time(DISPATCH_TIME_NOW, 100000000),
+    dispatch_get_main_queue(),
+    NULL,
+    call_update_functions);
+}
+
+// we do what we must
+void StartForcingEditorApplicationUpdates() {
+  MonoDomain *domain = mono_domain_get();
+  // TODO better assembly lookup
+  MonoAssembly *assembly = mono_domain_assembly_open(domain, "UnityEditor");
+  MonoImage *image = mono_assembly_get_image(assembly); 
+
+  // TODO use our own update method to avoid double invoking Internal_CallUpdateFunctions
+  MonoClass *klass = mono_class_from_name(image, "UnityEditor", "EditorApplication");
+  update_method = mono_class_get_method_from_name (klass, "Internal_CallUpdateFunctions", 0);
+  
+  dispatch_after_f(
+    dispatch_time(DISPATCH_TIME_NOW, 100000000),
+    dispatch_get_main_queue(),
+    NULL,
+    call_update_functions);
+}

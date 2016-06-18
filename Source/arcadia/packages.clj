@@ -1,5 +1,6 @@
 (ns arcadia.packages
   (:require [clojure.string :as string]
+            [arcadia.compiler :refer [dir-seperator-re]]
             [clojure.clr.io :as io])
   (:import XmlReader
            [UnityEngine Debug]
@@ -202,7 +203,7 @@
 
 (defn make-directories [^ZipEntry e base]
   (Directory/CreateDirectory
-    (->> (string/split (.FileName e) #"/")
+    (->> (string/split (.FileName e) dir-seperator-re)
          (drop-last 1)
          (string/join (str Path/DirectorySeparatorChar))
          (conj [base])
@@ -224,21 +225,25 @@
 
 (defn normalize-coordinates [group-artifact-version]
   (case (count group-artifact-version)
-    3 group-artifact-version
+    3 (map str group-artifact-version)
     2 (let [[group-artifact version] group-artifact-version]
-        
-        )
-    (throw (Exception. (str "Package coordinates must be vectors with 2 or 3 elements, got " group-artifact-version)))))
+        [(or (namespace group-artifact)
+             (name group-artifact))
+         (name group-artifact)
+         version])
+    (throw (Exception. (str "Package coordinate must be a vector with 2 or 3 elements, got " group-artifact-version)))))
 
 (defn install [group-artifact-version]
   (Debug/Log (str "Installing " (prn-str group-artifact-version)))
   (dorun
-    (->> (download-jars group-artifact-version)
-      (mapcat #(seq (ZipFile/Read %)))
-      (filter should-extract?)
-      (map #(make-directories % library-directory))
-      ;; TODO do better than silently overwriting 
-      (map #(.Extract % library-directory ExtractExistingFileAction/OverwriteSilently)))))
+    (->> group-artifact-version
+         normalize-coordinates
+         download-jars
+         (mapcat #(seq (ZipFile/Read %)))
+         (filter should-extract?)
+         (map #(make-directories % library-directory))
+         ;; TODO do better than silently overwriting 
+         (map #(.Extract % library-directory ExtractExistingFileAction/OverwriteSilently)))))
 
 (def library-manifest-name "manifest.edn")
 
