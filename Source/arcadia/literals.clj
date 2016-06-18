@@ -108,3 +108,31 @@
 
 (defn parse-AnimationCurve [v]
   (new UnityEngine.AnimationCurve (into-array (map eval (first v)))))
+
+
+;; TODO where should this lift? 
+;; TODO is the atom needed?
+(def ^:dynamic *object-db* (atom {}))
+
+(defn db-put [obj]
+  (let [id (.GetInstanceID obj)]
+    (swap! *object-db* assoc id obj)
+    id))
+
+;; TODO handle nil
+;; clojure errors out if this returns nil
+;; considers the dispatch to have failed... 
+(defn db-get [id]
+  (get @*object-db* id))
+
+(.addMethod
+  print-method
+  UnityEngine.Object
+  (fn [obj w]
+    (.Write w (str "#unity/Object " (db-put obj)))))
+
+(defn parse-Object [id]
+  (or (db-get id)
+      (do
+        (UnityEngine.Debug/Log (str "Cant find object with ID " id))
+        (UnityEngine.Object.))))

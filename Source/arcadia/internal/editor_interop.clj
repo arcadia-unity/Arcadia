@@ -33,14 +33,17 @@
        sort))
 
 (defn label-widget [k]
-  (EditorGUILayout/PrefixLabel
+  (EditorGUILayout/LabelField
     #_
     (str k)
     #_
     (title-case (name k))
     (if (namespace k)
       (str "::" (name k))
-      (str k))))
+      (str k))
+    (into-array
+      UnityEngine.GUILayoutOption
+      [(GUILayout/MaxWidth 100)])))
 
 (defmulti value-widget (fn [v] (type v)))
 
@@ -142,7 +145,22 @@
 
 (defmethod value-widget UnityEngine.Object [v] 
   (EditorGUILayout/ObjectField v (type v) true nil))
+
+(defmethod value-widget clojure.lang.IPersistentMap [v] 
+  (state-inspector v))
+
+(defmethod value-widget :default [v] 
+  (EditorGUILayout/LabelField (pr-str v) nil)
+  v)
  
+(defn hash-map->generic-list [m]
+  (new |System.Collections.Generic.List`1[System.Object]|
+       (interleave (keys m)
+                   (vals m))))
+
+(defn generic-list->hash-map [l]
+  (apply hash-map l))
+
 (def types-unity-can-serialize
   [System.Int32
    System.Int64

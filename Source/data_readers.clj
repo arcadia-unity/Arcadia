@@ -1,4 +1,5 @@
-{unity/GradientAlphaKey      arcadia.literals/parse-GradientAlphaKey
+{unity/Object                arcadia.literals/parse-Object
+ unity/GradientAlphaKey      arcadia.literals/parse-GradientAlphaKey
  unity/Bounds                arcadia.literals/parse-Bounds
  unity/Rect                  arcadia.literals/parse-Rect
  unity/Vector2               arcadia.literals/parse-Vector2
