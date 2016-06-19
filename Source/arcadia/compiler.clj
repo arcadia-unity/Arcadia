@@ -142,7 +142,7 @@
 
 (defn import-asset [asset]
   (if (should-compile? asset)
-    (reload-ns-and-deps (asset->ns asset))
+    (reload-ns (asset->ns asset))
     (Debug/Log (str "Not Loading " asset))))
 
 (defn import-assets [imported]

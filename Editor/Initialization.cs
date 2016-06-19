@@ -45,7 +45,7 @@ namespace Arcadia {
       SetClojureLoadPath();
       LoadConfig();
       ensureCompiledFolder();
-      StartWatching();
+      // StartWatching();
       StartREPL();
       
       
