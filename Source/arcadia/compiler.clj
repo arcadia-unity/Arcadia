@@ -7,18 +7,11 @@
              :refer [configuration]
              :as config]
             clojure.string)
-  (:import [System IO.Path IO.File IO.StringWriter Environment]
+  (:import [System.IO Path File StringWriter Directory]
            [System.Text.RegularExpressions Regex]
-           [UnityEngine Debug]
-           [UnityEditor AssetDatabase ImportAssetOptions PlayerSettings ApiCompatibilityLevel]))
-
-(defn assemblies-path
-  "Path where compiled Clojure assemblies are placed."
-  []
-  (let [clj-dll-folder (Path/GetDirectoryName (.Location (.Assembly clojure.lang.RT)))
-        arcadia-folder (Path/Combine clj-dll-folder "..")
-        compiled-folder (Path/Combine arcadia-folder "Compiled")]
-    (Path/GetFullPath compiled-folder)))
+           [System.Collections Queue]
+           [System.Threading Thread ThreadStart]
+           [UnityEngine Debug]))
 
 ;; should we just patch the compiler to make GetFindFilePaths public?
 (defn load-path []
@@ -104,56 +97,52 @@
          (first-form-is-ns? file)
          (correct-ns? file))))
 
-#_ (defn import-asset [asset]
-     (let [config @configuration
-           verbose (config :verbose)
-           {:keys [assemblies
-                   load-path
-                   warn-on-reflection
-                   unchecked-math
-                   compiler-options
-                   enabled
-                   debug]}
-           (config :compiler)
-           assemblies (or assemblies
-                          (assemblies-path))]
-       (if (and enabled (should-compile? asset))
-         (try
-           (let [namespace (asset->ns asset)
-                 errors (StringWriter.)]
-             (binding [*compile-path* assemblies
-                       *debug* debug
-                       *warn-on-reflection* warn-on-reflection
-                       *unchecked-math* unchecked-math
-                       *compiler-options* compiler-options
-                       *err* errors]
-               (if (config :verbose)
-                 (Debug/Log
-                   (str "Compiling " (name namespace) "...")))
-               (compile namespace)
-               (doseq [error (remove empty? (clojure.string/split (.ToString errors) #"\n"))]
-                 (Debug/LogWarning error))
-               (AssetDatabase/Refresh ImportAssetOptions/ForceUpdate)))
-           (catch clojure.lang.Compiler+CompilerException e
-             (Debug/LogError (str (.. e InnerException Message) " (at " (.FileSource e) ":" (.Line e) ")")))
-           (catch Exception e
-             (Debug/LogException e)))
-         (if (config :verbose)
-           (Debug/LogWarning (str "Skipping " asset ", "
-                                  (cond (not enabled)
-                                        "compiler is disabled"
-                                        (not (first-form-is-ns? asset))
-                                        "first form is not ns"
-                                        (not (correct-ns? asset))
-                                        "namespace in ns form does not match file name"
-                                        :else
-                                        "not sure why")))))))
+(defn dependencies [ns]
+  (let [nss-mappings (->> ns
+                          .getMappings  
+                          vals
+                          (filter var?)
+                          (map #(.. % Namespace)))
+        nss-aliases (->> ns
+                         .getAliases  
+                         vals)]
+    (-> (into #{} (concat nss-aliases
+                          nss-mappings))
+        (disj ns
+              (find-ns 'clojure.core)))))
+
+(defn all-dependencies
+  ([] (all-dependencies Namespace/all))
+  ([nss]
+   (reduce
+     (fn [m ns]
+       (reduce
+         (fn [m* ns*]
+           (update m* (.Name ns*)
+                   (fnil conj #{}) (.Name ns)))
+         m
+         (dependencies ns)))
+     {}
+     (remove #{(find-ns 'user)} nss))))
+
+(defn reload-ns [n]
+  (Debug/Log (str "Loading " n))
+  (require n :reload))
+
+(defn reload-ns-and-deps [n]
+  (let [dep-map (all-dependencies)]
+    (loop [nss [n]
+           loaded #{}]
+      (when-not (empty? nss)
+        (let [loaded (into loaded nss)]
+          (doseq [ns nss]
+            (reload-ns ns))
+          (recur (remove loaded (mapcat dep-map nss))
+                 loaded))))))
 
 (defn import-asset [asset]
   (if (should-compile? asset)
-    (do
-      (Debug/Log (str "Loading " asset))
-      (require (asset->ns asset) :reload))
+    (reload-ns-and-deps (asset->ns asset))
     (Debug/Log (str "Not Loading " asset))))
 
 (defn import-assets [imported]
@@ -167,3 +156,53 @@
 (defn delete-assets [deleted]
   (doseq [asset (clj-files deleted)]))
     
+(def import-queue (Queue/Synchronized (Queue.)))
+
+(defn import-changed-files []
+  (try
+    (while (pos? (.Count import-queue))
+      (let [file (.Dequeue import-queue)]
+        (if (config-file? file)
+          (config/update!)
+          (import-asset file))))
+    (catch Exception e
+      (Debug/LogException e))))
+
+(defn after? [^DateTime a ^DateTime b]
+  (pos? (.CompareTo a b)))
+
+(defn new? [file times]
+  (after? (File/GetLastWriteTime file)
+          (or (times file) (DateTime.))))
+
+(defn each-new-file [root pattern f times-atom]
+  (let [files
+        ^|System.String[]|
+        (Directory/GetFiles root
+                            pattern
+                            SearchOption/AllDirectories)]
+    (loop [i 0]
+      (let [file (aget files i)]
+        (when (new? file @times-atom)
+          (f file)
+          (swap! times-atom assoc file DateTime/Now)))
+      (if (< i (dec (count files))) (recur (inc i))))))
+
+(defonce last-read-times (atom {}))
+(defonce watching-files (atom true))
+
+(defn enqueue-asset [asset]
+  (.Enqueue import-queue asset))
+
+(defn start-watching-files []
+  (reset! watching-files true)
+  (-> (gen-delegate
+        ThreadStart []
+        (while @watching-files
+          (each-new-file "Assets" "*.clj" enqueue-asset last-read-times)
+          (Thread/Sleep 100)))
+      Thread.
+      .Start))
+
+(defn stop-watching-files []
+  (reset! watching-files false))
