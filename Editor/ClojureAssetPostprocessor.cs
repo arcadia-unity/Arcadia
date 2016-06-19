@@ -4,32 +4,25 @@ using clojure.lang;
 using System;
 using System.IO;
 
-class ClojureAssetPostprocessor : AssetPostprocessor {
-    public static FileSystemWatcher watcher;
+class ClojureAssetPostprocessor {
+  static ClojureAssetPostprocessor() {
+    RT.load("arcadia/compiler");
+    // kill repl when exiting unity
+    AppDomain.CurrentDomain.ProcessExit += (object sender, EventArgs e) => { StopWatchingFiles(); };
+  }
+
     static public void StartWatchingFiles() {
-      RT.load("arcadia/compiler");
-      
-      watcher = new FileSystemWatcher();
-      watcher.Path = Path.GetFullPath("Assets");
-      Debug.Log("Watching " + watcher.Path);
-      watcher.IncludeSubdirectories = true;
-      watcher.NotifyFilter = NotifyFilters.LastAccess | NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.DirectoryName;
-      watcher.Filter = "*.clj";
-      watcher.Changed += (object source, FileSystemEventArgs e) => {
-        Debug.Log("Changed " + e.Name);
-        Debug.Log("Changed " + e.FullPath);
-        RT.var("arcadia.compiler", "import-asset").invoke(e.Name);
-      };
-      watcher.EnableRaisingEvents = true;
+      RT.var("arcadia.compiler", "start-watching-files").invoke();
+      EditorApplication.update += ClojureAssetPostprocessor.ImportChangedFiles;
+    }
+    
+    static public void StopWatchingFiles() {
+      RT.var("arcadia.compiler", "stop-watching-files").invoke();
+      EditorApplication.update -= ClojureAssetPostprocessor.ImportChangedFiles;
     }
   
-    static public void OnPostprocessAllAssets(String[] importedAssets, String[] deletedAssets, String[] movedAssets, String[] movedFromAssetPaths) {
-        RT.load("arcadia/compiler");
-        RT.var("arcadia.compiler", "import-assets").invoke(importedAssets);
-        // TODO support deleting and moving assets
-        // RT.var("arcadia.compiler", "delete-assets").invoke(deletedAssets);
-        // RT.var("arcadia.compiler", "move-assets").invoke(movedAssets);
-        // RT.var("arcadia.compiler", "move-assets").invoke(movedAssets);
+    static public void ImportChangedFiles() {
+      RT.var("arcadia.compiler", "import-changed-files").invoke();
     }
     
       [MenuItem ("Arcadia/Compiler/Reload Assets")]

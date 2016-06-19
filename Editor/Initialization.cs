@@ -31,7 +31,11 @@ namespace Arcadia {
         Directory.CreateDirectory(maybeCompiled);
      }
     }
-
+    
+    
+    public static void StartWatching() {
+      ClojureAssetPostprocessor.StartWatchingFiles();
+    }
 
     [MenuItem ("Arcadia/Initialization/Rerun")]
     public static void Initialize() {
@@ -41,7 +45,9 @@ namespace Arcadia {
       SetClojureLoadPath();
       LoadConfig();
       ensureCompiledFolder();
+      // StartWatching();
       StartREPL();
+      
       
       Debug.Log("Arcadia Started!");    
     }
