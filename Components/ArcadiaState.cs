@@ -77,7 +77,6 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
   
   public void OnAfterDeserialize()
   {
-    Debug.Log("~ OnAfterDeserialize");
 #if UNITY_EDITOR  
     Awake();
 #endif

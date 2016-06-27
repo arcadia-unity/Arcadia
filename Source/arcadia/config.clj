@@ -1,6 +1,7 @@
 (ns arcadia.config
   (:require [clojure.edn :as edn])
   (:import
+    [Arcadia Configuration]
     [System DateTime]
     [System.IO File]
     [UnityEngine Debug]))
@@ -9,21 +10,21 @@
 
 (defn default-config 
   "Built in Arcadia default configuration file. Never changes."
-  [] (if (File/Exists ClojureConfiguration/defaultConfigFilePath)
-       (edn/read-string (slurp ClojureConfiguration/defaultConfigFilePath
+  [] (if (File/Exists Configuration/defaultConfigFilePath)
+       (edn/read-string (slurp Configuration/defaultConfigFilePath
                                :encoding "utf8"))
        (throw (Exception. (str "Default Arcadia configuration file missing. "
-                               ClojureConfiguration/defaultConfigFilePath
+                               Configuration/defaultConfigFilePath
                                " does not exist")))))
 
 (defn user-config-file 
   "Path to the user defined configuration file"
-  [] ClojureConfiguration/userConfigFilePath)
+  [] Configuration/userConfigFilePath)
 
 (defn user-config
   "User supplied configuration file"
-  [] (if (File/Exists ClojureConfiguration/userConfigFilePath)
-       (edn/read-string (slurp ClojureConfiguration/userConfigFilePath
+  [] (if (File/Exists Configuration/userConfigFilePath)
+       (edn/read-string (slurp Configuration/userConfigFilePath
                                :encoding "utf8"))
        {}))
 

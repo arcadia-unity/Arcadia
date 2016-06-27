@@ -57,7 +57,7 @@ public class ArcadiaBehaviourEditor : Editor {
   }
   
   public override void OnInspectorGUI () {
-    var inspectorConfig = ClojureConfiguration.Get("editor", "hooks-inspector");
+    // var inspectorConfig = ClojureConfiguration.Get("editor", "hooks-inspector");
     
     PopupInspector();
     /*
