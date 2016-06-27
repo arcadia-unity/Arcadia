@@ -362,7 +362,7 @@
   `(Matrix4x4/Determinant ~m))
 
 (definline transpose [^Matrix4x4 m]
-  `(. m transpose))
+  `(. ~m transpose))
 
 (definline column [^Matrix4x4 m, col-inx]
   `(.GetColumn ~m ~col-inx))
