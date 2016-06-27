@@ -2,8 +2,7 @@
   arcadia.introspection
   (:refer-clojure :exclude [methods])
   (:require [clojure.pprint :as pprint]
-            [clojure.test :as test]
-            [arcadia.internal.macro :as im])
+            [clojure.test :as test])
   (:import [System.Reflection
             MonoMethod MonoProperty MonoField]))
 
