@@ -159,20 +159,22 @@
 
 (defn start-server [^long port]
   (if @server-running
-    (throw (Exception. "REPL Already Running")))
-  (reset! server-running true)
-  (let [socket (UdpClient. (IPEndPoint. IPAddress/Any port))]
-    (set! (.. socket Client SendBufferSize) (* 1024 5000)) ;; 5Mb
-    (set! (.. socket Client ReceiveBufferSize) (* 1024 5000)) ;; 5Mb
-    (.Start (Thread. (gen-delegate ThreadStart []
-                                   (if (@configuration :verbose)
-                                     (Debug/Log "Starting REPL..."))
-                                   (while @server-running
-                                     (listen-and-block socket))
-                                   ;; TODO why does this line not execute?
-                                   (if (@configuration :verbose)
-                                     (Debug/Log "REPL Stopped")))))
-    socket))
+    (Debug/Log "REPL already running")
+    (Debug/Log "Starting REPL"))
+  (when-not @server-running
+    (reset! server-running true)
+    (let [socket (UdpClient. (IPEndPoint. IPAddress/Any port))]
+      (set! (.. socket Client SendBufferSize) (* 1024 5000)) ;; 5Mb
+      (set! (.. socket Client ReceiveBufferSize) (* 1024 5000)) ;; 5Mb
+      (.Start (Thread. (gen-delegate ThreadStart []
+                                     (if (@configuration :verbose)
+                                       (Debug/Log "Starting REPL..."))
+                                     (while @server-running
+                                       (listen-and-block socket))
+                                     ;; TODO why does this line not execute?
+                                     (if (@configuration :verbose)
+                                       (Debug/Log "REPL Stopped")))))
+      socket)))
 
 (defn stop-server [^UdpClient socket]
   (if (@configuration :verbose)
