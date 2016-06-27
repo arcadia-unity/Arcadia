@@ -18,7 +18,7 @@
 
 (defn- logger [_ _ old new]
   (when (:logging @log-state)
-    (swap! log update :log conj
+    (swap! log-state update :log conj
       {:time System.DateTime/Now
        :old old
        :new new})))
