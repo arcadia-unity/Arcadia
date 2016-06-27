@@ -155,11 +155,9 @@
         incoming-bytes (.Receive socket (by-ref sender))]
     (when (> (.Length incoming-bytes) 0)
       (let [incoming-code (.GetString Encoding/UTF8 incoming-bytes 0 (.Length incoming-bytes))]
-        (Debug/Log (str "bytes received: " incoming-code))
         (.Enqueue work-queue [incoming-code socket sender])))))
 
 (defn start-server [^long port]
-  (Debug/Log @server-running)
   (if @server-running
     (throw (Exception. "REPL Already Running")))
   (reset! server-running true)
