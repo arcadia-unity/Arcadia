@@ -1,9 +1,8 @@
 (ns arcadia.core
   (:require [clojure.string :as string]
             [arcadia.internal.messages :refer [messages interface-messages]]
-            [arcadia.internal.editor-interop :refer [camels-to-hyphens]]
-            arcadia.literals
-            [arcadia.internal.macro :as im])
+            [arcadia.internal.name-utils :refer [camels-to-hyphens]]
+            arcadia.literals)
   (:import ArcadiaBehaviour
            ArcadiaState
            [UnityEngine
@@ -25,27 +24,27 @@
   [& args]
   (Debug/Log (apply str args)))
 
-(defonce ^:private editor-available
-  (boolean
-    (try
-      (import 'UnityEditor.EditorApplication)
-      (catch NullReferenceException e
-        nil))))
+; (defonce ^:private editor-available
+;   (boolean
+;     (try
+;       (import 'UnityEditor.EditorApplication)
+;       (catch NullReferenceException e
+;         nil))))
 
 ;; can't use the obvious macro, because we want this logic to avoid
 ;; being expanded away at AOT
 ;; however we end up dealing with eval will have to at least allow it
 ;; to show up in code
-(def ^:private in-editor
-  (if editor-available
-    (eval `(UnityEditor.EditorApplication/isPlaying))
-    false))
+; (def ^:private in-editor
+;   (if editor-available
+;     (eval `(UnityEditor.EditorApplication/isPlaying))
+;     false))
 
-(defn editor? 
-  "Returns true if called from within the editor. Notably, calls
-  from the REPL are considered to be form within the editor"
-  []
-  in-editor)
+; (defn editor? 
+;   "Returns true if called from within the editor. Notably, calls
+;   from the REPL are considered to be form within the editor"
+;   []
+;   in-editor)
 
 ;; ============================================================
 ;; null obj stuff
@@ -105,11 +104,13 @@
   "Removes a gameobject, component or asset. When called with `t`, the removal
   happens after `t` seconds."
   ([^UnityEngine.Object obj]
-   (if (editor?)
-    (UnityEngine.Object/DestroyImmediate obj)
-    (UnityEngine.Object/Destroy obj)))
+   (UnityEngine.Object/Destroy obj))
   ([^UnityEngine.Object obj ^double t]
    (UnityEngine.Object/Destroy obj t)))
+
+(defn destroy-immediate
+  [^UnityEngine.Object obj]
+  (UnityEngine.Object/DestroyImmediate obj))
 
 (definline object-typed
   "Returns the first active loaded object of Type `type`."
