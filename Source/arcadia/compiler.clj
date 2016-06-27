@@ -145,6 +145,28 @@
     (reload-ns (asset->ns asset))
     (Debug/Log (str "Not Loading " asset))))
 
+(defn aot-namespace
+  "Compile a namespace `ns` and all namespaces it depends on
+  to disk, placing resulting assemblies in `path`"
+  [path ns]
+  (binding [*compile-path* path
+            *compile-files* true]
+    (require ns :reload-all)))
+
+(defn aot-namespaces [path nss]
+  (doseq [ns nss]
+    (Debug/Log (str "Compiling " ns " to " path))
+    (aot-namespace path ns)))
+
+(defn aot-asset [path asset]
+  (when (should-compile? asset)
+    (Debug/Log (str "Compiling " asset " to " path))
+    (aot-namespace path (asset->ns asset))))
+
+(defn aot-assets [path assets]
+  (doseq [asset assets]
+    (aot-asset path asset)))
+
 (defn import-assets [imported]
   (when (some config-file? imported)
     (Debug/Log (str "Updating config"))
