@@ -27,21 +27,26 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
       serializedVar = v.Namespace.Name + "/" + v.Symbol.Name;
     }
   }
+
+  public void OnAfterDeserialize() {
+#if UNITY_EDITOR  
+    Awake();
+#endif
+  }
   
+  private static IFn requireFn = null;
+
   // if serializedVar not null, set fn to var
-  public void OnAfterDeserialize()
+  public void Awake()
   {
+    if(requireFn == null) requireFn = RT.var("clojure.core", "require");
     if(serializedVar != "")
     {
       Symbol sym = Symbol.intern(serializedVar);
       if(sym.Namespace != null) {
-        RT.var("clojure.core", "require").invoke(Symbol.intern(sym.Namespace));
+        requireFn.invoke(Symbol.intern(sym.Namespace));
         fn = RT.var(sym.Namespace, sym.Name);
       }
-      // string libName = sym.Namespace.Replace(".", "/").Replace("-", "_");
-      // Debug.Log("Loading " + libName);
-      // RT.load(libName);
-      // fn = Var.intern(Symbol.intern(sym.Namespace), Symbol.intern(sym.Name));
     }
   }
-}
+} 
