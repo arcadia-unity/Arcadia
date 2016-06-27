@@ -36,7 +36,7 @@
   (let [ctor (constructor-arguments (resolve t))
         params (map #(gensym %) ctor)]
     (list 'fn [(vec params)]
-       (list* 'list ''new (list 'quote t) params))))
+       (list* 'new t params))))
 
 (defmacro install-type-parser [t]
   `(def ~(symbol (str "parse-" (type-name t)))

@@ -79,7 +79,7 @@
 ;; ============================================================
 ;; state
 
-(def ip-map
+(defonce ip-map
   (atom {}))
 
 ;; ============================================================
@@ -139,14 +139,14 @@
                      (let [bytes (byte-str s "\n" (ns-name (:*ns* env2)) "=> ")]
                        (.Send socket bytes (.Length bytes) destination)))]
           (swap! ip-map assoc destination env2)                  ; update ip-map with new env
-          (Debug/Log "Sending result")
           (let [res (try
                       (send result)
                       (catch SocketException e
                         (Debug/Log (str "SocketException encountered:\n" e))
                         (send (.ToString e))))]
-            (Debug/Log "Sent result")
             res))
+        (doseq [view (UnityEngine.Resources/FindObjectsOfTypeAll UnityEditor.GUIView)]
+          (.Repaint view))
         (catch Exception e
           (Debug/Log (str e)))))))
 
@@ -155,26 +155,26 @@
         incoming-bytes (.Receive socket (by-ref sender))]
     (when (> (.Length incoming-bytes) 0)
       (let [incoming-code (.GetString Encoding/UTF8 incoming-bytes 0 (.Length incoming-bytes))]
-        (Debug/Log (str "bytes received: " incoming-code))
         (.Enqueue work-queue [incoming-code socket sender])))))
 
 (defn start-server [^long port]
-  (Debug/Log @server-running)
   (if @server-running
-    (throw (Exception. "REPL Already Running")))
-  (reset! server-running true)
-  (let [socket (UdpClient. (IPEndPoint. IPAddress/Any port))]
-    (set! (.. socket Client SendBufferSize) (* 1024 5000)) ;; 5Mb
-    (set! (.. socket Client ReceiveBufferSize) (* 1024 5000)) ;; 5Mb
-    (.Start (Thread. (gen-delegate ThreadStart []
-                                   (if (@configuration :verbose)
-                                     (Debug/Log "Starting REPL..."))
-                                   (while @server-running
-                                     (listen-and-block socket))
-                                   ;; TODO why does this line not execute?
-                                   (if (@configuration :verbose)
-                                     (Debug/Log "REPL Stopped")))))
-    socket))
+    (Debug/Log "REPL already running")
+    (Debug/Log "Starting REPL"))
+  (when-not @server-running
+    (reset! server-running true)
+    (let [socket (UdpClient. (IPEndPoint. IPAddress/Any port))]
+      (set! (.. socket Client SendBufferSize) (* 1024 5000)) ;; 5Mb
+      (set! (.. socket Client ReceiveBufferSize) (* 1024 5000)) ;; 5Mb
+      (.Start (Thread. (gen-delegate ThreadStart []
+                                     (if (@configuration :verbose)
+                                       (Debug/Log "Starting REPL..."))
+                                     (while @server-running
+                                       (listen-and-block socket))
+                                     ;; TODO why does this line not execute?
+                                     (if (@configuration :verbose)
+                                       (Debug/Log "REPL Stopped")))))
+      socket)))
 
 (defn stop-server [^UdpClient socket]
   (if (@configuration :verbose)

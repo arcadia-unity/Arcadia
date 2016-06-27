@@ -8,19 +8,18 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
   public string edn = "{}";
   public Atom state = new Atom(PersistentHashMap.EMPTY);
   
-  public Atom objectDatabase;
+  public Atom objectDatabase = null;
   public int[] objectDatabaseIds = new int[0];
   public Object[] objectDatabaseObjects = new Object[0];
   
-  static IFn prStr;
-  static IFn readString;
+  private static IFn prStr = null;
+  private static IFn readString = null;
+  private static IFn requireFn = null;
   
   // creates objectDatabase atom from
   // objectDatabaseIds and objectDatabaseObjects
   public void BuildDatabaseAtom(bool force=false) {
     if(objectDatabase == null || force) {
-      Debug.Log("ArcadiaState BuildDatabaseAtom");
-      RT.var("clojure.core", "require").invoke(Symbol.intern("arcadia.literals"));
       var idsToObjectsMap = PersistentHashMap.EMPTY;
       
       if(objectDatabaseIds.Length > 0 && objectDatabaseObjects.Length > 0) {
@@ -39,14 +38,28 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
     objectDatabase = new Atom(PersistentHashMap.EMPTY);
   }
   
-  static ArcadiaState()
+  public void Awake()
   {
-    prStr = (IFn)RT.var("clojure.core", "pr-str");
-    readString = (IFn)RT.var("clojure.core", "read-string");
+    if(readString == null) readString = (IFn)RT.var("clojure.core", "read-string");
+    if(requireFn == null) requireFn = (IFn)RT.var("clojure.core", "require");
+    requireFn.invoke(Symbol.intern("arcadia.literals"));
+    Namespace ArcadiaLiteralsNamespace = Namespace.findOrCreate(Symbol.intern("arcadia.literals"));
+    Var ObjectDbVar = Var.intern(ArcadiaLiteralsNamespace, Symbol.intern("*object-db*")).setDynamic();
+
+    BuildDatabaseAtom(true);
+    Var.pushThreadBindings(RT.map(ObjectDbVar, objectDatabase));
+    try {
+      state = new Atom(readString.invoke(edn));
+    } finally {
+      Var.popThreadBindings();
+    }
   }
     
   public void OnBeforeSerialize()
   {
+    if(prStr == null) prStr = (IFn)RT.var("clojure.core", "pr-str");
+    if(requireFn == null) requireFn = (IFn)RT.var("clojure.core", "require");
+    requireFn.invoke(Symbol.intern("arcadia.literals"));
     Namespace ArcadiaLiteralsNamespace = Namespace.findOrCreate(Symbol.intern("arcadia.literals"));
     Var ObjectDbVar = Var.intern(ArcadiaLiteralsNamespace, Symbol.intern("*object-db*")).setDynamic();
     
@@ -64,15 +77,8 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
   
   public void OnAfterDeserialize()
   {
-    Namespace ArcadiaLiteralsNamespace = Namespace.findOrCreate(Symbol.intern("arcadia.literals"));
-    Var ObjectDbVar = Var.intern(ArcadiaLiteralsNamespace, Symbol.intern("*object-db*")).setDynamic();
-
-    BuildDatabaseAtom();
-    Var.pushThreadBindings(RT.map(ObjectDbVar, objectDatabase));
-    try {
-      state = new Atom(readString.invoke(edn));
-    } finally {
-      Var.popThreadBindings();
-    }
+#if UNITY_EDITOR  
+    Awake();
+#endif
   }
 }

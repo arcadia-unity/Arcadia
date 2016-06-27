@@ -34,7 +34,7 @@ namespace Arcadia {
     
     
     public static void StartWatching() {
-      ClojureAssetPostprocessor.StartWatchingFiles();
+      AssetPostprocessor.StartWatchingFiles();
     }
 
     [MenuItem ("Arcadia/Initialization/Rerun")]
@@ -92,7 +92,7 @@ namespace Arcadia {
     }
     
     static void StartREPL() {
-      ClojureRepl.StartREPL();
+      Repl.StartREPL();
     }
     
     // old mono...

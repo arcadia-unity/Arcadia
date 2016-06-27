@@ -1,27 +1,35 @@
 (ns arcadia.internal.editor-interop
-  (:require [clojure.string :as string])
-  (:import [System.IO File]
+  (:require [clojure.string :as string]
+            [arcadia.compiler :refer [asset->ns]]
+            [arcadia.internal.name-utils :refer [title-case]])
+  (:import [System.IO Directory File]
            [System.Reflection FieldInfo]
-           [clojure.lang Symbol Keyword]
-           [UnityEngine GUILayout Vector2 Vector3 Vector4 AnimationCurve Color Bounds Rect]
+           [clojure.lang RT Symbol Keyword]
+           [UnityEngine Debug GUILayout Vector2 Vector3 Vector4 AnimationCurve Color Bounds Rect]
            [UnityEditor EditorGUILayout]))
 
-(defn all-user-namespaces []
-  (->> (all-ns)
-       (remove #(.. % Name ToString (StartsWith "clojure")))
-       (remove #(.. % Name ToString (StartsWith "arcadia")))
-       into-array))
+(defn all-user-namespaces-symbols []
+  (->> (Directory/GetFiles
+         "Assets"
+         "*.clj"
+         SearchOption/AllDirectories)
+       (map asset->ns)
+       (remove #(or (re-find #"^arcadia.*" (name %))
+                    (re-find #"^clojure.*" (name %))
+                    (= 'data-readers %)))))
 
-(defn camels-to-hyphens [s]
-  (string/replace s #"([a-z])([A-Z])" "$1-$2"))
+(defn all-loaded-user-namespaces []
+  (keep find-ns (all-user-namespaces-symbols)))
 
-(defn title-case [s]
-  (-> s
-      name
-      (string/replace #"[-_]" " ")
-      (string/replace #"([a-z])([A-Z])" "$1 $2")
-      (string/replace #" [a-z]" string/upper-case)
-      (string/replace #"^[a-z]" string/upper-case)))
+(defn load-user-namespaces! []
+  (doseq [n (all-user-namespaces-symbols)]
+    (Debug/Log (str "Loading " n))
+    (require n)))
+
+(defn reload-user-namespaces! []
+  (doseq [n (all-user-namespaces-symbols)]
+    (Debug/Log (str "Reloading " n))
+    (require n :reload)))
 
 (defn touch-dlls [^System.String folder]
   (doseq [dll (Directory/GetFiles folder "*.dll")]
