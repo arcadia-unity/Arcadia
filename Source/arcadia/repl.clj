@@ -145,6 +145,8 @@
                         (Debug/Log (str "SocketException encountered:\n" e))
                         (send (.ToString e))))]
             res))
+        (doseq [view (UnityEngine.Resources/FindObjectsOfTypeAll UnityEditor.GUIView)]
+          (.Repaint view))
         (catch Exception e
           (Debug/Log (str e)))))))
 
