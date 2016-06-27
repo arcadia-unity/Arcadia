@@ -139,13 +139,11 @@
                      (let [bytes (byte-str s "\n" (ns-name (:*ns* env2)) "=> ")]
                        (.Send socket bytes (.Length bytes) destination)))]
           (swap! ip-map assoc destination env2)                  ; update ip-map with new env
-          (Debug/Log "Sending result")
           (let [res (try
                       (send result)
                       (catch SocketException e
                         (Debug/Log (str "SocketException encountered:\n" e))
                         (send (.ToString e))))]
-            (Debug/Log "Sent result")
             res))
         (catch Exception e
           (Debug/Log (str e)))))))
