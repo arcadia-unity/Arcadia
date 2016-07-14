@@ -7,8 +7,8 @@ const rl = readline.createInterface({
   output: process.stdout
 });
 
-const arcadiaPort = 11211;
-const arcadiaHost = "localhost";
+const arcadiaPort = process.argv[2] || 11211;
+const arcadiaHost = process.argv[3] || "localhost";
 
 var input = "";
 
