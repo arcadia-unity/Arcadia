@@ -7,8 +7,8 @@ const rl = readline.createInterface({
   output: process.stdout
 });
 
-const arcadiaPort = 11211;
-const arcadiaHost = "localhost";
+const arcadiaPort = process.argv[2] || 11211;
+const arcadiaHost = process.argv[3] || "localhost";
 
 var input = "";
 
@@ -17,7 +17,7 @@ rl.on('line', (cmd) => {
   input += cmd + "\n";
   if(parenthesesAreBalanced(input)) {
     // send balanced form to server
-    server.send(input, 11211, "localhost");
+    server.send(input, arcadiaPort, arcadiaHost);
     // reset input
     input = "";
     // pause prompt until message event
