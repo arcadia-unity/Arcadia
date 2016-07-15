@@ -51,7 +51,11 @@
     *data-readers*
     *default-data-reader-fn*
     *command-line-args*
-    *assert*])
+    *assert*
+    *1
+    *2
+    *3
+    *e])
 
 (defmacro with-env-bindings
   "Executes body in the context of thread-local bindings for several vars
@@ -113,10 +117,15 @@
   (with-config-compiler-bindings ; maybe... very dubious about the wisdom of this
     (with-env-bindings repl-env
       (let [frm (read-string* s)]
-          {:result (try
-                     (eval-to-string frm)
-                     (catch Exception e
-                       (str e)))
+        {:result (try
+                   (let [value (eval-to-string frm)]
+                     (set! *3 *2)
+                     (set! *2 *1)
+                     (set! *1 value)
+                     value)
+                   (catch Exception e
+                     (set! *e e) ;;; like in main
+                     (str e)))
            :env (env-map)}))))
 
 (def work-queue (Queue/Synchronized (Queue.)))
