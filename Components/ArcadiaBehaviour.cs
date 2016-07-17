@@ -40,7 +40,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
   public void Awake()
   {
     if(requireFn == null) requireFn = RT.var("clojure.core", "require");
-    if(serializedVar != "")
+    if(serializedVar != null && serializedVar != "")
     {
       Symbol sym = Symbol.intern(serializedVar);
       if(sym.Namespace != null) {
