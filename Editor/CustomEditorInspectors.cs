@@ -29,7 +29,9 @@ public class ArcadiaBehaviourEditor : Editor
 		if (ab.serializedVar != null)
 		{
 			// var, show popup
-			var loadedNamespaces = allLoadedUserNamespacesFn.invoke();
+			var loadedNamespaces = (ISeq)allLoadedUserNamespacesFn.invoke();
+			if (loadedNamespaces.count() == 0)
+				return;
 			Namespace[] namespaces = (Namespace[])intoArrayFn.invoke(loadedNamespaces);
 			var fullyQualifiedVars = namespaces.
 			SelectMany(ns => ns.getMappings().
