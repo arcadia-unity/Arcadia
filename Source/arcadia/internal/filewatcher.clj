@@ -17,7 +17,19 @@
 ;; utils
 
 (defmacro gets [m & ks]
-  `(-> ~m ~@(map (fn [k] `(get ~k)) ks)))
+  (list* `-> m (for [k ks] `(get ~k))))
+
+(defn- absorber
+  ([])
+  ([_])
+  ([_ _])
+  ([_ _ _]))
+
+(defn- doduce [xform coll]
+  (transduce xform absorber nil coll))
+
+(defn- assoc-by [m f x]
+  (assoc m (f x) x))
 
 ;; ============================================================
 ;; file graph
@@ -107,15 +119,19 @@
         fg
         kids))))
 
-(defn add-file [fg path]
-  (merge-file-graphs fg (file-graph path)))
+(defn add-file
+  ([fg] fg)
+  ([fg path]
+   (merge-file-graphs fg (file-graph path))))
 
-(defn remove-file [fg path]
-  (let [ps (keys (::g (file-graph path)))
-        remove (fn [m] (persistent! (reduce dissoc! (transient m) ps)))]
-    (-> fg
-      (update ::g remove)
-      (update ::fsis remove))))
+(defn remove-file
+  ([fg] fg)
+  ([fg path]
+   (let [ps (keys (::g (file-graph path)))
+         remove (fn [m] (persistent! (reduce dissoc! (transient m) ps)))]
+     (-> fg
+       (update ::g remove)
+       (update ::fsis remove)))))
 
 ;; ============================================================
 ;; watch
@@ -212,65 +228,67 @@
          (as/loud-valid? ::event event)]}
   (func event))
 
-(defn- run-listeners [{:keys [::event-type->listeners]},
-                      path->changes]
+;; side-effecting
+(defn- run-listeners [event-type->listeners, changes]
   {:pre [(as/loud-valid? ::event-type->listeners event-type->listeners)]}
-  (dorun ;; turn this into transducer pls
-    (for [[p chs] path->changes
-          ch chs
-          l (event-type->listeners (::event-type ch))]
-      (apply-listener l ch))))
+  (letfn [(process-change [ch]
+            (doduce (map #(apply-listener % ch))
+              (event-type->listeners (::event-type ch))))]
+    (doduce (map process-change) changes)))
 
-(defn- indexed-changes [watch-data]
-  (let [changes (for [path (keys (gets watch-data ::file-graph ::g))
-                      e (keys (::event-type->listeners watch-data))
-                      :let [change (event-change e watch-data path)]
-                      :when change]
-                  change)]
-    (group-by ::path changes)))
+(defn- changes [watch-data]
+  (let [es (keys (::event-type->listeners watch-data))
+        paths (keys (gets watch-data ::file-graph ::g))]
+    (into []
+      (mapcat
+        (fn [e]
+          (eduction
+            (keep #(event-change e watch-data %))
+            paths)))
+      es)))
 
-(defn- update-history [history path->changes]
-  {:pre [(as/loud-valid? (s/map-of ::path (s/spec (s/* ::event))) path->changes)
+(defn- update-history [history changes]
+  {:pre [(as/loud-valid? (s/spec (s/* ::event)) changes)
          (as/loud-valid? ::history history)]
    :post [(as/loud-valid? ::history %)]}
-  (letfn [(f2 [e->change, {:keys [::event-type] :as change}]
-            (assoc e->change event-type change))
-          (f1 [history path changes]
-            (update history path
-              (fn [e->change]
-                (reduce f2 e->change
-                  (sort-by ::time changes)))))]
-    (reduce-kv f1 history path->changes)))
+  (reduce (fn [history {:keys [::path ::event-type] :as change}]
+            (assoc-in history [path event-type] change))
+    history
+    changes))
 
-(defn- update-file-graph [file-graph path->changes]
-  (let [e->ps (-> (group-by ::event (eduction (mapcat val) path->changes))
-                (mu/map-vals ::path))]
-    (as-> file-graph file-graph
-      (reduce add-file file-graph (::create e->ps))
-      (reduce remove-file file-graph (::destroy e->ps)))))
+(defn- update-file-graph [file-graph changes]
+  (as-> file-graph file-graph
+    (transduce (filter #(= (::event-type %) ::create))
+      add-file file-graph changes)
+    (transduce (filter #(= (::event-type %) ::destroy))
+      remove-file file-graph changes)))
 
-(defn watch-step [watch-data]
-  (let [path->changes (indexed-changes watch-data)]
-    (run-listeners watch-data path->changes) ;; side effecting
+(defn- watch-step [{:keys [::event-type->listeners] :as watch-data}]
+  {:pre [(as/loud-valid? ::watch-data watch-data)]}
+  (let [chs (changes watch-data)]
+    (run-listeners event-type->listeners chs) ;; side effecting
     (-> watch-data
-      (update ::history update-history path->changes)
-      (update ::file-graph update-file-graph path->changes))))
+      (update ::history update-history chs)
+      (update ::file-graph update-file-graph chs))))
 
-(defn- remove-listener [watch-data listener-key]
-  ;; stupid way for now, no one cares
-  (update watch-data ::event-type->listeners
-    (fn [e->l]
-      (mu/map-vals e->l
-        (fn [ls]
-          (into (empty ls)
-            (remove #(= (::listener-key %) listener-key))
-            ls))))))
+(defn- remove-listener
+  ([watch-data] watch-data)
+  ([watch-data listener-key]
+   (update watch-data ::event-type->listeners
+     (fn [e->l]
+       (mu/map-vals e->l
+         (fn [ls]
+           (into (empty ls)
+             (remove #(= (::listener-key %) listener-key))
+             ls)))))))
 
-(defn- add-listener [watch-data, {:keys [::listener-key ::event-type]
-                                  :as new-listener}]
-  (-> watch-data
-    (remove-listener listener-key) ;; so stupid
-    (update-in [::event-type->listeners event-type] conj new-listener)))
+(defn- add-listener
+  ([watch-data] watch-data)
+  ([watch-data, {:keys [::listener-key ::event-type]
+                 :as new-listener}]
+   (-> watch-data
+     (remove-listener listener-key) ;; so stupid
+     (update-in [::event-type->listeners event-type] conj new-listener))))
 
 (defn- start-thread [f]
   (let [t (Thread.
@@ -278,6 +296,13 @@
               (f)))]
     (.Start t)
     t))
+
+(def ^:private all-watches
+  (atom #{}))
+
+(defn kill-all-watches []
+  (doseq [{:keys [::stop]} @all-watches]
+    (stop)))
 
 (defn start-watch [root, interval]
   (let [watch-state (atom {::event-types #{}
@@ -300,23 +325,25 @@
                            (catch Exception e
                              (swap! errors conj e)
                              (throw e)))
-                         (recur))))))]
-    {::thread thread
-     ::set-interval (fn [i] (swap! control assoc :interval i))
-     ::state (fn [] @watch-state) ;; for debugging
-     ::control (fn [] @control) ;; for debugging
-     ::stop (fn [] (swap! control assoc :should-loop false))
-     ::errors (fn [] @errors)
-     ::add-listener (fn [k f e]
-                     (let [listener {::listener-key k
-                                     ::func f
-                                     ::event-type e}]
-                       (if (s/valid? ::listener listener)
-                         (swap! watch-state add-listener listener)
-                         (throw
-                           (System.ArgumentException.
-                             (str
-                               "Attempting to add invalid listener:/n"
-                               (with-out-str (s/explain ::listener listener))))))))
-     ::remove-listener (fn [k] (swap! watch-state remove-listener k))
-     ::cancelled (fn [] (not (and (:should-loop @control) (.IsAlive thread))))}))
+                         (recur))))))
+        watch {::thread thread
+               ::set-interval (fn [i] (swap! control assoc :interval i))
+               ::state (fn [] @watch-state) ;; for debugging
+               ::control (fn [] @control) ;; for debugging
+               ::stop (fn [] (swap! control assoc :should-loop false))
+               ::errors (fn [] @errors)
+               ::add-listener (fn [k f e]
+                                (let [listener {::listener-key k
+                                                ::func f
+                                                ::event-type e}]
+                                  (if (s/valid? ::listener listener)
+                                    (swap! watch-state add-listener listener)
+                                    (throw
+                                      (System.ArgumentException.
+                                        (str
+                                          "Attempting to add invalid listener:/n"
+                                          (with-out-str (s/explain ::listener listener))))))))
+               ::remove-listener (fn [k] (swap! watch-state remove-listener k))
+               ::cancelled (fn [] (not (and (:should-loop @control) (.IsAlive thread))))}]
+    (swap! all-watches conj watch)
+    watch))
