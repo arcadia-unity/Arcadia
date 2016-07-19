@@ -51,7 +51,7 @@
     :null nil?
     :populated (s/keys :req [::g ::fsis])))
 
-(defn merge-file-graphs
+(defn- merge-file-graphs
   ([] {::g {} ::fsis {}})
   ([fg] fg)
   ([fg1 fg2]
@@ -64,13 +64,13 @@
 
 (def empty-set #{}) ;;omg
 
-(defn info-children [info]
+(defn- info-children [info]
   {:pre [(as/loud-valid? ::info info)]}
   (condp instance? info
     FileInfo empty-set
     DirectoryInfo (set (.GetFileSystemInfos info))))
 
-(defn path [x]
+(defn- path [x]
   {:pre [(instance? FileSystemInfo x)]}
   (.FullName x))
 
@@ -91,7 +91,7 @@
     :else (throw (System.ArgumentException. "Expects DirectoryInfo or String."))))
 
 ;; !!!!THIS SOMETIMES RETURNS NIL!!!!
-(defn info ^FileSystemInfo [x]
+(defn- info ^FileSystemInfo [x]
   {:pre [(as/loud-valid? ::info-path x)]
    :post [(as/loud-valid? (s/or ::info ::info :nil nil?) %)]}
   (cond
@@ -106,7 +106,7 @@
     :else (throw (System.ArgumentException. "Expects FileSystemInfo or String."))))
 
 ;; this might screw up symlinks
-(defn file-graph [root]
+(defn- file-graph [root]
   {:pre [(as/loud-valid? ::info-path root)]
    :post [(as/loud-valid? ::file-graph %)]}
   (when-let [root-info (info root)]
@@ -119,12 +119,15 @@
         fg
         kids))))
 
-(defn add-file
+(defn- add-file
   ([fg] fg)
   ([fg path]
+   {:pre [(as/loud-valid? ::path path)
+          (as/loud-valid? ::file-graph fg)]}
+   (Debug/Log "Should be adding a file now")
    (merge-file-graphs fg (file-graph path))))
 
-(defn remove-file
+(defn- remove-file
   ([fg] fg)
   ([fg path]
    (let [ps (keys (::g (file-graph path)))
@@ -137,7 +140,7 @@
 ;; watch
 
 ;; ------------------------------------------------------------
-;; api
+;; api (for defining listeners)
 
 (defn get-info [fg, path]
   {:pre [(as/loud-valid? ::file-graph fg)
@@ -153,7 +156,6 @@
   {:pre [(as/loud-valid? ::file-graph fg)
          (as/loud-valid? ::path path)]}
   (-> fg (get ::g) (get path)))
-
 
 ;; ============================================================
 ;; file event history
@@ -175,14 +177,17 @@
 (s/def ::watch-data
   (s/keys :req [::history ::event-types ::file-graph ::event-type->listeners]))
 
-(defn add-event [history {:keys [::event-type ::path] :as event}]
+(defn- add-event [history {:keys [::event-type ::path] :as event}]
   (assoc-in history [path event-type] event))
 
 (defn- qwik-event [path event-type time]
   {::path path, ::event-type event-type, ::time time})
 
-(defn before? [^DateTime d1 ^DateTime d2]
+(defn- before? [^DateTime d1 ^DateTime d2]
   (< (DateTime/Compare d1 d2) 0))
+
+;; ------------------------------------------------------------
+;; event-change
 
 (defmulti event-change (fn [e watch-data path] e))
 
@@ -202,10 +207,10 @@
         (qwik-event path e ct))
       (qwik-event path e ct))))
 
-(defmethod event-change ::child-create [e {:keys [::file-graph] :as watch-data} path]
+(defmethod event-change ::create-child [e {:keys [::file-graph] :as watch-data} path]
   (let [info (get-info file-graph path)]
+    (.Refresh info)
     (when (instance? DirectoryInfo info)
-      (.Refresh info)
       (let [lwt (.LastWriteTime info)]
         (if-let [{:keys [::time]} (gets watch-data ::history path e)]
           (when (before? time lwt)
@@ -237,7 +242,11 @@
     (doduce (map process-change) changes)))
 
 (defn- changes [watch-data]
-  (let [es (keys (::event-type->listeners watch-data))
+  (doduce ; refresh all file infos
+    (map (fn [^FileSystemInfo fsi]
+           (.Refresh fsi)))
+    (vals (gets ((::state watch)) ::file-graph ::fsis)))
+  (let [events (keys (::event-type->listeners watch-data))
         paths (keys (gets watch-data ::file-graph ::g))]
     (into []
       (mapcat
@@ -245,7 +254,7 @@
           (eduction
             (keep #(event-change e watch-data %))
             paths)))
-      es)))
+      events)))
 
 (defn- update-history [history changes]
   {:pre [(as/loud-valid? (s/spec (s/* ::event)) changes)
@@ -257,11 +266,13 @@
     changes))
 
 (defn- update-file-graph [file-graph changes]
-  (as-> file-graph file-graph
-    (transduce (filter #(= (::event-type %) ::create))
-      add-file file-graph changes)
-    (transduce (filter #(= (::event-type %) ::destroy))
-      remove-file file-graph changes)))
+  (letfn [(process [file-graph event f]
+            (transduce
+              (comp (filter #(= event (::event-type %))) (map ::path))
+              f file-graph changes))]
+    (-> file-graph
+      (process ::create-child add-file)
+      (process ::destroy remove-file))))
 
 (defn- watch-step [{:keys [::event-type->listeners] :as watch-data}]
   {:pre [(as/loud-valid? ::watch-data watch-data)]}
@@ -274,13 +285,9 @@
 (defn- remove-listener
   ([watch-data] watch-data)
   ([watch-data listener-key]
-   (update watch-data ::event-type->listeners
-     (fn [e->l]
-       (mu/map-vals e->l
-         (fn [ls]
-           (into (empty ls)
-             (remove #(= (::listener-key %) listener-key))
-             ls)))))))
+   (update watch-data ::event-type->listeners mu/map-vals e->ls
+     (fn [ls]
+       (into [] (remove #(= listener-key (::listener-key %))) ls)))))
 
 (defn- add-listener
   ([watch-data] watch-data)
@@ -297,12 +304,15 @@
     (.Start t)
     t))
 
-(def ^:private all-watches
+(defonce ^:private all-watches
   (atom #{}))
 
 (defn kill-all-watches []
   (doseq [{:keys [::stop]} @all-watches]
-    (stop)))
+    (stop))
+  (swap! all-watches
+    (fn [ws]
+      (into #{} (remove #((::cancelled %))) ws))))
 
 (defn start-watch [root, interval]
   (let [watch-state (atom {::event-types #{}
