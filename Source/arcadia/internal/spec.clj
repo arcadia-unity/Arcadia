@@ -38,37 +38,65 @@
     false))
 
 ;; ============================================================
+;; arrgh
+
+(def assert-stack (atom [*assert*]))
+
+(defn push-assert [state]
+  (set! *assert*
+    (peek
+      (swap! assert-stack conj state))))
+
+(defn pop-assert []
+  (set! *assert*
+    (peek
+      (swap! assert-stack pop))))
+
+;; ============================================================
 ;; hacky spec disabler (therefore refiner)
 
-(defonce ^:private registry-ref
-  (var-get #'clojure.spec/registry-ref))
+;; (defonce ^:private own-private-any
+;;   (fn own-private-any [& xs] true))
 
-;; I know, two atoms, unsafe
+;; (defonce ^:private registry-ref
+;;   (var-get #'clojure.spec/registry-ref))
 
-(defonce ^:private disabled-refs #{})
+;; (defn disable-spec [k]
+;;   (if (= ::disabled-refs k)
+;;     (throw (ArgumentException. (str "no: " k)))
+;;     (swap! registry-ref
+;;       (fn [rr]
+;;         (if (contains? rr k)
+;;           (-> rr
+;;             (update ::disabled-refs assoc k (get rr k))
+;;             (assoc k own-private-any))
+;;           rr)))))
 
+;; (defn disabled? [k]
+;;   (let [rr @registry-ref]
+;;     (and (contains? (::disabled-refs rr) k)
+;;          (= own-private-any (get rr k)))))
 
-(defn disable-spec [k]
-  (if (#{:clojure.spec/any ::disabled-refs} k)
-    (throw (ArgumentException. (str "no: " k)))
-    (swap! registry-ref
-      (fn [rr]
-        (if (contains? rr k)
-          (-> rr
-            (assoc k (get rr :clojure.spec/any))
-            (update ::disabled-refs assoc k (get rr k)))
-          (throw
-            (ArgumentException.
-              (str "key " k " must be in global registry to be disabled"))))))))
+;; (defn- enable-spec-inner [{:keys [::disabled-refs] :as rr}, k]
+;;   (as-> rr rr
+;;     (update rr ::disabled-refs disj k)
+;;     (if (= own-private-any (get rr k))
+;;       (assoc rr k (get disabled-refs k))
+;;       rr)))
 
-(defn disabled? [k]
-  (contains? (::disabled-refs @registry-ref) k))
+;; (defn enable-spec [k]
+;;   (when (disabled? k)
+;;     (swap! registry-ref enable-spec-inner k)))
 
-(defn enable-spec [k]
-  (when (disabled? k)
-    (swap! registry-ref
-      (fn [{:keys [::disabled-refs]}]
-        (-> rr
-          (update ::disabled-refs dissoc k)
-          (assoc k (get disabled-refs k)))))))
+;; (defn enable-all-specs []
+;;   (swap! registry-ref
+;;     (fn [{:keys [::disabled-refs] :as m}]
+;;       (reduce enable-spec-inner m (keys disabled-refs)))))
 
+;; (defn ns-specs
+;;   ([] (ns-specs *ns*))
+;;   ([ns]
+;;    (let [n (name (.Name ns))]
+;;      (filter
+;;        #(= n (namespace %))
+;;        (keys @registry-ref)))))
