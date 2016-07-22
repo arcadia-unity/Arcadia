@@ -89,3 +89,22 @@
        (methods t sr)))))
 
 ;; TODO: printing conveniences, aproprint, version of apropos returning richer data, etc
+
+;; ============================================================
+;;
+
+(defn snapshot-data-fn [type]
+  (let [fields (fields type)
+        props  (properties type)]
+    (fn [obj]
+      (merge
+        (zipmap
+          (map (fn [^MonoField mf] (.Name mf))
+            fields)
+          (map (fn [^MonoField mf] (.GetValue mf obj))
+            fields))
+        (zipmap
+          (map (fn [^MonoProperty mp] (.Name mp))
+            props)
+          (map (fn [^MonoProperty mp] (.GetValue mp obj nil))
+            props))))))
