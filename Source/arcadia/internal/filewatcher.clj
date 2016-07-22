@@ -1,17 +1,25 @@
 (ns arcadia.internal.filewatcher
   ;; dev
-  (:use clojure.pprint clojure.repl)
+  (:use clojure.pprint
+        [clojure.repl :exclude [dir]])
   (:require [arcadia.introspection :as i]
-            [arcadia.internal.benchmarking :as b])
+            [arcadia.internal.benchmarking :as b]
+            [clojure.repl :as repl])
   ;; prod
   (:require [clojure.spec :as s]
             [arcadia.internal.spec :as as]
-            [arcadia.internal.map-utils :as mu])
+            [arcadia.internal.map-utils :as mu]
+            [arcadia.internal.array-utils :as au]
+            [clojure.test :as t]
+            [arcadia.internal.test :as at]
+            [clojure.data :as d])
   (:import [System.Collections Queue]
-           [System.IO FileSystemInfo DirectoryInfo FileInfo]
+           [System.IO FileSystemInfo DirectoryInfo FileInfo Path]
            [System DateTime]
            [System.Threading Thread ThreadStart]
            [UnityEngine Debug]))
+
+(as/push-assert true)
 
 ;; ============================================================
 ;; utils
@@ -174,8 +182,10 @@
 (s/def ::event-type->listeners
   (s/map-of ::event-type (s/coll-of ::listener [])))
 
+(s/def ::started #(instance? System.DateTime %))
+
 (s/def ::watch-data
-  (s/keys :req [::history ::event-types ::file-graph ::event-type->listeners]))
+  (s/keys :req [::history ::file-graph ::event-type->listeners ::started]))
 
 (defn- add-event [history {:keys [::event-type ::path] :as event}]
   (assoc-in history [path event-type] event))
@@ -199,28 +209,37 @@
         (qwik-event path e lwt))
       (qwik-event path e lwt))))
 
-;; this one's sort of stupid
-(defmethod event-change ::create [e watch-data path]
-  (let [ct (.CreationTime (get-info watch-data path))]
-    (if-let [{:keys [::time]} (gets watch-data ::history path e)]
-      (when (before? time ct)
-        (qwik-event path e ct))
-      (qwik-event path e ct))))
+(defmethod event-change ::create [e,
+                                  {:keys [::file-graph ::started]
+                                   :as watch-data}
+                                  path]
+  (let [ct (.CreationTime (get-info file-graph path))]
+    (when-not (before? ct started) ;; if created before we started, move along
+      (if-let [{:keys [::time]} (gets watch-data ::history path e)]
+        ;; in history
+        ;; was it created again since last time?
+        (when (before? time ct)
+          (qwik-event path e ct))
+        ;; not in history
+        (qwik-event path e ct)))))
 
-(defmethod event-change ::create-child [e {:keys [::file-graph] :as watch-data} path]
+(defmethod event-change ::create-child [e,
+                                        {:keys [::file-graph ::started]
+                                         :as watch-data},
+                                        path]
   (let [info (get-info file-graph path)]
-    (.Refresh info)
     (when (instance? DirectoryInfo info)
       (let [lwt (.LastWriteTime info)]
-        (if-let [{:keys [::time]} (gets watch-data ::history path e)]
-          (when (before? time lwt)
-            (qwik-event path e lwt))
-          (qwik-event path e lwt))))))
+        (when (before? started lwt)
+          (if-let [{:keys [::time]} (gets watch-data ::history path e)]
+            (when (before? time lwt)
+              (qwik-event path e lwt))
+            (qwik-event path e lwt)))))))
 
 (defmethod event-change ::delete [e watch-data path]
   (let [^FileSystemInfo fsi (get-info watch-data path)]
     (when-not (or (.Exists fsi) (gets watch-data ::history path e))
-      {::path path, ::event-type e, ::time (DateTime/Now)})))
+      (qwik-event path e (DateTime/Now)))))
 
 ;; ============================================================
 ;; file listening
@@ -242,10 +261,9 @@
     (doduce (map process-change) changes)))
 
 (defn- changes [watch-data]
-  (doduce ; refresh all file infos
-    (map (fn [^FileSystemInfo fsi]
-           (.Refresh fsi)))
-    (vals (gets ((::state watch)) ::file-graph ::fsis)))
+  (let [fsis (vals (gets watch-data ::file-graph ::fsis))]
+    (doseq [^FileSystemInfo fsi fsis] ;; refresh all file system infos
+      (.Refresh fsi)))
   (let [events (keys (::event-type->listeners watch-data))
         paths (keys (gets watch-data ::file-graph ::g))]
     (into []
@@ -278,14 +296,17 @@
   {:pre [(as/loud-valid? ::watch-data watch-data)]}
   (let [chs (changes watch-data)]
     (run-listeners event-type->listeners chs) ;; side effecting
-    (-> watch-data
-      (update ::history update-history chs)
-      (update ::file-graph update-file-graph chs))))
+    (let [wd2 (-> watch-data
+                (update ::history update-history chs)
+                (update ::file-graph update-file-graph chs))]
+      (if (some #(= ::create-child (::event-type %)) chs) ;; stupid but easy to type
+        (watch-step wd2)
+        wd2))))
 
 (defn- remove-listener
   ([watch-data] watch-data)
   ([watch-data listener-key]
-   (update watch-data ::event-type->listeners mu/map-vals e->ls
+   (update watch-data ::event-type->listeners mu/map-vals
      (fn [ls]
        (into [] (remove #(= listener-key (::listener-key %))) ls)))))
 
@@ -309,15 +330,25 @@
 
 (defn kill-all-watches []
   (doseq [{:keys [::stop]} @all-watches]
-    (stop))
-  (swap! all-watches
-    (fn [ws]
-      (into #{} (remove #((::cancelled %))) ws))))
+    (stop)))
+
+;; gc dead watches
+(defn clean-watches
+  ([]
+   (swap! all-watches
+     (fn swapso [xset]
+       (clojure.set/select #(.IsAlive (::thread %))
+         xset))))
+  ([delay]
+   (start-thread
+     (fn []
+       (Thread/Sleep delay)
+       (clean-watches)))))
 
 (defn start-watch [root, interval]
-  (let [watch-state (atom {::event-types #{}
-                           ::event-type->listeners {}
+  (let [watch-state (atom {::event-type->listeners {}
                            ::history {}
+                           ::started DateTime/Now
                            ::file-graph (file-graph root)})
         control (atom {:interval interval
                        :should-loop true})
@@ -333,6 +364,7 @@
                            (reset! watch-state ;; NOT swap!; watch-step side-effects.
                              (watch-step @watch-state))
                            (catch Exception e
+                             (clean-watches (* 2 interval))
                              (swap! errors conj e)
                              (throw e)))
                          (recur))))))
@@ -340,7 +372,10 @@
                ::set-interval (fn [i] (swap! control assoc :interval i))
                ::state (fn [] @watch-state) ;; for debugging
                ::control (fn [] @control) ;; for debugging
-               ::stop (fn [] (swap! control assoc :should-loop false))
+               ::stop (fn []
+                        (let [control (swap! control assoc :should-loop false)]
+                          (clean-watches (* (:interval control) 2))
+                          control))
                ::errors (fn [] @errors)
                ::add-listener (fn [k f e]
                                 (let [listener {::listener-key k
@@ -354,6 +389,73 @@
                                           "Attempting to add invalid listener:/n"
                                           (with-out-str (s/explain ::listener listener))))))))
                ::remove-listener (fn [k] (swap! watch-state remove-listener k))
-               ::cancelled (fn [] (not (and (:should-loop @control) (.IsAlive thread))))}]
+               ::cancelled? (fn [] (not (and (:should-loop @control) (.IsAlive thread))))}]
     (swap! all-watches conj watch)
     watch))
+
+;; ============================================================
+;; tests
+;; ============================================================
+
+;; absolute, so it doesn't screw up _your_ file system
+(def ^:private test-path "/Users/timothygardner/Desktop/filesystemwatcher_tests")
+
+(defn- path-combine [& paths]
+  (reduce #(Path/Combine %1 %2) paths))
+
+(defn- path-split [path]
+  (vec (. path (Split (au/lit-array System.Char Path/DirectorySeparatorChar)))))
+
+(defn- path-supers [path]
+  (take-while (complement nil?)
+    (iterate #(Path/GetDirectoryName %)
+      path)))
+
+(defn- txt [name & contents]
+  {::type :txt
+   ::name name
+   ::contents (vec contents)})
+
+(defn- dir [name & children]
+  {::type :dir
+   ::name name
+   ::children (vec children)})
+
+(defmulti ^:private make-file-system
+  (fn [root spec] (::type spec)))
+
+ ;; guard so I don't screw up _my_ file system
+(defn- ward-file-system [root]
+  (.Contains root test-path))
+
+(defmethod make-file-system :dir [root spec]
+  (assert (ward-file-system root))
+  (let [dir (DirectoryInfo. (Path/Combine root (::name spec)))]
+    (if (.Exists dir)
+      (doseq [fsi (.GetFileSystemInfos dir)]
+        (cond
+          (instance? DirectoryInfo fsi) (.Delete fsi true)
+          (instance? FileInfo fsi) (.Delete fsi)))
+      (.Create dir))
+    (doseq [child-spec (::children spec)]
+      (make-file-system (.FullName dir) child-spec))))
+
+(defmethod make-file-system :txt [root spec]
+  (assert (ward-file-system root))
+  (let [file (FileInfo. (Path/Combine root (str (::name spec) ".txt")))]
+    (when (.Exists file) (. file (Delete)))
+    (spit (.FullName file)
+      (clojure.string/join (::contents spec) "\n"))))
+
+(defn- setup-test-1 []
+  (let [watch (start-watch test-path, 500)
+        side-state (atom {:new-file-log []})
+        listener (fn test-listener-1 [& args]
+                   (Debug/Log "Firing test-listener-1")
+                   (swap! side-state update :new-file-log conj args))]
+    ((::add-listener watch) :new-file listener ::create-child)
+    (mu/lit-map watch side-state listener)))
+
+
+
+(as/pop-assert)
