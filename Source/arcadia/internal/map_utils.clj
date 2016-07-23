@@ -147,11 +147,10 @@
                    :let [msym (gensym "map_")]]
                (->> ks
                  (mapcat
-                   (fn [k] [k `(checked-get ~m ~(keyword k))]))
+                   (fn [k] [(symbol (name k)) `(checked-get ~m ~(keyword k))]))
                  (list* msym m)))]
     `(let [~@(apply concat dcls)]
        ~@body)))
-
 
 (defn apply-kv
   "Terrible, necessary function. Use with APIs employing horrific
