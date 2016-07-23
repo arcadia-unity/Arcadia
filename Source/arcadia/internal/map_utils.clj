@@ -134,13 +134,14 @@
          (map keyword syms)
          syms)))
 
-(definline checked-get [m k]
-  `(let [k# ~k]
-     (if-let [e# (find ~m k#)]
-       (val e#)
-       (throw
-         (Exception.
-           (str "key " k# " not found"))))))
+(defn checked-get [m k]
+  (let [v (get m k)]
+    (cond
+      (not (nil? v)) v
+      (contains? m k) v
+      :else (throw
+              (Exception.
+                (str "key " k " not found"))))))
 
 (defmacro checked-keys [bndgs & body]
   (let [dcls (for [[ks m] (partition 2 bndgs),
