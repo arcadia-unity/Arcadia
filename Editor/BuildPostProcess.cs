@@ -7,6 +7,7 @@ using System.Text.RegularExpressions;
 using System.Collections;
 using clojure.lang;
 using System.Diagnostics;
+using System.Linq;
 
 namespace Arcadia
 {
@@ -85,6 +86,7 @@ namespace Arcadia
 				ResetProgress(userNameSpaces.Count + 3);
 				var targetPath = Path.Combine(Directory.GetParent(pathToBuiltProject).FullName, pathToBuiltProject + "-clj-build");  // Initialization.VariadicPathCombine(Directory.GetParent(pathToBuiltProject).FullName, "assets", "bin", "Data", "Managed");
 				var signedApk = pathToBuiltProject + "-signed";
+				var alignedApk = pathToBuiltProject + "-aligned";
 				Directory.CreateDirectory(targetPath);
 				CompileNamespacesToFolder(userNameSpaces, targetPath);
 
@@ -134,12 +136,14 @@ namespace Arcadia
 				var androidSDKToolsInstance = androidSDKToolsGetInstanceMethod.Invoke(null, null);
 				var zipalignProperty = AndroidSDKTools.GetProperty("ZIPALIGN");
 				var zipalignPath = (string)zipalignProperty.GetValue(androidSDKToolsInstance, null);
-				var zipalignArgs = "-f -v 4 " + signedApk + " " + pathToBuiltProject;
+				var zipalignArgs = "-f -v 4 " + signedApk + " " + alignedApk;
 				Process.Start(zipalignPath, zipalignArgs);
 
 				Progress("Arcadia : Android", "Cleaning Up");
-				File.Delete(signedApk);
-				Directory.Delete(targetPath, true);
+				// File.Delete(signedApk);
+				// File.Delete(pathToBuiltProject);
+				// File.Move(alignedApk, pathToBuiltProject);
+				// Directory.Delete(targetPath, true);
 			}
 			else {
 				EditorUtility.DisplayDialog(
