@@ -1,4 +1,4 @@
-*This document aims to capture the current state of Arcadia. The project is still pre-alpha and has not had an official release yet, so the ideas here remain in flux. That said, the API and architecture have stabilized enough that it merits recording for those willing to take the early plunge.*
+*This document aims to capture the current state of Arcadia. The project is still pre-alpha and has not had an official release yet, so the ideas here remain in flux. That said, the API and architecture have stabilized enough that it merits recording for those willing to take the early plunge. The [community Gitter](https://gitter.im/arcadia-unity/Arcadia) is the best place to ask questions.*
 
 *Most videos and code snippets from a year ago are no longer valid, particularly anything to do with `defcomponent`, as we underwent a major rearchitecting some months ago.*
 
