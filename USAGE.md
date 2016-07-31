@@ -1,6 +1,6 @@
-*This document aims to capture the current state of Arcadia. The project is still pre-alpha and has not had an official release yet, so the ideas here remain in flux. That said, the API and architechture have stabalized enough that it merits recording for those willing to take the early plunge.*
+*This document aims to capture the current state of Arcadia. The project is still pre-alpha and has not had an official release yet, so the ideas here remain in flux. That said, the API and architecture have stabilized enough that it merits recording for those willing to take the early plunge.*
 
-*Most videos and code snippets from a year ago are no longer valid, particularly anything to do with `defcomponent`, as we underwent a major rearchitechting some months ago.*
+*Most videos and code snippets from a year ago are no longer valid, particularly anything to do with `defcomponent`, as we underwent a major rearchitecting some months ago.*
 
 *This document assumes familiarity with [Clojure][clojure] and [Unity][unity].*
 
@@ -28,7 +28,7 @@ Launch Unity and select *NEW* to start a new project
 
 ![](http://imgur.com/K89L5Z0.png)
 
-Fill out the *Project name* and *Location* fields. These determine where on your harddrive the files associated with the project will be created: a subdirectory with named *Project name* in the folder *Location*. In the following example, the project files will be created in `/Users/nasser/Projects/ArcadiaDocumentation`.
+Fill out the *Project name* and *Location* fields. These determine where on your hard drive the files associated with the project will be created: a subdirectory with named *Project name* in the folder *Location*. In the following example, the project files will be created in `/Users/nasser/Projects/ArcadiaDocumentation`.
 
 ![](http://imgur.com/zxMnABM.png)
 
@@ -39,7 +39,7 @@ Unity creates four folders to manage each project: Temp, Assets, Library, Projec
 You now have a new Unity project, almost ready for Arcadia.
 
 ### Unity Configuration
-*We are trying to automate this step, and it may disapear in the future*
+*We are trying to automate this step, and it may disappear in the future*
 
 By default, Unity is configured in a way that does not allow Arcadia to run well.
 
@@ -74,11 +74,11 @@ $ git checkout develop
 
 On Windows or using a GUI git client you will have to perform the equivalent operations.
 
-Swicth back into Unity. It is normal for it to take a moment to load all the new code.
+Switch back into Unity. It is normal for it to take a moment to load all the new code.
 
 ![](http://imgur.com/CdH3qMi.png)
 
-To confirm Arcadia's installation, check your Unity console. If it is not open, select from the main manu Window → Console. There may be errors and warnings, but if it ends with `Starting REPL` and `Arcadia Started!` you should be set.
+To confirm Arcadia's installation, check your Unity console. If it is not open, select from the main menu Window → Console. There may be errors and warnings, but if it ends with `Starting REPL` and `Arcadia Started!` you should be set.
 
 ![](http://imgur.com/PrWoc0P.png)
 
@@ -97,8 +97,8 @@ Arcadia uses a custom UDP socket REPL listening on port 11211. *It does not use 
 
 The current protocol aims to be straightforward:
 
-1. The REPL runs inside of Unity on a seperate thread
-2. It expects strings of valid Clojure code over UDP on poer 11211
+1. The REPL runs inside of Unity on a separate thread
+2. It expects strings of valid Clojure code over UDP on port 11211
 3. When new code is received, it is placed in a queue
 4. Meanwhile, on a regular interval, the contents of the queue are evaluated on the *main thread*
 5. The results of the evaluation are sent back over the socket
@@ -124,7 +124,7 @@ Work has started on an [alternative SumblimeText REPL integration](https://githu
 * vm flushing
 * namespace roots
 * interop
-* focus-dependant REPL
+* focus-dependent REPL
 * unity is stateful
 * arcadia core
 * arcadia linear
