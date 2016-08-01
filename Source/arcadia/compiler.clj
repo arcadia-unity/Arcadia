@@ -145,12 +145,15 @@
     (reload-ns (asset->ns asset))
     (Debug/Log (str "Not Loading " asset))))
 
+(def ^:dynamic *exporting?* false)
+
 (defn aot-namespace
   "Compile a namespace `ns` and all namespaces it depends on
   to disk, placing resulting assemblies in `path`"
   [path ns]
   (binding [*compile-path* path
-            *compile-files* true]
+            *compile-files* true
+            *exporting?* true]
     (require ns :reload-all)))
 
 (defn aot-namespaces [path nss]

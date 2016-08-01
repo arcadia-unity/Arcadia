@@ -3,17 +3,16 @@
             [arcadia.compiler :refer [asset->ns]]
             [arcadia.internal.name-utils :refer [title-case]])
   (:import [System.IO Directory File]
+           [Arcadia AssetPostprocessor]
            [System.Reflection FieldInfo]
            [clojure.lang RT Symbol Keyword]
            [UnityEngine Debug GUILayout Vector2 Vector3 Vector4 AnimationCurve Color Bounds Rect]
            [UnityEditor EditorGUILayout]))
 
+;; PERF memoize 
 (defn all-user-namespaces-symbols []
-  (->> (Directory/GetFiles
-         "Assets"
-         "*.clj"
-         SearchOption/AllDirectories)
-       (map asset->ns)
+  (->> AssetPostprocessor/cljFiles
+       (map arcadia.compiler/asset->ns)
        (remove #(or (re-find #"^arcadia.*" (name %))
                     (re-find #"^clojure.*" (name %))
                     (= 'data-readers %)))))
