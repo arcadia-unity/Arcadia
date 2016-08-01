@@ -1,5 +1,6 @@
 (ns arcadia.internal.leiningen
-  (:require [arcadia.internal.filewatcher-dummy :as fw]
+  (:require [arcadia.internal.filewatcher :as fw]
+            [arcadia.internal.asset-watcher :as aw]
             [arcadia.internal.state :as state]
             [clojure.spec :as s]
             [arcadia.internal.spec :as as]))
@@ -67,3 +68,15 @@ Elements of the returned vector have the following structure:
 (defn dependencies
   "Return vector of what Arcadia currently considers to be dependency coordinates specified in Leiningen project files. Does not hit disk."
   [])
+
+
+;; ============================================================
+;; hook up listeners. should be idempotent.
+
+
+;; ((::fw/add-listener (aw/asset-watcher))
+;;  ::fw/create-modify-delete-file
+;;  ::config-reload
+;;  (fn [{:keys [::fw/time ::fw/path]}]
+;;    ;; stuff happens here
+;;    ))
