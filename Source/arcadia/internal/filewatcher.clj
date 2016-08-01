@@ -20,7 +20,7 @@
            [System.Threading Thread ThreadStart]
            [UnityEngine Debug]))
 
-(as/push-assert true)
+(as/push-assert false)
 
 ;; ============================================================
 ;; utils
