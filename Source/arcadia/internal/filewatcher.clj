@@ -4,7 +4,8 @@
         [clojure.repl :exclude [dir]])
   (:require [arcadia.introspection :as i]
             [arcadia.internal.benchmarking :as b]
-            [clojure.repl :as repl])
+            [clojure.repl :as repl]
+            [clojure.set :as set])
   ;; prod
   (:require [clojure.spec :as s]
             [arcadia.internal.spec :as as]
@@ -14,7 +15,7 @@
             [arcadia.internal.test :as at]
             [clojure.data :as d])
   (:import [System.Collections Queue]
-           [System.IO FileSystemInfo DirectoryInfo FileInfo Path]
+           [System.IO FileSystemInfo DirectoryInfo FileInfo Path File]
            [System DateTime]
            [System.Threading Thread ThreadStart]
            [UnityEngine Debug]))
@@ -39,6 +40,15 @@
 (defn- assoc-by [m f x]
   (assoc m (f x) x))
 
+(defn- before? [^DateTime d1 ^DateTime d2]
+  (< (DateTime/Compare d1 d2) 0))
+
+(defn- latest
+  ([^DateTime a, ^DateTime b]
+   (if (before? a b) b a))
+  ([^DateTime a, ^DateTime b & ds]
+   (reduce latest (latest a b) ds)))
+
 ;; ============================================================
 ;; file graph
 
@@ -56,19 +66,39 @@
 
 (s/def ::file-graph
   (s/or
-    :null nil?
-    :populated (s/keys :req [::g ::fsis])))
+    :nil nil?
+    :some (s/and #(= ::file-graph (::type %))
+            (s/keys :req [::g ::fsis])))
+  ;; (s/nilable
+  ;;   (s/and #(= ::file-graph (::type %))
+  ;;     (s/keys :req [::g ::fsis])))
+  )
+
 
 (defn- merge-file-graphs
-  ([] {::g {} ::fsis {}})
+  ([] {::g {}, ::fsis {}, ::type ::file-graph})
   ([fg] fg)
-  ([fg1 fg2]
+  ([{g1 ::g :as fg1}
+    {g2 ::g :as fg2}]
    {:pre [(as/loud-valid? ::file-graph fg1)
           (as/loud-valid? ::file-graph fg2)]
     :post [(as/loud-valid? ::file-graph %)]}
-   (-> fg1
-     (update ::g #(merge-with into % (::g fg2)))
-     (update ::fsis merge (::fsis fg2)))))
+   (let [removed (reduce-kv
+                   (fn [bldg k v]
+                     (into bldg (set/difference v (get g2 k))))
+                   []
+                   (select-keys g1 (keys g2)))]
+     (-> fg1
+       (update ::g
+         (fn [g]
+           (reduce dissoc
+             (merge g g2)
+             removed)))
+       (update ::fsis
+         (fn [fsis]
+           (reduce dissoc
+             (merge fsis (::fsis fg2))
+             removed)))))))
 
 (def empty-set #{}) ;;omg
 
@@ -119,7 +149,8 @@
    :post [(as/loud-valid? ::file-graph %)]}
   (when-let [root-info (info root)]
     (let [kids (info-children root-info)
-          fg {::g {(path root-info) (into #{} (map path) kids)}
+          fg {::type ::file-graph
+              ::g {(path root-info) (into #{} (map path) kids)}
               ::fsis {(path root-info) root-info}}]
       (transduce
         (map file-graph)
@@ -150,20 +181,39 @@
 ;; ------------------------------------------------------------
 ;; api (for defining listeners)
 
-(defn get-info [fg, path]
+(defmulti get-info
+  (fn [data path]
+    (mu/checked-keys [[::type] data]
+      type)))
+
+(defmethod get-info ::file-graph [fg path]
   {:pre [(as/loud-valid? ::file-graph fg)
          (as/loud-valid? ::path path)]}
-  (-> fg (get ::fsis) (get path)))
+  (mu/checked-keys [[::fsis] fg]
+    (get fsis path)))
+
+(defmethod get-info ::watch-data [watch-data path]
+  (mu/checked-keys [[::file-graph] watch-data]
+    (get-info file-graph path)))
 
 (defn contains-path? [fg, path]
   {:pre [(as/loud-valid? ::file-graph fg)
          (as/loud-valid? ::path path)]}
   (-> fg (get ::g) (contains? path)))
 
-(defn children [fg, path]
+(defmulti get-children
+  (fn [data path]
+    (mu/checked-keys [[::type] data]
+      type)))
+
+(defmethod get-children ::file-graph [fg, path]
   {:pre [(as/loud-valid? ::file-graph fg)
          (as/loud-valid? ::path path)]}
-  (-> fg (get ::g) (get path)))
+  (gets fg ::g path))
+
+(defmethod get-children ::watch-data [wd, path]
+  (mu/checked-keys [[::file-graph] wd]
+    (get-children file-graph path)))
 
 ;; ============================================================
 ;; file event history
@@ -185,7 +235,9 @@
 (s/def ::started #(instance? System.DateTime %))
 
 (s/def ::watch-data
-  (s/keys :req [::history ::file-graph ::event-type->listeners ::started]))
+  (s/and
+    #(= ::watch-data (::type %))
+    (s/keys :req [::history ::file-graph ::event-type->listeners ::started])))
 
 (defn- add-event [history {:keys [::event-type ::path] :as event}]
   (assoc-in history [path event-type] event))
@@ -193,53 +245,79 @@
 (defn- qwik-event [path event-type time]
   {::path path, ::event-type event-type, ::time time})
 
-(defn- before? [^DateTime d1 ^DateTime d2]
-  (< (DateTime/Compare d1 d2) 0))
-
 ;; ------------------------------------------------------------
 ;; event-change
 
+;; TODO: ensure some ::create, ::create-child, ::delete things are in
+;; place even if those listeners haven't been explicitly set on the
+;; watch, so they will run anyway
+
 (defmulti event-change (fn [e watch-data path] e))
 
-;; not sure this is robust to delete
-(defmethod event-change ::write [e watch-data path]
-  (let [lwt (.LastWriteTime (get-info watch-data path))]
+(defn- change-buddy [{:keys [::started] :as watch-data} path e t]
+  (when (before? started t)
     (if-let [{:keys [::time]} (gets watch-data ::history path e)]
-      (when (before? time lwt)
-        (qwik-event path e lwt))
-      (qwik-event path e lwt))))
+      (when (before? time t)
+        (qwik-event path e t))
+      (qwik-event path e t))))
 
-(defmethod event-change ::create [e,
-                                  {:keys [::file-graph ::started]
-                                   :as watch-data}
-                                  path]
-  (let [ct (.CreationTime (get-info file-graph path))]
-    (when-not (before? ct started) ;; if created before we started, move along
-      (if-let [{:keys [::time]} (gets watch-data ::history path e)]
-        ;; in history
-        ;; was it created again since last time?
-        (when (before? time ct)
-          (qwik-event path e ct))
-        ;; not in history
-        (qwik-event path e ct)))))
+;; not sure this is robust to delete
+;; (defmethod event-change ::write-file
+;;   [e, watch-data, path]
+;;   (let [fsi (get-info watch-data path)]
+;;     (when (instance? FileInfo fsi)
+;;       (change-buddy watch-data path e (.LastWriteTime fsi)))))
 
-(defmethod event-change ::create-child [e,
-                                        {:keys [::file-graph ::started]
-                                         :as watch-data},
-                                        path]
-  (let [info (get-info file-graph path)]
-    (when (instance? DirectoryInfo info)
-      (let [lwt (.LastWriteTime info)]
-        (when (before? started lwt)
-          (if-let [{:keys [::time]} (gets watch-data ::history path e)]
-            (when (before? time lwt)
-              (qwik-event path e lwt))
-            (qwik-event path e lwt)))))))
+;; a file is created if:
+;; - its creation time has changed
+;; - it wasn't in the filegraph previously
 
-(defmethod event-change ::delete [e watch-data path]
+;; ... but that last one is hard to track at the moment. we don't
+;; have access to the n - 1 filegraph, only the current filegraph.
+
+;; Answer might be to hang onto the n - 1 filegraph, which would be
+;; a bit awkward given the current layout
+
+;; which *makes sense* because it gives us a good meaning for change in the filesystem
+;; (defmethod event-change ::create
+;;   [e, watch-data, path]  
+;;   (change-buddy watch-data path e
+;;     (.CreationTime (get-info watch-data path))))
+
+;; this seems to be about all we can say just by looking at the time
+;; fields of DirectoryInfos
+(defmethod event-change ::alter-children
+  [e, watch-data, path]
+  ;;  (Debug/Log (str "::alter-children considering " path))
+  (let [fsi (get-info watch-data path)]
+    (when (instance? DirectoryInfo fsi)
+      ;;      (Debug/Log (str "::alter-children 1"))
+      (when-let [ch (change-buddy watch-data path e (.LastWriteTime fsi))]
+        ;;        (Debug/Log (str "::alter-children 2"))
+        (let [subfs (into #{} (map #(.FullName %)) (.GetFileSystemInfos fsi))]
+          (when (not= subfs (get-children watch-data path))
+            ;;          (Debug/Log (str "::alter-children registering at " path))
+            ch))))))
+
+(defmethod event-change ::create-modify-delete-file
+  [e, watch-data, path]
+  (let [^FileSystemInfo fsi (get-info watch-data path)]
+    ;;(Debug/Log (str "::create-modify-delete-file considering " path))
+    (when (instance? FileInfo fsi)
+      (or (and                                       ; check for delete
+            (not (.Exists fsi))                      ; it's not there...
+            ;;(not (gets watch-data ::history path e)) ; only once! it's deleted
+            (qwik-event path e DateTime/Now))        ; return event
+        (change-buddy watch-data path e              ; other cases
+          (latest ; yes. maybe it was created after it was written to. nothing's off the table
+            (.CreationTime fsi)
+            (.LastWriteTime fsi)))))))
+
+(defmethod event-change ::delete
+  [e watch-data path]
   (let [^FileSystemInfo fsi (get-info watch-data path)]
     (when-not (or (.Exists fsi) (gets watch-data ::history path e))
-      (qwik-event path e (DateTime/Now)))))
+      (qwik-event path e DateTime/Now))))
 
 ;; ============================================================
 ;; file listening
@@ -284,22 +362,28 @@
     changes))
 
 (defn- update-file-graph [file-graph changes]
-  (letfn [(process [file-graph event f]
-            (transduce
-              (comp (filter #(= event (::event-type %))) (map ::path))
-              f file-graph changes))]
-    (-> file-graph
-      (process ::create-child add-file)
-      (process ::destroy remove-file))))
+  (->> changes
+    (filter #(= ::alter-children (::event-type %)))
+    (reduce (fn [fg {:keys [::path]}]
+              (Debug/Log (str "merging for path: " path))
+              (let [fg2 (merge-file-graphs fg
+                          (arcadia.internal.filewatcher/file-graph path))]
+                (Debug/Log (str "merge result:\n"
+                             (with-out-str (pprint fg2))))
+                fg2))
+      file-graph)))
 
 (defn- watch-step [{:keys [::event-type->listeners] :as watch-data}]
   {:pre [(as/loud-valid? ::watch-data watch-data)]}
   (let [chs (changes watch-data)]
+    (when (seq chs)
+      (Debug/Log (str "changes!\n" (with-out-str (pprint chs)))))
     (run-listeners event-type->listeners chs) ;; side effecting
     (let [wd2 (-> watch-data
                 (update ::history update-history chs)
-                (update ::file-graph update-file-graph chs))]
-      (if (some #(= ::create-child (::event-type %)) chs) ;; stupid but easy to type
+                (update ::file-graph update-file-graph chs)
+                (assoc ::prev-file-graph (::file-graph watch-data)))]
+      (if (some #(= ::alter-children (::event-type %)) chs) ;; stupid but easy to type
         (watch-step wd2)
         wd2))))
 
@@ -346,10 +430,11 @@
        (clean-watches)))))
 
 (defn start-watch [root, interval]
-  (let [watch-state (atom {::event-type->listeners {}
+  (let [watch-state (atom {::event-type->listeners {::alter-children []}
                            ::history {}
                            ::started DateTime/Now
-                           ::file-graph (file-graph root)})
+                           ::file-graph (file-graph root)
+                           ::type ::watch-data})
         control (atom {:interval interval
                        :should-loop true})
         errors (atom [])
@@ -361,8 +446,10 @@
                        (when should-loop
                          (Thread/Sleep interval)
                          (try
-                           (reset! watch-state ;; NOT swap!; watch-step side-effects.
-                             (watch-step @watch-state))
+                           (let [ws2 (watch-step @watch-state)]
+                             (swap! watch-state
+                               (fn [{:keys [::event-type->listeners]}] ;; might have changed
+                                 (assoc ws2 ::event-type->listeners event-type->listeners))))
                            (catch Exception e
                              (clean-watches (* 2 interval))
                              (swap! errors conj e)
@@ -371,13 +458,15 @@
         watch {::thread thread
                ::set-interval (fn [i] (swap! control assoc :interval i))
                ::state (fn [] @watch-state) ;; for debugging
-               ::control (fn [] @control) ;; for debugging
+               ::control (fn [] @control)   ;; for debugging
                ::stop (fn []
                         (let [control (swap! control assoc :should-loop false)]
                           (clean-watches (* (:interval control) 2))
                           control))
                ::errors (fn [] @errors)
-               ::add-listener (fn [k f e]
+               ::add-listener (fn [e k f] ;; e is the event-type; k is
+                                          ;; the listener k; f is the
+                                          ;; listener function
                                 (let [listener {::listener-key k
                                                 ::func f
                                                 ::event-type e}]
@@ -426,10 +515,11 @@
 
  ;; guard so I don't screw up _my_ file system
 (defn- ward-file-system [root]
-  (.Contains root test-path))
+  (when-not (.Contains root test-path)
+    (throw (Exception. "root must contain test path"))))
 
 (defmethod make-file-system :dir [root spec]
-  (assert (ward-file-system root))
+  (ward-file-system root)
   (let [dir (DirectoryInfo. (Path/Combine root (::name spec)))]
     (if (.Exists dir)
       (doseq [fsi (.GetFileSystemInfos dir)]
@@ -441,7 +531,7 @@
       (make-file-system (.FullName dir) child-spec))))
 
 (defmethod make-file-system :txt [root spec]
-  (assert (ward-file-system root))
+  (ward-file-system root)
   (let [file (FileInfo. (Path/Combine root (str (::name spec) ".txt")))]
     (when (.Exists file) (. file (Delete)))
     (spit (.FullName file)
@@ -453,9 +543,83 @@
         listener (fn test-listener-1 [& args]
                    (Debug/Log "Firing test-listener-1")
                    (swap! side-state update :new-file-log conj args))]
-    ((::add-listener watch) :new-file listener ::create-child)
+    ((::add-listener watch) :new-file listener ::alter-children)
     (mu/lit-map watch side-state listener)))
 
+(defn- delete-in-directory [dir]
+  (let [dir (info dir)]
+    (ward-file-system (.FullName dir))
+    (doseq [^FileSystemInfo fsi (.GetFileSystemInfos dir)]
+      (if (instance? DirectoryInfo fsi)
+        (.Delete fsi true)
+        (.Delete fsi)))))
 
+(defn- correct-file-graph? [{:keys [::g] :as fg} root]
+  (let [fg-traversal (tree-seq
+                       (fn branch-a? [path]
+                         (instance? DirectoryInfo (get-info fg path)))
+                       (fn children-a [path]
+                         (get-children fg path))
+                       root)
+        baseline-traversal (tree-seq
+                             (fn branch-b? [path]
+                               (instance? DirectoryInfo (info path)))
+                             (fn children-b [path]
+                               (map #(.FullName (info %))
+                                 (.GetFileSystemInfos (info path))))
+                             root)]
+    ;; writing test for correct topology is a little harder since
+    ;; we're using sets in file-graph
+    (and 
+      (= (set fg-traversal) (set baseline-traversal))
+      (= (set (keys g)) (set baseline-traversal)))))
+
+(defmacro ^:private cleanup [& body]
+  `(try
+     (do ~@body)
+     (finally
+       (kill-all-watches))))
+
+;; hard to know how to automate this without better support for
+;; printing to repl from other threads
+(t/deftest create-modify-delete-test
+  (let [fs1 (dir "d1"
+              (txt "t1" "start\n")
+              (txt "t2" "start\n"))
+        interval 500
+        setup (fn setup
+                ([] (setup nil))
+                ([& listener-specs]
+                 (make-file-system test-path fs1)
+                 (Thread/Sleep 200)
+                 (let [watch (start-watch test-path interval)]
+                   (doseq [{:keys [k f e]} listener-specs]
+                     ((::add-listener watch) k f e))                   
+                   watch)))]
+    (t/testing "initial topology"
+      (cleanup
+        (let [watch (setup)]
+          (t/is (correct-file-graph?
+                  (::file-graph ((::state watch)))
+                  test-path)))))
+    (t/testing "create file"
+      (cleanup
+        (let [state (atom {::create []
+                           ::create-modify-delete-file []})
+              watch (setup
+                      {:f #(swap! state update ::create conj %)
+                       :e ::create
+                       :k ::create}
+                      {:f #(swap! state update ::create-modify-delete-file conj %)
+                       :e ::create-modify-delete-file
+                       :k ::create-modify-delete-file})]
+          (File/WriteAllText (path-combine test-path "d1" "t3.txt")
+            "start\n")
+          (Thread/Sleep (* 2 interval))
+          (let [s @state]
+            (t/is (= (map ::path (::create s))
+                    [(path-combine test-path "d1" "t3.txt")]))
+            (t/is (= (map ::path (::create-modify-delete-file s))
+                    [(path-combine test-path "d1" "t3.txt")]))))))))
 
 (as/pop-assert)
