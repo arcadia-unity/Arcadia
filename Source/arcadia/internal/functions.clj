@@ -18,22 +18,24 @@
 ;; something reasonable.
 
 (defn- comp-impl []
-  (let [max-args 5
+  (let [max-args 21
         outer-args (for [i (range (inc max-args))]
-                     (symbol (str "fn_" i)))
+                     (symbol (str "fn_" (inc i))))
         inner-args (am/classy-args)
         base-body-base (fn [outer-inx inner-inx]
                          (let [outer-args* (take outer-inx outer-args)
                                inner-args* (vec (take inner-inx inner-args))
                                base (vec (reverse outer-args*))]
-                           (list (if (= max-args inner-inx)
-                                   (-> inner-args* pop (conj '& 'more))
-                                   inner-args*)
-                             (cons `->
-                               (if (= max-args inner-inx)
+                           (if (= max-args inner-inx)
+                             (list
+                               (-> inner-args* pop (conj '& 'more))
+                               (cons `->
                                  (update base 0
                                    #(list* `apply %
-                                      (-> inner-args* pop (conj 'more))))
+                                      (-> inner-args* pop (conj 'more))))))
+                             (list
+                               inner-args*
+                               (cons `->
                                  (update base 0 #(list* % inner-args*)))))))
         base-body (fn [outer-inx]
                     (list* `fn (gensym (str "composed_" outer-inx))
