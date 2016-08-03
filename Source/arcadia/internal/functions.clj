@@ -8,7 +8,7 @@
 ;; ============================================================
 ;; comp
 
-;; 400 total thingums: explicit cases for up to 19 input functions,
+;; 400 total composed arities: explicit cases for up to 19 input functions,
 ;; plus a case for over 20, then for each of those, explicit cases for
 ;; up to 19 arguments to the composed function, plus a case for over
 ;; 20 such arguments. Code explodey, but as-fast-as-possible comp is especially
@@ -17,55 +17,57 @@
 ;; To see the innards, (pprint (comp-impl)) with *print-length* set to
 ;; something reasonable.
 
+(defn- arities-forms
+  ([base-fn] (arities-forms base-fn nil))
+  ([base-fn, {:keys [::max-args, ::cases, ::args-fn]
+              :or {::max-args 21,
+                   ::cases {},
+                   ::args-fn #(gensym (str "arg-" (inc %) "_"))}}]
+   (let [args (map args-fn (range max-args))
+         arity-args (vec (reductions conj [] args))
+         cases-fn (fn [i val]
+                    (if (contains? cases i)
+                      ((cases i) val)
+                      val))]
+     (into []
+       (clojure.core/comp
+         (map base-fn)
+         (map-indexed cases-fn))
+       arity-args))))
+
 (defn- comp-impl []
-  (let [max-args 21
-        outer-args (for [i (range (inc max-args))]
-                     (symbol (str "fn_" (inc i))))
-        inner-args (am/classy-args)
-        base-body-base (fn [outer-inx inner-inx]
-                         (let [outer-args* (take outer-inx outer-args)
-                               inner-args* (vec (take inner-inx inner-args))
-                               base (vec (reverse outer-args*))]
-                           (if (= max-args inner-inx)
-                             (list
-                               (-> inner-args* pop (conj '& 'more))
-                               (cons `->
-                                 (update base 0
-                                   #(list* `apply %
-                                      (-> inner-args* pop (conj 'more))))))
-                             (list
-                               inner-args*
-                               (cons `->
-                                 (update base 0 #(list* % inner-args*)))))))
-        base-body (fn [outer-inx]
-                    (list* `fn (gensym (str "composed_" outer-inx))
-                      (for [inner-inx (range (inc max-args))]
-                        (base-body-base outer-inx inner-inx))))
+  (let [max-args 5
+        base-body (fn [outer-args]
+                    (letfn [(max-arg-fn [[inner-args]]
+                              `([~@(pop inner-args) ~'& ~'more]
+                                (->
+                                  ~@(update outer-args 0
+                                      (fn [f]
+                                        `(apply ~f ~@(pop inner-args) ~'more))))))]
+                      (list* `fn (symbol (str "composed-" (count outer-args)))
+                        (arities-forms (fn [inner-args]
+                                         (let [base (-> (vec (reverse outer-args))
+                                                        (update 0 #(cons % inner-args)))]
+                                           `(~inner-args (-> ~@base))))
+                          {::max-args max-args
+                           ::args-fn (vec (am/classy-args max-args))
+                           ::cases {max-args max-arg-fn}}))))
         base (vec
-               (for [outer-inx (range (inc max-args))]
-                 (let [outer-args* (vec (take outer-inx outer-args))
-                       bb (base-body outer-inx)]
-                   (list
-                     (if (= max-args outer-inx)
-                       (-> outer-args* pop (conj '& 'fn-more))
-                       outer-args*)
-                     (cond
-                       (zero? outer-inx)
-                       'identity
-
-                       (= 1 outer-inx)
-                       (first outer-args)
-                       
-                       (= max-args outer-inx)
-                       `(reduce comp
-                          (comp ~@(take (dec max-args) outer-args*))
-                          ~'fn-more)
-
-                       :else bb)))))]
+               (arities-forms #(list % (base-body %))
+                 {::max-args max-args
+                  ::args-fn #(symbol (str "fn-" (inc %)))
+                  ::cases {0 (fn [_] `([] identity))
+                           1 (fn [[[f]]] `([~f] ~f))                           
+                           max-args (fn [[outer-args]]
+                                      (list
+                                        (-> outer-args pop (conj '& 'more))
+                                        `(reduce comp
+                                           (comp ~@(take (dec max-args) outer-args))
+                                           ~'fn-more)))}}))]
     base))
 
-(am/defn-meval comp
-  "Faster version of comp than clojure.core/comp. Maybe should just swap out core comp for this."
-  (comp-impl))
+;; (am/defn-meval comp
+;;   "Faster version of comp than clojure.core/comp. Maybe should just swap out core comp for this."
+;;   (comp-impl))
 
 
