@@ -144,7 +144,7 @@
     :else (throw (System.ArgumentException. "Expects FileSystemInfo or String."))))
 
 ;; this might screw up symlinks
-(defn- file-graph [root]
+(defn file-graph [root]
   {:pre [(as/loud-valid? ::info-path root)]
    :post [(as/loud-valid? ::file-graph %)]}
   (when-let [root-info (info root)]
@@ -288,16 +288,20 @@
 ;; fields of DirectoryInfos
 (defmethod event-change ::alter-children
   [e, watch-data, path]
-  ;;  (Debug/Log (str "::alter-children considering " path))
   (let [fsi (get-info watch-data path)]
     (when (instance? DirectoryInfo fsi)
-      ;;      (Debug/Log (str "::alter-children 1"))
       (when-let [ch (change-buddy watch-data path e (.LastWriteTime fsi))]
-        ;;        (Debug/Log (str "::alter-children 2"))
         (let [subfs (into #{} (map #(.FullName %)) (.GetFileSystemInfos fsi))]
           (when (not= subfs (get-children watch-data path))
-            ;;          (Debug/Log (str "::alter-children registering at " path))
             ch))))))
+
+;; all changes to directories
+;; for gross but ultimately much more efficient optimization to refresh
+(defmethod event-change ::alter-directory
+  [e, watch-data, path]
+  (let [fsi (get-info watch-data path)]
+    (when (instance? DirectoryInfo fsi)
+      (change-buddy watch-data path e (.LastWriteTime fsi)))))
 
 (defmethod event-change ::create-modify-delete-file
   [e, watch-data, path]
@@ -338,19 +342,74 @@
               (event-type->listeners (::event-type ch))))]
     (doduce (map process-change) changes)))
 
-(defn- changes [watch-data]
-  (let [fsis (vals (gets watch-data ::file-graph ::fsis))]
-    (doseq [^FileSystemInfo fsi fsis] ;; refresh all file system infos
-      (.Refresh fsi)))
-  (let [events (keys (::event-type->listeners watch-data))
-        paths (keys (gets watch-data ::file-graph ::g))]
-    (into []
-      (mapcat
-        (fn [e]
-          (eduction
-            (keep #(event-change e watch-data %))
-            paths)))
-      events)))
+(defn- refresh ^FileSystemInfo [^FileSystemInfo fsi]
+  (.Refresh fsi)
+  fsi)
+
+;; now with loony tangled optimization, to cut the number of files we
+;; consider (and have to .Refresh) down to the minimum
+(defn- changes [{{:keys [::g, ::fsis], :as fg} ::file-graph,
+                 started ::started,
+                 :as watch-data}]
+  (let [infos (vals (gets watch-data ::file-graph ::fsis))
+        events (vec (keys (::event-type->listeners watch-data)))]
+    (letfn [(info-changes [^FileSystemInfo fsi]
+              (let [p (.FullName fsi)]
+                (eduction
+                  (keep #(event-change % watch-data p))
+                  events)))
+            (new-path? [p]
+              (not (some-> watch-data ::prev-file-graph ::g (get p))))
+            (directory-changes [^DirectoryInfo di]
+              (let [child-files (eduction
+                                  (comp
+                                    (map #(get-info fg %))
+                                    (filter #(instance? FileInfo %))
+                                    (remove (fn [^FileInfo fi] (new-path? (.FullName fi)))) ; needs to be disjoint with new files
+                                    (map refresh)) ; !!
+                                  (get-children fg (.FullName di)))]
+                (eduction
+                  (comp cat (mapcat info-changes))
+                  [[di] child-files])))
+            (directory-written? [^DirectoryInfo di]
+              (let [p (.FullName di)
+                    lwt (.LastWriteTime di)]
+                (when (before? started lwt)
+                  (if-let [{:keys [::time]} (gets watch-data ::history path ::alter-directory)]
+                    (before? time lwt)
+                    true))))]
+      (let [new-files (eduction
+                        (comp
+                          (filter #(and (instance? FileInfo %)
+                                        (new-path? (.FullName %))))
+                          (map refresh)) ; !!
+                        infos)
+            changed-directories (eduction
+                                  (comp
+                                    (filter #(instance? DirectoryInfo %))
+                                    (map refresh) ; !!
+                                    (filter directory-written?))
+                                  infos)]
+        (into [] cat
+          [(eduction (mapcat info-changes) new-files),
+           (eduction ; old files with changed parents
+             (mapcat directory-changes)
+             changed-directories)]))))
+  ;; ------------------------------------------------------------
+  ;; much simpler, slower way:
+  ;; (let [fsis (vals (gets watch-data ::file-graph ::fsis))]
+  ;;   (doseq [^FileSystemInfo fsi fsis] ;; refresh all file system infos
+  ;;     (.Refresh fsi)))
+  ;; (let [events (keys (::event-type->listeners watch-data))
+  ;;       paths (keys (gets watch-data ::file-graph ::g))]
+  ;;   (into []
+  ;;     (mapcat
+  ;;       (fn [e]
+  ;;         (eduction
+  ;;           (keep #(event-change e watch-data %))
+  ;;           paths)))
+  ;;     events))
+  )
 
 (defn- update-history [history changes]
   {:pre [(as/loud-valid? (s/spec (s/* ::event)) changes)
@@ -373,6 +432,8 @@
                 fg2))
       file-graph)))
 
+(def ws-weirdness-log (atom []))
+
 (defn- watch-step [{:keys [::event-type->listeners] :as watch-data}]
   {:pre [(as/loud-valid? ::watch-data watch-data)]}
   (let [chs (changes watch-data)]
@@ -384,7 +445,14 @@
                 (update ::file-graph update-file-graph chs)
                 (assoc ::prev-file-graph (::file-graph watch-data)))]
       (if (some #(= ::alter-children (::event-type %)) chs) ;; stupid but easy to type
-        (watch-step wd2)
+        (if (= (::file-graph wd2)
+              (::file-graph
+               (::prev-file-graph watch-data)))
+          (do
+            (swap! ws-weirdness-log conj
+              (filter #(= ::alter-children (::event-type %)) chs))
+            (throw (Exception. "something's up")))
+          (watch-step wd2))
         wd2))))
 
 (defn- remove-listener
@@ -430,7 +498,8 @@
        (clean-watches)))))
 
 (defn start-watch [root, interval]
-  (let [watch-state (atom {::event-type->listeners {::alter-children []}
+  (let [watch-state (atom {::event-type->listeners {::alter-children []
+                                                    ::alter-directory []}
                            ::history {}
                            ::started DateTime/Now
                            ::file-graph (file-graph root)
@@ -510,7 +579,7 @@
    ::name name
    ::children (vec children)})
 
-(defmulti ^:private make-file-system
+(defmulti make-file-system
   (fn [root spec] (::type spec)))
 
  ;; guard so I don't screw up _my_ file system
@@ -530,96 +599,101 @@
     (doseq [child-spec (::children spec)]
       (make-file-system (.FullName dir) child-spec))))
 
-(defmethod make-file-system :txt [root spec]
-  (ward-file-system root)
-  (let [file (FileInfo. (Path/Combine root (str (::name spec) ".txt")))]
-    (when (.Exists file) (. file (Delete)))
-    (spit (.FullName file)
-      (clojure.string/join (::contents spec) "\n"))))
+;; ;; uncomment next form while watch running to trigger weirdness
 
-(defn- setup-test-1 []
-  (let [watch (start-watch test-path, 500)
-        side-state (atom {:new-file-log []})
-        listener (fn test-listener-1 [& args]
-                   (Debug/Log "Firing test-listener-1")
-                   (swap! side-state update :new-file-log conj args))]
-    ((::add-listener watch) :new-file listener ::alter-children)
-    (mu/lit-map watch side-state listener)))
+;; (defmethod make-file-system :txt [root spec]
+;;   :bloo)
 
-(defn- delete-in-directory [dir]
-  (let [dir (info dir)]
-    (ward-file-system (.FullName dir))
-    (doseq [^FileSystemInfo fsi (.GetFileSystemInfos dir)]
-      (if (instance? DirectoryInfo fsi)
-        (.Delete fsi true)
-        (.Delete fsi)))))
+;; (defmethod make-file-system :txt [root spec]
+;;   (ward-file-system root)
+;;   (let [file (FileInfo. (Path/Combine root (str (::name spec) ".txt")))]
+;;     (when (.Exists file) (. file (Delete)))
+;;     (spit (.FullName file)
+;;       (clojure.string/join (::contents spec) "\n"))))
 
-(defn- correct-file-graph? [{:keys [::g] :as fg} root]
-  (let [fg-traversal (tree-seq
-                       (fn branch-a? [path]
-                         (instance? DirectoryInfo (get-info fg path)))
-                       (fn children-a [path]
-                         (get-children fg path))
-                       root)
-        baseline-traversal (tree-seq
-                             (fn branch-b? [path]
-                               (instance? DirectoryInfo (info path)))
-                             (fn children-b [path]
-                               (map #(.FullName (info %))
-                                 (.GetFileSystemInfos (info path))))
-                             root)]
-    ;; writing test for correct topology is a little harder since
-    ;; we're using sets in file-graph
-    (and 
-      (= (set fg-traversal) (set baseline-traversal))
-      (= (set (keys g)) (set baseline-traversal)))))
+;; (defn- setup-test-1 []
+;;   (let [watch (start-watch test-path, 500)
+;;         side-state (atom {:new-file-log []})
+;;         listener (fn test-listener-1 [& args]
+;;                    (Debug/Log "Firing test-listener-1")
+;;                    (swap! side-state update :new-file-log conj args))]
+;;     ((::add-listener watch) :new-file listener ::alter-children)
+;;     (mu/lit-map watch side-state listener)))
 
-(defmacro ^:private cleanup [& body]
-  `(try
-     (do ~@body)
-     (finally
-       (kill-all-watches))))
+;; (defn- delete-in-directory [dir]
+;;   (let [dir (info dir)]
+;;     (ward-file-system (.FullName dir))
+;;     (doseq [^FileSystemInfo fsi (.GetFileSystemInfos dir)]
+;;       (if (instance? DirectoryInfo fsi)
+;;         (.Delete fsi true)
+;;         (.Delete fsi)))))
 
-;; hard to know how to automate this without better support for
-;; printing to repl from other threads
-(t/deftest create-modify-delete-test
-  (let [fs1 (dir "d1"
-              (txt "t1" "start\n")
-              (txt "t2" "start\n"))
-        interval 500
-        setup (fn setup
-                ([] (setup nil))
-                ([& listener-specs]
-                 (make-file-system test-path fs1)
-                 (Thread/Sleep 200)
-                 (let [watch (start-watch test-path interval)]
-                   (doseq [{:keys [k f e]} listener-specs]
-                     ((::add-listener watch) k f e))                   
-                   watch)))]
-    (t/testing "initial topology"
-      (cleanup
-        (let [watch (setup)]
-          (t/is (correct-file-graph?
-                  (::file-graph ((::state watch)))
-                  test-path)))))
-    (t/testing "create file"
-      (cleanup
-        (let [state (atom {::create []
-                           ::create-modify-delete-file []})
-              watch (setup
-                      {:f #(swap! state update ::create conj %)
-                       :e ::create
-                       :k ::create}
-                      {:f #(swap! state update ::create-modify-delete-file conj %)
-                       :e ::create-modify-delete-file
-                       :k ::create-modify-delete-file})]
-          (File/WriteAllText (path-combine test-path "d1" "t3.txt")
-            "start\n")
-          (Thread/Sleep (* 2 interval))
-          (let [s @state]
-            (t/is (= (map ::path (::create s))
-                    [(path-combine test-path "d1" "t3.txt")]))
-            (t/is (= (map ::path (::create-modify-delete-file s))
-                    [(path-combine test-path "d1" "t3.txt")]))))))))
+;; (defn- correct-file-graph? [{:keys [::g] :as fg} root]
+;;   (let [fg-traversal (tree-seq
+;;                        (fn branch-a? [path]
+;;                          (instance? DirectoryInfo (get-info fg path)))
+;;                        (fn children-a [path]
+;;                          (get-children fg path))
+;;                        root)
+;;         baseline-traversal (tree-seq
+;;                              (fn branch-b? [path]
+;;                                (instance? DirectoryInfo (info path)))
+;;                              (fn children-b [path]
+;;                                (map #(.FullName (info %))
+;;                                  (.GetFileSystemInfos (info path))))
+;;                              root)]
+;;     ;; writing test for correct topology is a little harder since
+;;     ;; we're using sets in file-graph
+;;     (and 
+;;       (= (set fg-traversal) (set baseline-traversal))
+;;       (= (set (keys g)) (set baseline-traversal)))))
+
+;; (defmacro ^:private cleanup [& body]
+;;   `(try
+;;      (do ~@body)
+;;      (finally
+;;        (kill-all-watches))))
+
+;; ;; hard to know how to automate this without better support for
+;; ;; printing to repl from other threads
+;; (t/deftest create-modify-delete-test
+;;   (let [fs1 (dir "d1"
+;;               (txt "t1" "start\n")
+;;               (txt "t2" "start\n"))
+;;         interval 500
+;;         setup (fn setup
+;;                 ([] (setup nil))
+;;                 ([& listener-specs]
+;;                  (make-file-system test-path fs1)
+;;                  (Thread/Sleep 200)
+;;                  (let [watch (start-watch test-path interval)]
+;;                    (doseq [{:keys [k f e]} listener-specs]
+;;                      ((::add-listener watch) k f e))                   
+;;                    watch)))]
+;;     (t/testing "initial topology"
+;;       (cleanup
+;;         (let [watch (setup)]
+;;           (t/is (correct-file-graph?
+;;                   (::file-graph ((::state watch)))
+;;                   test-path)))))
+;;     (t/testing "create file"
+;;       (cleanup
+;;         (let [state (atom {::create []
+;;                            ::create-modify-delete-file []})
+;;               watch (setup
+;;                       {:f #(swap! state update ::create conj %)
+;;                        :e ::create
+;;                        :k ::create}
+;;                       {:f #(swap! state update ::create-modify-delete-file conj %)
+;;                        :e ::create-modify-delete-file
+;;                        :k ::create-modify-delete-file})]
+;;           (File/WriteAllText (path-combine test-path "d1" "t3.txt")
+;;             "start\n")
+;;           (Thread/Sleep (* 2 interval))
+;;           (let [s @state]
+;;             (t/is (= (map ::path (::create s))
+;;                     [(path-combine test-path "d1" "t3.txt")]))
+;;             (t/is (= (map ::path (::create-modify-delete-file s))
+;;                     [(path-combine test-path "d1" "t3.txt")]))))))))
 
 (as/pop-assert)
