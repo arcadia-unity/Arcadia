@@ -8,6 +8,8 @@
             [clojure.set :as set])
   ;; prod
   (:require [clojure.spec :as s]
+            [arcadia.internal.functions :as af]
+            [arcadia.internal.file-system :as fs]
             [arcadia.internal.spec :as as]
             [arcadia.internal.map-utils :as mu]
             [arcadia.internal.array-utils :as au]
@@ -306,11 +308,9 @@
 (defmethod event-change ::create-modify-delete-file
   [e, watch-data, path]
   (let [^FileSystemInfo fsi (get-info watch-data path)]
-    ;;(Debug/Log (str "::create-modify-delete-file considering " path))
     (when (instance? FileInfo fsi)
       (or (and                                       ; check for delete
             (not (.Exists fsi))                      ; it's not there...
-            ;;(not (gets watch-data ::history path e)) ; only once! it's deleted
             (qwik-event path e DateTime/Now))        ; return event
         (change-buddy watch-data path e              ; other cases
           (latest ; yes. maybe it was created after it was written to. nothing's off the table
@@ -342,74 +342,71 @@
               (event-type->listeners (::event-type ch))))]
     (doduce (map process-change) changes)))
 
+;; ------------------------------------------------------------
+;; changes, and associated low-level helpers
+
 (defn- refresh ^FileSystemInfo [^FileSystemInfo fsi]
   (.Refresh fsi)
   fsi)
 
-;; now with loony tangled optimization, to cut the number of files we
-;; consider (and have to .Refresh) down to the minimum
+(defn- info-changes [^FileSystemInfo fsi, watch-data, events]
+  (let [p (.FullName fsi)]
+    (eduction
+      (keep #(event-change % watch-data p))
+      events)))
+
+(defn- new-path? [p watch-data]
+  (not (some-> watch-data ::prev-file-graph ::g (get p))))
+
+(defn- directory-changes [^DirectoryInfo di, {fg ::file-graph, :as watch-data}, events]
+  (let [child-files (eduction
+                      (af/comp
+                        (map #(get-info fg %))
+                        (filter #(instance? FileInfo %))
+                        (remove (fn [^FileInfo fi] ; needs to be disjoint with new files
+                                  (new-path? (.FullName fi) watch-data)))
+                        (map refresh)) ; !!
+                      (get-children fg (.FullName di)))]
+    (eduction
+      (af/comp cat (mapcat #(info-changes % watch-data events)))
+      [[di] child-files])))
+
+(defn- directory-written? [^DirectoryInfo di, {:keys [::started] :as watch-data}]
+  (let [p (.FullName di)
+        lwt (.LastWriteTime di)]
+    (when (before? started lwt)
+      (if-let [{:keys [::time]} (gets watch-data ::history p ::alter-directory)]
+        (before? time lwt)
+        true))))
+
 (defn- changes [{{:keys [::g, ::fsis], :as fg} ::file-graph,
                  started ::started,
                  :as watch-data}]
   (let [infos (vals (gets watch-data ::file-graph ::fsis))
-        events (vec (keys (::event-type->listeners watch-data)))]
-    (letfn [(info-changes [^FileSystemInfo fsi]
-              (let [p (.FullName fsi)]
-                (eduction
-                  (keep #(event-change % watch-data p))
-                  events)))
-            (new-path? [p]
-              (not (some-> watch-data ::prev-file-graph ::g (get p))))
-            (directory-changes [^DirectoryInfo di]
-              (let [child-files (eduction
-                                  (comp
-                                    (map #(get-info fg %))
-                                    (filter #(instance? FileInfo %))
-                                    (remove (fn [^FileInfo fi] (new-path? (.FullName fi)))) ; needs to be disjoint with new files
-                                    (map refresh)) ; !!
-                                  (get-children fg (.FullName di)))]
-                (eduction
-                  (comp cat (mapcat info-changes))
-                  [[di] child-files])))
-            (directory-written? [^DirectoryInfo di]
-              (let [p (.FullName di)
-                    lwt (.LastWriteTime di)]
-                (when (before? started lwt)
-                  (if-let [{:keys [::time]} (gets watch-data ::history path ::alter-directory)]
-                    (before? time lwt)
-                    true))))]
-      (let [new-files (eduction
-                        (comp
-                          (filter #(and (instance? FileInfo %)
-                                        (new-path? (.FullName %))))
-                          (map refresh)) ; !!
-                        infos)
-            changed-directories (eduction
-                                  (comp
-                                    (filter #(instance? DirectoryInfo %))
-                                    (map refresh) ; !!
-                                    (filter directory-written?))
-                                  infos)]
-        (into [] cat
-          [(eduction (mapcat info-changes) new-files),
-           (eduction ; old files with changed parents
-             (mapcat directory-changes)
-             changed-directories)]))))
-  ;; ------------------------------------------------------------
-  ;; much simpler, slower way:
-  ;; (let [fsis (vals (gets watch-data ::file-graph ::fsis))]
-  ;;   (doseq [^FileSystemInfo fsi fsis] ;; refresh all file system infos
-  ;;     (.Refresh fsi)))
-  ;; (let [events (keys (::event-type->listeners watch-data))
-  ;;       paths (keys (gets watch-data ::file-graph ::g))]
-  ;;   (into []
-  ;;     (mapcat
-  ;;       (fn [e]
-  ;;         (eduction
-  ;;           (keep #(event-change e watch-data %))
-  ;;           paths)))
-  ;;     events))
-  )
+        events (vec (keys (::event-type->listeners watch-data)))
+        new-files (eduction
+                    (af/comp
+                      (filter #(and (instance? FileInfo %)
+                                    (new-path? (.FullName %) watch-data)))
+                      (map refresh))    ; !!
+                    infos)
+        changed-directories (eduction
+                              (af/comp
+                                (filter #(instance? DirectoryInfo %))
+                                (map refresh) ; !!
+                                (filter #(directory-written? % watch-data)))
+                              infos)
+        chs (into [] cat
+              [(eduction
+                 (mapcat #(info-changes % watch-data events))
+                 new-files),
+               (eduction ; old files with changed parents
+                 (mapcat #(directory-changes % watch-data events))
+                 changed-directories)])]
+    chs))
+
+;; ------------------------------------------------------------
+;; updating topology
 
 (defn- update-history [history changes]
   {:pre [(as/loud-valid? (s/spec (s/* ::event)) changes)
@@ -427,10 +424,11 @@
               (Debug/Log (str "merging for path: " path))
               (let [fg2 (merge-file-graphs fg
                           (arcadia.internal.filewatcher/file-graph path))]
-                (Debug/Log (str "merge result:\n"
-                             (with-out-str (pprint fg2))))
                 fg2))
-      file-graph)))
+       file-graph)))
+
+;; ------------------------------------------------------------
+;; driver 
 
 (def ws-weirdness-log (atom []))
 
@@ -455,6 +453,9 @@
           (watch-step wd2))
         wd2))))
 
+;; ------------------------------------------------------------
+;; listener API
+
 (defn- remove-listener
   ([watch-data] watch-data)
   ([watch-data listener-key]
@@ -470,6 +471,9 @@
      (remove-listener listener-key) ;; so stupid
      (update-in [::event-type->listeners event-type] conj new-listener))))
 
+;; ------------------------------------------------------------
+;; thread management
+
 (defn- start-thread [f]
   (let [t (Thread.
             (gen-delegate ThreadStart []
@@ -484,7 +488,7 @@
   (doseq [{:keys [::stop]} @all-watches]
     (stop)))
 
-;; gc dead watches
+;; gc dead watches 
 (defn clean-watches
   ([]
    (swap! all-watches
@@ -496,6 +500,9 @@
      (fn []
        (Thread/Sleep delay)
        (clean-watches)))))
+
+;; ------------------------------------------------------------
+;; top level entry point
 
 (defn start-watch [root, interval]
   (let [watch-state (atom {::event-type->listeners {::alter-children []
@@ -556,50 +563,49 @@
 ;; ============================================================
 
 ;; absolute, so it doesn't screw up _your_ file system
-(def ^:private test-path "/Users/timothygardner/Desktop/filesystemwatcher_tests")
 
-(defn- path-combine [& paths]
-  (reduce #(Path/Combine %1 %2) paths))
+;; (def ^:private test-path "/Users/timothygardner/Desktop/filesystemwatcher_tests")
 
-(defn- path-split [path]
-  (vec (. path (Split (au/lit-array System.Char Path/DirectorySeparatorChar)))))
+;; (defn- path-combine [& paths]
+;;   (reduce #(Path/Combine %1 %2) paths))
 
-(defn- path-supers [path]
-  (take-while (complement nil?)
-    (iterate #(Path/GetDirectoryName %)
-      path)))
+;; (defn- path-split [path]
+;;   (vec (. path (Split (au/lit-array System.Char Path/DirectorySeparatorChar)))))
 
-(defn- txt [name & contents]
-  {::type :txt
-   ::name name
-   ::contents (vec contents)})
+;; (defn- path-supers [path]
+;;   (take-while (complement nil?)
+;;     (iterate #(Path/GetDirectoryName %)
+;;       path)))
 
-(defn- dir [name & children]
-  {::type :dir
-   ::name name
-   ::children (vec children)})
+;; (defn- txt [name & contents]
+;;   {::type :txt
+;;    ::name name
+;;    ::contents (vec contents)})
 
-(defmulti make-file-system
-  (fn [root spec] (::type spec)))
+;; (defn- dir [name & children]
+;;   {::type :dir
+;;    ::name name
+;;    ::children (vec children)})
 
- ;; guard so I don't screw up _my_ file system
-(defn- ward-file-system [root]
-  (when-not (.Contains root test-path)
-    (throw (Exception. "root must contain test path"))))
+;; (defmulti make-file-system
+;;   (fn [root spec] (::type spec)))
 
-(defmethod make-file-system :dir [root spec]
-  (ward-file-system root)
-  (let [dir (DirectoryInfo. (Path/Combine root (::name spec)))]
-    (if (.Exists dir)
-      (doseq [fsi (.GetFileSystemInfos dir)]
-        (cond
-          (instance? DirectoryInfo fsi) (.Delete fsi true)
-          (instance? FileInfo fsi) (.Delete fsi)))
-      (.Create dir))
-    (doseq [child-spec (::children spec)]
-      (make-file-system (.FullName dir) child-spec))))
+;;  ;; guard so I don't screw up _my_ file system
+;; (defn- ward-file-system [root]
+;;   (when-not (.Contains root test-path)
+;;     (throw (Exception. "root must contain test path"))))
 
-;; ;; uncomment next form while watch running to trigger weirdness
+;; (defmethod make-file-system :dir [root spec]
+;;   (ward-file-system root)
+;;   (let [dir (DirectoryInfo. (Path/Combine root (::name spec)))]
+;;     (if (.Exists dir)
+;;       (doseq [fsi (.GetFileSystemInfos dir)]
+;;         (cond
+;;           (instance? DirectoryInfo fsi) (.Delete fsi true)
+;;           (instance? FileInfo fsi) (.Delete fsi)))
+;;       (.Create dir))
+;;     (doseq [child-spec (::children spec)]
+;;       (make-file-system (.FullName dir) child-spec))))
 
 ;; (defmethod make-file-system :txt [root spec]
 ;;   :bloo)
