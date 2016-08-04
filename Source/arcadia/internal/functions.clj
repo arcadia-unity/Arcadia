@@ -1,9 +1,10 @@
 (ns ^{:doc
-      "Useful general-purpose higher order functions.
+      "Useful general-purpose higher order functions, with emphasis on perf.
  Includes optimized implementation of comp."}
     arcadia.internal.functions
-  (:refer-clojure :exclude [comp])
-  (:require [arcadia.internal.macro :as am]))
+  (:refer-clojure :exclude [comp, partial])
+  (:require [arcadia.internal.macro :as am]
+            [arcadia.internal.benchmarking :as b]))
 
 ;; ============================================================
 ;; comp
@@ -51,4 +52,60 @@
   "Faster version of comp than clojure.core/comp. Maybe should just swap out core comp for this."
   (comp-impl))
 
+;; perf:
 
+;; (b/n-timing 1e3
+;;   (comp
+;;     identity identity identity identity
+;;     identity identity identity identity
+;;     identity identity identity identity
+;;     identity identity identity identity))
+
+;; ~ 0.0008
+
+;; (b/n-timing 1e3
+;;   (clojure.core/comp
+;;     identity identity identity identity
+;;     identity identity identity identity
+;;     identity identity identity identity
+;;     identity identity identity identity))
+
+;; ~ 0.018332
+
+;; (am/defn-meval arg-eater
+;;   (am/arities-forms list))
+
+;; (let [f (comp
+;;           identity identity identity identity
+;;           identity identity identity identity
+;;           identity identity identity identity
+;;           identity identity identity identity
+;;           arg-eater)]
+;;   (b/n-timing 1e3
+;;     (f
+;;       :bla :bla :bla :bla
+;;       :bla :bla :bla :bla
+;;       :bla :bla :bla :bla
+;;       :bla :bla :bla :bla)))
+
+;; ~ 0.000234
+
+;; (let [f (clojure.core/comp
+;;           identity identity identity identity
+;;           identity identity identity identity
+;;           identity identity identity identity
+;;           identity identity identity identity
+;;           arg-eater)]
+;;   (b/n-timing 1e3
+;;     (f
+;;       :bla :bla :bla :bla
+;;       :bla :bla :bla :bla
+;;       :bla :bla :bla :bla
+;;       :bla :bla :bla :bla)))
+
+;; ~ 0.005382
+
+;; ============================================================
+;; partial
+
+;; partial in clojure is too stupid, I'm not writing this.
