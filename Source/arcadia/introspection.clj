@@ -108,3 +108,24 @@
             props)
           (map (fn [^MonoProperty mp] (.GetValue mp obj nil))
             props))))))
+
+(defn methods-report
+  ([type] (methods-report type nil))
+  ([type pat]
+   (let [cmpr (comparator #(< (count (.GetParameters %1))
+                              (count (.GetParameters %2))))]
+     (->> (if pat
+            (methods type pat)
+            (methods type))
+          (sort (fn [a b]
+                  (let [cmp (compare (.Name a) (.Name b))]
+                    (if-not (zero? cmp)
+                      cmp
+                      (cmpr a b)))))
+          (map (fn [meth]
+                 {:name (.Name meth)
+                  :parameters (vec
+                                (for [param (.GetParameters meth)]
+                                  {:name (.Name param)
+                                   :type (.ParameterType param)}))
+                  :return-type (.. meth ReturnParameter ParameterType)}))))))
