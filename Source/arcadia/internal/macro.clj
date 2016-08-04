@@ -125,3 +125,24 @@ I've found vectors useful data structures for generating arities, since it is ea
 (defn classy-args
   ([] (map symbol (classy-arg-strs)))
   ([n] (map symbol (classy-arg-strs n))))
+
+;; ============================================================
+;; arity generation helpers
+
+(defn arities-forms
+  ([base-fn] (arities-forms base-fn nil))
+  ([base-fn, {:keys [::max-args, ::cases, ::arg-fn]
+              :or {::max-args 20,
+                   ::cases {},
+                   ::arg-fn #(gensym (str "arg-" (inc %) "_"))}}]
+   (let [args (map arg-fn (range max-args))
+         arity-args (vec (reductions conj [] args))
+         cases-fn (fn [i val]
+                    (if (contains? cases i)
+                      ((cases i) val)
+                      val))]
+     (into []
+       (comp
+         (map base-fn)
+         (map-indexed cases-fn))
+       arity-args))))
