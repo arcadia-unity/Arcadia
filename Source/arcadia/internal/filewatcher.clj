@@ -146,19 +146,22 @@
     :else (throw (System.ArgumentException. "Expects FileSystemInfo or String."))))
 
 ;; this might screw up symlinks
-(defn file-graph [root]
-  {:pre [(as/loud-valid? ::info-path root)]
-   :post [(as/loud-valid? ::file-graph %)]}
-  (when-let [root-info (info root)]
-    (let [kids (info-children root-info)
-          fg {::type ::file-graph
-              ::g {(path root-info) (into #{} (map path) kids)}
-              ::fsis {(path root-info) root-info}}]
-      (transduce
-        (map file-graph)
-        merge-file-graphs
-        fg
-        kids))))
+(defn file-graph
+  ([root] (file-graph root nil))
+  ([root {:keys [::do-not-descend?] :as opts}]
+   {:pre [(as/loud-valid? ::info-path root)]
+    :post [(as/loud-valid? ::file-graph %)]}
+   (when-not (if do-not-descend? (do-not-descend? (fs/path root)))
+     (when-let [root-info (info root)]
+       (let [kids (info-children root-info)
+             fg {::type ::file-graph
+                 ::g {(path root-info) (into #{} (map path) kids)}
+                 ::fsis {(path root-info) root-info}}]
+         (transduce
+           (map #(file-graph % opts))
+           merge-file-graphs
+           fg
+           kids))))))
 
 (defn- add-file
   ([fg] fg)
@@ -505,11 +508,16 @@
 ;; top level entry point
 
 (defn start-watch [root, interval]
-  (let [watch-state (atom {::event-type->listeners {::alter-children []
+  (let [do-not-descend? (fn [p]
+                          (boolean
+                            (re-find #"\.git$" p)))
+        watch-state (atom {::event-type->listeners {::alter-children []
                                                     ::alter-directory []}
                            ::history {}
+                           ::do-not-descend? do-not-descend?
                            ::started DateTime/Now
-                           ::file-graph (file-graph root)
+                           ::file-graph (file-graph root
+                                          {::do-not-descend? do-not-descend?})
                            ::type ::watch-data})
         control (atom {:interval interval
                        :should-loop true})
