@@ -15,8 +15,7 @@
   (atom
     (fw/start-watch
       (.FullName
-        (FileSystemInfo.
-          (fs/path-combine "." "Assets")))
+        (fs/info "Assets"))
       interval)))
 
 (defn asset-watcher []
