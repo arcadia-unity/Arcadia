@@ -1,5 +1,8 @@
-(ns arcadia.internal.filewatcher
-  ;; dev
+(ns ^{:doc
+      "General purpose filewatcher. 
+Much much faster (about 150 to 375 times faster) than walking
+assets periodically, minimal allocations if no change."}
+    arcadia.internal.filewatcher
   (:use clojure.pprint
         [clojure.repl :exclude [dir]])
   (:require [arcadia.introspection :as i]
