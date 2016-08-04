@@ -457,22 +457,39 @@
         wd2))))
 
 ;; ------------------------------------------------------------
+;; this def should go somewhere I guess
+
+(def constant-events
+  #{::alter-children ::alter-directory})
+
+;; ------------------------------------------------------------
 ;; listener API
 
 (defn- remove-listener
   ([watch-data] watch-data)
   ([watch-data listener-key]
-   (update watch-data ::event-type->listeners mu/map-vals
-     (fn [ls]
-       (into [] (remove #(= listener-key (::listener-key %))) ls)))))
+   (update watch-data ::event-type->listeners
+     (fn [etl]
+       (into {}
+         (af/comp
+           (map (fn [[k v]]
+                  [k (into []
+                       (remove #(= listener-key (::listener-key %)))
+                       v)]))
+           (filter (fn [[k v]] ;; clean up inessential events with no listeners
+                     (or (constant-events k)
+                         (seq v)))))
+         etl)))))
 
 (defn- add-listener
   ([watch-data] watch-data)
   ([watch-data, {:keys [::listener-key ::event-type]
                  :as new-listener}]
    (-> watch-data
-     (remove-listener listener-key) ;; so stupid
-     (update-in [::event-type->listeners event-type] conj new-listener))))
+       (remove-listener listener-key)
+       (update-in [::event-type->listeners event-type]
+         (fnil conj [])
+         new-listener))))
 
 ;; ------------------------------------------------------------
 ;; thread management
@@ -507,12 +524,14 @@
 ;; ------------------------------------------------------------
 ;; top level entry point
 
+
+
+;; should probably break some of this out
 (defn start-watch [root, interval]
   (let [do-not-descend? (fn [p]
                           (boolean
                             (re-find #"\.git$" p)))
-        watch-state (atom {::event-type->listeners {::alter-children []
-                                                    ::alter-directory []}
+        watch-state (atom {::event-type->listeners (zipmap constant-events (repeat []))
                            ::history {}
                            ::do-not-descend? do-not-descend?
                            ::started DateTime/Now
@@ -554,14 +573,17 @@
                                 (let [listener {::listener-key k
                                                 ::func f
                                                 ::event-type e}]
-                                  (if (s/valid? ::listener listener)
+                                  (if (as/loud-valid? ::listener listener)
                                     (swap! watch-state add-listener listener)
                                     (throw
                                       (System.ArgumentException.
-                                        (str
-                                          "Attempting to add invalid listener:/n"
-                                          (with-out-str (s/explain ::listener listener))))))))
-               ::remove-listener (fn [k] (swap! watch-state remove-listener k))
+                                        (str "Attempting to add invalid listener:/n"
+                                          (with-out-str
+                                            (s/explain ::listener listener))))))
+                                  listener))
+               ::remove-listener (fn [k]
+                                   (do (swap! watch-state remove-listener k)
+                                       nil))
                ::cancelled? (fn [] (not (and (:should-loop @control) (.IsAlive thread))))}]
     (swap! all-watches conj watch)
     watch))
