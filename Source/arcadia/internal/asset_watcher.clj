@@ -9,14 +9,17 @@
 ;; arcadia.internal.filewatcher itself, which is a general-purpose
 ;; filewatcher and shouldn't contain things this specific to Arcadia.
 
-(def ^:private interval 500)
-
-(defonce asset-watcher-ref
+;; indirection, because watch itself is stateful and ops on it
+;; probably not idempotent, so swap! isn't a safe move here. We need
+;; some state to hold it in anyway, since we might want to restart it
+;; down the line, and as built that requires swapping it out for a new
+;; watch.
+(defonce ^:private asset-watcher-ref
   (atom
     (fw/start-watch
       (.FullName
         (fs/info "Assets"))
-      interval)))
+      500)))
 
 (defn asset-watcher []
-  @asset-watcher-ref)
+  @asset-watcher)
