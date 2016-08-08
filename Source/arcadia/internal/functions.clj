@@ -109,3 +109,18 @@
 ;; partial
 
 ;; partial in clojure is too stupid, I'm not writing this.
+
+;; ============================================================
+;; reducers, transducers
+
+;; aka transreductorooni
+(defn transreducer [xfrm reducible]
+  "Takes a transducer and a reducible, returns a reducible incorporating the transducer."
+  (reify clojure.core.protocols/CollReduce
+    (coll-reduce [this f]
+      (clojure.core.protocols/coll-reduce this f (f))) ;; right?
+    (coll-reduce [_ f init]
+      (transduce xfrm f init reducible))
+    clojure.lang.Counted
+    (count [this]
+      (count reducible))))
