@@ -11,6 +11,7 @@ assets periodically, minimal allocations if no change."}
             [clojure.set :as set])
   ;; prod
   (:require [clojure.spec :as s]
+            [clojure.core.reducers :as r]
             [arcadia.internal.functions :as af]
             [arcadia.internal.file-system :as fs]
             [arcadia.internal.spec :as as]
@@ -388,27 +389,26 @@ assets periodically, minimal allocations if no change."}
 (defn- changes [{{:keys [::g, ::fsis], :as fg} ::file-graph,
                  started ::started,
                  :as watch-data}]
-  (let [infos (vals (gets watch-data ::file-graph ::fsis))
+  (let [infos (mu/valsr (gets watch-data ::file-graph ::fsis))
         events (vec (keys (::event-type->listeners watch-data)))
-        new-files (eduction
-                    (af/comp
-                      (filter #(and (instance? FileInfo %)
-                                    (new-path? (.FullName %) watch-data)))
-                      (map refresh))    ; !!
-                    infos)
-        changed-directories (eduction
-                              (af/comp
-                                (filter #(instance? DirectoryInfo %))
-                                (map refresh) ; !!
-                                (filter #(directory-written? % watch-data)))
-                              infos)
-        chs (into [] cat
-              [(eduction
-                 (mapcat #(info-changes % watch-data events))
-                 new-files),
-               (eduction ; old files with changed parents
-                 (mapcat #(directory-changes % watch-data events))
-                 changed-directories)])]
+        new-files (af/comp
+                    (filter #(and (instance? FileInfo %)
+                                  (new-path? (.FullName %) watch-data)))
+                    (map refresh)
+                    (mapcat #(info-changes % watch-data events)))
+        changed-directories (af/comp
+                              (filter #(instance? DirectoryInfo %))
+                              (map refresh) ; !!
+                              (filter #(directory-written? % watch-data))
+                              (mapcat #(directory-changes % watch-data events)))
+        chs (into []
+              (r/cat
+                (af/transreducer
+                  new-files
+                  infos),
+                (af/transreducer  ; old files with changed parents
+                  changed-directories
+                  infos)))]
     chs))
 
 ;; ------------------------------------------------------------
