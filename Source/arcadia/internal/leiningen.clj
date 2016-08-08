@@ -3,42 +3,34 @@
             [arcadia.internal.asset-watcher :as aw]
             [arcadia.internal.state :as state]
             [arcadia.internal.file-system :as fs]
+            [arcadia.packages.data :as pd]
             [clojure.spec :as s]
             [arcadia.internal.spec :as as]))
 
-;; ============================================================
-;; implementation
-
 ;; ------------------------------------------------------------
-;; state
+;; grammar
 
-(defn- state []
-  (@state/state ::leiningen))
+(s/def ::dependencies (as/collude [] ::pd/dependency))
 
-(def ^:private update-state
-  (state/updater ::leiningen))
+(s/def ::name string?)
 
-;; ------------------------------------------------------------
-;; state grammar, since we love that now
+(s/def ::version string?)
 
-(s/def ::dependency (as/collude [] string?))
+(s/def ::defproject
+  (s/keys :req [::fs/path
+                ::name
+                ::pd/version
+                ::dependencies]))
 
-(s/def ::dependencies (as/collude #{} ::dependency))
+(s/def ::project (s/keys :req [::fs/path ::defproject]))
 
-(s/def ::defproject (s/keys :req-un [::dependencies]))
-
-(s/def ::path string?)
-
-(s/def ::project (s/keys :req-un [::path ::defproject]))
-
-(s/def ::projects (as/collude #{} ::project))
-
-(s/def ::leiningen (s/keys :req-un [::projects]))
+(s/def ::projects (as/collude [] ::project))
 
 ;; ------------------------------------------------------------
 
+;; should use conform instead
 (defn- compute-raw-dependencies [data]
-  (into [] (comp (map :defproject) (map :dependencies) cat) data))
+  (into [] (comp (map ::defproject) (mapcat ::dependencies)) data))
 
 ;; ============================================================
 
@@ -103,6 +95,34 @@
 (defn- leiningen-project-file? [fi]
   (= "project.clj" (.Name (fs/info fi))))
 
+(s/fdef project-file-data
+  :ret ::defproject)
+
+(defn project-file-data [pf]
+  (let [[_ name version & body] (read-lein-project-file pf)]
+    {::fs/path (fs/path pf)
+     ::name name
+     ::version version
+     ::dependencies (vec (:dependencies (apply hash-map body)))}))
+
+(s/fdef project-data
+  :ret ::project)
+
+(defn project-data [dir]
+  (let [dir (fs/directory-info dir)]
+    (if (.Exists dir)
+      (let [project-file (fs/file-info
+                           (fs/path-combine dir "project.clj"))]
+        (if (.Exists project-file)
+          {::fs/path (fs/path dir)
+           ::defproject (project-file-data project-file)}
+          (throw
+            (Exception.
+              (str "No leiningen project file found at " (.FullName project-file))))))
+      (throw
+        (ArgumentException.
+          (str "Directory " (.FullName dir) " does not exist"))))))
+
 (defn- leiningen-structured-directory? [^DirectoryInfo di]
   (boolean
     (some leiningen-project-file?
@@ -110,15 +130,13 @@
 
 (defn- leiningen-project-directories []
   (->> (.GetDirectories (DirectoryInfo. "Assets"))
-    (filter leiningen-structured-directory?)
-    vec))
+    (filter leiningen-structured-directory?)))
 
 (defn- leiningen-project-files []
-  (vec
-    (for [^DirectoryInfo di (leiningen-project-directories)
-          ^FileInfo fi (.GetFiles di)
-          :when (leiningen-project-file? fi)]
-      fi)))
+  (for [^DirectoryInfo di (leiningen-project-directories)
+        ^FileInfo fi (.GetFiles di)
+        :when (leiningen-project-file? fi)]
+    fi))
 
 ;; (defn- leiningen-loadpaths []
 ;;   (let [config @configuration]
@@ -130,35 +148,13 @@
 
 
 ;; ============================================================
-;; public facing
+(s/fdef leiningen-data
+  :ret ::projects)
 
-(declare gather-data compute-projects compute-raw-dependencies update-state)
-
-(defn refresh!
-  "Hits disk to update Arcadia state with Leiningen-relevent information, keyed to ::leiningen. Returns total Arcadia state immediately after update completes."
-  []
-  (let [data (gather-data)
-        projects (compute-projects data)
-        dependencies (compute-raw-dependencies data)]
-    (update-state
-      (fn [x]
-        (assoc x :projects projects)))))
-
-(defn projects
-  "Returns vector of information for directories under Assets that Arcadia currently considers Leiningen projects. Does not hit disk.
-
-Elements of the returned vector have the following structure:
-
-{:path  <string representation of absolute path to directory of leiningen project>
- :loadpath <vector of strings representing absolute path(s) to leiningen project root(s)>
- :name <string; name of the leiningen project>}
-"
-  [])
-
-(defn dependencies
-  "Return vector of what Arcadia currently considers to be dependency coordinates specified in Leiningen project files. Does not hit disk."
-  [])
-
+(defn leiningen-data []
+  (into []
+    (map project-data)
+    (leiningen-project-directories)))
 
 ;; ============================================================
 ;; hook up listeners. should be idempotent.
