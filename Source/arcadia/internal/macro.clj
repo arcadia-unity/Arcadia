@@ -77,30 +77,32 @@
 
 ;; which is probably what we wanted here, and at runtime evalutes to 2.
 
-(defmacro meval [form]
+(defmacro meval
   "Expands to the result of (eval form). Useful for manipulating the order of compile-time evaluation, thereby potentially improving ergonomics of code generation. Also handy for writing bizarre, illegible, or weirdly buggy code; please use with caution. See comments aracadia/internal/macro.clj for examples of expansion, and potential resulting bugs."
+  [form]
   (eval form))
 
-(defmacro defn-meval [name & tail-forms-and-code-form]
+(defmacro defn-meval
   "Macro for generating function definitions. Uses include generating many arities for a function. The final form in tail-forms-and-code-form will be evaluated at expansion time and spliced into the body of the function.
 
-Example:
+  Example:
 
-(am/defn-meval backwards-subtract
+  (am/defn-meval backwards-subtract
   \"an amazing function\"
   (for [i (range 3)
         :let [args (vec (repeatedly i gensym))]]
     `(~args ~(cons '- (reverse args)))))
 
-expands to:
+  expands to:
 
-(clojure.core/defn backwards-subtract
+  (clojure.core/defn backwards-subtract
   \"an amazing function\"
   ([] (-))
   ([G__26409] (- G__26409))
   ([G__26410 G__26411] (- G__26411 G__26410)))
 
-I've found vectors useful data structures for generating arities, since it is easy to generate all the default cases, then use update to modify them for special cases, such as 0, 1, and 20/more-than-19 arguments."
+  I've found vectors useful data structures for generating arities, since it is easy to generate all the default cases, then use update to modify them for special cases, such as 0, 1, and 20/more-than-19 arguments."
+  [name & tail-forms-and-code-form]
   `(defn ~name
      ~@(butlast tail-forms-and-code-form)
      ~@(eval (last tail-forms-and-code-form)))  )
@@ -146,3 +148,73 @@ I've found vectors useful data structures for generating arities, since it is ea
          (map base-fn)
          (map-indexed cases-fn))
        arity-args))))
+
+
+;; ============================================================
+;; condcast->
+
+(defn- maximize
+  ([xs]
+   (maximize (comparator >) xs))
+  ([compr xs]
+   (when (seq xs)
+     (reduce
+       (fn [mx x]
+         (if (= 1 (compr mx x))
+           x
+           mx))
+       xs))))
+
+(defn- most-specific-type ^Type [& types]
+  (maximize (comparator same-or-subclass?)
+    (remove nil? types)))
+
+(defn- contract-condcast-clauses [expr xsym clauses env]
+  (let [etype (most-specific-type
+                (type-of-reference expr env)
+                (tag-type xsym))]
+    (if etype
+      (if-let [[_ then] (first
+                          (filter #(= etype (ensure-type (first %)))
+                            (partition 2 clauses)))]
+        [then]
+        (->> clauses
+          (partition 2)
+          (filter
+            (fn [[t _]]
+              (same-or-subclass? etype (ensure-type t))))
+          (apply concat)))
+      clauses)))
+
+;; note this takes an optional default value. This macro is potentially
+;; annoying in the case that you want to branch on a supertype, for
+;; instance, but the cast would remove interface information. Use with
+;; this in mind.
+(defmacro condcast-> [expr xsym & clauses]
+  (let [[clauses default] (if (even? (count clauses))
+                            [clauses nil] 
+                            [(butlast clauses)
+                             [:else
+                              `(let [~xsym ~expr]
+                                 ~(last clauses))]])
+        clauses (contract-condcast-clauses
+                  expr xsym clauses &env)]
+    (cond
+      (= 0 (count clauses))
+      `(let [~xsym ~expr]
+         ~default) ;; might be nil obvi
+
+      (= 1 (count clauses)) ;; corresponds to exact type match. janky but fine
+      `(let [~xsym ~expr]
+         ~@clauses)
+
+      :else
+      `(let [~xsym ~expr]
+         (cond
+           ~@(->> clauses
+               (partition 2)
+               (mapcat
+                 (fn [[t then]]
+                   `[(instance? ~t ~xsym)
+                     (let [~(with-meta xsym {:tag t}) ~xsym]
+                       ~then)]))))))))
