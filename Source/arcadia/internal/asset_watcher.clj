@@ -15,11 +15,25 @@
 ;; down the line, and as built that requires swapping it out for a new
 ;; watch.
 (defonce ^:private asset-watcher-ref
-  (atom
-    (fw/start-watch
-      (.FullName
-        (fs/info "Assets"))
-      500)))
+  (atom nil))
+
+(defn start-watch []
+  (fw/start-watch
+    (.FullName
+      (fs/info "Assets"))
+    500))
+
+(defn watch-running? []
+  (boolean
+    (let [watch @asset-watcher-ref]
+      (and watch (not ((::fw/cancelled? watch)))))))
 
 (defn asset-watcher []
-  @asset-watcher)
+  (or @asset-watcher-ref
+      (let [watch (start-watch)]
+        (swap! asset-watcher-ref
+          (fn [state]
+            (if state
+              (do ((::stop) watch)
+                  state)
+              watch))))))
