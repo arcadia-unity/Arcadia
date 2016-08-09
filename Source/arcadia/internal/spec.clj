@@ -87,10 +87,10 @@
                  (as-> tail s
                        (str/trim
                          (with-out-str
-                           (pprint* indent tail)))
+                           (pprint* indent s)))
                        (if (< (count pre) indent)
                          (str (str/join (repeat (- indent (count pre)) " "))
-                              tail)
+                              s)
                          s)
                        (str pre s)))))]
     (if ed
@@ -106,8 +106,7 @@
             (println " spec:")
             (pp (last via)))
           (when-not (empty? path)
-            (println "at:")
-            (pp path))
+            (tp "at:" path))
           (println "predicate: ")
           (pr* indent pred)
           (when reason
