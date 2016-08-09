@@ -1,7 +1,8 @@
 (ns arcadia.internal.file-system
   (:require [arcadia.internal.array-utils :as au]
             [clojure.spec :as s]
-            [arcadia.internal.spec :as as])
+            [arcadia.internal.spec :as as]
+            [arcadia.internal.macro :as am])
   (:import [System.IO FileSystemInfo DirectoryInfo FileInfo Path File]))
 
 (as/push-assert false) ;; this is stupid
@@ -16,11 +17,30 @@
 
 (declare info)
 
-(defn path-combine [& paths]
-  (reduce #(Path/Combine %1 %2) paths))
+(defn path ^String [x]
+  (cond
+    (instance? FileSystemInfo x) (.FullName x)
+    (string? x) (if-let [fsi (info x)]
+                  (path fsi)
+                  (path (FileInfo. x)))
+    :else (throw (ArgumentException.
+                   (str "expects FileSystemInfo or string, got "
+                     (class x))))))
 
-(defn path-split [path]
-  (vec (. path (Split (au/lit-array System.Char Path/DirectorySeparatorChar)))))
+(defn path-combine [& paths]
+  (letfn [(as-path [x]
+            (if (instance? FileSystemInfo x)
+              (.FullName x)
+              x))
+          (step
+            ([] "")
+            ([p] p)
+            ([p1 p2]
+             (Path/Combine p1 p2)))]
+    (transduce (map as-path) step paths)))
+
+(defn path-split [p]
+  (vec (. p (Split (au/lit-array System.Char Path/DirectorySeparatorChar)))))
 
 (defn path-supers [path]
   (take-while (complement nil?)
@@ -34,17 +54,6 @@
   (condp instance? info
     FileInfo empty-set
     DirectoryInfo (set (.GetFileSystemInfos info))))
-
-(defn path [x]
-  ;;{:pre [(instance? FileSystemInfo x)]}
-  (cond
-    (instance? FileSystemInfo x) (.FullName x)
-    (string? x) (if-let [fsi (info x)]
-                  (path fsi)
-                  (path (FileInfo. x)))
-    :else (throw (ArgumentException.
-                   (str "expects FileSystemInfo or string, got "
-                     (class x))))))
 
 (defn file-info [x]
   (cond
@@ -87,5 +96,12 @@
 (defn path-seq [root]
   (map (fn [^FileSystemInfo fsi] (.FullName fsi))
     (info-seq root)))
+
+(defn delete [root]
+  (am/condcast-> root root
+    String (delete (info root))
+    DirectoryInfo (.Delete root true)
+    FileInfo (.Delete root)
+    FileSystemInfo (delete (.FullName root))))
 
 (as/pop-assert)
