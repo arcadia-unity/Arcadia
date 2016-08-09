@@ -1,7 +1,19 @@
 (ns arcadia.packages
-  (:require [clojure.string :as string]
-            [arcadia.compiler :refer [dir-seperator-re]]
-            [clojure.clr.io :as io])
+  (:use clojure.pprint
+        clojure.repl)
+  (:require [arcadia.compiler :refer [dir-seperator-re]]
+            [arcadia.config :as config]
+            [arcadia.internal.asset-watcher :as aw]
+            [arcadia.internal.file-system :as fs]
+            [arcadia.internal.filewatcher :as fw]
+            [arcadia.internal.leiningen :as lein]
+            [arcadia.internal.map-utils :as mu]
+            [arcadia.internal.spec :as as]
+            [arcadia.internal.state :as state]
+            [arcadia.packages.data :as pd]
+            [clojure.clr.io :as io]
+            [clojure.spec :as s]
+            [clojure.string :as string])
   (:import XmlReader
            [UnityEngine Debug]
            [System.Net WebClient WebException WebRequest HttpWebRequest]
@@ -56,13 +68,13 @@
 (def temp-dir "Temp/Arcadia") ;; TODO where should this live?
 
 (defmacro in-dir [dir & body]
-  `(let [original-cwd# (Directory/GetCurrentDirectory)
-         res# (do 
-                (Directory/CreateDirectory ~dir)
-                (Directory/SetCurrentDirectory ~dir)
-                ~@body)]
-     (Directory/SetCurrentDirectory original-cwd#)
-     res#))
+  `(let [original-cwd# (Directory/GetCurrentDirectory)]
+     (try
+       (do (Directory/CreateDirectory ~dir)
+           (Directory/SetCurrentDirectory ~dir)
+           ~@body)
+       (finally
+         (Directory/SetCurrentDirectory original-cwd#)))))
 
 (def url-prefixes
   ["http://central.maven.org/maven2/"
@@ -148,6 +160,7 @@
 
 (defn jar-url [group artifact version]
   (first (jar-urls group artifact version)))
+
 (defn pom-url [group artifact version]
   (first (pom-urls group artifact version)))
 
@@ -202,13 +215,13 @@
            (re-find #"/$" (.FileName e)))))
 
 (defn make-directories [^ZipEntry e base]
-  (Directory/CreateDirectory
-    (->> (string/split (.FileName e) dir-seperator-re)
-         (drop-last 1)
-         (string/join (str Path/DirectorySeparatorChar))
-         (conj [base])
-         (string/join (str Path/DirectorySeparatorChar))))
-  e)
+  (let [dir (->> (string/split (.FileName e) dir-seperator-re)
+                 (drop-last 1)
+                 (string/join (str Path/DirectorySeparatorChar))
+                 (conj [base])
+                 (string/join (str Path/DirectorySeparatorChar)))]
+    (Directory/CreateDirectory dir)
+    dir))
 
 (defn- as-directory ^DirectoryInfo [x]
   (if (instance? DirectoryInfo x)
@@ -233,27 +246,70 @@
          version])
     (throw (Exception. (str "Package coordinate must be a vector with 2 or 3 elements, got " group-artifact-version)))))
 
-(defn install [group-artifact-version]
-  (Debug/Log (str "Installing " (prn-str group-artifact-version)))
-  (dorun
-    (->> group-artifact-version
-         normalize-coordinates
-         download-jars
-         (mapcat #(seq (ZipFile/Read %)))
-         (filter should-extract?)
-         (map #(make-directories % library-directory))
-         ;; TODO do better than silently overwriting 
-         (map #(.Extract % library-directory ExtractExistingFileAction/OverwriteSilently)))))
+(defn blacklisted-coordinate? [coord]
+  (let [{:keys [::pd/artifact]} (pd/normalize-coordinates coord)]
+    (= artifact "clojure")))
+
+;; big and tangly for now, pending refactor with emphasis on spec
+(defn install
+  ([group-artifact-version]
+   (install group-artifact-version nil))
+  ([group-artifact-version, {{:keys [::installed]} ::manifest, :as opts}]
+   (Debug/Log (str "Installing " (prn-str group-artifact-version)))
+   (let [gav (vec (normalize-coordinates group-artifact-version))]
+     (when-not (or (blacklisted-coordinate? gav)
+                   (contains? installed (pd/normalize-coordinates gav)))
+       (let [all-coords (->> (cons gav (all-dependencies gav))
+                             (map vec) ;; stricter
+                             (concat (map (juxt ::pd/group ::pd/artifact ::pd/version)
+                                       (keys installed)))
+                             most-recent-versions
+                             (remove blacklisted-coordinate?)
+                             (remove (fn filtering-installed [coord]
+                                       (and installed
+                                            (contains? installed
+                                              (pd/normalize-coordinates coord)))))
+                             vec)
+             extractions (for [coord all-coords,
+                               :let [jar (download-jar coord),
+                                     extractable-entries (->> (ZipFile/Read jar)
+                                                              (filter should-extract?))]]
+                           {::coord (pd/normalize-coordinates coord)
+                            ::root (first
+                                     (fs/path-split
+                                       (.FileName
+                                         (first extractable-entries))))
+                            ::entries extractable-entries})]
+         (doseq [^ZipEntry zip-entry (mapcat ::entries extractions)]
+           (make-directories zip-entry library-directory)
+           (.Extract zip-entry library-directory
+             ExtractExistingFileAction/OverwriteSilently))
+         extractions)))))
+
+  ;; (dorun
+  ;;   (->> group-artifact-version
+  ;;        normalize-coordinates
+  ;;        download-jars
+  ;;        (mapcat #(seq (ZipFile/Read %)))
+  ;;        (filter should-extract?)
+  ;;        (map (fn [^ZipEntry zip-entry]
+  ;;               (make-directories zip-entry library-directory)
+  ;;               ;; TODO do better than silently overwriting 
+  ;;               (.Extract zip-entry library-directory
+  ;;                 ExtractExistingFileAction/OverwriteSilently)))))
+  
 
 (def library-manifest-name "manifest.edn")
 
 ;; can't find how to do this with spit, don't want to waste more time
 (defn- write-or-overwrite-file [file, contents]
-  (File/WriteAllText (.FullName (io/as-file file)) contents))
+  (File/WriteAllText
+    (fs/path (fs/file-info file))
+    (prn-str contents)))
 
 (defn- write-library-manifest
   ([]
-   (write-library-manifest "{}"))
+   (write-library-manifest {}))
   ([contents]
    (write-or-overwrite-file
      (Path/Combine
@@ -261,14 +317,12 @@
        library-manifest-name)
      contents)))
 
-;; oh for condcast->. Put this somewhere.
-(defn- delete-fsi [^FileSystemInfo fsi]
-  (condp instance? fsi
-    DirectoryInfo (let [^DirectoryInfo fsi fsi]
-                    (.Delete fsi true))
-    FileInfo (let [^FileInfo fsi fsi]
-               (.Delete fsi))
-    (throw (Exception. "Expects instance of FileSystemInfo"))))
+(defn library-manifest []
+  (clojure.edn/read-string
+    (slurp
+      (fs/path-combine
+        (ensure-library-directory)
+        library-manifest-name))))
 
 (defn flush-libraries []
   (let [d (ensure-library-directory)]
@@ -279,5 +333,47 @@
                     (#{library-manifest-name
                        (str library-manifest-name ".meta")}
                      (.Name fi)))]
-      (delete-fsi fi)))
+      (fs/delete fi)))
   (write-library-manifest))
+
+;; ============================================================
+;; do everything
+
+;; add memoization etc in a moment
+(defn install-all-deps []
+  ;;(flush-libraries)
+  (let [user-deps (:dependencies (config/merged-configs))
+        lein-deps (mapcat #(get-in % [::lein/defproject ::lein/dependencies])
+                    (lein/all-project-data))
+        ;; krufty until we integrate packages.data into the rest of this namespace:
+        deps (->> (concat user-deps lein-deps)
+                  (map pd/normalize-coordinates)
+                  (map (juxt ::pd/group ::pd/artifact ::pd/version))
+                  most-recent-versions)]
+    (vec ;; this whole system is horribly in need of refactoring
+      (for [dep deps,
+            :let [manifest (library-manifest),
+                  install-data (install dep {::manifest manifest})]]
+        (when install-data
+          (write-library-manifest
+            (update manifest ::installed
+              (fn [installed]
+                (reduce (fn [bldg, {:keys [::coord ::root]}]
+                          (assoc bldg coord root))
+                  installed
+                  install-data))))
+          install-data)))))
+
+;; ============================================================
+;; driver
+
+;; maybe package installation shouldn't be something we listen for; use a button or something instead
+;; (defn setup-listeners []
+;;   (letfn [(config-file? [])
+;;           (dependency-listener [{:keys [::fw/path] :as change}]
+;;             (when (or (config-file? path) (leiningen-project-file? path))
+;;               (doseq [dep (compute-deps)] ;; no memoization for now
+;;                 (install dep))))]
+;;     (let [{:keys [::fw/add-listener]} (aw/asset-watcher)]
+;;       (add-listener ::fw/create-modify-delete-file ::dependencies
+;;         dependency-listener))))
