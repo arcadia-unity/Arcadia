@@ -246,9 +246,14 @@
          version])
     (throw (Exception. (str "Package coordinate must be a vector with 2 or 3 elements, got " group-artifact-version)))))
 
-(defn blacklisted-coordinate? [coord]
-  (let [{:keys [::pd/artifact]} (pd/normalize-coordinates coord)]
-    (= artifact "clojure")))
+(defn blacklisted-coordinate? [{:keys [::pd/artifact]}]
+  (= artifact "clojure"))
+
+(defn- blocked-coordinate? [coord installed]
+  (let [nrmd (pd/normalize-coordinates coord)]
+    (or (blacklisted-coordinate? coord)
+        (contains? installed
+          (pd/normalize-coordinates coord)))))
 
 ;; big and tangly for now, pending refactor with emphasis on spec
 (defn install
@@ -257,18 +262,13 @@
   ([group-artifact-version, {{:keys [::installed]} ::manifest, :as opts}]
    (Debug/Log (str "Installing " (prn-str group-artifact-version)))
    (let [gav (vec (normalize-coordinates group-artifact-version))]
-     (when-not (or (blacklisted-coordinate? gav)
-                   (contains? installed (pd/normalize-coordinates gav)))
+     (when-not (blocked-coordinate? gav installed)
        (let [all-coords (->> (cons gav (all-dependencies gav))
                              (map vec) ;; stricter
                              (concat (map (juxt ::pd/group ::pd/artifact ::pd/version)
                                        (keys installed)))
+                             (remove #(blocked-coordinate? % installed))
                              most-recent-versions
-                             (remove blacklisted-coordinate?)
-                             (remove (fn filtering-installed [coord]
-                                       (and installed
-                                            (contains? installed
-                                              (pd/normalize-coordinates coord)))))
                              vec)
              extractions (for [coord all-coords,
                                :let [jar (download-jar coord),
