@@ -5,7 +5,8 @@
             [arcadia.internal.file-system :as fs]
             [arcadia.packages.data :as pd]
             [clojure.spec :as s]
-            [arcadia.internal.spec :as as]))
+            [arcadia.internal.spec :as as]
+            [arcadia.compiler :as compiler]))
 
 ;; ------------------------------------------------------------
 ;; grammar
@@ -16,11 +17,17 @@
 
 (s/def ::version string?)
 
+(s/def ::body map?)
+
+(s/def ::source-paths
+  (as/collude [] ::fs/path))
+
 (s/def ::defproject
   (s/keys :req [::fs/path
                 ::name
                 ::pd/version
-                ::dependencies]))
+                ::dependencies
+                ::body]))
 
 (s/def ::project (s/keys :req [::fs/path ::defproject]))
 
@@ -99,11 +106,13 @@
   :ret ::defproject)
 
 (defn project-file-data [pf]
-  (let [[_ name version & body] (read-lein-project-file pf)]
+  (let [[_ name version & body] (read-lein-project-file pf)
+        body (apply hash-map body)]
     {::fs/path (fs/path pf)
      ::name name
      ::version version
-     ::dependencies (vec (:dependencies (apply hash-map body)))}))
+     ::dependencies (vec (:dependencies body))
+     ::body body}))
 
 (s/fdef project-data
   :ret ::project)
@@ -152,9 +161,35 @@
   :ret ::projects)
 
 (defn all-project-data []
-  (into []
-    (map project-data)
-    (leiningen-project-directories)))
+  :flubber
+  ;; (into []
+  ;;   (map project-data)
+  ;;   (leiningen-project-directories))
+  )
+
+;; ============================================================
+;; loadpath
+
+(s/fdef project-data-loadpath
+  :args (s/cat :project ::project))
+
+(defn project-data-loadpath [{{{:keys [source-paths]} ::body} ::defproject,
+                              p1 ::fs/path}]
+  (if source-paths
+    (map (fn [p2]
+           (Path/Combine p1 p2))
+      source-paths)
+    [(Path/Combine p1 "src")]))
+
+(defn leiningen-loadpaths []
+  (->> (all-project-data)
+       (mapcat project-data-loadpath)))
+
+(defn leiningen-loadpaths-string []
+  (clojure.string/join Path/PathSeparator
+    (leiningen-loadpaths)))
+
+(compiler/add-loadpath-extension-fn ::loadpath-fn #'leiningen-loadpaths)
 
 ;; ============================================================
 ;; hook up listeners. should be idempotent.
@@ -166,6 +201,8 @@
 ;;  (fn [{:keys [::fw/time ::fw/path]}]
 ;;    ;; stuff happens here
 ;;    ))
+
+
 
 
 (comment
