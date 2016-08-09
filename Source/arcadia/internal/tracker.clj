@@ -2,28 +2,21 @@
   (:require [arcadia.internal.map-utils :as mu]
             [arcadia.internal.macro :as am]))
 
-;; no step debugger, must make do with stuff like this.
-;; sneaking suspicion this doesn't play nice with clojure.spec/instrument yet
-;; therefore also that clojure.spec/instrument has a slightly jank implementation
+;; No step debugger, must make do with stuff like this.
+;; Won't play nicely with other wrappers such as
+;; clojure.spec/instrument (they have the same problem; I guess one
+;; would need keyable wrapper support baked into clojure to do this
+;; right).
 
-;; to do this right (ie in a way that composes with other things like
-;; it, such as clojure.spec/instrument) should build out wrapper
-;; instances a bit. here's a first step for wrapping clojure.lang.IFn:
+;; If you want to use multiple wrappers, consider chiasmus:
 
-;; (defn- wrapped-arities [side-fx fsym]
-;;   (letfn [(base [args]
-;;             `(~args ~(cons fsym args)))]
-;;     (->> (am/arities-forms base
-;;            {::am/max-args 21
-;;             ::am/cases {21 (fn [[args]]
-;;                              `([this# ~@args]
-;;                                ~side-fx
-;;                                (apply ~fsym ~@args)))}})
-;;          (map #(cons 'invoke %))
-;;          (cons `(applyTo [this# arglist#]
-;;                   ~side-fx
-;;                   (apply ~fsym arglist#)))
-;;          vec)))
+;; Should be ok:
+;; (instrument x) (track x) (untrack x) (unstrument x)
+
+;; Probably won't be ok:
+;; (instrument x) (track x) (unstrument x) (untrack x)
+
+;; To reduce odds of this bug, use with-tracking.
 
 ;; "Map for tracked vars to :raw/:wrapped fns"
 (defonce tracked-vars
@@ -78,3 +71,17 @@
    (doseq [v (->> (keys @tracked-vars)
                   (filter #(= ns (:ns (meta %)))))]
      (untrack v))))
+
+(defmacro with-track [vars & body]
+  `(let [vars# ~vars]
+     (doseq [v# vars#] (track v#))
+     (let [res# (do ~@body)]
+       (doseq [v# vars#] (untrack v#))
+       res#)))
+
+(defmacro with-track-all [nss & body]
+  `(let [nss# ~nss]
+     (doseq [ns# nss#] (track ns#))
+     (let [res# (do ~@body)]
+       (doseq [ns# nss#] (untrack ns#))
+       res#)))
