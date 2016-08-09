@@ -89,3 +89,43 @@
        (methods t sr)))))
 
 ;; TODO: printing conveniences, aproprint, version of apropos returning richer data, etc
+
+;; ============================================================
+;;
+
+(defn snapshot-data-fn [type]
+  (let [fields (fields type)
+        props  (properties type)]
+    (fn [obj]
+      (merge
+        (zipmap
+          (map (fn [^MonoField mf] (.Name mf))
+            fields)
+          (map (fn [^MonoField mf] (.GetValue mf obj))
+            fields))
+        (zipmap
+          (map (fn [^MonoProperty mp] (.Name mp))
+            props)
+          (map (fn [^MonoProperty mp] (.GetValue mp obj nil))
+            props))))))
+
+(defn methods-report
+  ([type] (methods-report type nil))
+  ([type pat]
+   (let [cmpr (comparator #(< (count (.GetParameters %1))
+                              (count (.GetParameters %2))))]
+     (->> (if pat
+            (methods type pat)
+            (methods type))
+          (sort (fn [a b]
+                  (let [cmp (compare (.Name a) (.Name b))]
+                    (if-not (zero? cmp)
+                      cmp
+                      (cmpr a b)))))
+          (map (fn [meth]
+                 {:name (.Name meth)
+                  :parameters (vec
+                                (for [param (.GetParameters meth)]
+                                  {:name (.Name param)
+                                   :type (.ParameterType param)}))
+                  :return-type (.. meth ReturnParameter ParameterType)}))))))

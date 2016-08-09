@@ -1,12 +1,20 @@
 (ns arcadia.config
-  (:require [clojure.edn :as edn])
+  (:require [clojure.edn :as edn]
+            [arcadia.internal.state :as state])
   (:import
     [Arcadia Configuration]
     [System DateTime]
     [System.IO File]
     [UnityEngine Debug]))
 
+;; shouldn't have this 
 (defonce configuration (atom {}))
+
+(def update-state
+  (state/updater ::configuration))
+
+(defn config []
+  (@state/state ::configuration))
 
 (defn default-config 
   "Built in Arcadia default configuration file. Never changes."
@@ -35,5 +43,6 @@
             (user-config)))
 
 (defn update!
-  "Update the configuration atom"
-  [] (reset! configuration (merged-configs)))
+  "Update the configuration"
+  []
+  (update-state (constantly (merged-configs))))

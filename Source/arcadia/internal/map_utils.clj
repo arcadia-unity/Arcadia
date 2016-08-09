@@ -134,24 +134,24 @@
          (map keyword syms)
          syms)))
 
-(definline checked-get [m k]
-  `(let [k# ~k]
-     (if-let [e# (find ~m k#)]
-       (val e#)
-       (throw
-         (Exception.
-           (str "key " k# " not found"))))))
+(defn checked-get [m k]
+  (let [v (get m k)]
+    (cond
+      (not (nil? v)) v
+      (contains? m k) v
+      :else (throw
+              (Exception.
+                (str "key " k " not found"))))))
 
 (defmacro checked-keys [bndgs & body]
   (let [dcls (for [[ks m] (partition 2 bndgs),
                    :let [msym (gensym "map_")]]
                (->> ks
                  (mapcat
-                   (fn [k] [k `(checked-get ~m ~(keyword k))]))
+                   (fn [k] [(symbol (name k)) `(checked-get ~m ~(keyword k))]))
                  (list* msym m)))]
     `(let [~@(apply concat dcls)]
        ~@body)))
-
 
 (defn apply-kv
   "Terrible, necessary function. Use with APIs employing horrific
@@ -185,3 +185,35 @@
               (assoc ~msym ~k ~thn))))))
 
 ;; much of this might be condensed into a single alternate destructuring dsl for maps
+
+;; ==================================================
+
+(defn keysr [m]
+  "Returns reducible collection of keys in m. Fast."
+  (reify
+    clojure.core.protocols/CollReduce
+    (coll-reduce [this f]
+      (clojure.core.protocols/coll-reduce this f (f)))
+    (coll-reduce [_ f init]
+      (letfn [(rfn [bldg _ v]
+                (f bldg v))]
+        (reduce-kv rfn init m)))
+    clojure.lang.Counted
+    (count [this]
+      (count m))))
+
+(defn valsr [m]
+  "Returns reducible collection of vals in m. Fast."
+  (reify clojure.core.protocols/CollReduce
+    (coll-reduce [this f]
+      (clojure.core.protocols/coll-reduce this f (f)))
+    (coll-reduce [_ f init]
+      (letfn [(rfn [bldg k _]
+                (f bldg k))]
+        (reduce-kv rfn init m)))
+    clojure.lang.Counted
+    (count [this]
+      (count m))))
+
+
+
