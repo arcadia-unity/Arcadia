@@ -128,7 +128,7 @@
     (some leiningen-project-file?
       (.GetFiles di))))
 
-(defn- leiningen-project-directories []
+(defn leiningen-project-directories []
   (->> (.GetDirectories (DirectoryInfo. "Assets"))
     (filter leiningen-structured-directory?)))
 
@@ -148,10 +148,10 @@
 
 
 ;; ============================================================
-(s/fdef leiningen-data
+(s/fdef all-project-data
   :ret ::projects)
 
-(defn leiningen-data []
+(defn all-project-data []
   (into []
     (map project-data)
     (leiningen-project-directories)))
