@@ -26,13 +26,13 @@
   (as/qwik-conform [[k v] ::dependency coords]
     (case k
       ::vector-dependency
-      (let [[ary conf3] v]
+      (let [[ary conf] v]
         (case ary
-          :long conf3
-          :short (let [{:keys [::group-artifact ::version]} conf3]
+          :long conf
+          :short (let [{:keys [::group-artifact ::version]} conf]
                    {::group (or (namespace group-artifact) (name group-artifact))
                     ::artifact (name group-artifact)
                     ::version version})))
       
       ::normal-dependency
-      conf)))
+      v)))
