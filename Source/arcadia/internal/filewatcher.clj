@@ -246,7 +246,7 @@ assets periodically, minimal allocations if no change."}
 (s/def ::watch-data
   (s/and
     #(= ::watch-data (::type %))
-    (s/keys :req [::history ::file-graph ::event-type->listeners ::started])))
+    (s/keys :req [::history ::file-graph ::event-type->listeners ::started ::path])))
 
 (defn- add-event [history {:keys [::event-type ::path] :as event}]
   (assoc-in history [path event-type] event))
@@ -524,70 +524,81 @@ assets periodically, minimal allocations if no change."}
        (Thread/Sleep delay)
        (clean-watches)))))
 
+(defn- watch-thread [{:keys [::watch-state,
+                             ::control,
+                             ::errors]}]
+  (start-thread
+    (fn watch-loop []
+      (loop []
+        (as/loud-valid? ::watch-data @watch-state)
+        (let [{:keys [::interval should-loop]} @control]
+          (when should-loop
+            (Thread/Sleep interval)
+            (try
+              (let [ws2 (watch-step @watch-state)]
+                (swap! watch-state
+                  (fn [{:keys [::event-type->listeners]}] ;; might have changed
+                    (assoc ws2 ::event-type->listeners event-type->listeners))))
+              (catch Exception e
+                (clean-watches (* 2 interval))
+                (swap! errors conj e)
+                (throw e)))
+            (recur)))))))
+
+(defn- add-listener-fn [{:keys [::watch-state]}]
+  ;; e is the event-type; k is
+  ;; the listener k; f is the
+  ;; listener function
+  (fn [e k f]    
+    (let [listener {::listener-key k
+                    ::func f
+                    ::event-type e}]
+      (if (as/loud-valid? ::listener listener)
+        (swap! watch-state add-listener listener)
+        (throw
+          (System.ArgumentException.
+            (str "Attempting to add invalid listener:/n"
+              (with-out-str
+                (s/explain ::listener listener))))))
+      listener)))
+
 ;; ------------------------------------------------------------
 ;; top level entry point
 
-
-
-;; should probably break some of this out
 (defn start-watch [root, interval]
   (let [do-not-descend? (fn [p]
                           (boolean
                             (re-find #"\.git$" p)))
-        watch-state (atom {::event-type->listeners (zipmap constant-events (repeat []))
+        watch-state (atom {::type ::watch-data
+                           ::event-type->listeners (zipmap constant-events (repeat []))
+                           ::path root
                            ::history {}
                            ::do-not-descend? do-not-descend?
                            ::started DateTime/Now
                            ::file-graph (file-graph root
-                                          {::do-not-descend? do-not-descend?})
-                           ::type ::watch-data})
-        control (atom {:interval interval
-                       :should-loop true})
+                                          {::do-not-descend? do-not-descend?})})
+        control (atom {::interval interval
+                       ::should-loop true})
         errors (atom [])
-        thread (start-thread
-                 (fn watch-loop []
-                   (loop []
-                     (as/loud-valid? ::watch-data @watch-state)
-                     (let [{:keys [interval should-loop]} @control]
-                       (when should-loop
-                         (Thread/Sleep interval)
-                         (try
-                           (let [ws2 (watch-step @watch-state)]
-                             (swap! watch-state
-                               (fn [{:keys [::event-type->listeners]}] ;; might have changed
-                                 (assoc ws2 ::event-type->listeners event-type->listeners))))
-                           (catch Exception e
-                             (clean-watches (* 2 interval))
-                             (swap! errors conj e)
-                             (throw e)))
-                         (recur))))))
-        watch {::thread thread
-               ::set-interval (fn [i] (swap! control assoc :interval i))
-               ::state (fn [] @watch-state) ;; for debugging
-               ::control (fn [] @control)   ;; for debugging
-               ::stop (fn []
-                        (let [control (swap! control assoc :should-loop false)]
-                          (clean-watches (* (:interval control) 2))
-                          control))
+        all-state {::watch-state watch-state
+                   ::control control
+                   ::errors errors}
+        thread (watch-thread all-state)
+        watch {::type ::watch
+               ::thread thread
+               ::state (fn [] @watch-state)
+               ::control (fn [] @control)
                ::errors (fn [] @errors)
-               ::add-listener (fn [e k f] ;; e is the event-type; k is
-                                          ;; the listener k; f is the
-                                          ;; listener function
-                                (let [listener {::listener-key k
-                                                ::func f
-                                                ::event-type e}]
-                                  (if (as/loud-valid? ::listener listener)
-                                    (swap! watch-state add-listener listener)
-                                    (throw
-                                      (System.ArgumentException.
-                                        (str "Attempting to add invalid listener:/n"
-                                          (with-out-str
-                                            (s/explain ::listener listener))))))
-                                  listener))
+               ::set-interval (fn [i] (swap! control assoc ::interval i))
+               ::stop (fn []
+                        (let [control (swap! control assoc ::should-loop false)]
+                          (clean-watches (* (::interval control) 2))
+                          control))
+               ::add-listener (add-listener-fn all-state)
                ::remove-listener (fn [k]
                                    (do (swap! watch-state remove-listener k)
                                        nil))
-               ::cancelled? (fn [] (not (and (:should-loop @control) (.IsAlive thread))))}]
+               ::cancelled? (fn [] (not (and (::should-loop @control) (.IsAlive thread))))}]
     (swap! all-watches conj watch)
     watch))
 
