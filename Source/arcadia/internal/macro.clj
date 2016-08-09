@@ -149,6 +149,64 @@
          (map-indexed cases-fn))
        arity-args))))
 
+;; ============================================================
+;; type utils
+;; ============================================================
+
+(defn- same-or-subclass? [^Type a ^Type b]
+  (or (= a b)
+      (.IsSubclassOf a b)))
+
+;; put elsewhere
+(defn- some-2
+  "Uses reduced, should be faster + less garbage + more general than clojure.core/some"
+  [pred coll]
+  (reduce #(when (pred %2) (reduced %2)) nil coll))
+
+(defn- in? [x coll]
+  (boolean (some-2 #(= x %) coll)))
+ ; reference to tagged var, or whatever 
+
+(defn- type-name? [x]
+  (boolean
+    (and (symbol? x)
+      (when-let [y (resolve x)]
+        (instance? System.MonoType y)))))
+
+(defn- type-of-local-reference [x env]
+  (assert (contains? env x))
+  (let [lclb ^clojure.lang.CljCompiler.Ast.LocalBinding (env x)]
+    (when (.get_HasClrType lclb)
+      (.get_ClrType lclb))))
+
+(defn- type? [x]
+  (instance? System.MonoType x))
+
+(defn- ensure-type [x]
+  (cond
+    (type? x) x
+    (symbol? x) (let [xt (resolve x)]
+                  (if (type? xt)
+                    xt
+                    (throw
+                      (Exception.
+                        (str "symbol does not resolve to a type")))))
+    :else (throw
+            (Exception.
+              (str "expects type or type symbol")))))
+
+(defn- tag-type [x]
+  (when-let [t (:tag (meta x))]
+    (ensure-type t)))
+
+(defn- type-of-reference [x env]
+  (when (symbol? x)
+    (or (tag-type x)
+      (if (contains? env x)
+        (type-of-local-reference x env) ; local
+        (let [v (resolve x)] ;; dubious
+          (when (not (and (var? v) (fn? (var-get v))))
+            (tag-type v))))))) 
 
 ;; ============================================================
 ;; condcast->
