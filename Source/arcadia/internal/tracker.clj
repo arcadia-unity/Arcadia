@@ -1,4 +1,5 @@
 (ns arcadia.internal.tracker
+  (:use clojure.pprint)
   (:require [arcadia.internal.map-utils :as mu]
             [arcadia.internal.macro :as am]))
 
@@ -22,19 +23,47 @@
 (defonce tracked-vars
   (atom {}))
 
+(defn var-symbol [var]
+  (symbol
+    (name (.Name (.Namespace var)))
+    (name (.Symbol var))))
+
 (defn track [v]
   (letfn [(tracking-fn [v f]
             (fn tracker [& args]
-              (locking tracked-vars
-                (swap! tracked-vars update v assoc :last DateTime/Now))
-              (apply f args)))]
+              (try
+                (locking tracked-vars
+                  (swap! tracked-vars update-in [v ::history]
+                    (fn [stuff]
+                      (conj stuff {::time DateTime/Now
+                                   ::args args}))))
+                (let [result (apply f args)]
+                  (locking tracked-vars
+                    (swap! tracked-vars update-in [v ::history]
+                      identity
+                      ;; (fn [stuff]
+                      ;;   (update stuff (dec (count stuff))
+                      ;;     assoc ::return result))
+                      ))
+                  result)
+                (catch Exception e
+                  (throw (Exception.
+                           (str "stupid problem encountered.\n"
+                                (with-out-str
+                                  (clojure.pprint/pprint
+                                    {:v v
+                                     :f f
+                                     :args args})))))))))]
     (locking tracked-vars
-      (let [{:keys [raw wrapped]} (get @tracked-vars v)
+      (let [{:keys [::raw ::wrapped]} (get @tracked-vars v)
             current @v]
         (when-not (= wrapped current)
           (let [tracked (tracking-fn v current)]
             (alter-var-root v (constantly tracked))
-            (swap! tracked-vars assoc v {:raw current :wrapped tracked}))))
+            (swap! tracked-vars assoc v
+              {::raw current
+               ::wrapped tracked
+               ::history []}))))
       v)))
 
 (defn track-all [ns]
@@ -46,17 +75,9 @@
        (map track)
        dorun))
 
-(defn history []
-  (->> (-> @tracked-vars
-           (mu/map-vals :last)
-           (mu/map-keys (comp :name meta)))
-       (remove #(nil? (val %)))
-       (sort-by val)
-       (map #(zipmap [::name ::last-call] %))))
-
 (defn untrack [v]
   (locking tracked-vars
-    (when-let [{:keys [raw wrapped]} (get @tracked-vars v)]
+    (when-let [{:keys [::raw ::wrapped]} (get @tracked-vars v)]
       (let [current @v]
         (when (= wrapped current)
           (alter-var-root v (constantly raw))))
@@ -74,14 +95,34 @@
 
 (defmacro with-track [vars & body]
   `(let [vars# ~vars]
-     (doseq [v# vars#] (track v#))
-     (let [res# (do ~@body)]
-       (doseq [v# vars#] (untrack v#))
-       res#)))
+     (doseq [v# vars#]
+       (track v#))
+     (try
+       (do ~@body)
+       (finally
+         (doseq [v# vars#]
+           (untrack v#))))))
 
 (defmacro with-track-all [nss & body]
   `(let [nss# ~nss]
-     (doseq [ns# nss#] (track ns#))
-     (let [res# (do ~@body)]
-       (doseq [ns# nss#] (untrack ns#))
-       res#)))
+     (doseq [ns# nss#]
+       (track-all ns#))
+     (try
+       (do ~@body)
+       (finally
+         (doseq [ns# nss#]
+           (untrack-all ns#))))))
+
+(defn history []
+  (let [record-fn (fn [bldg var {:keys [::history]}]
+                    (let [vsym (var-symbol var)]
+                      (into bldg
+                        (map #(assoc % ::var-symbol vsym))
+                        history)))]
+    (->> (reduce-kv record-fn [] @tracked-vars)
+         (sort-by ::time))))
+
+(defn print-history []
+  (clojure.pprint/pprint
+    (for [{:keys [::time ::var-symbol]} (history)]
+      (str var-symbol " at " time))))
