@@ -90,8 +90,13 @@ For non-Clojure fns, :scope and :local-fn will be absent."
         demunge #(clojure.lang.Compiler/demunge %)
         degensym #(str/replace % #"--.*" "")
         [ns-sym name-sym local] (when clojure?
-                                  (->> (str/split (str cls) #"\$" 3)
-                                       (map demunge)))]
+                                  (-> (->> (str/split (str cls) #"\$" 3)
+                                           (mapv demunge))
+                                      (update 0 #(str/replace % #"/" "."))))
+        ;; (when clojure?
+        ;;   (->> (str/split (str cls) #"\$" 3)
+        ;;        (map demunge)))
+        ]
     (merge {:file file
             :line line
             :method method
@@ -160,7 +165,8 @@ failure in instrument."
                                        (when caller
                                          {::caller (dissoc caller :class :method)}))]
                          (throw (ex-info
-                                 (str "Call to " v " did not conform to spec:\n" (with-out-str (s/explain-out ed)))
+                                  (str "Call to " v " did not conform to spec:\n"
+                                       (with-out-str (s/explain-out ed)))
                                  ed)))
                        conformed)))]
     (fn

@@ -10,7 +10,7 @@
   (let [switch (->> `[set? map? seq? vector? list?]
                  (mapcat (fn [p] `[(~p ~gen) ~p]))
                  (cons `cond))]
-    `(s/and ~switch (s/coll-of ~el ~gen))))
+    `(s/and ~switch (s/coll-of ~el))))
 
 (defmacro qwik-cat [& things]
   (list* `s/cat (interleave things things)))
@@ -97,21 +97,22 @@
       (do
         ;;(prn {:ed ed})
         (println "==================================================")
-        (doseq [[path {:keys [pred val reason via in] :as prob}]  (::s/problems ed)]
+        (doseq [{:keys [path pred val reason via in] :as prob}  (::s/problems ed)]
           (when-not (empty? in)
             (tp "In:" in))
           (tp "val:" val)
-          (print "fails")
+          (println "fails")
           (when-not (empty? via)
-            (println " spec:")
-            (pp (last via)))
+            (tp " spec:" (last via)))
           (when-not (empty? path)
-            (tp "at:" path))
+            (tp " at:" path))
           (println "predicate: ")
           (pr* indent pred)
           (when reason
             (println "Reason:")
             (print reason))
+          (newline)
+          (when (seq prob) (print "furthermore:"))
           (doseq [[k v] prob]
             (when-not (#{:pred :val :reason :via :in} k)
               (print "\n\t" k " ")
