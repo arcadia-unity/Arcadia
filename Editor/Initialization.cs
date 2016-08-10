@@ -55,12 +55,22 @@ namespace Arcadia
 			CheckSettings();
 			SetClojureLoadPath();
 			LoadConfig();
+			LoadPackages();
 			ensureCompiledFolder();
 			// StartWatching();
 			StartREPL();
 
 
 			Debug.Log("Arcadia Started!");
+		}
+
+		// code is so durn orthogonal we have to explicitly call this
+		// (necessary for package-sensitive loadpaths in presence of stuff like leiningen)
+		// on the other hand, packages pulls in almost everything else
+		public static void LoadPackages(){
+			Debug.Log("Loading packages...");
+			RT.load("arcadia/packages");
+			RT.var("arcadia.packages", "install-all-deps").invoke();
 		}
 
 		[MenuItem("Arcadia/Initialization/Load Configuration")]
