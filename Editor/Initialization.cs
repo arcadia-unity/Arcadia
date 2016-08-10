@@ -56,7 +56,6 @@ namespace Arcadia
 			SetInitialClojureLoadPath();
 			LoadConfig();
 			LoadPackages();
-			LoadCompiler();
 			SetClojureLoadPath();
 			ensureCompiledFolder();
 			// StartWatching();
@@ -73,12 +72,6 @@ namespace Arcadia
 			RT.load("arcadia/packages");
 			// may want to make this conditional on some config thing
 			RT.var("arcadia.packages", "install-all-deps").invoke();
-		}
-
-		// don't strictly have to do this since we've loaded arcadia.packages, but can't hurt
-		public static void LoadCompiler(){
-			Debug.Log("Loading compiler...");
-			RT.load("arcadia/compiler");
 		}
 
 		[MenuItem("Arcadia/Initialization/Load Configuration")]
