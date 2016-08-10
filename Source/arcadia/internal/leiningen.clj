@@ -33,20 +33,7 @@
 
 (s/def ::projects (as/collude [] ::project))
 
-;; ------------------------------------------------------------
-
-;; should use conform instead
-(defn- compute-raw-dependencies [data]
-  (into [] (comp (map ::defproject) (mapcat ::dependencies)) data))
-
 ;; ============================================================
-
-(defn- detect-leiningen-projects? []
-  ;; for now:
-  true
-  ;; (boolean
-  ;;   (:detect-leiningen-projects @configuration))
-  )
 
 (defn- ensure-readable-project-file [file-name, raw-file]
   (let [stringless (clojure.string/replace
@@ -66,38 +53,10 @@
             (.FullName (fs/info file-name))
             ": " problem))))))
 
-;; stupid for now, expand to deal with exclusions etc
-(defn- normalize-coordinate [coord]
-  (vec
-    (take 3
-      (map str
-        (if (< (count coord) 3)
-          (cons (first coord) coord)
-          coord)))))
-
-(defn- process-coordinates [coords]
-  (->> coords
-    (map normalize-coordinate)
-    (remove #(= ["org.clojure/clojure" "org.clojure/clojure"]
-               (take 2 %)))
-    vec))
-
 (defn- read-lein-project-file [file]
   (let [raw (slurp file)]
     (ensure-readable-project-file file raw)
     (read-string raw)))
-
-(defn- load-leiningen-configuration-map [file]
-  (let [[_ name version & rst] (read-lein-project-file file)
-        m (apply hash-map rst)]
-    (-> m 
-      (select-keys [:dependencies :source-paths])
-      (assoc
-        :type :leiningen
-        :path (.FullName (fs/info file)),
-        :name (str name),
-        :version version,)
-      (update :dependencies process-coordinates))))
 
 (defn- leiningen-project-file? [fi]
   (= "project.clj" (.Name (fs/info fi))))
@@ -141,12 +100,6 @@
   (->> (.GetDirectories (DirectoryInfo. "Assets"))
     (filter leiningen-structured-directory?)))
 
-(defn- leiningen-project-files []
-  (for [^DirectoryInfo di (leiningen-project-directories)
-        ^FileInfo fi (.GetFiles di)
-        :when (leiningen-project-file? fi)]
-    fi))
-
 ;; (defn- leiningen-loadpaths []
 ;;   (let [config @configuration]
 ;;     (for [m (:config-maps config)
@@ -161,17 +114,16 @@
   :ret ::projects)
 
 (defn all-project-data []
-  :flubber
-  ;; (into []
-  ;;   (map project-data)
-  ;;   (leiningen-project-directories))
-  )
+  (into []
+    (map project-data)
+    (leiningen-project-directories)))
 
 ;; ============================================================
 ;; loadpath
 
 (s/fdef project-data-loadpath
-  :args (s/cat :project ::project))
+  :args (s/cat :project ::project)
+  :ret ::fs/path)
 
 (defn project-data-loadpath [{{{:keys [source-paths]} ::body} ::defproject,
                               p1 ::fs/path}]
