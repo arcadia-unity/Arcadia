@@ -141,7 +141,7 @@
   (clojure.string/join Path/PathSeparator
     (leiningen-loadpaths)))
 
-(compiler/add-loadpath-extension-fn ::loadpath-fn #'leiningen-loadpaths)
+(compiler/add-loadpath-extension-fn ::loadpath-fn #'leiningen-loadpaths-string)
 
 ;; ============================================================
 ;; hook up listeners. should be idempotent.

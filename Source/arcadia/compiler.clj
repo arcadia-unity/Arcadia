@@ -250,14 +250,14 @@
 ;; ============================================================
 ;; loadpath handling
 
-(s/def ::loadpath-extensions
+(s/def ::loadpath-extension-fns
   (s/map-of keyword? ifn?))
 
 (defn add-loadpath-extension-fn [k f]
-  (swap! state/state update ::loadpath-extensions
+  (swap! state/state update ::loadpath-extension-fns
     (fn [loadpath-extensions]
       (let [res (assoc loadpath-extensions k f)]
-        (if (as/loud-valid? ::loadpath-extensions res)
+        (if (as/loud-valid? ::loadpath-extension-fns res)
           res
           (throw
             (Exception.
@@ -265,7 +265,7 @@
                 "Result of attempt to add loadpath extension function keyed to " k
                 " fails:\n"
                 (with-out-str
-                  (s/explain ::loadpath-extensions res))))))))))
+                  (s/explain ::loadpath-extension-fns res))))))))))
 
 (defn remove-loadpath-extension-fn [k]
   (swap! state/state update ::loadpath-extensions dissoc k))
