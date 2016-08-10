@@ -246,11 +246,8 @@
          version])
     (throw (Exception. (str "Package coordinate must be a vector with 2 or 3 elements, got " group-artifact-version)))))
 
-(defn- blocked-coordinate? [coord installed]
-  (let [{:keys [::pd/artifact]} (pd/normalize-coordinates coord)]
-    (or (= artifact "clojure")
-        (contains? installed
-          (pd/normalize-coordinates coord)))))
+;; ============================================================
+;; extraction
 
 (s/def ::coord ::pd/normal-dependency)
 
@@ -259,14 +256,59 @@
 (s/def ::entries
   (s/coll-of #(instance? Ionic.Zip.ZipEntry %)))
 
+(s/def ::error #(instance? Exception %))
+
+(s/def ::succeeded
+  #{true false})
+
 (s/def ::extraction
-  (s/keys :req [::coord ::root ::entries]))
+  (s/or
+    :succeeded  (s/and
+                  (s/keys :req [::coord ::root ::entries ::succeeded])
+                  #(::succeeded %))
+    :failed     (s/and
+                  (s/keys :req [::coord ::error ::succeeded])
+                  #(not (::succeeded %)))
+    :unresolved (s/keys :req [::coord ::root ::entries])))
+
+(s/fdef extract
+  :args (s/cat :data ::pd/vector-dependency)
+  :ret ::extraction)
+
+(defn- extract [coord]
+  (try
+    (let [jar (download-jar coord)
+          extractable-entries (filter should-extract?
+                                (ZipFile/Read jar))]
+      (doseq [^ZipEntry zip-entry extractable-entries]
+        (make-directories zip-entry library-directory)
+        (.Extract zip-entry library-directory
+          ExtractExistingFileAction/OverwriteSilently))
+      {::coord (pd/normalize-coordinates coord)
+       ::root (first
+                (fs/path-split
+                  (.FileName
+                    (first extractable-entries))))
+       ::entries extractable-entries
+       ::succeeded true})
+    (catch Exception e
+      {::coord (pd/normalize-coordinates coord)
+       ::error e
+       ::succeeded false})))
+
+;; ============================================================
+;; installation
 
 (s/fdef install
   :args (s/cat :group-artifact-version ::pd/vector-dependency) ;; would like to broaden this
   :ret (s/coll-of ::extraction))
 
-;; big and tangly for now, pending refactor with emphasis on spec
+(defn- blocked-coordinate? [coord installed]
+  (let [{:keys [::pd/artifact]} (pd/normalize-coordinates coord)]
+    (or (= artifact "clojure")
+        (contains? installed
+          (pd/normalize-coordinates coord)))))
+
 (defn install
   ([group-artifact-version]
    (install group-artifact-version nil))
@@ -274,41 +316,13 @@
    (let [gav (vec (normalize-coordinates group-artifact-version))]
      (when-not (blocked-coordinate? gav installed)
        (Debug/Log (str "Installing " (prn-str group-artifact-version)))
-       (let [all-coords (->> (cons gav (all-dependencies gav))
-                             (map vec) ;; stricter
-                             (concat (map (juxt ::pd/group ::pd/artifact ::pd/version)
-                                       (keys installed)))
-                             (remove #(blocked-coordinate? % installed))
-                             most-recent-versions
-                             vec)
-             extractions (for [coord all-coords,
-                               :let [jar (download-jar coord),
-                                     extractable-entries (->> (ZipFile/Read jar)
-                                                              (filter should-extract?))]]
-                           {::coord (pd/normalize-coordinates coord)
-                            ::root (first
-                                     (fs/path-split
-                                       (.FileName
-                                         (first extractable-entries))))
-                            ::entries extractable-entries})]
-         (doseq [^ZipEntry zip-entry (mapcat ::entries extractions)]
-           (make-directories zip-entry library-directory)
-           (.Extract zip-entry library-directory
-             ExtractExistingFileAction/OverwriteSilently))
-         extractions)))))
-
-  ;; (dorun
-  ;;   (->> group-artifact-version
-  ;;        normalize-coordinates
-  ;;        download-jars
-  ;;        (mapcat #(seq (ZipFile/Read %)))
-  ;;        (filter should-extract?)
-  ;;        (map (fn [^ZipEntry zip-entry]
-  ;;               (make-directories zip-entry library-directory)
-  ;;               ;; TODO do better than silently overwriting 
-  ;;               (.Extract zip-entry library-directory
-  ;;                 ExtractExistingFileAction/OverwriteSilently)))))
-  
+       (->> (cons gav (all-dependencies gav))
+            (map vec) ;; stricter
+            (concat (map (juxt ::pd/group ::pd/artifact ::pd/version)
+                      installed))
+            (remove #(blocked-coordinate? % installed))
+            most-recent-versions
+            (mapv extract))))))
 
 (def library-manifest-name "manifest.edn")
 
@@ -336,7 +350,7 @@
     (if (.Exists inf)
       (clojure.edn/read-string
         (slurp inf))
-      (do (write-or-overwrite-file inf {})
+      (do (write-library-manifest)
           (library-manifest)))))
 
 (defn flush-libraries []
@@ -359,11 +373,7 @@
     (when-let [install-data (install dep {::manifest manifest})]
       (write-library-manifest
         (update manifest ::installed
-          (fn [installed]
-            (reduce (fn [bldg, {:keys [::coord ::root]}]
-                      (assoc bldg coord root))
-              installed
-              install-data))))
+          (fnil into #{}) (map ::coord) install-data))
       install-data)))
 
 (s/fdef install-all-deps
@@ -377,4 +387,4 @@
          (map pd/normalize-coordinates)
          (map (juxt ::pd/group ::pd/artifact ::pd/version))
          most-recent-versions
-         (into [] (comp (keep install-step) cat)))))
+         (into [] (mapcat install-step)))))

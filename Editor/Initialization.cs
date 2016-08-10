@@ -53,13 +53,14 @@ namespace Arcadia
 			Debug.Log("Starting Arcadia...");
 
 			CheckSettings();
-			SetClojureLoadPath();
+			SetInitialClojureLoadPath();
 			LoadConfig();
 			LoadPackages();
+			LoadCompiler();
+			SetClojureLoadPath();
 			ensureCompiledFolder();
 			// StartWatching();
 			StartREPL();
-
 
 			Debug.Log("Arcadia Started!");
 		}
@@ -70,7 +71,14 @@ namespace Arcadia
 		public static void LoadPackages(){
 			Debug.Log("Loading packages...");
 			RT.load("arcadia/packages");
+			// may want to make this conditional on some config thing
 			RT.var("arcadia.packages", "install-all-deps").invoke();
+		}
+
+		// don't strictly have to do this since we've loaded arcadia.packages, but can't hurt
+		public static void LoadCompiler(){
+			Debug.Log("Loading compiler...");
+			RT.load("arcadia/compiler");
 		}
 
 		[MenuItem("Arcadia/Initialization/Load Configuration")]
@@ -98,24 +106,40 @@ namespace Arcadia
 			}
 		}
 
-		[MenuItem("Arcadia/Initialization/Update Clojure Load Path")]
-		public static void SetClojureLoadPath()
+		// need this to set things up so we can get rest of loadpath after loading arcadia.compiler
+		public static void SetInitialClojureLoadPath()
 		{
 			try
 			{
-				Debug.Log("Setting Load Path...");
+				Debug.Log("Setting Initial Load Path...");
 				string clojureDllFolder = GetClojureDllFolder();
 
 				Environment.SetEnvironmentVariable("CLOJURE_LOAD_PATH",
 				  Path.GetFullPath(VariadicPathCombine(clojureDllFolder, "..", "Compiled")) + Path.PathSeparator +
 				  Path.GetFullPath(VariadicPathCombine(clojureDllFolder, "..", "Source")) + Path.PathSeparator +
-				  Path.GetFullPath(Application.dataPath) + Path.PathSeparator +
-				  Path.GetFullPath(VariadicPathCombine(clojureDllFolder, "..", "Libraries")));
+				  Path.GetFullPath(Application.dataPath));
 			}
 			catch (InvalidOperationException e)
 			{
 				throw new SystemException("Error Loading Arcadia! Arcadia expects exactly one Arcadia folder (a folder with Clojure.dll in it)");
 			}
+
+			Debug.Log("Load Path is " + Environment.GetEnvironmentVariable("CLOJURE_LOAD_PATH"));
+		}
+
+
+		[MenuItem("Arcadia/Initialization/Update Clojure Load Path")]
+		public static void SetClojureLoadPath()
+		{
+			Debug.Log("Setting Load Path...");
+			string clojureDllFolder = GetClojureDllFolder();
+
+			Environment.SetEnvironmentVariable("CLOJURE_LOAD_PATH",
+				Path.GetFullPath(VariadicPathCombine(clojureDllFolder, "..", "Compiled")) + Path.PathSeparator +
+				Path.GetFullPath(VariadicPathCombine(clojureDllFolder, "..", "Source")) + Path.PathSeparator +
+				Path.GetFullPath(Application.dataPath) + Path.PathSeparator +
+				RT.var("arcadia.compiler", "loadpath-extension-string").invoke() + Path.PathSeparator +
+				Path.GetFullPath(VariadicPathCombine(clojureDllFolder, "..", "Libraries")));
 
 			Debug.Log("Load Path is " + Environment.GetEnvironmentVariable("CLOJURE_LOAD_PATH"));
 		}
