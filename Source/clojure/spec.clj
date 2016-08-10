@@ -7,7 +7,7 @@
 ;   You must not remove this notice, or any other, from this software.
 
 (ns clojure.spec
-  (:refer-clojure :exclude [+ * and or cat def keys])
+  (:refer-clojure :exclude [+ * and assert or cat def keys merge])
   (:require [clojure.walk :as walk]
             [clojure.spec.gen :as gen]
             [clojure.string :as str]))
@@ -27,12 +27,12 @@
   21)
 
 (def ^:dynamic *coll-check-limit*
-  "The number of items validated in a collection spec'ed with 'coll'"
-  100)
+  "The number of elements validated in a collection spec'ed with 'every'"
+  101)
 
-(def ^:private ^:dynamic *instrument-enabled*
-  "if false, instrumented fns call straight through"
-  true)
+(def ^:dynamic *coll-error-limit*
+  "The number of errors reported by explain in a collection spec'ed with 'every'"
+  20)
 
 (defprotocol Spec
   (conform* [spec x])
@@ -156,48 +156,52 @@
 (defn with-gen
   "Takes a spec and a no-arg, generator-returning fn and returns a version of that spec that uses that generator"
   [spec gen-fn]
-  (with-gen* (specize spec) gen-fn))
+  (let [spec (reg-resolve spec)]
+    (if (regex? spec)
+      (assoc spec ::gfn gen-fn)
+      (with-gen* (specize spec) gen-fn))))
 
 (defn explain-data* [spec path via in x]
-  (when-let [probs (explain* (specize spec) path via in x)]
-    {::problems probs}))
+  (let [probs (explain* (specize spec) path via in x)]
+    (when-not (empty? probs)
+      {::problems probs})))
 
 (defn explain-data
   "Given a spec and a value x which ought to conform, returns nil if x
   conforms, else a map with at least the key ::problems whose value is
-  a path->problem-map, where problem-map has at least :pred and :val
+  a collection of problem-maps, where problem-map has at least :path :pred and :val
   keys describing the predicate and the value that failed at that
   path."
   [spec x]
   (explain-data* spec [] (if-let [name (spec-name spec)] [name] []) [] x))
 
-(defn- explain-out
-  "prints an explanation to *out*."
+(defn explain-out
+  "prints explanation data (per 'explain-data') to *out*."
   [ed]
   (if ed
     (do
       ;;(prn {:ed ed})
-      (doseq [[path {:keys [pred val reason via in] :as prob}]  (::problems ed)]
+      (doseq [{:keys [path pred val reason via in] :as prob}  (::problems ed)]
         (when-not (empty? in)
-          (print "In:" in ""))
+          (print "In:" (pr-str in) ""))
         (print "val: ")
         (pr val)
         (print " fails")
         (when-not (empty? via)
-          (print " spec:" (last via)))
+          (print " spec:" (pr-str (last via))))
         (when-not (empty? path)
-          (print " at:" path))
+          (print " at:" (pr-str path)))
         (print " predicate: ")
-        (pr pred)
+        (pr (abbrev pred))
         (when reason (print ", " reason))
         (doseq [[k v] prob]
-          (when-not (#{:pred :val :reason :via :in} k)
-            (print "\n\t" k " ")
+          (when-not (#{:path :pred :val :reason :via :in} k)
+            (print "\n\t" (pr-str k) " ")
             (pr v)))
         (newline))
       (doseq [[k v] ed]
         (when-not (#{::problems} k)
-          (print k " ")
+          (print (pr-str k) " ")
           (pr v)
           (newline))))
     (println "Success!")))
@@ -218,20 +222,25 @@
   [spec overrides path rmap form]
   ;;(prn {:spec spec :over overrides :path path :form form})
   (let [spec (specize spec)]
-    (if-let [g (c/or (get overrides path) (gen* spec overrides path rmap))]
+    (if-let [g (c/or (when-let [gfn (c/or (get overrides (c/or (spec-name spec) spec))
+                                          (get overrides path))]
+                       (gfn))
+                     (gen* spec overrides path rmap))]
       (gen/such-that #(valid? spec %) g 100)
-      ;; (throw (IllegalStateException. (str "Unable to construct gen at: " path " for: " (abbrev form))))
-      (throw (System.InvalidOperationException. (str "Unable to construct gen at: " path " for: " (abbrev form)))))))
+      (let [abbr (abbrev form)]
+        (throw (ex-info (str "Unable to construct gen at: " path " for: " abbr)
+                        {::path path ::form form ::failure :no-gen}))))))
 
 (defn gen
   "Given a spec, returns the generator for it, or throws if none can
   be constructed. Optionally an overrides map can be provided which
-  should map paths (vectors of keywords) to generators. These will be
-  used instead of the generators at those paths. Note that parent
-  generator (in the spec or overrides map) will supersede those of any
-  subtrees. A generator for a regex op must always return a
-  sequential collection (i.e. a generator for s/? should return either
-  an empty sequence/vector or a sequence/vector with one item in it)"
+  should map spec names or paths (vectors of keywords) to no-arg
+  generator-creating fns. These will be used instead of the generators at those
+  names/paths. Note that parent generator (in the spec or overrides
+  map) will supersede those of any subtrees. A generator for a regex
+  op must always return a sequential collection (i.e. a generator for
+  s/? should return either an empty sequence/vector or a
+  sequence/vector with one item in it)"
   ([spec] (gen spec nil))
   ([spec overrides] (gensub spec overrides [] {::recursion-limit *recursion-limit*} spec)))
 
@@ -262,23 +271,38 @@
 (defn ^:skip-wiki def-impl
   "Do not call this directly, use 'def'"
   [k form spec]
-  (assert (c/and (named? k) (namespace k)) "k must be namespaced keyword/symbol")
+  (c/assert (c/and (named? k) (namespace k)) "k must be namespaced keyword or resolvable symbol")
   (let [spec (if (c/or (spec? spec) (regex? spec) (get @registry-ref spec))
                spec
                (spec-impl form spec nil nil))]
     (swap! registry-ref assoc k spec)
     k))
 
+(defn- ns-qualify
+  "Qualify symbol s by resolving it or using the current *ns*."
+  [s]
+  (if-let [ns-sym (some-> s namespace symbol)]
+    (c/or (some-> (get (ns-aliases *ns*) ns-sym) str (symbol (name s)))
+          s)
+    (symbol (str (.Name *ns*)) (str s))))
+
 (defmacro def
-  "Given a namespace-qualified keyword or symbol k, and a spec, spec-name, predicate or regex-op
-  makes an entry in the registry mapping k to the spec"
+  "Given a namespace-qualified keyword or resolvable symbol k, and a
+  spec, spec-name, predicate or regex-op makes an entry in the
+  registry mapping k to the spec"
   [k spec-form]
-  `(def-impl ~k '~(res spec-form) ~spec-form))
+  (let [k (if (symbol? k) (ns-qualify k) k)]
+    `(def-impl '~k '~(res spec-form) ~spec-form)))
 
 (defn registry
-  "returns the registry map"
+  "returns the registry map, prefer 'get-spec' to lookup a spec by name"
   []
   @registry-ref)
+
+(defn get-spec
+  "Returns spec registered for keyword/symbol/var k, or nil."
+  [k]
+  (get (registry) (if (keyword? k) k (->sym k))))
 
 (declare map-spec)
 
@@ -362,8 +386,8 @@
   (let [unk #(-> % name keyword)
         req-keys (filterv keyword? (flatten req))
         req-un-specs (filterv keyword? (flatten req-un))
-        _ (assert (every? #(c/and (keyword? %) (namespace %)) (concat req-keys req-un-specs opt opt-un))
-                  "all keys must be namespace-qualified keywords")
+        _ (c/assert (every? #(c/and (keyword? %) (namespace %)) (concat req-keys req-un-specs opt opt-un))
+                    "all keys must be namespace-qualified keywords")
         req-specs (into req-keys req-un-specs)
         req-keys (into req-keys (map unk req-un-specs))
         opt-keys (into (vec opt) (map unk opt-un))
@@ -404,7 +428,7 @@
         keys (mapv first pairs)
         pred-forms (mapv second pairs)
         pf (mapv res pred-forms)]
-    (assert (c/and (even? (count key-pred-forms)) (every? keyword? keys)) "spec/or expects k1 p1 k2 p2..., where ks are keywords")
+    (c/assert (c/and (even? (count key-pred-forms)) (every? keyword? keys)) "spec/or expects k1 p1 k2 p2..., where ks are keywords")
     `(or-spec-impl ~keys '~pf ~pred-forms nil)))
 
 (defmacro and
@@ -416,6 +440,84 @@
   conformed values propagate through rest of predicates."
   [& pred-forms]
   `(and-spec-impl '~(mapv res pred-forms) ~(vec pred-forms) nil))
+
+(defmacro merge
+  "Takes map-validating specs (e.g. 'keys' specs) and
+  returns a spec that returns a conformed map satisfying all of the
+  specs.  Successive conformed values propagate through rest of
+  predicates. Unlike 'and', merge can generate maps satisfying the
+  union of the predicates."
+  [& pred-forms]
+  `(merge-spec-impl '~(mapv res pred-forms) ~(vec pred-forms) nil))
+
+(defmacro every
+  "takes a pred and validates collection elements against that pred.
+
+  Note that 'every' does not do exhaustive checking, rather it samples
+  *coll-check-limit* elements. Nor (as a result) does it do any
+  conforming of elements. 'explain' will report at most *coll-error-limit*
+  problems.  Thus 'every' should be suitable for potentially large
+  collections.
+
+  Takes several kwargs options that further constrain the collection:
+
+  :kind - a pred/spec that the collection type must satisfy, e.g. vector?
+        (default nil) Note that if :kind is specified and :into is
+        not, this pred must generate in order for every to generate.
+  :count - specifies coll has exactly this count (default nil)
+  :min-count, :max-count - coll has count (<= min-count count max-count) (defaults nil)
+  :distinct - all the elements are distinct (default nil)
+
+  And additional args that control gen
+
+  :gen-max - the maximum coll size to generate (default 20)
+  :into - one of [], (), {}, #{} - the default collection to generate into
+      (default: empty coll as generated by :kind pred if supplied, else [])
+  
+  Optionally takes :gen generator-fn, which must be a fn of no args that
+  returns a test.check generator
+
+  See also - coll-of, every-kv
+"
+  [pred & {:keys [into kind count max-count min-count distinct gen-max gen] :as opts}]
+  (let [nopts (-> opts (dissoc :gen) (assoc ::kind-form `'~(res (:kind opts))))]
+    `(every-impl '~pred ~pred ~nopts ~gen)))
+
+(defmacro every-kv
+  "like 'every' but takes separate key and val preds and works on associative collections.
+
+  Same options as 'every', :into defaults to {}
+
+  See also - map-of"
+
+  [kpred vpred & opts]
+  `(every (tuple ~kpred ~vpred) ::kfn (fn [i# v#] (nth v# 0)) :into {} ~@opts))
+
+(defmacro coll-of
+  "Returns a spec for a collection of items satisfying pred. Unlike
+  'every', coll-of will exhaustively conform every value.
+
+  Same options as 'every'. conform will produce a collection
+  corresponding to :into if supplied, else will match the input collection,
+  avoiding rebuilding when possible.
+
+  See also - every, map-of"
+  [pred & opts]
+  `(every ~pred ::conform-all true ~@opts))
+
+(defmacro map-of
+  "Returns a spec for a map whose keys satisfy kpred and vals satisfy
+  vpred. Unlike 'every-kv', map-of will exhaustively conform every
+  value.
+
+  Same options as 'every', :kind defaults to map?, with the addition of:
+
+  :conform-keys - conform keys as well as values (default false)
+
+  See also - every-kv"
+  [kpred vpred & opts]
+  `(every-kv ~kpred ~vpred ::conform-all true :kind map? ~@opts))
+
 
 (defmacro *
   "Returns a regex op that matches zero or more values matching
@@ -449,7 +551,7 @@
         keys (mapv first pairs)
         pred-forms (mapv second pairs)
         pf (mapv res pred-forms)]
-    (assert (c/and (even? (count key-pred-forms)) (every? keyword? keys)) "alt expects k1 p1 k2 p2..., where ks are keywords")
+    (c/assert (c/and (even? (count key-pred-forms)) (every? keyword? keys)) "alt expects k1 p1 k2 p2..., where ks are keywords")
     `(alt-impl ~keys ~pred-forms '~pf)))
 
 (defmacro cat
@@ -465,7 +567,7 @@
         pred-forms (mapv second pairs)
         pf (mapv res pred-forms)]
     ;;(prn key-pred-forms)
-    (assert (c/and (even? (count key-pred-forms)) (every? keyword? keys)) "cat expects k1 p1 k2 p2..., where ks are keywords")
+    (c/assert (c/and (even? (count key-pred-forms)) (every? keyword? keys)) "cat expects k1 p1 k2 p2..., where ks are keywords")
     `(cat-impl ~keys ~pred-forms '~pf)))
 
 (defmacro &
@@ -489,8 +591,16 @@
   and returns a spec whose conform/explain take a fn and validates it
   using generative testing. The conformed value is always the fn itself.
 
+  See 'fdef' for a single operation that creates an fspec and
+  registers it, as well as a full description of :args, :ret and :fn
+
+  fspecs can generate functions that validate the arguments and
+  fabricate a return value compliant with the :ret spec, ignoring
+  the :fn spec if present.
+
   Optionally takes :gen generator-fn, which must be a fn of no args
   that returns a test.check generator."
+  
   [& {:keys [args ret fn gen]}]
   `(fspec-impl (spec ~args) '~(res args)
                (spec ~ret) '~(res ret)
@@ -501,77 +611,21 @@
   where each element conforms to the corresponding pred. Each element
   will be referred to in paths using its ordinal."
   [& preds]
-  (assert (not (empty? preds)))
+  (c/assert (not (empty? preds)))
   `(tuple-impl '~(mapv res preds) ~(vec preds)))
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; instrument ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(defn- ns-qualify
-  "Qualify symbol s by resolving it or using the current *ns*."
-  [s]
-  (if-let [resolved (resolve s)]
-    (->sym resolved)
-    (if (namespace s)
-      s
-      (symbol (str (.Name *ns*)) (str s)))))
-
-(defn- expect
-  "Returns nil if v conforms to spec, else throws ex-info with explain-data."
-  [spec v]
-  )
-
-(defn- fn-spec?
-  "Fn-spec must include at least :args or :ret specs."
-  [m]
-  (c/or (:args m) (:ret m)))
-
-(defn fn-spec
-  "Returns fspec of specs for var or symbol v, or nil."
-  [v]
-  (get (registry) (->sym v)))
-
-(defmacro with-instrument-disabled
-  "Disables instrument's checking of calls, within a scope."
-  [& body]
-  `(binding [*instrument-enabled* nil]
-     ~@body))
-
-(defn- spec-checking-fn
-  [v f]
-  (let [conform! (fn [v role spec data args]
-                   (let [conformed (conform spec data)]
-                     (if (= ::invalid conformed)
-                       (let [ed (assoc (explain-data* spec [role] [] [] data)
-                                  ::args args)]
-                         (throw (ex-info
-                                 (str "Call to " v " did not conform to spec:\n" (with-out-str (explain-out ed)))
-                                 ed)))
-                       conformed)))]
-    (c/fn
-     [& args]
-     (if *instrument-enabled*
-       (with-instrument-disabled
-         (let [specs (fn-spec v)]
-           (when (:args specs) (conform! v :args (:args specs) args args))
-           (binding [*instrument-enabled* true]
-             (.applyTo ^clojure.lang.IFn f args))))
-       (.applyTo ^clojure.lang.IFn f args)))))
 
 (defn- macroexpand-check
   [v args]
-  (let [specs (fn-spec v)]
-    (when-let [arg-spec (:args specs)]
+  (let [fn-spec (get-spec v)]
+    (when-let [arg-spec (:args fn-spec)]
       (when (= ::invalid (conform arg-spec args))
         (let [ed (assoc (explain-data* arg-spec [:args]
                                        (if-let [name (spec-name arg-spec)] [name] []) [] args)
                    ::args args)]
-          (throw ;; (IllegalArgumentException.
-                 ;;   (str
-                 ;;     "Call to " (->sym v) " did not conform to spec:\n"
-                 ;;     (with-out-str (explain-out ed))))
-            (ArgumentException.
-              (str
-                "Call to " (->sym v) " did not conform to spec:\n"
-                (with-out-str (explain-out ed))))))))))
+          (throw (ArgumentException.
+                   (str
+                     "Call to " (->sym v) " did not conform to spec:\n"
+                     (with-out-str (explain-out ed))))))))))
 
 (defmacro fdef
   "Takes a symbol naming a function, and one or more of the following:
@@ -585,8 +639,8 @@
     expected to contain predicates that relate those values
 
   Qualifies fn-sym with resolve, or using *ns* if no resolution found.
-  Registers specs in the global registry, where they can be retrieved
-  by calling fn-spec.
+  Registers an fspec in the global registry, where it can be retrieved
+  by calling get-spec with the var or fully-qualified symbol.
 
   Once registered, function specs are included in doc, checked by
   instrument, tested by the runner clojure.spec.test/run-tests, and (if
@@ -606,110 +660,7 @@
                  :sym symbol?)
     :ret symbol?)"
   [fn-sym & specs]
-  (let [qn (ns-qualify fn-sym)]
-    `(clojure.spec/def '~qn (clojure.spec/fspec ~@specs))))
-
-(defn- no-fn-spec
-  [v specs]
-  (ex-info (str "Fn at " v " is not spec'ed.")
-           {:var v :specs specs}))
-
-(def ^:private instrumented-vars
-     "Map for instrumented vars to :raw/:wrapped fns"
-  (atom {}))
-
-(defn- ->var
-  [s-or-v]
-  (if (var? s-or-v)
-    s-or-v
-    (let [v (c/and (symbol? s-or-v) (resolve s-or-v))]
-      (if (var? v)
-        v
-        (throw
-          ;; (IllegalArgumentException. (str (pr-str s-or-v) " does not name a var"))
-          (ArgumentException. (str (pr-str s-or-v) " does not name a var")))))))
-
-(defn instrument
-  "Instruments the var at v, a var or symbol, to check specs
-registered with fdef. Wraps the fn at v to check the :args
-spec, if it exists, throwing an ex-info with explain-data if a
-check fails. Idempotent."
-  [v]
-  (let [v (->var v)
-        spec (fn-spec v)]
-    (if (fn-spec? spec)
-      (locking instrumented-vars
-        (let [{:keys [raw wrapped]} (get @instrumented-vars v)
-              current @v]
-          (when-not (= wrapped current)
-            (let [checked (spec-checking-fn v current)]
-              (alter-var-root v (constantly checked))
-              (swap! instrumented-vars assoc v {:raw current :wrapped checked}))))
-        v)
-      (throw (no-fn-spec v spec)))))
-
-(defn unstrument
-  "Undoes instrument on the var at v, a var or symbol. Idempotent."
-  [v]
-  (let [v (->var v)]
-    (locking instrumented-vars
-      (when-let [{:keys [raw wrapped]} (get @instrumented-vars v)]
-        (let [current @v]
-          (when (= wrapped current)
-            (alter-var-root v (constantly raw))))
-        (swap! instrumented-vars dissoc v))
-      v)))
-
-(defn speced-vars
-  "Returns the set of vars whose namespace is in ns-syms AND
-whose vars have been speced with fdef. If no ns-syms are
-specified, return speced vars from all namespaces."
-  [& ns-syms]
-  (let [ns-match? (if (seq ns-syms)
-                    (set (map str ns-syms))
-                    (constantly true))]
-    (reduce-kv
-     (fn [s k _]
-       (if (c/and (symbol? k)
-                  (ns-match? (namespace k)))
-         (if-let [v (resolve k)]
-           (conj s v)
-           s)
-         s))
-     #{}
-     (registry))))
-
-(defn instrument-ns
-  "Call instrument for all speced-vars in namespaces named
-by ns-syms. Idempotent."
-  [& ns-syms]
-  (when (seq ns-syms)
-    (locking instrumented-vars
-      (doseq [v (apply speced-vars ns-syms)]
-        (instrument v)))))
-
-(defn unstrument-ns
-  "Call unstrument for all speced-vars in namespaces named
-by ns-syms. Idempotent."
-  [& ns-syms]
-  (when (seq ns-syms)
-    (locking instrumented-vars
-      (doseq [v (apply speced-vars ns-syms)]
-        (unstrument v)))))
-
-(defn instrument-all
-  "Call instrument for all speced-vars. Idempotent."
-  []
-  (locking instrumented-vars
-    (doseq [v (speced-vars)]
-      (instrument v))))
-
-(defn unstrument-all
-  "Call unstrument for all speced-vars. Idempotent"
-  []
-  (locking instrumented-vars
-    (doseq [v (speced-vars)]
-      (unstrument v))))
+  `(clojure.spec/def ~fn-sym (clojure.spec/fspec ~@specs)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; impl ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- recur-limit? [rmap id path k]
@@ -744,7 +695,7 @@ by ns-syms. Idempotent."
   (let [pred (maybe-spec pred)]
     (if (spec? pred)
       (explain* pred path (if-let [name (spec-name pred)] (conj via name) via) in v)
-      {path {:pred (abbrev form) :val v :via via :in in}})))
+      [{:path path :pred (abbrev form) :val v :via via :in in}])))
 
 (defn ^:skip-wiki map-spec-impl
   "Do not call this directly, use 'spec' with a map argument"
@@ -788,14 +739,16 @@ by ns-syms. Idempotent."
                     ret))))
      (explain* [_ path via in x]
                (if-not (map? x)
-                 {path {:pred 'map? :val x :via via :in in}}
+                 [{:path path :pred 'map? :val x :via via :in in}]
                  (let [reg (registry)]
-                   (apply merge
+                   (apply concat
                           (when-let [probs (->> (map (fn [pred form] (when-not (pred x) (abbrev form)))
                                                      pred-exprs pred-forms)
                                                 (keep identity)
                                                 seq)]
-                            {path {:pred (vec probs) :val x :via via :in in}})
+                            (map
+                             #(identity {:path path :pred % :val x :via via :in in})
+                             probs))
                           (map (fn [[k v]]
                                  (when-not (c/or (not (contains? reg (keys->specs k)))
                                                  (valid? (keys->specs k) v k))
@@ -841,19 +794,16 @@ by ns-syms. Idempotent."
       (named? pred) (cond-> (the-spec pred) gfn (with-gen gfn))
       :else
       (reify
-       clojure.lang.IFn
-       (invoke [this x] (valid? this x))
        Spec
        (conform* [_ x] (dt pred x form cpred?))
        (unform* [_ x] (if cpred?
                         (if unc
                           (unc x)
-                          (throw ;;(IllegalStateException. "no unform fn for conformer")
-                            (System.InvalidOperationException. "no unform fn for conformer")))
+                          (throw (InvalidOperationException. "no unform fn for conformer")))
                         x))
        (explain* [_ path via in x]
                  (when (= ::invalid (dt pred x form cpred?))
-                   {path {:pred (abbrev form) :val x :via via :in in}}))
+                   [{:path path :pred (abbrev form) :val x :via via :in in}]))
        (gen* [_ _ _ _] (if gfn
                          (gfn)
                          (gen/gen-for-pred pred)))
@@ -864,32 +814,29 @@ by ns-syms. Idempotent."
   "Do not call this directly, use 'multi-spec'"
   ([form mmvar retag] (multi-spec-impl form mmvar retag nil))
   ([form mmvar retag gfn]
-   (let [id  (System.Guid.) ;;(java.util.UUID/randomUUID)
-         predx #(let [^clojure.lang.MultiFn mm @mmvar]
-                  (c/and (contains? (methods mm)
-                           ((.dispatchFn mm) %))
-                    (mm %)))
-         dval #((.dispatchFn ^clojure.lang.MultiFn @mmvar) %)
-         tag (if (keyword? retag)
-               #(assoc %1 retag %2)
-               retag)]
+     (let [id (System.Guid.)
+           predx #(let [^clojure.lang.MultiFn mm @mmvar]
+                    (c/and (contains? (methods mm)
+                                      ((.dispatchFn mm) %))
+                           (mm %)))
+           dval #((.dispatchFn ^clojure.lang.MultiFn @mmvar) %)
+           tag (if (keyword? retag)
+                 #(assoc %1 retag %2)
+                 retag)]
        (reify
-        clojure.lang.IFn
-        (invoke [this x] (valid? this x))
         Spec
         (conform* [_ x] (if-let [pred (predx x)]
                           (dt pred x form)
                           ::invalid))
         (unform* [_ x] (if-let [pred (predx x)]
                          (unform pred x)
-                         (throw ;; (IllegalStateException. (str "No method of: " form " for dispatch value: " (dval x)))
-                           (System.InvalidOperationException. (str "No method of: " form " for dispatch value: " (dval x))))))
+                         (throw (InvalidOperationException. (str "No method of: " form " for dispatch value: " (dval x))))))
         (explain* [_ path via in x]
                   (let [dv (dval x)
                         path (conj path dv)]
                     (if-let [pred (predx x)]
                       (explain-1 form pred path via in x)
-                      {path {:pred form :val x :reason "no method" :via via :in in}})))
+                      [{:path path :pred (abbrev form) :val x :reason "no method" :via via :in in}])))
         (gen* [_ overrides path rmap]
               (if gfn
                 (gfn)
@@ -915,8 +862,6 @@ by ns-syms. Idempotent."
   ([forms preds] (tuple-impl forms preds nil))
   ([forms preds gfn]
      (reify
-      clojure.lang.IFn
-      (invoke [this x] (valid? this x))
       Spec
       (conform* [_ x]
                 (if-not (c/and (vector? x)
@@ -932,7 +877,7 @@ by ns-syms. Idempotent."
                           (recur (if (identical? cv v) ret (assoc ret i cv))
                                  (inc i))))))))
       (unform* [_ x]
-               (assert (c/and (vector? x)
+               (c/assert (c/and (vector? x)
                               (= (count x) (count preds))))
                (loop [ret x, i 0]
                  (if (= i (count x))
@@ -944,13 +889,13 @@ by ns-syms. Idempotent."
       (explain* [_ path via in x]
                 (cond
                  (not (vector? x))
-                 {path {:pred 'vector? :val x :via via :in in}}
+                 [{:path path :pred 'vector? :val x :via via :in in}]
 
                  (not= (count x) (count preds))
-                 {path {:pred `(= (count ~'%) ~(count preds)) :val x :via via :in in}}
+                 [{:path path :pred `(= (count ~'%) ~(count preds)) :val x :via via :in in}]
 
                  :else
-                 (apply merge
+                 (apply concat
                         (map (fn [i form pred]
                                (let [v (x i)]
                                  (when-not (valid? pred v)
@@ -973,7 +918,7 @@ by ns-syms. Idempotent."
 (defn ^:skip-wiki or-spec-impl
   "Do not call this directly, use 'or'"
   [keys forms preds gfn]
-  (let [id (System.Guid.) ;;(java.util.UUID/randomUUID)
+  (let [id (System.Guid.)
         kps (zipmap keys preds)
         cform (fn [x]
                 (loop [i 0]
@@ -985,14 +930,12 @@ by ns-syms. Idempotent."
                           (tagged-ret (keys i) ret))))
                     ::invalid)))]
     (reify
-     clojure.lang.IFn
-     (invoke [this x] (valid? this x))
      Spec
      (conform* [_ x] (cform x))
      (unform* [_ [k x]] (unform (kps k) x))
      (explain* [this path via in x]
                (when-not (valid? this x)
-                 (apply merge
+                 (apply concat
                         (map (fn [k form pred]
                                (when-not (valid? pred x)
                                  (explain-1 form pred (conj path k) via in x)))
@@ -1037,16 +980,170 @@ by ns-syms. Idempotent."
 (defn ^:skip-wiki and-spec-impl
   "Do not call this directly, use 'and'"
   [forms preds gfn]
-     (reify
-      clojure.lang.IFn
-      (invoke [this x] (valid? this x))
-      Spec
-      (conform* [_ x] (and-preds x preds forms))
-      (unform* [_ x] (reduce #(unform %2 %1) x (reverse preds)))
-      (explain* [_ path via in x] (explain-pred-list forms preds path via in x))
+  (reify
+   Spec
+   (conform* [_ x] (and-preds x preds forms))
+   (unform* [_ x] (reduce #(unform %2 %1) x (reverse preds)))
+   (explain* [_ path via in x] (explain-pred-list forms preds path via in x))
    (gen* [_ overrides path rmap] (if gfn (gfn) (gensub (first preds) overrides path rmap (first forms))))
    (with-gen* [_ gfn] (and-spec-impl forms preds gfn))
    (describe* [_] `(and ~@forms))))
+
+(defn ^:skip-wiki merge-spec-impl
+  "Do not call this directly, use 'merge'"
+  [forms preds gfn]
+  (reify
+   Spec
+   (conform* [_ x] (let [ms (map #(dt %1 x %2) preds forms)]
+                     (if (some #{::invalid} ms)
+                       ::invalid
+                       (apply c/merge ms))))
+   (unform* [_ x] (apply c/merge (map #(unform % x) (reverse preds))))
+   (explain* [_ path via in x]
+             (apply concat
+                    (map #(explain-1 %1 %2 path via in x)
+                         forms preds)))
+   (gen* [_ overrides path rmap]
+         (if gfn
+           (gfn)
+           (gen/fmap
+            #(apply c/merge %)
+            (apply gen/tuple (map #(gensub %1 overrides path rmap %2)
+                                  preds forms)))))
+   (with-gen* [_ gfn] (merge-spec-impl forms preds gfn))
+   (describe* [_] `(merge ~@forms))))
+
+(defn- coll-prob [x kfn kform distinct count min-count max-count
+                  path via in]
+  (let [pred (c/or kfn coll?)
+        kform (c/or kform `coll?)]
+    (cond
+     (not (valid? pred x))
+     (explain-1 kform pred path via in x)
+
+     (c/and distinct (not (empty? x)) (not (apply distinct? x)))
+     [{:path path :pred 'distinct? :val x :via via :in in}]
+
+     (c/and count (not= count (bounded-count count x)))
+     [{:path path :pred `(= ~count (c/count ~'%)) :val x :via via :in in}]
+
+     (c/and (c/or min-count max-count)
+            (not (<= (c/or min-count 0)
+                     (bounded-count (if max-count (inc max-count) min-count) x)
+                     (c/or max-count System.Int32/MaxValue))))
+     [{:path path :pred `(<= ~(c/or min-count 0) (c/count ~'%) ~(c/or max-count 'System.Int32/MaxValue)) :val x :via via :in in}])))
+
+(defn ^:skip-wiki every-impl
+  "Do not call this directly, use 'every', 'every-kv', 'coll-of' or 'map-of'"
+  ([form pred opts] (every-impl form pred opts nil))
+  ([form pred {gen-into :into
+               :keys [kind ::kind-form count max-count min-count distinct gen-max ::kfn
+                      conform-keys ::conform-all]
+               :or {gen-max 20}
+               :as opts}
+    gfn]
+     (let [conform-into gen-into
+           check? #(valid? pred %)
+           kfn (c/or kfn (fn [i v] i))
+           addcv (fn [ret i v cv] (conj ret cv))
+           cfns (fn [x]
+                  ;;returns a tuple of [init add complete] fns
+                  (cond
+                   (c/and (vector? x) (c/or (not conform-into) (vector? conform-into)))
+                   [identity
+                    (fn [ret i v cv]
+                      (if (identical? v cv)
+                        ret
+                        (assoc ret i cv)))
+                    identity]
+
+                   (c/and (map? x) (c/or (c/and kind (not conform-into)) (map? conform-into)))
+                   [(if conform-keys empty identity)
+                    (fn [ret i v cv]
+                      (if (c/and (identical? v cv) (not conform-keys))
+                        ret
+                        (assoc ret (nth (if conform-keys cv v) 0) (nth cv 1))))
+                    identity]
+                  
+                   (c/or (list? conform-into) (c/and (not conform-into) (list? x)))
+                   [(constantly ()) addcv reverse]
+
+                   :else [#(empty (c/or conform-into %)) addcv identity]))]
+       (reify
+        Spec
+        (conform* [_ x]
+                  (cond
+                   (coll-prob x kind kind-form distinct count min-count max-count
+                              nil nil nil)
+                   ::invalid
+
+                   conform-all
+                   (let [[init add complete] (cfns x)]
+                     (loop [ret (init x), i 0, [v & vs :as vseq] (seq x)]
+                       (if vseq
+                         (let [cv (dt pred v nil)]
+                           (if (= ::invalid cv)
+                             ::invalid
+                             (recur (add ret i v cv) (inc i) vs)))
+                         (complete ret))))
+                   
+                   
+                   :else
+                   (if (indexed? x)
+                     (let [step (max 1 (long (/ (c/count x) *coll-check-limit*)))]
+                       (loop [i 0]
+                         (if (>= i (c/count x))
+                           x
+                           (if (check? (nth x i))
+                             (recur (c/+ i step))
+                             ::invalid))))
+                     (c/or (c/and (every? check? (take *coll-check-limit* x)) x)
+                           ::invalid))))
+        (unform* [_ x] x)
+        (explain* [_ path via in x]
+                  (c/or (coll-prob x kind kind-form distinct count min-count max-count
+                                   path via in)
+                        (apply concat
+                               ((if conform-all identity (partial take *coll-error-limit*))
+                                (keep identity
+                                      (map (fn [i v]
+                                             (let [k (kfn i v)]
+                                               (when-not (check? v)
+                                                 (let [prob (explain-1 form pred path via (conj in k) v)]
+                                                   prob))))
+                                           (range) x))))))
+        (gen* [_ overrides path rmap]
+              (if gfn
+                (gfn)
+                (let [pgen (gensub pred overrides path rmap form)]
+                  (gen/bind
+                   (cond
+                    gen-into (gen/return (empty gen-into))
+                    kind (gen/fmap #(if (empty? %) % (empty %))
+                                   (gensub kind overrides path rmap form))
+                    :else (gen/return []))
+                   (fn [init]
+                     (gen/fmap
+                      #(if (vector? init) % (into init %))
+                      (cond
+                       distinct
+                       (if count
+                         (gen/vector-distinct pgen {:num-elements count :max-tries 100})
+                         (gen/vector-distinct pgen {:min-elements (c/or min-count 0)
+                                                    :max-elements (c/or max-count (max gen-max (c/* 2 (c/or min-count 0))))
+                                                    :max-tries 100}))
+
+                       count
+                       (gen/vector pgen count)
+
+                       (c/or min-count max-count)
+                       (gen/vector pgen (c/or min-count 0) (c/or max-count (max gen-max (c/* 2 (c/or min-count 0)))))
+
+                       :else
+                       (gen/vector pgen 0 gen-max))))))))
+        
+        (with-gen* [_ gfn] (every-impl form pred opts gfn))
+        (describe* [_] `(every ~form ~@(mapcat identity opts)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;; regex ;;;;;;;;;;;;;;;;;;;
 ;;See:
@@ -1078,8 +1175,7 @@ by ns-syms. Idempotent."
 
 (defn- rep* [p1 p2 ret splice form]
   (when p1
-    (let [r {::op ::rep, :p2 p2, :splice splice, :forms form :id (System.Guid.) ;;(java.util.UUID/randomUUID)
-             }]
+    (let [r {::op ::rep, :p2 p2, :splice splice, :forms form :id (System.Guid.)}]
       (if (accept? p1)
         (assoc r :p1 p2 :ret (conj ret (:ret p1)))
         (assoc r :p1 p1, :ret ret)))))
@@ -1124,8 +1220,7 @@ by ns-syms. Idempotent."
 
 (defn ^:skip-wiki alt-impl
   "Do not call this directly, use 'alt'"
-  [ks ps forms] (assoc (alt* ps ks forms) :id (System.Guid.) ;;(java.util.UUID/randomUUID)
-                  ))
+  [ks ps forms] (assoc (alt* ps ks forms) :id (System.Guid.)))
 
 (defn ^:skip-wiki maybe-impl
   "Do not call this directly, use '?'"
@@ -1245,11 +1340,12 @@ by ns-syms. Idempotent."
         {:keys [::op ps ks forms splice p1 p2] :as p} (reg-resolve! p)
         via (if-let [name (spec-name p)] (conj via name) via)
         insufficient (fn [path form]
-                       {path {:reason "Insufficient input"
-                              :pred (abbrev form)
-                              :val ()
-                              :via via
-                              :in in}})]
+                       [{:path path
+                         :reason "Insufficient input"
+                         :pred (abbrev form)
+                         :val ()
+                         :via via
+                         :in in}])]
     (when p
       (case op
             ::accept nil
@@ -1277,7 +1373,7 @@ by ns-syms. Idempotent."
                        (op-explain form pred path via in input)))
             ::alt (if (empty? input)
                     (insufficient path (op-describe p))
-                    (apply merge
+                    (apply concat
                            (map (fn [k form pred]
                                   (op-explain (c/or form (op-describe pred))
                                               pred
@@ -1295,7 +1391,7 @@ by ns-syms. Idempotent."
 
 (defn- re-gen [p overrides path rmap f]
   ;;(prn {:op op :ks ks :forms forms})
-  (let [{:keys [::op ps ks p1 p2 forms splice ret id] :as p} (reg-resolve! p)
+  (let [{:keys [::op ps ks p1 p2 forms splice ret id ::gfn] :as p} (reg-resolve! p)
         rmap (if id (inck rmap id) rmap)
         ggens (fn [ps ks forms]
                 (let [gen (fn [p k f]
@@ -1309,6 +1405,8 @@ by ns-syms. Idempotent."
             (case op
                   (:accept nil) (gen/fmap vector g)
                   g))
+          (when gfn
+            (gfn))
           (when p
             (case op
                   ::accept (if (= ret ::nil)
@@ -1354,24 +1452,24 @@ by ns-syms. Idempotent."
         (if (accept? p)
           (if (= (::op p) ::pcat)
             (op-explain (op-describe p) p path via (conj in i) (seq data))
-            {path {:reason "Extra input"
-                   :pred (abbrev (op-describe re))
-                   :val data
-                   :via via
-                   :in (conj in i)}})
+            [{:path path
+              :reason "Extra input"
+              :pred (abbrev (op-describe re))
+              :val data
+              :via via
+              :in (conj in i)}])
           (c/or (op-explain (op-describe p) p path via (conj in i) (seq data))
-                {path {:reason "Extra input"
-                       :pred (abbrev (op-describe p))
-                       :val data
-                       :via via
-                       :in (conj in i)}}))))))
+                [{:path path
+                  :reason "Extra input"
+                  :pred (abbrev (op-describe p))
+                  :val data
+                  :via via
+                  :in (conj in i)}]))))))
 
 (defn ^:skip-wiki regex-spec-impl
   "Do not call this directly, use 'spec' with a regex op argument"
   [re gfn]
   (reify
-   clojure.lang.IFn
-   (invoke [this x] (valid? this x))
    Spec
    (conform* [_ x]
              (if (c/or (nil? x) (coll? x))
@@ -1381,7 +1479,7 @@ by ns-syms. Idempotent."
    (explain* [_ path via in x]
              (if (c/or (nil? x) (coll? x))
                (re-explain path via in re (seq x))
-               {path {:pred (abbrev (op-describe re)) :val x :via via :in in}}))
+               [{:path path :pred (abbrev (op-describe re)) :val x :via via :in in}]))
    (gen* [_ overrides path rmap]
          (if gfn
            (gfn)
@@ -1417,9 +1515,6 @@ by ns-syms. Idempotent."
   [argspec aform retspec rform fnspec fform gfn]
   (let [specs {:args argspec :ret retspec :fn fnspec}]
     (reify
-     clojure.lang.IFn
-     (invoke [this x] (valid? this x))
-     
      clojure.lang.ILookup
      (valAt [this k] (get specs k))
      (valAt [_ k not-found] (get specs k not-found))
@@ -1448,19 +1543,17 @@ by ns-syms. Idempotent."
                              (when fnspec
                                (let [cargs (conform argspec args)]
                                  (explain-1 fform fnspec (conj path :fn) via in {:args cargs :ret cret})))))))))
-                 {path {:pred 'ifn? :val f :via via :in in}}))
-     (gen* [_ _ _ _] (if gfn
+                 [{:path path :pred 'ifn? :val f :via via :in in}]))
+     (gen* [_ overrides _ _] (if gfn
              (gfn)
-             (when-not fnspec
-               (gen/return
-                (fn [& args]
-                  (assert (valid? argspec args) (with-out-str (explain argspec args)))
-                  (gen/generate (gen retspec)))))))
+             (gen/return
+              (fn [& args]
+                (c/assert (valid? argspec args) (with-out-str (explain argspec args)))
+                (gen/generate (gen retspec overrides))))))
      (with-gen* [_ gfn] (fspec-impl argspec aform retspec rform fnspec fform gfn))
      (describe* [_] `(fspec :args ~aform :ret ~rform :fn ~fform)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; non-primitives ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(clojure.spec/def ::any (spec (constantly true) :gen gen/any))
 (clojure.spec/def ::kvs->map (conformer #(zipmap (map ::k %) (map ::v %)) #(map (fn [[k v]] {::k k ::v v}) %)))
 
 (defmacro keys*
@@ -1478,7 +1571,9 @@ by ns-syms. Idempotent."
   user=> (s/conform (s/cat :i1 integer? :m (s/keys* :req-un [::a ::c]) :i2 integer?) [42 :a 1 :c 2 :d 4 99])
   {:i1 42, :m {:a 1, :c 2, :d 4}, :i2 99}"
   [& kspecs]
-  `(clojure.spec/& (* (cat ::k keyword? ::v ::any)) ::kvs->map (keys ~@kspecs)))
+  `(let [mspec# (keys ~@kspecs)]
+     (with-gen (clojure.spec/& (* (cat ::k keyword? ::v any?)) ::kvs->map mspec#)
+       (fn [] (gen/fmap (fn [m#] (apply concat m#)) (gen mspec#))))))
 
 (defmacro nilable
   "returns a spec that accepts nil and values satisfiying pred"
@@ -1494,55 +1589,36 @@ by ns-syms. Idempotent."
   ([spec n overrides]
      (map #(vector % (conform spec %)) (gen/sample (gen spec overrides) n))))
 
-(defn coll-checker
-  "returns a predicate function that checks *coll-check-limit* items in a collection with pred"
-  [pred]
-  (let [check? #(valid? pred %)]
-    (fn [coll]
-      (c/or (nil? coll)
-            (c/and
-             (coll? coll)
-             (every? check? (take *coll-check-limit* coll)))))))
+(defn exercise-fn
+  "exercises the fn named by sym (a symbol) by applying it to
+  n (default 10) generated samples of its args spec. When fspec is
+  supplied its arg spec is used, and sym-or-f can be a fn.  Returns a
+  sequence of tuples of [args ret]. "
+  ([sym] (exercise-fn sym 10))
+  ([sym n] (exercise-fn sym n (get-spec sym)))
+  ([sym-or-f n fspec]
+     (let [f (if (symbol? sym-or-f) (resolve sym-or-f) sym-or-f)]
+       (for [args (gen/sample (gen (:args fspec)) n)]
+         [args (apply f args)]))))
 
-(defn coll-gen
-  "returns a function of no args that returns a generator of
-  collections of items conforming to pred, with the same shape as
-  init-coll"
-  [pred init-coll]
-  (let [init (empty init-coll)]
-    (fn []
-      (gen/fmap
-       #(if (vector? init) % (into init %))
-       (gen/vector (gen pred))))))
+(defn inst-in-range?
+  "Return true if inst at or after start and before end"
+  [start end inst]
+  (c/and (inst? inst)
+         (let [t (inst-ms inst)]
+           (c/and (<= (inst-ms start) t) (< t (inst-ms end))))))
 
-(defmacro coll-of
-  "Returns a spec for a collection of items satisfying pred. The generator will fill an empty init-coll."
-  [pred init-coll]
-  `(spec (coll-checker ~pred) :gen (coll-gen ~pred ~init-coll)))
-
-(defmacro map-of
-  "Returns a spec for a map whose keys satisfy kpred and vals satisfy vpred."
-  [kpred vpred]
-  `(and (coll-of (tuple ~kpred ~vpred) {}) map?))
-
-;; (defn inst-in-range?
-;;   "Return true if inst at or after start and before end"
-;;   [start end inst]
-;;   (c/and (inst? inst)
-;;          (let [t (inst-ms inst)]
-;;            (c/and (<= (inst-ms start) t) (< t (inst-ms end))))))
-
-;; (defmacro inst-in
-;;   "Returns a spec that validates insts in the range from start
-;; (inclusive) to end (exclusive)."
-;;   [start end]
-;;   `(let [st# (inst-ms ~start)
-;;          et# (inst-ms ~end)
-;;          mkdate# (fn [d#] (java.util.Date. ^{:tag ~'long} d#))]
-;;      (spec (and inst? #(inst-in-range? ~start ~end %))
-;;        :gen (fn []
-;;               (gen/fmap mkdate#
-;;                 (gen/large-integer* {:min st# :max et#}))))))
+(defmacro inst-in
+  "Returns a spec that validates insts in the range from start
+(inclusive) to end (exclusive)."
+  [start end]
+  `(let [st# (inst-ms ~start)
+         et# (inst-ms ~end)
+         mkdate# (fn [d#] (java.util.Date. ^{:tag ~'long} d#))]
+     (spec (and inst? #(inst-in-range? ~start ~end %))
+       :gen (fn []
+              (gen/fmap mkdate#
+                (gen/large-integer* {:min st# :max et#}))))))
 
 (defn int-in-range?
   "Return true if start <= val and val < end"
@@ -1572,3 +1648,79 @@ by ns-syms. Idempotent."
               ~@(when max `[#(<= % ~max)])
               ~@(when min `[#(<= ~min %)]))
          :gen #(gen/double* ~m)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; assert ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defonce
+  ^{:dynamic true
+    :doc "If true, compiler will enable spec asserts, which are then
+subject to runtime control via check-asserts? If false, compiler
+will eliminate all spec assert overhead. See 'assert'.
+
+Initially set to boolean value of clojure.spec.compile-asserts
+system property. Defaults to true."}
+  *compile-asserts*
+  (not= "false"
+        (System.Environment/GetEnvironmentVariable "CLOJURE_SPEC_COMPILE_ASSERTS")
+;;        (System/getProperty "clojure.spec.compile-asserts")
+        ))
+
+(def ^:private check-spec-asserts-ref
+  ;; janky hack in absence of easier way to modify RT
+  (atom
+    ;; ;; I guess? see https://docs.oracle.com/javase/7/docs/api/java/lang/Boolean.html
+    ;; ;; Without some more work won't "default to true", though
+    ;; (= "true" 
+    ;;    (System.Environment/GetEnvironmentVariable "CLOJURE_SPEC_COMPILE_ASSERTS"))
+    true ;; fify
+    ))
+
+(defn check-asserts?
+  "Returns the value set by check-asserts."
+  []  
+  @check-spec-asserts-ref
+  ;;clojure.lang.RT/checkSpecAsserts
+  )
+
+(defn check-asserts
+  "Enable or disable spec asserts that have been compiled
+with '*compile-asserts*' true.  See 'assert'.
+
+Initially set to boolean value of clojure.spec.check-asserts
+system property. Defaults to false."
+  [flag]
+  (reset! check-spec-asserts-ref flag)
+  ;;(set! (. clojure.lang.RT checkSpecAsserts) flag)
+  )
+
+(defn assert*
+  "Do not call this directly, use 'assert'."
+  [spec x]
+  (if (valid? spec x)
+    x
+    (let [ed (c/merge (assoc (explain-data* spec [] [] [] x)
+                        ::failure :assertion-failed))]
+      (throw (ex-info
+              (str "Spec assertion failed\n" (with-out-str (explain-out ed)))
+              ed)))))
+
+(defmacro assert
+  "spec-checking assert expression. Returns x if x is valid? according
+to spec, else throws an ex-info with explain-data plus ::failure of
+:assertion-failed.
+
+Can be disabled at either compile time or runtime:
+
+If *compile-asserts* is false at compile time, compiles to x. Defaults
+to value of 'clojure.spec.compile-asserts' system property, or true if
+not set.
+
+If (check-asserts?) is false at runtime, always returns x. Defaults to
+value of 'clojure.spec.check-asserts' system property, or false if not
+set. You can toggle check-asserts? with (check-asserts bool)."
+  [spec x]
+  (if *compile-asserts*
+    `(if clojure.lang.RT/checkSpecAsserts
+       (assert* ~spec ~x)
+       ~x)
+    x))
+

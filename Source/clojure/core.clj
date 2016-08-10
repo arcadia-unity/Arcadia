@@ -515,6 +515,12 @@
    :static true}
   [x] (not (nil? x)))
 
+(defn any?
+  "Returns true given any argument."
+  {:tag Boolean
+   :added "1.9"}
+  [x] true)
+
 (defn str
   "With no args, returns the empty string. With one arg x, returns
   x.toString().  (str nil) returns the empty string. With more than
@@ -4854,21 +4860,31 @@
    (reduce1 #(min-key k %1 %2) (min-key k x y) more)))
 
 (defn distinct
-  "Returns a lazy sequence of the elements of coll with duplicates removed"
+  "Returns a lazy sequence of the elements of coll with duplicates removed.
+  Returns a stateful transducer when no collection is provided."
   {:added "1.0"
    :static true}
-  [coll]
-    (let [step (fn step [xs seen]
-                   (lazy-seq
-                    ((fn [[f :as xs] seen]
-                      (when-let [s (seq xs)]
-                        (if (contains? seen f) 
-                          (recur (rest s) seen)
-                          (cons f (step (rest s) (conj seen f))))))
-                     xs seen)))]
-      (step coll #{})))
-
-
+  ([]
+   (fn [rf]
+     (let [seen (volatile! #{})]
+       (fn
+         ([] (rf))
+         ([result] (rf result))
+         ([result input]
+          (if (contains? @seen input)
+            result
+            (do (vswap! seen conj input)
+                (rf result input))))))))
+  ([coll]
+   (let [step (fn step [xs seen]
+                (lazy-seq
+                  ((fn [[f :as xs] seen]
+                     (when-let [s (seq xs)]
+                       (if (contains? seen f)
+                         (recur (rest s) seen)
+                         (cons f (step (rest s) (conj seen f))))))
+                   xs seen)))]
+     (step coll #{}))))
 
 (defn replace
   "Given a map of replacement pairs and a vector/collection, returns a
@@ -6535,27 +6551,34 @@
 ; (load "gvec")
 (load "instant")
 
-;; (defprotocol Inst
-;;   (inst-ms* [inst]))
+(defprotocol Inst
+  (inst-ms* [inst]))
 
-;; (extend-protocol Inst
-;;   ;;java.util.Date
-;;   System.DateTime
-;;   ;;(inst-ms* [inst] (.getTime ^java.util.Date inst))
-;;   (inst-ms* [inst] (.getTime ^System.DateTime inst))
-;;   )
+(extend-protocol Inst
+  ;;java.util.Date
+  System.DateTime
+  ;;(inst-ms* [inst] (.getTime ^java.util.Date inst))
+  (inst-ms* [inst]
+    ;; from https://blogs.msdn.microsoft.com/brada/2004/03/20/seconds-since-the-unix-epoch-in-c/
+    (let [^System.TimeSpan t (System.DateTime/op_Subtraction
+                               System.DateTime/UtcNow
+                               (System.DateTime. 1970, 1, 1))]
+      (. t TotalMilliseconds))
+    ;;(.getTime ^System.DateTime inst)
+    )
+  )
 
-;; (defn inst-ms
-;;   "Return the number of milliseconds since January 1, 1970, 00:00:00 GMT"
-;;   {:added "1.9"}
-;;   [inst]
-;;   (inst-ms* inst))
+(defn inst-ms
+  "Return the number of milliseconds since January 1, 1970, 00:00:00 GMT"
+  {:added "1.9"}
+  [inst]
+  (inst-ms* inst))
 
-;; (defn inst?
-;;   "Return true if x satisfies Inst"
-;;   {:added "1.9"}
-;;   [x]
-;;   (satisfies? Inst x))
+(defn inst?
+  "Return true if x satisfies Inst"
+  {:added "1.9"}
+  [x]
+  (satisfies? Inst x))
 
 (load "uuid")
 
@@ -7149,6 +7172,18 @@
                         (keepi (inc idx) (rest s))
                         (cons x (keepi (inc idx) (rest s)))))))))]
        (keepi 0 coll))))
+
+(defn bounded-count
+  "If coll is counted? returns its count, else will count at most the first n
+  elements of coll using its seq"
+  {:added "1.9"}
+  [n coll]
+  (if (counted? coll)
+    (count coll)
+    (loop [i 0 s (seq coll)]
+      (if (and s (< i n))
+        (recur (inc i) (next s))
+        i))))
 
 (defn every-pred
   "Takes a set of predicates and returns a function f that returns true if all of its
