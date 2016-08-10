@@ -29,14 +29,16 @@
 (def assert-stack (atom [*assert*]))
 
 (defn push-assert [state]
-  (set! *assert*
-    (peek
-      (swap! assert-stack conj state))))
+  (alter-var-root #'*assert*
+    (constantly
+      (peek
+        (swap! assert-stack conj state)))))
 
 (defn pop-assert []
-  (set! *assert*
-    (peek
-      (swap! assert-stack pop))))
+  (alter-var-root #'*assert*
+    (constantly
+      (peek
+        (swap! assert-stack pop)))))
 
 ;; ============================================================
 ;; more legible explanations
