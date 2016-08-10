@@ -239,7 +239,7 @@ assets periodically, minimal allocations if no change."}
     (s/map-of ::event-type ::event)))
 
 (s/def ::event-type->listeners
-  (s/map-of ::event-type (s/coll-of ::listener [])))
+  (s/map-of ::event-type (as/collude [] ::listener)))
 
 (s/def ::started #(instance? System.DateTime %))
 
