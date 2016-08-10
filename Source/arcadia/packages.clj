@@ -246,23 +246,34 @@
          version])
     (throw (Exception. (str "Package coordinate must be a vector with 2 or 3 elements, got " group-artifact-version)))))
 
-(defn blacklisted-coordinate? [{:keys [::pd/artifact]}]
-  (= artifact "clojure"))
-
 (defn- blocked-coordinate? [coord installed]
-  (let [nrmd (pd/normalize-coordinates coord)]
-    (or (blacklisted-coordinate? coord)
+  (let [{:keys [::pd/artifact]} (pd/normalize-coordinates coord)]
+    (or (= artifact "clojure")
         (contains? installed
           (pd/normalize-coordinates coord)))))
+
+(s/def ::coord ::pd/normal-dependency)
+
+(s/def ::root ::fs/path)
+
+(s/def ::entries
+  (s/coll-of #(instance? Ionic.Zip.ZipEntry %)))
+
+(s/def ::extraction
+  (s/keys :req [::coord ::root ::entries]))
+
+(s/fdef install
+  :args (s/cat :group-artifact-version ::pd/vector-dependency) ;; would like to broaden this
+  :ret (s/coll-of ::extraction))
 
 ;; big and tangly for now, pending refactor with emphasis on spec
 (defn install
   ([group-artifact-version]
    (install group-artifact-version nil))
   ([group-artifact-version, {{:keys [::installed]} ::manifest, :as opts}]
-   (Debug/Log (str "Installing " (prn-str group-artifact-version)))
    (let [gav (vec (normalize-coordinates group-artifact-version))]
      (when-not (blocked-coordinate? gav installed)
+       (Debug/Log (str "Installing " (prn-str group-artifact-version)))
        (let [all-coords (->> (cons gav (all-dependencies gav))
                              (map vec) ;; stricter
                              (concat (map (juxt ::pd/group ::pd/artifact ::pd/version)
@@ -318,11 +329,15 @@
      contents)))
 
 (defn library-manifest []
-  (clojure.edn/read-string
-    (slurp
-      (fs/path-combine
-        (ensure-library-directory)
-        library-manifest-name))))
+  (let [inf (fs/file-info
+              (fs/path-combine
+                (ensure-library-directory)
+                library-manifest-name))]
+    (if (.Exists inf)
+      (clojure.edn/read-string
+        (slurp inf))
+      (do (write-or-overwrite-file inf {})
+          (library-manifest)))))
 
 (defn flush-libraries []
   (let [d (ensure-library-directory)]
@@ -339,41 +354,27 @@
 ;; ============================================================
 ;; do everything
 
-;; add memoization etc in a moment
+(defn- install-step [dep]
+  (let [manifest (library-manifest)]
+    (when-let [install-data (install dep {::manifest manifest})]
+      (write-library-manifest
+        (update manifest ::installed
+          (fn [installed]
+            (reduce (fn [bldg, {:keys [::coord ::root]}]
+                      (assoc bldg coord root))
+              installed
+              install-data))))
+      install-data)))
+
+(s/fdef install-all-deps
+  :ret (s/coll-of ::extraction))
+
 (defn install-all-deps []
-  ;;(flush-libraries)
   (let [user-deps (:dependencies (config/merged-configs))
         lein-deps (mapcat #(get-in % [::lein/defproject ::lein/dependencies])
-                    (lein/all-project-data))
-        ;; krufty until we integrate packages.data into the rest of this namespace:
-        deps (->> (concat user-deps lein-deps)
-                  (map pd/normalize-coordinates)
-                  (map (juxt ::pd/group ::pd/artifact ::pd/version))
-                  most-recent-versions)]
-    (vec ;; this whole system is horribly in need of refactoring
-      (for [dep deps,
-            :let [manifest (library-manifest),
-                  install-data (install dep {::manifest manifest})]]
-        (when install-data
-          (write-library-manifest
-            (update manifest ::installed
-              (fn [installed]
-                (reduce (fn [bldg, {:keys [::coord ::root]}]
-                          (assoc bldg coord root))
-                  installed
-                  install-data))))
-          install-data)))))
-
-;; ============================================================
-;; driver
-
-;; maybe package installation shouldn't be something we listen for; use a button or something instead
-;; (defn setup-listeners []
-;;   (letfn [(config-file? [])
-;;           (dependency-listener [{:keys [::fw/path] :as change}]
-;;             (when (or (config-file? path) (leiningen-project-file? path))
-;;               (doseq [dep (compute-deps)] ;; no memoization for now
-;;                 (install dep))))]
-;;     (let [{:keys [::fw/add-listener]} (aw/asset-watcher)]
-;;       (add-listener ::fw/create-modify-delete-file ::dependencies
-;;         dependency-listener))))
+                    (lein/all-project-data))]
+    (->> (concat user-deps lein-deps)
+         (map pd/normalize-coordinates)
+         (map (juxt ::pd/group ::pd/artifact ::pd/version))
+         most-recent-versions
+         (into [] (comp (keep install-step) cat)))))
