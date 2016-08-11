@@ -423,7 +423,6 @@
    (let [c (ensure-state go)]
      (swap! (.state c) assoc kw v))))
 
-
 (defn remove-state!
   "Updates the state of object `go` with funciton `f`."
   ([go kw]
