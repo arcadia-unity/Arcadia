@@ -34,19 +34,18 @@
                         (am/arities-forms base-fn
                           {::am/max-args max-args
                            ::am/arg-fn (vec (am/classy-args max-args))
-                           ::am/cases {max-args max-arg-fn}}))))
-        base (vec
-               (am/arities-forms #(list % (base-body %))
-                 {::am/max-args max-args
-                  ::am/arg-fn #(symbol (str "fn-" (inc %)))
-                  ::am/cases {0 (fn [_] `([] identity))
-                              1 (fn [[[f]]] `([~f] ~f))                           
-                              max-args (fn [[outer-args]]
-                                         `([~@(pop outer-args) ~'& ~'fn-more]
-                                           (reduce comp
-                                             (comp ~@(take (dec max-args) outer-args))
-                                             ~'fn-more)))}}))]
-    base))
+                           ::am/cases {max-args max-arg-fn}}))))]
+    (vec
+      (am/arities-forms #(list % (base-body %))
+        {::am/max-args max-args
+         ::am/arg-fn #(symbol (str "fn-" (inc %)))
+         ::am/cases {0 (fn [_] `([] identity))
+                     1 (fn [[[f]]] `([~f] ~f))                           
+                     max-args (fn [[outer-args]]
+                                `([~@(pop outer-args) ~'& ~'fn-more]
+                                  (reduce comp
+                                    (comp ~@(pop outer-args))
+                                    ~'fn-more)))}}))))
 
 (am/defn-meval comp
   "Faster version of comp than clojure.core/comp. Maybe should just swap out core comp for this."
