@@ -113,13 +113,21 @@
 ;; reducers, transducers
 
 ;; aka transreductorooni
-(defn transreducer [xfrm reducible]
+(defn transreducer
   "Takes a transducer and a reducible, returns a reducible incorporating the transducer."
-  (reify clojure.core.protocols/CollReduce
+  [xfrm reducible]
+  (reify
+    clojure.core.protocols/CollReduce
     (coll-reduce [this f]
       (clojure.core.protocols/coll-reduce this f (f))) ;; right?
     (coll-reduce [_ f init]
       (transduce xfrm f init reducible))
     clojure.lang.Counted
-    (count [this]
+    (count [_]
       (count reducible))))
+
+;; ============================================================
+;; other suboptimal core stuff
+
+(defn some [pred coll]
+  (reduce #(when (pred %2) (reduced %2)) nil coll))
