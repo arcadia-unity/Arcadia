@@ -6,6 +6,7 @@ assets periodically, minimal allocations if no change."}
   (:use clojure.pprint
         [clojure.repl :exclude [dir]])
   (:require [arcadia.introspection :as i]
+            [arcadia.internal.thread :as thr]
             [arcadia.internal.benchmarking :as b]
             [clojure.repl :as repl]
             [clojure.set :as set])
@@ -497,13 +498,6 @@ assets periodically, minimal allocations if no change."}
 ;; ------------------------------------------------------------
 ;; thread management
 
-(defn- start-thread [f]
-  (let [t (Thread.
-            (gen-delegate ThreadStart []
-              (f)))]
-    (.Start t)
-    t))
-
 (defonce ^:private all-watches
   (atom #{}))
 
@@ -519,7 +513,7 @@ assets periodically, minimal allocations if no change."}
        (clojure.set/select #(.IsAlive (::thread %))
          xset))))
   ([delay]
-   (start-thread
+   (thr/start-thread
      (fn []
        (Thread/Sleep delay)
        (clean-watches)))))
@@ -527,7 +521,7 @@ assets periodically, minimal allocations if no change."}
 (defn- watch-thread [{:keys [::watch-state,
                              ::control,
                              ::errors]}]
-  (start-thread
+  (thr/start-thread
     (fn watch-loop []
       (loop []
         (as/loud-valid? ::watch-data @watch-state)
