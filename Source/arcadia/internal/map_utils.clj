@@ -188,8 +188,24 @@
 
 ;; ==================================================
 
-(defn keysr [m]
+(defn keysr
   "Returns reducible collection of keys in m. Fast."
+  [m]
+  (reify
+    clojure.core.protocols/CollReduce
+    (coll-reduce [this f]
+      (clojure.core.protocols/coll-reduce this f (f)))
+    (coll-reduce [_ f init]
+      (letfn [(rfn [bldg k _]
+                (f bldg k))]
+        (reduce-kv rfn init m)))
+    clojure.lang.Counted
+    (count [_]
+      (count m))))
+
+(defn valsr
+  "Returns reducible collection of vals in m. Fast."
+  [m]
   (reify
     clojure.core.protocols/CollReduce
     (coll-reduce [this f]
@@ -199,20 +215,7 @@
                 (f bldg v))]
         (reduce-kv rfn init m)))
     clojure.lang.Counted
-    (count [this]
-      (count m))))
-
-(defn valsr [m]
-  "Returns reducible collection of vals in m. Fast."
-  (reify clojure.core.protocols/CollReduce
-    (coll-reduce [this f]
-      (clojure.core.protocols/coll-reduce this f (f)))
-    (coll-reduce [_ f init]
-      (letfn [(rfn [bldg k _]
-                (f bldg k))]
-        (reduce-kv rfn init m)))
-    clojure.lang.Counted
-    (count [this]
+    (count [_]
       (count m))))
 
 
