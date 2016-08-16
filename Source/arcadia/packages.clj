@@ -10,12 +10,14 @@
             [arcadia.internal.map-utils :as mu]
             [arcadia.internal.spec :as as]
             [arcadia.internal.state :as state]
+            [arcadia.internal.thread :as thr]
             [arcadia.packages.data :as pd]
             [clojure.clr.io :as io]
             [clojure.spec :as s]
             [clojure.string :as string])
   (:import XmlReader
            [UnityEngine Debug]
+           [System.Collections Queue]
            [System.Net WebClient WebException WebRequest HttpWebRequest]
            [System.IO Directory DirectoryInfo Path File FileInfo FileSystemInfo StringReader Path]
            [Ionic.Zip ZipEntry ZipFile ExtractExistingFileAction]))
@@ -65,7 +67,7 @@
             (partition 2 stream))
     stream))
 
-(def temp-dir "Temp/Arcadia") ;; TODO where should this live?
+(def temp-dir "Temp/Arcadia")
 
 (defmacro in-dir [dir & body]
   `(let [original-cwd# (Directory/GetCurrentDirectory)]
@@ -196,12 +198,13 @@
 
 (defn download-jar
   [[group artifact version]]
-  (in-dir
-    (str temp-dir "/Jars")
+  (let [temp (fs/directory-info (fs/path-combine temp-dir "Jars"))]
+    (when-not (.Exists temp) (.Create temp))
     (Path/GetFullPath
       (download-file
         (jar-url group artifact version)
-        (str (gensym (str group "-" artifact "-" version "-")) ".jar")))))
+        (fs/path-combine (.FullName temp)
+          (str (gensym (str group "-" artifact "-" version "-")) ".jar"))))))
 
 (defn download-jars
   [group-artifact-version]
@@ -376,15 +379,42 @@
           (fnil into #{}) (map ::coord) install-data))
       install-data)))
 
-(s/fdef install-all-deps
-  :ret (s/coll-of ::extraction))
+(def ^:private install-queue
+  (Queue/Synchronized (Queue.)))
 
-(defn install-all-deps []
-  (let [user-deps (:dependencies (config/merged-configs))
-        lein-deps (mapcat #(get-in % [::lein/defproject ::lein/dependencies])
-                    (lein/all-project-data))]
-    (->> (concat user-deps lein-deps)
-         (map pd/normalize-coordinates)
-         (map (juxt ::pd/group ::pd/artifact ::pd/version))
-         most-recent-versions
-         (into [] (mapcat install-step)))))
+(defn- drain-install-queue
+  ([] (drain-install-queue nil))
+  ([callback]
+   (while (> (.Count install-queue) 0)
+     (let [all-work (.Dequeue install-queue)]
+       (Debug/Log
+         (with-out-str
+           (println "Beginning installation:")
+           (doseq [work all-work]
+             (println "------------------------------")
+             (pprint work))))
+       (let [result (into [] (mapcat install-step) all-work)]
+         (Debug/Log
+           (with-out-str
+             (println "Installation complete. Installed:")
+             (doseq [extr result]
+               (println "------------------------------")
+               (pprint
+                 (select-keys extr [::succeeded ::coord])))))
+         (when callback
+           (callback result)))))))
+
+(defn install-all-deps
+  ([] (install-all-deps nil))
+  ([callback]
+   (thr/start-thread
+     (fn []
+       (let [user-deps (:dependencies (config/merged-configs))
+             lein-deps (mapcat #(get-in % [::lein/defproject ::lein/dependencies])
+                         (lein/all-project-data))
+             work (->> (concat user-deps lein-deps)
+                       (map pd/normalize-coordinates)
+                       (map (juxt ::pd/group ::pd/artifact ::pd/version))
+                       most-recent-versions)]
+         (.Enqueue install-queue work)
+         (drain-install-queue callback))))))
