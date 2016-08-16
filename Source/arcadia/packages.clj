@@ -379,42 +379,39 @@
           (fnil into #{}) (map ::coord) install-data))
       install-data)))
 
-(def ^:private install-queue
+(defonce ^:private install-queue
   (Queue/Synchronized (Queue.)))
 
-(defn- drain-install-queue
-  ([] (drain-install-queue nil))
-  ([callback]
-   (while (> (.Count install-queue) 0)
-     (let [all-work (.Dequeue install-queue)]
-       (Debug/Log
-         (with-out-str
-           (println "Beginning installation:")
-           (doseq [work all-work]
-             (println "------------------------------")
-             (pprint work))))
-       (let [result (into [] (mapcat install-step) all-work)]
-         (Debug/Log
-           (with-out-str
-             (println "Installation complete. Installed:")
-             (doseq [extr result]
-               (println "------------------------------")
-               (pprint
-                 (select-keys extr [::succeeded ::coord])))))
-         (when callback
-           (callback result)))))))
+(defn- drain-install-queue []
+  (locking install-queue
+    (while (> (count install-queue) 0)
+      (let [{:keys [::callback]} (.Dequeue install-queue)
+            user-deps (:dependencies (config/merged-configs))
+            lein-deps (mapcat #(get-in % [::lein/defproject ::lein/dependencies])
+                        (lein/all-project-data))
+            work (->> (concat user-deps lein-deps)
+                      (map pd/normalize-coordinates)
+                      (map (juxt ::pd/group ::pd/artifact ::pd/version))
+                      most-recent-versions)]
+        (Debug/Log
+          (with-out-str
+            (println "Beginning installation:")
+            (doseq [wk work]
+              (println "------------------------------")
+              (pprint wk))))
+        (let [result (into [] (mapcat install-step) work)]
+          (Debug/Log
+            (with-out-str
+              (println "Installation complete. Installed:")
+              (doseq [extr result]
+                (println "------------------------------")
+                (pprint
+                  (select-keys extr [::succeeded ::coord])))))
+          (when callback
+            (callback result)))))))
 
 (defn install-all-deps
   ([] (install-all-deps nil))
   ([callback]
-   (thr/start-thread
-     (fn []
-       (let [user-deps (:dependencies (config/merged-configs))
-             lein-deps (mapcat #(get-in % [::lein/defproject ::lein/dependencies])
-                         (lein/all-project-data))
-             work (->> (concat user-deps lein-deps)
-                       (map pd/normalize-coordinates)
-                       (map (juxt ::pd/group ::pd/artifact ::pd/version))
-                       most-recent-versions)]
-         (.Enqueue install-queue work)
-         (drain-install-queue callback))))))
+   (.Enqueue install-queue {::callback callback})
+   (thr/start-thread drain-install-queue)))
