@@ -276,6 +276,7 @@
   :ret ::extraction)
 
 (defn- extract [coord]
+  (Debug/Log (str "Installing " (prn-str group-artifact-version)))
   (try
     (let [jar (download-jar coord)
           extractable-entries (filter should-extract?
@@ -315,7 +316,6 @@
   ([group-artifact-version, {{:keys [::installed]} ::manifest, :as opts}]
    (let [gav (vec (normalize-coordinates group-artifact-version))]
      (when-not (blocked-coordinate? gav installed)
-       (Debug/Log (str "Installing " (prn-str group-artifact-version)))
        (->> (cons gav (all-dependencies gav))
             (map vec) ;; stricter
             (concat (map (juxt ::pd/group ::pd/artifact ::pd/version)
