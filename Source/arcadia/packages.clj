@@ -276,7 +276,7 @@
   :ret ::extraction)
 
 (defn- extract [coord]
-  (Debug/Log (str "Installing " (prn-str group-artifact-version)))
+  (Debug/Log (str "Installing " coord))
   (try
     (let [jar (download-jar coord)
           extractable-entries (filter should-extract?
