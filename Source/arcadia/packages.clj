@@ -407,11 +407,13 @@
                 (println "------------------------------")
                 (pprint
                   (select-keys extr [::succeeded ::coord])))))
-          (when callback
+          (when callback ;; TODO: move out of lock
             (callback result)))))))
 
 (defn install-all-deps
   ([] (install-all-deps nil))
   ([callback]
-   (.Enqueue install-queue {::callback callback})
-   (thr/start-thread drain-install-queue)))
+   (thr/start-thread
+     (fn []
+       (.Enqueue install-queue {::callback callback})
+       (drain-install-queue)))))
