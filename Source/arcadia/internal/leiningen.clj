@@ -34,6 +34,7 @@
 (s/def ::projects (as/collude [] ::project))
 
 ;; ============================================================
+;; defproject parsing for slackers and villains
 
 (defn- ensure-readable-project-file [file-name, raw-file]
   (let [stringless (-> raw-file
@@ -47,22 +48,19 @@
                   (re-find #"~" stringless)
                   "'~' found"
 
-                  (re-find #"#" stringless)
+                  (re-find #"#[^_]" stringless)
                   "'#' found")]
     (when problem
       (throw
         (Exception.
           (str "Unsupported file "
-            (.FullName (fs/info file-name))
-            ": " problem))))))
+               (.FullName (fs/info file-name))
+               ": " problem))))))
 
 (defn- read-lein-project-file [file]
   (let [raw (slurp file)]
     (ensure-readable-project-file file raw)
     (read-string raw)))
-
-(defn- leiningen-project-file? [fi]
-  (= "project.clj" (.Name (fs/info fi))))
 
 (s/fdef project-file-data
   :ret ::defproject)
@@ -75,6 +73,12 @@
      ::version version
      ::dependencies (vec (:dependencies body))
      ::body body}))
+
+;; ============================================================
+;; filesystem
+
+(defn- leiningen-project-file? [fi]
+  (= "project.clj" (.Name (fs/info fi))))
 
 (s/fdef project-data
   :ret ::project)
@@ -101,18 +105,8 @@
 
 (defn leiningen-project-directories []
   (->> (.GetDirectories (DirectoryInfo. "Assets"))
-    (filter leiningen-structured-directory?)))
+       (filter leiningen-structured-directory?)))
 
-;; (defn- leiningen-loadpaths []
-;;   (let [config @configuration]
-;;     (for [m (:config-maps config)
-;;           :when (= :leiningen (:type m))
-;;           :let [p (Path/GetDirectoryName (.FullName (io/as-file (:path m))))]
-;;           sp (or (:source-paths m) ["src" "test"])]
-;;       (combine-paths p sp))))
-
-
-;; ============================================================
 (s/fdef all-project-data
   :ret ::projects)
 
@@ -149,16 +143,12 @@
 ;; ============================================================
 ;; hook up listeners. should be idempotent.
 
-
 ;; ((::fw/add-listener (aw/asset-watcher))
 ;;  ::fw/create-modify-delete-file
 ;;  ::config-reload
 ;;  (fn [{:keys [::fw/time ::fw/path]}]
 ;;    ;; stuff happens here
 ;;    ))
-
-
-
 
 (comment
   ((::fw/add-listener (aw/asset-watcher))
