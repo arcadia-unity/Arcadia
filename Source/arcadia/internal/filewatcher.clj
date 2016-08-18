@@ -1,7 +1,5 @@
 (ns ^{:doc
-      "General purpose filewatcher. 
-Much much faster (about 150 to 375 times faster) than walking
-assets periodically, minimal allocations if no change."}
+      "General purpose filewatcher. Minimal allocations if no change."}
     arcadia.internal.filewatcher
   (:use clojure.pprint
         [clojure.repl :exclude [dir]])
@@ -28,6 +26,7 @@ assets periodically, minimal allocations if no change."}
            [UnityEngine Debug]))
 
 (as/push-assert false)
+
 
 ;; ============================================================
 ;; utils
@@ -81,15 +80,18 @@ assets periodically, minimal allocations if no change."}
   ;;     (s/keys :req [::g ::fsis])))
   )
 
+(s/fdef merge-file-graphs
+  :args (s/alt
+          :0 #{[]}
+          :1 ::file-graph
+          :2 (s/cat :g1 ::file-graph, :g2 ::file-graph))
+  :ret ::file-graph)
 
 (defn- merge-file-graphs
   ([] {::g {}, ::fsis {}, ::type ::file-graph})
   ([fg] fg)
   ([{g1 ::g :as fg1}
     {g2 ::g :as fg2}]
-   {:pre [(as/loud-valid? ::file-graph fg1)
-          (as/loud-valid? ::file-graph fg2)]
-    :post [(as/loud-valid? ::file-graph %)]}
    (let [removed (reduce-kv
                    (fn [bldg k v]
                      (into bldg (set/difference v (get g2 k))))
@@ -109,14 +111,19 @@ assets periodically, minimal allocations if no change."}
 
 (def empty-set #{}) ;;omg
 
+(s/fdef info-children
+  :args (s/cat :info ::info))
+
 (defn- info-children [info]
   {:pre [(as/loud-valid? ::info info)]}
   (condp instance? info
     FileInfo empty-set
     DirectoryInfo (set (.GetFileSystemInfos info))))
 
+(s/fdef path
+  :args (s/cat #(instance? FileSystemInfo %)))
+
 (defn- path [x]
-  {:pre [(instance? FileSystemInfo x)]}
   (.FullName x))
 
 (defn- file-info [x]
@@ -135,10 +142,13 @@ assets periodically, minimal allocations if no change."}
                   (catch System.ArgumentException e))
     :else (throw (System.ArgumentException. "Expects DirectoryInfo or String."))))
 
+(s/fdef info [x]
+  :args (s/cat :arg ::info-path)
+  :post (s/or :info ::info
+              :nil nil?))
+
 ;; !!!!THIS SOMETIMES RETURNS NIL!!!!
 (defn- info ^FileSystemInfo [x]
-  {:pre [(as/loud-valid? ::info-path x)]
-   :post [(as/loud-valid? (s/or ::info ::info :nil nil?) %)]}
   (cond
     (instance? FileSystemInfo x) x
     ;; Yes I hate it too
@@ -150,12 +160,20 @@ assets periodically, minimal allocations if no change."}
                         di))))
     :else (throw (System.ArgumentException. "Expects FileSystemInfo or String."))))
 
+
+(s/fdef file-graph [x]
+  :args (s/alt
+          :no-opts (s/cat :root ::path)
+          :with-opts (s/cat
+                       :path ::path
+                       :opts map?))
+  :post (s/or :info ::info
+              :nil nil?))
+
 ;; this might screw up symlinks
 (defn file-graph
   ([root] (file-graph root nil))
   ([root {:keys [::do-not-descend?] :as opts}]
-   {:pre [(as/loud-valid? ::info-path root)]
-    :post [(as/loud-valid? ::file-graph %)]}
    (when-not (if do-not-descend? (do-not-descend? (fs/path root)))
      (when-let [root-info (info root)]
        (let [kids (info-children root-info)
@@ -524,8 +542,7 @@ assets periodically, minimal allocations if no change."}
   (thr/start-thread
     (fn watch-loop []
       (loop []
-        (as/loud-valid? ::watch-data @watch-state)
-        (let [{:keys [::interval should-loop]} @control]
+        (let [{:keys [::interval ::should-loop]} @control]
           (when should-loop
             (Thread/Sleep interval)
             (try
@@ -595,5 +612,7 @@ assets periodically, minimal allocations if no change."}
                ::cancelled? (fn [] (not (and (::should-loop @control) (.IsAlive thread))))}]
     (swap! all-watches conj watch)
     watch))
+
+(def blort *assert*)
 
 (as/pop-assert)
