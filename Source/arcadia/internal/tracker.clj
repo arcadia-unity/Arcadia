@@ -113,16 +113,32 @@
          (doseq [ns# nss#]
            (untrack-all ns#))))))
 
-(defn history []
-  (let [record-fn (fn [bldg var {:keys [::history]}]
-                    (let [vsym (var-symbol var)]
-                      (into bldg
-                        (map #(assoc % ::var-symbol vsym))
-                        history)))]
-    (->> (reduce-kv record-fn [] @tracked-vars)
-         (sort-by ::time))))
+(defn history
+  ([] (history @tracked-vars))
+  ([trackings]
+   (let [record-fn (fn [bldg var {:keys [::history]}]
+                     (let [vsym (var-symbol var)]
+                       (into bldg
+                         (map #(assoc % ::var-symbol vsym))
+                         history)))]
+     (->> (reduce-kv record-fn [] trackings)
+          (sort-by ::time)))))
 
-(defn print-history []
-  (clojure.pprint/pprint
-    (for [{:keys [::time ::var-symbol]} (history)]
-      (str var-symbol " at " time))))
+(defn print-history
+  ([] (print-history nil))
+  ([trackings]
+   (clojure.pprint/pprint
+     (for [{:keys [::time ::var-symbol]} (if trackings
+                                           (history trackings)
+                                           (history))]
+       (str var-symbol " at " time)))))
+
+(defn print-rev-history
+  ([] (print-history nil))
+  ([trackings]
+   (clojure.pprint/pprint
+     (for [{:keys [::time ::var-symbol]} (reverse
+                                           (if trackings
+                                             (history trackings)
+                                             (history)))]
+       (str var-symbol " at " time)))))
