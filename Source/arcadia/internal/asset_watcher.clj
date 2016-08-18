@@ -1,6 +1,7 @@
 (ns arcadia.internal.asset-watcher
   (:require [arcadia.internal.filewatcher :as fw]
-            [arcadia.internal.file-system :as fs])
+            [arcadia.internal.file-system :as fs]
+            [arcadia.internal.thread :as thr])
   (:import [System.IO FileSystemInfo]))
 
 ;; Contains the arcadia asset filewatcher. Separate namespace to
@@ -9,31 +10,37 @@
 ;; arcadia.internal.filewatcher itself, which is a general-purpose
 ;; filewatcher and shouldn't contain things this specific to Arcadia.
 
-;; indirection, because watch itself is stateful and ops on it
-;; probably not idempotent, so swap! isn't a safe move here. We need
-;; some state to hold it in anyway, since we might want to restart it
-;; down the line, and as built that requires swapping it out for a new
-;; watch.
+;; seems a little janky
+(defn- watch-promise
+  "Returns a promise after starting a thread which will deliver a new filewatcher to the promise."
+  []
+  (let [p (promise)]
+    (thr/start-thread
+      (fn []
+        (deliver p
+          (fw/start-watch
+            (.FullName
+              (fs/info "Assets"))
+            500))))
+    p))
+
 (defonce ^:private asset-watcher-ref
-  (atom nil))
-
-(defn start-watch []
-  (fw/start-watch
-    (.FullName
-      (fs/info "Assets"))
-    500))
-
-(defn watch-running? []
-  (boolean
-    (let [watch @asset-watcher-ref]
-      (and watch (not ((::fw/cancelled? watch)))))))
+  (atom
+    (watch-promise)))
 
 (defn asset-watcher []
-  (or @asset-watcher-ref
-      (let [watch (start-watch)]
-        (swap! asset-watcher-ref
-          (fn [state]
-            (if state
-              (do ((::stop) watch)
-                  state)
-              watch))))))
+  @@asset-watcher-ref)
+
+(defn add-listener
+  "Asynchronously add a listener to the asset watcher. Returns thread."
+  [e k f]
+  (thr/start-thread
+    (fn []
+      ((::fw/add-listener (asset-watcher)) e k f))))
+
+(defn remove-listener
+  "Asynchronously remove a listener from the asset watcher. Returns thread."
+  [k]
+  (thr/start-thread
+    (fn []
+      ((::fw/remove-listener (asset-watcher)) k))))
