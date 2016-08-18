@@ -120,8 +120,8 @@
     FileInfo empty-set
     DirectoryInfo (set (.GetFileSystemInfos info))))
 
-(s/fdef path
-  :args (s/cat #(instance? FileSystemInfo %)))
+;; (s/fdef path
+;;   :args (s/cat :arg #(instance? FileSystemInfo %)))
 
 (defn- path [x]
   (.FullName x))
@@ -142,10 +142,10 @@
                   (catch System.ArgumentException e))
     :else (throw (System.ArgumentException. "Expects DirectoryInfo or String."))))
 
-(s/fdef info [x]
+(s/fdef info
   :args (s/cat :arg ::info-path)
-  :post (s/or :info ::info
-              :nil nil?))
+  :ret (s/or :info ::info
+             :nil nil?))
 
 ;; !!!!THIS SOMETIMES RETURNS NIL!!!!
 (defn- info ^FileSystemInfo [x]
@@ -161,14 +161,14 @@
     :else (throw (System.ArgumentException. "Expects FileSystemInfo or String."))))
 
 
-(s/fdef file-graph [x]
+(s/fdef file-graph
   :args (s/alt
           :no-opts (s/cat :root ::path)
           :with-opts (s/cat
                        :path ::path
                        :opts map?))
-  :post (s/or :info ::info
-              :nil nil?))
+  :ret (s/or :info ::info
+             :nil nil?))
 
 ;; this might screw up symlinks
 (defn file-graph
