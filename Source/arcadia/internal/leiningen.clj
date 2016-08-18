@@ -36,10 +36,13 @@
 ;; ============================================================
 
 (defn- ensure-readable-project-file [file-name, raw-file]
-  (let [stringless (clojure.string/replace
-                     raw-file
-                     #"(\".*?((\\\\+)|[^\\])\")|\"\"" ;; fancy string matcher
-                     "")
+  (let [stringless (-> raw-file
+                       (clojure.string/replace
+                         #"(?m);;.*?$"
+                         "")
+                       (clojure.string/replace
+                         #"(\".*?((\\\\+)|[^\\])\")|\"\"" ;; fancy string matcher
+                         ""))
         problem (cond
                   (re-find #"~" stringless)
                   "'~' found"
