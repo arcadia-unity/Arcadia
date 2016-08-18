@@ -296,3 +296,6 @@
    (str/join Path/PathSeparator
      (loadpath-extensions opts))))
 
+(defn refresh-loadpath []
+  (Arcadia.Initialization/SetClojureLoadPath))
+
