@@ -382,33 +382,41 @@
 (defonce ^:private install-queue
   (Queue/Synchronized (Queue.)))
 
+(defmacro ^:private with-log-out [& body]
+  `(let [s# (System.IO.StringWriter.)
+         res# (binding [*out* s#]
+                ~@body)]
+     (Debug/Log (str s#))
+     res#))
+
 (defn- drain-install-queue []
-  (locking install-queue
-    (while (> (count install-queue) 0)
-      (let [{:keys [::callback]} (.Dequeue install-queue)
-            user-deps (:dependencies (config/merged-configs))
-            lein-deps (mapcat #(get-in % [::lein/defproject ::lein/dependencies])
-                        (lein/all-project-data))
-            work (->> (concat user-deps lein-deps)
-                      (map pd/normalize-coordinates)
-                      (map (juxt ::pd/group ::pd/artifact ::pd/version))
-                      most-recent-versions)]
-        (Debug/Log
-          (with-out-str
+  (let [carrier (volatile! {::result []})]
+    (locking install-queue
+      (while (> (count install-queue) 0)
+        (let [{:keys [::callback]} (.Dequeue install-queue)
+              _ (vswap! carrier assoc ::callback callback)
+              user-deps (:dependencies (config/merged-configs))
+              lein-deps (mapcat #(get-in % [::lein/defproject ::lein/dependencies])
+                          (lein/all-project-data))
+              work (->> (concat user-deps lein-deps)
+                        (map pd/normalize-coordinates)
+                        (map (juxt ::pd/group ::pd/artifact ::pd/version))
+                        most-recent-versions)]
+          (with-log-out
             (println "Beginning installation:")
             (doseq [wk work]
               (println "------------------------------")
-              (pprint wk))))
-        (let [result (into [] (mapcat install-step) work)]
-          (Debug/Log
-            (with-out-str
+              (pprint wk)))
+          (let [result (into [] (mapcat install-step) work)]
+            (with-log-out
               (println "Installation complete. Installed:")
               (doseq [extr result]
                 (println "------------------------------")
                 (pprint
-                  (select-keys extr [::succeeded ::coord])))))
-          (when callback ;; TODO: move out of lock
-            (callback result)))))))
+                  (select-keys extr [::succeeded ::coord]))))
+            (vswap! carrier update ::result conj result)))))
+    (when-let [cb (::callback @carrier)]
+      (cb (::result @carrier)))))
 
 (defn install-all-deps
   ([] (install-all-deps nil))
