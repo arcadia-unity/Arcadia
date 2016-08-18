@@ -1,20 +1,17 @@
 (ns arcadia.config
   (:require [clojure.edn :as edn]
-            [arcadia.internal.state :as state])
+            [arcadia.internal.state :as state]
+            [arcadia.internal.asset-watcher :as aw]
+            [arcadia.internal.filewatcher :as fw]
+            [arcadia.internal.file-system :as fs])
   (:import
     [Arcadia Configuration]
     [System DateTime]
     [System.IO File]
     [UnityEngine Debug]))
 
-;; shouldn't have this 
-(defonce configuration (atom {}))
-
-(def update-state
-  (state/updater ::configuration))
-
 (defn config []
-  (@state/state ::configuration))
+  (@state/state ::config))
 
 (defn default-config 
   "Built in Arcadia default configuration file. Never changes."
@@ -36,13 +33,33 @@
                                :encoding "utf8"))
        {}))
 
+(defn config-file? [p]
+  (boolean
+    (when-let [fsi (fs/info p)]
+      (let [nm (.FullName (fs/info p))]
+        (or
+          (= nm (fs/path Configuration/defaultConfigFilePath))
+          (= nm (fs/path (user-config-file))))))))
+
 ;; TODO (merge-with into ... ) ?
-(defn merged-configs
+(defn- merged-configs
   "Result of merger of all three configuration sources"
-  [] (merge (default-config)
-            (user-config)))
+  [] (merge
+       (default-config)
+       (user-config)))
 
 (defn update!
   "Update the configuration"
   []
-  (update-state (constantly (merged-configs))))
+  (let [mc (merged-configs)]
+    (Debug/Log "Updating config")
+    (swap! state/state assoc ::config mc)
+    (state/run-listeners ::on-update mc)))
+
+(defn config-listener [{:keys [::fw/path]}]
+  (when (config-file? path)
+    (update!)))
+
+(update!)
+
+(aw/add-listener ::fw/create-modify-delete-file ::config-listener #'config-listener)

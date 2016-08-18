@@ -2,7 +2,7 @@
   (:refer-clojure :exclude [with-bindings])
   (:require [clojure.main :as main]
             [clojure.string :as str]
-            [arcadia.config :refer [configuration]])
+            [arcadia.config :as config])
   (:import
     [UnityEngine Debug]
     [System.IO EndOfStreamException]
@@ -17,7 +17,6 @@
 ;; utter kludge hack to help with poorly-understood bug where types
 ;; defined in namespace 'user are only accessible if (ns user) has
 ;; been evaluated in current session
-
 
 (ns user)
 (ns arcadia.repl)
@@ -67,18 +66,21 @@
 (defmacro pack-env-bindings []
   `(pack-bindings ~env-binding-symbols))
 
-(defonce config-binding-symbols
-  `[*ns*
-    ~'*debug* ;; is this namespace qualified or not?
-    *warn-on-reflection*
-    *unchecked-math*])
+;; ==================================================
+;; config bindings
 
-(defmacro with-config-compiler-bindings [& body]
-  `(with-packed-bindings (:compiler @configuration) ~config-binding-symbols
-     ~@body))
+;; (defonce config-binding-symbols
+;;   `[*ns*
+;;     ~'*debug* ;; is this namespace qualified or not?
+;;     *warn-on-reflection*
+;;     *unchecked-math*])
 
-(defmacro pack-config-bindings []
-  `(pack-bindings ~config-binding-symbols))
+;; (defmacro with-config-compiler-bindings [& body]
+;;   `(with-packed-bindings (:compiler (config/config)) ~config-binding-symbols
+;;      ~@body))
+
+;; (defmacro pack-config-bindings []
+;;   `(pack-bindings ~config-binding-symbols))
 
 ;; ============================================================
 ;; state
@@ -105,7 +107,7 @@
         (eval
           `(do
              ~(when-let [inj (read-string*
-                               (pr-str (@configuration :repl/injections)))]
+                               (pr-str ((config/config) :repl/injections)))]
                 `(try
                    ~inj
                    (catch Exception e#
@@ -114,19 +116,18 @@
 
  ; need some stuff in here about read-eval maybe
 (defn repl-eval-print [repl-env s]
-  (with-config-compiler-bindings ; maybe... very dubious about the wisdom of this
-    (with-env-bindings repl-env
-      (let [frm (read-string* s)]
-        {:result (try
-                   (let [value (eval-to-string frm)]
-                     (set! *3 *2)
-                     (set! *2 *1)
-                     (set! *1 value)
-                     value)
-                   (catch Exception e
-                     (set! *e e) ;;; like in main
-                     (str e)))
-           :env (env-map)}))))
+  (with-env-bindings repl-env
+    (let [frm (read-string* s)]
+      {:result (try
+                 (let [value (eval-to-string frm)]
+                   (set! *3 *2)
+                   (set! *2 *1)
+                   (set! *1 value)
+                   value)
+                 (catch Exception e
+                   (set! *e e) ;;; like in main
+                   (str e)))
+       :env (env-map)})))
 
 (def work-queue (Queue/Synchronized (Queue.)))
 
@@ -176,17 +177,17 @@
       (set! (.. socket Client SendBufferSize) (* 1024 5000)) ;; 5Mb
       (set! (.. socket Client ReceiveBufferSize) (* 1024 5000)) ;; 5Mb
       (.Start (Thread. (gen-delegate ThreadStart []
-                                     (if (@configuration :verbose)
+                                     (if ((config/config) :verbose)
                                        (Debug/Log "Starting REPL..."))
                                      (while @server-running
                                        (listen-and-block socket))
                                      ;; TODO why does this line not execute?
-                                     (if (@configuration :verbose)
+                                     (if ((config/config) :verbose)
                                        (Debug/Log "REPL Stopped")))))
       socket)))
 
 (defn stop-server [^UdpClient socket]
-  (if (@configuration :verbose)
+  (if ((config/config) :verbose)
     (Debug/Log "Stopping REPL..."))
   (reset! server-running false)
   (.Close socket))

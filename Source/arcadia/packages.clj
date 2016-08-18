@@ -395,7 +395,7 @@
       (while (> (count install-queue) 0)
         (let [{:keys [::callback]} (.Dequeue install-queue)
               _ (vswap! carrier assoc ::callback callback)
-              user-deps (:dependencies (config/merged-configs))
+              user-deps (:dependencies (config/config))
               lein-deps (mapcat #(get-in % [::lein/defproject ::lein/dependencies])
                           (lein/all-project-data))
               work (->> (concat user-deps lein-deps)

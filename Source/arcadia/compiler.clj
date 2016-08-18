@@ -3,9 +3,7 @@
            but the machinery is exposed for those who do."
       :author "Tims Gardner and Ramsey Nasser"}
     arcadia.compiler
-  (:require [arcadia.config
-             :refer [configuration]
-             :as config]
+  (:require [arcadia.config :as config]
             [clojure.spec :as s]
             [clojure.string :as str]
             [arcadia.internal.state :as state]
@@ -298,4 +296,3 @@
 
 (defn refresh-loadpath []
   (Arcadia.Initialization/SetClojureLoadPath))
-
