@@ -89,7 +89,7 @@
         (fn [s] (c/list 'lazy-combinator s))
         syms)))
 
-(lazy-combinators hash-map list map not-empty set vector fmap elements
+(lazy-combinators hash-map list map not-empty set vector vector-distinct fmap elements
                   bind choose fmap one-of such-that tuple sample return
                   large-integer* double*)
 
@@ -129,7 +129,9 @@ gens, each of which should generate something sequential."
   gen-builtins
   (c/delay
    (let [simple (simple-type-printable)]
-     {number? (one-of [(large-integer) (double)])
+     {any? (one-of [(return nil) (any-printable)])
+      some? (such-that some? (any-printable))
+      number? (one-of [(large-integer) (double)])
       integer? (large-integer)
       int? (large-integer)
       pos-int? (large-integer* {:min 1})
@@ -219,5 +221,4 @@ gens, each of which should generate something sequential."
   (gen-for-name 'ns.does.not.exist/f)
   
   )
-
 

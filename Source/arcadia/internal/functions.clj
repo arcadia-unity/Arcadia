@@ -34,19 +34,18 @@
                         (am/arities-forms base-fn
                           {::am/max-args max-args
                            ::am/arg-fn (vec (am/classy-args max-args))
-                           ::am/cases {max-args max-arg-fn}}))))
-        base (vec
-               (am/arities-forms #(list % (base-body %))
-                 {::am/max-args max-args
-                  ::am/arg-fn #(symbol (str "fn-" (inc %)))
-                  ::am/cases {0 (fn [_] `([] identity))
-                              1 (fn [[[f]]] `([~f] ~f))                           
-                              max-args (fn [[outer-args]]
-                                         `([~@(pop outer-args) ~'& ~'fn-more]
-                                           (reduce comp
-                                             (comp ~@(take (dec max-args) outer-args))
-                                             ~'fn-more)))}}))]
-    base))
+                           ::am/cases {max-args max-arg-fn}}))))]
+    (vec
+      (am/arities-forms #(list % (base-body %))
+        {::am/max-args max-args
+         ::am/arg-fn #(symbol (str "fn-" (inc %)))
+         ::am/cases {0 (fn [_] `([] identity))
+                     1 (fn [[[f]]] `([~f] ~f))                           
+                     max-args (fn [[outer-args]]
+                                `([~@(pop outer-args) ~'& ~'fn-more]
+                                  (reduce comp
+                                    (comp ~@(pop outer-args))
+                                    ~'fn-more)))}}))))
 
 (am/defn-meval comp
   "Faster version of comp than clojure.core/comp. Maybe should just swap out core comp for this."
@@ -114,13 +113,21 @@
 ;; reducers, transducers
 
 ;; aka transreductorooni
-(defn transreducer [xfrm reducible]
+(defn transreducer
   "Takes a transducer and a reducible, returns a reducible incorporating the transducer."
-  (reify clojure.core.protocols/CollReduce
+  [xfrm reducible]
+  (reify
+    clojure.core.protocols/CollReduce
     (coll-reduce [this f]
       (clojure.core.protocols/coll-reduce this f (f))) ;; right?
     (coll-reduce [_ f init]
       (transduce xfrm f init reducible))
     clojure.lang.Counted
-    (count [this]
+    (count [_]
       (count reducible))))
+
+;; ============================================================
+;; other suboptimal core stuff
+
+(defn some [pred coll]
+  (reduce #(when (pred %2) (reduced %2)) nil coll))

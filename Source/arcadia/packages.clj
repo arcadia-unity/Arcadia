@@ -10,12 +10,14 @@
             [arcadia.internal.map-utils :as mu]
             [arcadia.internal.spec :as as]
             [arcadia.internal.state :as state]
+            [arcadia.internal.thread :as thr]
             [arcadia.packages.data :as pd]
             [clojure.clr.io :as io]
             [clojure.spec :as s]
             [clojure.string :as string])
   (:import XmlReader
            [UnityEngine Debug]
+           [System.Collections Queue]
            [System.Net WebClient WebException WebRequest HttpWebRequest]
            [System.IO Directory DirectoryInfo Path File FileInfo FileSystemInfo StringReader Path]
            [Ionic.Zip ZipEntry ZipFile ExtractExistingFileAction]))
@@ -65,7 +67,7 @@
             (partition 2 stream))
     stream))
 
-(def temp-dir "Temp/Arcadia") ;; TODO where should this live?
+(def temp-dir "Temp/Arcadia")
 
 (defmacro in-dir [dir & body]
   `(let [original-cwd# (Directory/GetCurrentDirectory)]
@@ -196,12 +198,13 @@
 
 (defn download-jar
   [[group artifact version]]
-  (in-dir
-    (str temp-dir "/Jars")
+  (let [temp (fs/directory-info (fs/path-combine temp-dir "Jars"))]
+    (when-not (.Exists temp) (.Create temp))
     (Path/GetFullPath
       (download-file
         (jar-url group artifact version)
-        (str (gensym (str group "-" artifact "-" version "-")) ".jar")))))
+        (fs/path-combine (.FullName temp)
+          (str (gensym (str group "-" artifact "-" version "-")) ".jar"))))))
 
 (defn download-jars
   [group-artifact-version]
@@ -246,58 +249,83 @@
          version])
     (throw (Exception. (str "Package coordinate must be a vector with 2 or 3 elements, got " group-artifact-version)))))
 
-(defn blacklisted-coordinate? [coord]
-  (let [{:keys [::pd/artifact]} (pd/normalize-coordinates coord)]
-    (= artifact "clojure")))
+;; ============================================================
+;; extraction
 
-;; big and tangly for now, pending refactor with emphasis on spec
+(s/def ::coord ::pd/normal-dependency)
+
+(s/def ::root ::fs/path)
+
+(s/def ::entries
+  (s/coll-of #(instance? Ionic.Zip.ZipEntry %)))
+
+(s/def ::error #(instance? Exception %))
+
+(s/def ::succeeded
+  #{true false})
+
+(s/def ::extraction
+  (s/or
+    :succeeded  (s/and
+                  (s/keys :req [::coord ::root ::entries ::succeeded])
+                  #(::succeeded %))
+    :failed     (s/and
+                  (s/keys :req [::coord ::error ::succeeded])
+                  #(not (::succeeded %)))
+    :unresolved (s/keys :req [::coord ::root ::entries])))
+
+(s/fdef extract
+  :args (s/cat :data ::pd/vector-dependency)
+  :ret ::extraction)
+
+(defn- extract [coord]
+  (Debug/Log (str "Installing " coord))
+  (try
+    (let [jar (download-jar coord)
+          extractable-entries (filter should-extract?
+                                (ZipFile/Read jar))]
+      (doseq [^ZipEntry zip-entry extractable-entries]
+        (make-directories zip-entry library-directory)
+        (.Extract zip-entry library-directory
+          ExtractExistingFileAction/OverwriteSilently))
+      {::coord (pd/normalize-coordinates coord)
+       ::root (first
+                (fs/path-split
+                  (.FileName
+                    (first extractable-entries))))
+       ::entries extractable-entries
+       ::succeeded true})
+    (catch Exception e
+      {::coord (pd/normalize-coordinates coord)
+       ::error e
+       ::succeeded false})))
+
+;; ============================================================
+;; installation
+
+(s/fdef install
+  :args (s/cat :group-artifact-version ::pd/vector-dependency) ;; would like to broaden this
+  :ret (s/coll-of ::extraction))
+
+(defn- blocked-coordinate? [coord installed]
+  (let [{:keys [::pd/artifact]} (pd/normalize-coordinates coord)]
+    (or (= artifact "clojure")
+        (contains? installed
+          (pd/normalize-coordinates coord)))))
+
 (defn install
   ([group-artifact-version]
    (install group-artifact-version nil))
   ([group-artifact-version, {{:keys [::installed]} ::manifest, :as opts}]
-   (Debug/Log (str "Installing " (prn-str group-artifact-version)))
    (let [gav (vec (normalize-coordinates group-artifact-version))]
-     (when-not (or (blacklisted-coordinate? gav)
-                   (contains? installed (pd/normalize-coordinates gav)))
-       (let [all-coords (->> (cons gav (all-dependencies gav))
-                             (map vec) ;; stricter
-                             (concat (map (juxt ::pd/group ::pd/artifact ::pd/version)
-                                       (keys installed)))
-                             most-recent-versions
-                             (remove blacklisted-coordinate?)
-                             (remove (fn filtering-installed [coord]
-                                       (and installed
-                                            (contains? installed
-                                              (pd/normalize-coordinates coord)))))
-                             vec)
-             extractions (for [coord all-coords,
-                               :let [jar (download-jar coord),
-                                     extractable-entries (->> (ZipFile/Read jar)
-                                                              (filter should-extract?))]]
-                           {::coord (pd/normalize-coordinates coord)
-                            ::root (first
-                                     (fs/path-split
-                                       (.FileName
-                                         (first extractable-entries))))
-                            ::entries extractable-entries})]
-         (doseq [^ZipEntry zip-entry (mapcat ::entries extractions)]
-           (make-directories zip-entry library-directory)
-           (.Extract zip-entry library-directory
-             ExtractExistingFileAction/OverwriteSilently))
-         extractions)))))
-
-  ;; (dorun
-  ;;   (->> group-artifact-version
-  ;;        normalize-coordinates
-  ;;        download-jars
-  ;;        (mapcat #(seq (ZipFile/Read %)))
-  ;;        (filter should-extract?)
-  ;;        (map (fn [^ZipEntry zip-entry]
-  ;;               (make-directories zip-entry library-directory)
-  ;;               ;; TODO do better than silently overwriting 
-  ;;               (.Extract zip-entry library-directory
-  ;;                 ExtractExistingFileAction/OverwriteSilently)))))
-  
+     (when-not (blocked-coordinate? gav installed)
+       (->> (cons gav (all-dependencies gav))
+            (map vec) ;; stricter
+            (concat (map (juxt ::pd/group ::pd/artifact ::pd/version)
+                      installed))
+            (remove #(blocked-coordinate? % installed))
+            most-recent-versions
+            (mapv extract))))))
 
 (def library-manifest-name "manifest.edn")
 
@@ -318,11 +346,15 @@
      contents)))
 
 (defn library-manifest []
-  (clojure.edn/read-string
-    (slurp
-      (fs/path-combine
-        (ensure-library-directory)
-        library-manifest-name))))
+  (let [inf (fs/file-info
+              (fs/path-combine
+                (ensure-library-directory)
+                library-manifest-name))]
+    (if (.Exists inf)
+      (clojure.edn/read-string
+        (slurp inf))
+      (do (write-library-manifest)
+          (library-manifest)))))
 
 (defn flush-libraries []
   (let [d (ensure-library-directory)]
@@ -339,41 +371,57 @@
 ;; ============================================================
 ;; do everything
 
-;; add memoization etc in a moment
-(defn install-all-deps []
-  ;;(flush-libraries)
-  (let [user-deps (:dependencies (config/merged-configs))
-        lein-deps (mapcat #(get-in % [::lein/defproject ::lein/dependencies])
-                    (lein/all-project-data))
-        ;; krufty until we integrate packages.data into the rest of this namespace:
-        deps (->> (concat user-deps lein-deps)
-                  (map pd/normalize-coordinates)
-                  (map (juxt ::pd/group ::pd/artifact ::pd/version))
-                  most-recent-versions)]
-    (vec ;; this whole system is horribly in need of refactoring
-      (for [dep deps,
-            :let [manifest (library-manifest),
-                  install-data (install dep {::manifest manifest})]]
-        (when install-data
-          (write-library-manifest
-            (update manifest ::installed
-              (fn [installed]
-                (reduce (fn [bldg, {:keys [::coord ::root]}]
-                          (assoc bldg coord root))
-                  installed
-                  install-data))))
-          install-data)))))
+(defn- install-step [dep]
+  (let [manifest (library-manifest)]
+    (when-let [install-data (install dep {::manifest manifest})]
+      (write-library-manifest
+        (update manifest ::installed
+          (fnil into #{}) (map ::coord) install-data))
+      install-data)))
 
-;; ============================================================
-;; driver
+(defonce ^:private install-queue
+  (Queue/Synchronized (Queue.)))
 
-;; maybe package installation shouldn't be something we listen for; use a button or something instead
-;; (defn setup-listeners []
-;;   (letfn [(config-file? [])
-;;           (dependency-listener [{:keys [::fw/path] :as change}]
-;;             (when (or (config-file? path) (leiningen-project-file? path))
-;;               (doseq [dep (compute-deps)] ;; no memoization for now
-;;                 (install dep))))]
-;;     (let [{:keys [::fw/add-listener]} (aw/asset-watcher)]
-;;       (add-listener ::fw/create-modify-delete-file ::dependencies
-;;         dependency-listener))))
+(defmacro ^:private with-log-out [& body]
+  `(let [s# (System.IO.StringWriter.)
+         res# (binding [*out* s#]
+                ~@body)]
+     (Debug/Log (str s#))
+     res#))
+
+(defn- drain-install-queue []
+  (let [carrier (volatile! {::result []})]
+    (locking install-queue
+      (while (> (count install-queue) 0)
+        (let [{:keys [::callback]} (.Dequeue install-queue)
+              _ (vswap! carrier assoc ::callback callback)
+              user-deps (:dependencies (config/merged-configs))
+              lein-deps (mapcat #(get-in % [::lein/defproject ::lein/dependencies])
+                          (lein/all-project-data))
+              work (->> (concat user-deps lein-deps)
+                        (map pd/normalize-coordinates)
+                        (map (juxt ::pd/group ::pd/artifact ::pd/version))
+                        most-recent-versions)]
+          (with-log-out
+            (println "Beginning installation:")
+            (doseq [wk work]
+              (println "------------------------------")
+              (pprint wk)))
+          (let [result (into [] (mapcat install-step) work)]
+            (with-log-out
+              (println "Installation complete. Installed:")
+              (doseq [extr result]
+                (println "------------------------------")
+                (pprint
+                  (select-keys extr [::succeeded ::coord]))))
+            (vswap! carrier update ::result conj result)))))
+    (when-let [cb (::callback @carrier)]
+      (cb (::result @carrier)))))
+
+(defn install-all-deps
+  ([] (install-all-deps nil))
+  ([callback]
+   (thr/start-thread
+     (fn []
+       (.Enqueue install-queue {::callback callback})
+       (drain-install-queue)))))

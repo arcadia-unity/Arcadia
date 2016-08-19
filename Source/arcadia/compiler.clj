@@ -2,11 +2,14 @@
            Arcadia users will not need to use this namespace,
            but the machinery is exposed for those who do."
       :author "Tims Gardner and Ramsey Nasser"}
-  arcadia.compiler
+    arcadia.compiler
   (:require [arcadia.config
              :refer [configuration]
              :as config]
-            clojure.string)
+            [clojure.spec :as s]
+            [clojure.string :as str]
+            [arcadia.internal.state :as state]
+            [arcadia.internal.spec :as as])
   (:import [System.IO Path File StringWriter Directory]
            [System.Text.RegularExpressions Regex]
            [System.Collections Queue]
@@ -180,54 +183,116 @@
 
 (defn delete-assets [deleted]
   (doseq [asset (clj-files deleted)]))
-    
-(def import-queue (Queue/Synchronized (Queue.)))
 
-(defn import-changed-files []
-  (try
-    (while (pos? (.Count import-queue))
-      (let [file (.Dequeue import-queue)]
-        (if (config-file? file)
-          (config/update!)
-          (import-asset file))))
-    (catch Exception e
-      (Debug/LogException e))))
+;; ============================================================
+;; old liveload
 
-(defn after? [^DateTime a ^DateTime b]
-  (pos? (.CompareTo a b)))
+;; (def import-queue (Queue/Synchronized (Queue.)))
 
-(defn new? [file times]
-  (after? (File/GetLastWriteTime file)
-          (or (times file) (DateTime.))))
+;; (defn import-changed-files []
+;;   (try
+;;     (while (pos? (.Count import-queue))
+;;       (let [file (.Dequeue import-queue)]
+;;         (if (config-file? file)
+;;           (config/update!)
+;;           (import-asset file))))
+;;     (catch Exception e
+;;       (Debug/LogException e))))
 
-(defn each-new-file [root pattern f times-atom]
-  (let [files
-        ^|System.String[]|
-        (Directory/GetFiles root
-                            pattern
-                            SearchOption/AllDirectories)]
-    (loop [i 0]
-      (let [file (aget files i)]
-        (when (new? file @times-atom)
-          (f file)
-          (swap! times-atom assoc file DateTime/Now)))
-      (if (< i (dec (count files))) (recur (inc i))))))
+;; (defn after? [^DateTime a ^DateTime b]
+;;   (pos? (.CompareTo a b)))
 
-(defonce last-read-times (atom {}))
-(defonce watching-files (atom true))
+;; (defn new? [file times]
+;;   (after? (File/GetLastWriteTime file)
+;;           (or (times file) (DateTime.))))
 
-(defn enqueue-asset [asset]
-  (.Enqueue import-queue asset))
+;; (defn each-new-file [root pattern f times-atom]
+;;   (let [files
+;;         ^|System.String[]|
+;;         (Directory/GetFiles root
+;;                             pattern
+;;                             SearchOption/AllDirectories)]
+;;     (loop [i 0]
+;;       (let [file (aget files i)]
+;;         (when (new? file @times-atom)
+;;           (f file)
+;;           (swap! times-atom assoc file DateTime/Now)))
+;;       (if (< i (dec (count files))) (recur (inc i))))))
+
+;; (defonce last-read-times (atom {}))
+;; (defonce watching-files (atom true))
+
+;; (defn enqueue-asset [asset]
+;;   (.Enqueue import-queue asset))
+
+;; (defn start-watching-files []
+;;   (reset! watching-files true)
+;;   (-> (gen-delegate
+;;         ThreadStart []
+;;         (while @watching-files
+;;           (each-new-file "Assets" "*.clj" enqueue-asset last-read-times)
+;;           (Thread/Sleep 100)))
+;;       Thread.
+;;       .Start))
+
+;; (defn stop-watching-files []
+;;   (reset! watching-files false))
+
+;; ============================================================
+;; stand-in while building new liveload
 
 (defn start-watching-files []
-  (reset! watching-files true)
-  (-> (gen-delegate
-        ThreadStart []
-        (while @watching-files
-          (each-new-file "Assets" "*.clj" enqueue-asset last-read-times)
-          (Thread/Sleep 100)))
-      Thread.
-      .Start))
+  (throw (Exception. "still building liveload infrastructure")))
 
 (defn stop-watching-files []
-  (reset! watching-files false))
+  (throw (Exception. "still building liveload infrastructure")))
+
+;; ============================================================
+;; loadpath handling
+
+(s/def ::loadpath-extension-fns
+  (s/map-of keyword? ifn?))
+
+(defn add-loadpath-extension-fn [k f]
+  (swap! state/state update ::loadpath-extension-fns
+    (fn [loadpath-extensions]
+      (let [res (assoc loadpath-extensions k f)]
+        (if (as/loud-valid? ::loadpath-extension-fns res)
+          res
+          (throw
+            (Exception.
+              (str
+                "Result of attempt to add loadpath extension function keyed to " k
+                " fails:\n"
+                (with-out-str
+                  (s/explain ::loadpath-extension-fns res))))))))))
+
+(defn remove-loadpath-extension-fn [k]
+  (swap! state/state update ::loadpath-extensions dissoc k))
+
+(defn loadpath-extensions
+  ([] (loadpath-extensions nil))
+  ([{:keys [::strict?],
+     :as opts}]
+   (let [ap (if strict?
+              (fn ap [bldg _ f]
+                (conj bldg (f)))
+              (fn ap [bldg k f]
+                (try
+                  (conj bldg (f))
+                  (catch Exception e
+                    (Debug/Log
+                      (str
+                        "Encountered " (class e)
+                        " exception for loadpath extension function keyed to "
+                        k " during computation of loadpath."
+                        e))
+                    bldg))))]
+     (reduce-kv ap [] (::loadpath-extension-fns @state/state)))))
+
+(defn loadpath-extension-string
+  ([] (loadpath-extension-string nil))
+  ([opts]
+   (str/join Path/PathSeparator
+     (loadpath-extensions opts))))
+

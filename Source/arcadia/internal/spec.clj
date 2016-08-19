@@ -1,6 +1,8 @@
 (ns arcadia.internal.spec
   (:refer-clojure :exclude [def])
-  (:require [clojure.spec :as s])
+  (:require [clojure.spec :as s]
+            [clojure.string :as str]
+            [clojure.pprint :as pprint])
   (:import [UnityEngine Debug]))
 ;; cloying syrupy conveniences for clojure.spec
 
@@ -8,7 +10,7 @@
   (let [switch (->> `[set? map? seq? vector? list?]
                  (mapcat (fn [p] `[(~p ~gen) ~p]))
                  (cons `cond))]
-    `(s/and ~switch (s/coll-of ~el ~gen))))
+    `(s/and ~switch (s/coll-of ~el))))
 
 (defmacro qwik-cat [& things]
   (list* `s/cat (interleave things things)))
@@ -19,14 +21,131 @@
 (defmacro qwik-alt [& things]
   (list* `s/alt (interleave things things)))
 
+;; ============================================================
+;; arrgh
+
+;; this is actually pointless. remove it.
+
+(def assert-stack (atom [*assert*]))
+
+(defn push-assert [state]
+  (alter-var-root #'*assert*
+    (constantly
+      (peek
+        (swap! assert-stack conj state)))))
+
+(defn pop-assert []
+  (alter-var-root #'*assert*
+    (constantly
+      (peek
+        (swap! assert-stack pop)))))
+
+;; ============================================================
+;; more legible explanations
+
+(defmacro ^:private with-out-str-indented [indent & body]
+  `(let [indent# (String.
+                   ~(first " ") ;; for our jank repl
+                   ~indent)
+         s1# (with-out-str (do ~@body))
+         s2# (->> s1#
+                  clojure.string/split-lines
+                  (map (fn [line#]
+                         (str indent# line#)))
+                  (clojure.string/join "\n"))]
+     (if (re-matches #".*\n$" s1#)
+       (str s2# "\n")
+       s2#)))
+
+(defmacro ^:private def-indented [name wrapped]
+  `(defn- ~name [indent# & args#]
+     (print
+       (with-out-str-indented indent#
+         (apply ~wrapped args#)))))
+
+(def-indented print* print)
+
+(def-indented pr* pr)
+
+(def-indented prn* pr)
+
+(def-indented println* println)
+
+(def-indented pprint* pprint/pprint)
+
+(defn explain-out
+  "prints an explanation to *out*."
+  [ed]
+  (let [indent 5
+        pp (fn [& args]
+             (println
+               (str/trimr
+                 (with-out-str
+                   (apply pprint* indent args)))))
+        tp (fn [& args]
+             (let [pre (apply str (butlast args))
+                   tail (last args)]
+               (println
+                 (as-> tail s
+                       (str/trim
+                         (with-out-str
+                           (pprint* indent s)))
+                       (if (< (count pre) indent)
+                         (str (str/join (repeat (- indent (count pre)) " "))
+                              s)
+                         s)
+                       (str pre s)))))]
+    (if ed
+      (do
+        ;;(prn {:ed ed})
+        (println "==================================================")
+        (doseq [{:keys [path pred val reason via in] :as prob}  (::s/problems ed)]
+          (when-not (empty? in)
+            (tp "In:" in))
+          (tp "val:" val)
+          (println "fails")
+          (when-not (empty? via)
+            (tp " spec:" (last via)))
+          (when-not (empty? path)
+            (tp " at:" path))
+          (println "predicate: ")
+          (pr* indent pred)
+          (when reason
+            (println "Reason:")
+            (print reason))
+          (newline)
+          (when (seq prob) (print "furthermore:"))
+          (doseq [[k v] prob]
+            (when-not (#{:pred :val :reason :via :in} k)
+              (print "\n\t" k " ")
+              (pr v)))
+          (newline)
+          (println "------------------------------"))
+        (println )
+        (doseq [[k v] ed]
+          (when-not (#{::s/problems} k)
+            (print k " ")
+            (pr v)
+            (newline)))
+        (println "--------------------------------------------------"))
+      (println "Success!"))))
+
+(defmacro legible [& body]
+  `(with-redefs [clojure.spec/explain-out explain-out]
+     ~@body))
+;; ============================================================
+
 (defmacro qwik-conform [[lcl spec src] & body]
   `(let [src# ~src
          spec# ~spec
          lcltemp# (s/conform spec# src#)]
      (if (= ::s/invalid lcltemp#)
-       (throw (Exception.
-                (str "invalid thing:\n"
-                  (with-out-str (s/explain spec# src#)))))
+       (throw
+         (Exception.
+           (str "invalid thing:\n"
+                (with-out-str
+                  (legible
+                    (s/explain spec# src#))))))
        (let [~lcl lcltemp#]
          ~@body))))
 
@@ -34,69 +153,7 @@
   (or (s/valid? spec val)
     (Debug/Log
       (with-out-str
-        (s/explain spec val)))
+        (legible
+          (s/explain spec val))))
     false))
 
-;; ============================================================
-;; arrgh
-
-(def assert-stack (atom [*assert*]))
-
-(defn push-assert [state]
-  (set! *assert*
-    (peek
-      (swap! assert-stack conj state))))
-
-(defn pop-assert []
-  (set! *assert*
-    (peek
-      (swap! assert-stack pop))))
-
-;; ============================================================
-;; hacky spec disabler (therefore refiner)
-
-;; (defonce ^:private own-private-any
-;;   (fn own-private-any [& xs] true))
-
-;; (defonce ^:private registry-ref
-;;   (var-get #'clojure.spec/registry-ref))
-
-;; (defn disable-spec [k]
-;;   (if (= ::disabled-refs k)
-;;     (throw (ArgumentException. (str "no: " k)))
-;;     (swap! registry-ref
-;;       (fn [rr]
-;;         (if (contains? rr k)
-;;           (-> rr
-;;             (update ::disabled-refs assoc k (get rr k))
-;;             (assoc k own-private-any))
-;;           rr)))))
-
-;; (defn disabled? [k]
-;;   (let [rr @registry-ref]
-;;     (and (contains? (::disabled-refs rr) k)
-;;          (= own-private-any (get rr k)))))
-
-;; (defn- enable-spec-inner [{:keys [::disabled-refs] :as rr}, k]
-;;   (as-> rr rr
-;;     (update rr ::disabled-refs disj k)
-;;     (if (= own-private-any (get rr k))
-;;       (assoc rr k (get disabled-refs k))
-;;       rr)))
-
-;; (defn enable-spec [k]
-;;   (when (disabled? k)
-;;     (swap! registry-ref enable-spec-inner k)))
-
-;; (defn enable-all-specs []
-;;   (swap! registry-ref
-;;     (fn [{:keys [::disabled-refs] :as m}]
-;;       (reduce enable-spec-inner m (keys disabled-refs)))))
-
-;; (defn ns-specs
-;;   ([] (ns-specs *ns*))
-;;   ([ns]
-;;    (let [n (name (.Name ns))]
-;;      (filter
-;;        #(= n (namespace %))
-;;        (keys @registry-ref)))))

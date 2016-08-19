@@ -5,7 +5,8 @@
             [arcadia.internal.file-system :as fs]
             [arcadia.packages.data :as pd]
             [clojure.spec :as s]
-            [arcadia.internal.spec :as as]))
+            [arcadia.internal.spec :as as]
+            [arcadia.compiler :as compiler]))
 
 ;; ------------------------------------------------------------
 ;; grammar
@@ -16,36 +17,32 @@
 
 (s/def ::version string?)
 
+(s/def ::body map?)
+
+(s/def ::source-paths
+  (as/collude [] ::fs/path))
+
 (s/def ::defproject
   (s/keys :req [::fs/path
                 ::name
                 ::pd/version
-                ::dependencies]))
+                ::dependencies
+                ::body]))
 
 (s/def ::project (s/keys :req [::fs/path ::defproject]))
 
 (s/def ::projects (as/collude [] ::project))
 
-;; ------------------------------------------------------------
-
-;; should use conform instead
-(defn- compute-raw-dependencies [data]
-  (into [] (comp (map ::defproject) (mapcat ::dependencies)) data))
-
 ;; ============================================================
 
-(defn- detect-leiningen-projects? []
-  ;; for now:
-  true
-  ;; (boolean
-  ;;   (:detect-leiningen-projects @configuration))
-  )
-
 (defn- ensure-readable-project-file [file-name, raw-file]
-  (let [stringless (clojure.string/replace
-                     raw-file
-                     #"(\".*?((\\\\+)|[^\\])\")|\"\"" ;; fancy string matcher
-                     "")
+  (let [stringless (-> raw-file
+                       (clojure.string/replace
+                         #"(?m);;.*?$"
+                         "")
+                       (clojure.string/replace
+                         #"(\".*?((\\\\+)|[^\\])\")|\"\"" ;; fancy string matcher
+                         ""))
         problem (cond
                   (re-find #"~" stringless)
                   "'~' found"
@@ -59,38 +56,10 @@
             (.FullName (fs/info file-name))
             ": " problem))))))
 
-;; stupid for now, expand to deal with exclusions etc
-(defn- normalize-coordinate [coord]
-  (vec
-    (take 3
-      (map str
-        (if (< (count coord) 3)
-          (cons (first coord) coord)
-          coord)))))
-
-(defn- process-coordinates [coords]
-  (->> coords
-    (map normalize-coordinate)
-    (remove #(= ["org.clojure/clojure" "org.clojure/clojure"]
-               (take 2 %)))
-    vec))
-
 (defn- read-lein-project-file [file]
   (let [raw (slurp file)]
     (ensure-readable-project-file file raw)
     (read-string raw)))
-
-(defn- load-leiningen-configuration-map [file]
-  (let [[_ name version & rst] (read-lein-project-file file)
-        m (apply hash-map rst)]
-    (-> m 
-      (select-keys [:dependencies :source-paths])
-      (assoc
-        :type :leiningen
-        :path (.FullName (fs/info file)),
-        :name (str name),
-        :version version,)
-      (update :dependencies process-coordinates))))
 
 (defn- leiningen-project-file? [fi]
   (= "project.clj" (.Name (fs/info fi))))
@@ -99,11 +68,13 @@
   :ret ::defproject)
 
 (defn project-file-data [pf]
-  (let [[_ name version & body] (read-lein-project-file pf)]
+  (let [[_ name version & body] (read-lein-project-file pf)
+        body (apply hash-map body)]
     {::fs/path (fs/path pf)
      ::name name
      ::version version
-     ::dependencies (vec (:dependencies (apply hash-map body)))}))
+     ::dependencies (vec (:dependencies body))
+     ::body body}))
 
 (s/fdef project-data
   :ret ::project)
@@ -132,12 +103,6 @@
   (->> (.GetDirectories (DirectoryInfo. "Assets"))
     (filter leiningen-structured-directory?)))
 
-(defn- leiningen-project-files []
-  (for [^DirectoryInfo di (leiningen-project-directories)
-        ^FileInfo fi (.GetFiles di)
-        :when (leiningen-project-file? fi)]
-    fi))
-
 ;; (defn- leiningen-loadpaths []
 ;;   (let [config @configuration]
 ;;     (for [m (:config-maps config)
@@ -157,6 +122,31 @@
     (leiningen-project-directories)))
 
 ;; ============================================================
+;; loadpath
+
+(s/fdef project-data-loadpath
+  :args (s/cat :project ::project)
+  :ret ::fs/path)
+
+(defn project-data-loadpath [{{{:keys [source-paths]} ::body} ::defproject,
+                              p1 ::fs/path}]
+  (if source-paths
+    (map (fn [p2]
+           (Path/Combine p1 p2))
+      source-paths)
+    [(Path/Combine p1 "src")]))
+
+(defn leiningen-loadpaths []
+  (->> (all-project-data)
+       (mapcat project-data-loadpath)))
+
+(defn leiningen-loadpaths-string []
+  (clojure.string/join Path/PathSeparator
+    (leiningen-loadpaths)))
+
+(compiler/add-loadpath-extension-fn ::loadpath-fn #'leiningen-loadpaths-string)
+
+;; ============================================================
 ;; hook up listeners. should be idempotent.
 
 
@@ -166,6 +156,8 @@
 ;;  (fn [{:keys [::fw/time ::fw/path]}]
 ;;    ;; stuff happens here
 ;;    ))
+
+
 
 
 (comment

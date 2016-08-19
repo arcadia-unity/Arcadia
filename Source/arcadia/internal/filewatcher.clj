@@ -1,11 +1,10 @@
 (ns ^{:doc
-      "General purpose filewatcher. 
-Much much faster (about 150 to 375 times faster) than walking
-assets periodically, minimal allocations if no change."}
+      "General purpose filewatcher. Minimal allocations if no change."}
     arcadia.internal.filewatcher
   (:use clojure.pprint
         [clojure.repl :exclude [dir]])
   (:require [arcadia.introspection :as i]
+            [arcadia.internal.thread :as thr]
             [arcadia.internal.benchmarking :as b]
             [clojure.repl :as repl]
             [clojure.set :as set])
@@ -27,6 +26,7 @@ assets periodically, minimal allocations if no change."}
            [UnityEngine Debug]))
 
 (as/push-assert false)
+
 
 ;; ============================================================
 ;; utils
@@ -80,15 +80,18 @@ assets periodically, minimal allocations if no change."}
   ;;     (s/keys :req [::g ::fsis])))
   )
 
+(s/fdef merge-file-graphs
+  :args (s/alt
+          :0 #{[]}
+          :1 ::file-graph
+          :2 (s/cat :g1 ::file-graph, :g2 ::file-graph))
+  :ret ::file-graph)
 
 (defn- merge-file-graphs
   ([] {::g {}, ::fsis {}, ::type ::file-graph})
   ([fg] fg)
   ([{g1 ::g :as fg1}
     {g2 ::g :as fg2}]
-   {:pre [(as/loud-valid? ::file-graph fg1)
-          (as/loud-valid? ::file-graph fg2)]
-    :post [(as/loud-valid? ::file-graph %)]}
    (let [removed (reduce-kv
                    (fn [bldg k v]
                      (into bldg (set/difference v (get g2 k))))
@@ -108,14 +111,19 @@ assets periodically, minimal allocations if no change."}
 
 (def empty-set #{}) ;;omg
 
+(s/fdef info-children
+  :args (s/cat :info ::info))
+
 (defn- info-children [info]
   {:pre [(as/loud-valid? ::info info)]}
   (condp instance? info
     FileInfo empty-set
     DirectoryInfo (set (.GetFileSystemInfos info))))
 
+;; (s/fdef path
+;;   :args (s/cat :arg #(instance? FileSystemInfo %)))
+
 (defn- path [x]
-  {:pre [(instance? FileSystemInfo x)]}
   (.FullName x))
 
 (defn- file-info [x]
@@ -134,10 +142,13 @@ assets periodically, minimal allocations if no change."}
                   (catch System.ArgumentException e))
     :else (throw (System.ArgumentException. "Expects DirectoryInfo or String."))))
 
+(s/fdef info
+  :args (s/cat :arg ::info-path)
+  :ret (s/or :info ::info
+             :nil nil?))
+
 ;; !!!!THIS SOMETIMES RETURNS NIL!!!!
 (defn- info ^FileSystemInfo [x]
-  {:pre [(as/loud-valid? ::info-path x)]
-   :post [(as/loud-valid? (s/or ::info ::info :nil nil?) %)]}
   (cond
     (instance? FileSystemInfo x) x
     ;; Yes I hate it too
@@ -149,12 +160,20 @@ assets periodically, minimal allocations if no change."}
                         di))))
     :else (throw (System.ArgumentException. "Expects FileSystemInfo or String."))))
 
+
+(s/fdef file-graph
+  :args (s/alt
+          :no-opts (s/cat :root ::path)
+          :with-opts (s/cat
+                       :path ::path
+                       :opts map?))
+  :ret (s/or :info ::info
+             :nil nil?))
+
 ;; this might screw up symlinks
 (defn file-graph
   ([root] (file-graph root nil))
   ([root {:keys [::do-not-descend?] :as opts}]
-   {:pre [(as/loud-valid? ::info-path root)]
-    :post [(as/loud-valid? ::file-graph %)]}
    (when-not (if do-not-descend? (do-not-descend? (fs/path root)))
      (when-let [root-info (info root)]
        (let [kids (info-children root-info)
@@ -239,14 +258,14 @@ assets periodically, minimal allocations if no change."}
     (s/map-of ::event-type ::event)))
 
 (s/def ::event-type->listeners
-  (s/map-of ::event-type (s/coll-of ::listener [])))
+  (s/map-of ::event-type (as/collude [] ::listener)))
 
 (s/def ::started #(instance? System.DateTime %))
 
 (s/def ::watch-data
   (s/and
     #(= ::watch-data (::type %))
-    (s/keys :req [::history ::file-graph ::event-type->listeners ::started])))
+    (s/keys :req [::history ::file-graph ::event-type->listeners ::started ::path])))
 
 (defn- add-event [history {:keys [::event-type ::path] :as event}]
   (assoc-in history [path event-type] event))
@@ -497,13 +516,6 @@ assets periodically, minimal allocations if no change."}
 ;; ------------------------------------------------------------
 ;; thread management
 
-(defn- start-thread [f]
-  (let [t (Thread.
-            (gen-delegate ThreadStart []
-              (f)))]
-    (.Start t)
-    t))
-
 (defonce ^:private all-watches
   (atom #{}))
 
@@ -519,220 +531,88 @@ assets periodically, minimal allocations if no change."}
        (clojure.set/select #(.IsAlive (::thread %))
          xset))))
   ([delay]
-   (start-thread
+   (thr/start-thread
      (fn []
        (Thread/Sleep delay)
        (clean-watches)))))
 
+(defn- watch-thread [{:keys [::watch-state,
+                             ::control,
+                             ::errors]}]
+  (thr/start-thread
+    (fn watch-loop []
+      (loop []
+        (let [{:keys [::interval ::should-loop]} @control]
+          (when should-loop
+            (Thread/Sleep interval)
+            (try
+              (let [ws2 (watch-step @watch-state)]
+                (swap! watch-state
+                  (fn [{:keys [::event-type->listeners]}] ;; might have changed
+                    (assoc ws2 ::event-type->listeners event-type->listeners))))
+              (catch Exception e
+                (clean-watches (* 2 interval))
+                (swap! errors conj e)
+                (throw e)))
+            (recur)))))))
+
+(defn- add-listener-fn [{:keys [::watch-state]}]
+  ;; e is the event-type; k is
+  ;; the listener k; f is the
+  ;; listener function
+  (fn [e k f]    
+    (let [listener {::listener-key k
+                    ::func f
+                    ::event-type e}]
+      (if (as/loud-valid? ::listener listener)
+        (swap! watch-state add-listener listener)
+        (throw
+          (System.ArgumentException.
+            (str "Attempting to add invalid listener:/n"
+              (with-out-str
+                (s/explain ::listener listener))))))
+      listener)))
+
 ;; ------------------------------------------------------------
 ;; top level entry point
 
-
-
-;; should probably break some of this out
 (defn start-watch [root, interval]
   (let [do-not-descend? (fn [p]
                           (boolean
                             (re-find #"\.git$" p)))
-        watch-state (atom {::event-type->listeners (zipmap constant-events (repeat []))
+        watch-state (atom {::type ::watch-data
+                           ::event-type->listeners (zipmap constant-events (repeat []))
+                           ::path root
                            ::history {}
                            ::do-not-descend? do-not-descend?
                            ::started DateTime/Now
                            ::file-graph (file-graph root
-                                          {::do-not-descend? do-not-descend?})
-                           ::type ::watch-data})
-        control (atom {:interval interval
-                       :should-loop true})
+                                          {::do-not-descend? do-not-descend?})})
+        control (atom {::interval interval
+                       ::should-loop true})
         errors (atom [])
-        thread (start-thread
-                 (fn watch-loop []
-                   (loop []
-                     (as/loud-valid? ::watch-data @watch-state)
-                     (let [{:keys [interval should-loop]} @control]
-                       (when should-loop
-                         (Thread/Sleep interval)
-                         (try
-                           (let [ws2 (watch-step @watch-state)]
-                             (swap! watch-state
-                               (fn [{:keys [::event-type->listeners]}] ;; might have changed
-                                 (assoc ws2 ::event-type->listeners event-type->listeners))))
-                           (catch Exception e
-                             (clean-watches (* 2 interval))
-                             (swap! errors conj e)
-                             (throw e)))
-                         (recur))))))
-        watch {::thread thread
-               ::set-interval (fn [i] (swap! control assoc :interval i))
-               ::state (fn [] @watch-state) ;; for debugging
-               ::control (fn [] @control)   ;; for debugging
-               ::stop (fn []
-                        (let [control (swap! control assoc :should-loop false)]
-                          (clean-watches (* (:interval control) 2))
-                          control))
+        all-state {::watch-state watch-state
+                   ::control control
+                   ::errors errors}
+        thread (watch-thread all-state)
+        watch {::type ::watch
+               ::thread thread
+               ::state (fn [] @watch-state)
+               ::control (fn [] @control)
                ::errors (fn [] @errors)
-               ::add-listener (fn [e k f] ;; e is the event-type; k is
-                                          ;; the listener k; f is the
-                                          ;; listener function
-                                (let [listener {::listener-key k
-                                                ::func f
-                                                ::event-type e}]
-                                  (if (as/loud-valid? ::listener listener)
-                                    (swap! watch-state add-listener listener)
-                                    (throw
-                                      (System.ArgumentException.
-                                        (str "Attempting to add invalid listener:/n"
-                                          (with-out-str
-                                            (s/explain ::listener listener))))))
-                                  listener))
+               ::set-interval (fn [i] (swap! control assoc ::interval i))
+               ::stop (fn []
+                        (let [control (swap! control assoc ::should-loop false)]
+                          (clean-watches (* (::interval control) 2))
+                          control))
+               ::add-listener (add-listener-fn all-state)
                ::remove-listener (fn [k]
                                    (do (swap! watch-state remove-listener k)
                                        nil))
-               ::cancelled? (fn [] (not (and (:should-loop @control) (.IsAlive thread))))}]
+               ::cancelled? (fn [] (not (and (::should-loop @control) (.IsAlive thread))))}]
     (swap! all-watches conj watch)
     watch))
 
-;; ============================================================
-;; tests
-;; ============================================================
-
-;; absolute, so it doesn't screw up _your_ file system
-
-;; (def ^:private test-path "/Users/timothygardner/Desktop/filesystemwatcher_tests")
-
-;; (defn- path-combine [& paths]
-;;   (reduce #(Path/Combine %1 %2) paths))
-
-;; (defn- path-split [path]
-;;   (vec (. path (Split (au/lit-array System.Char Path/DirectorySeparatorChar)))))
-
-;; (defn- path-supers [path]
-;;   (take-while (complement nil?)
-;;     (iterate #(Path/GetDirectoryName %)
-;;       path)))
-
-;; (defn- txt [name & contents]
-;;   {::type :txt
-;;    ::name name
-;;    ::contents (vec contents)})
-
-;; (defn- dir [name & children]
-;;   {::type :dir
-;;    ::name name
-;;    ::children (vec children)})
-
-;; (defmulti make-file-system
-;;   (fn [root spec] (::type spec)))
-
-;;  ;; guard so I don't screw up _my_ file system
-;; (defn- ward-file-system [root]
-;;   (when-not (.Contains root test-path)
-;;     (throw (Exception. "root must contain test path"))))
-
-;; (defmethod make-file-system :dir [root spec]
-;;   (ward-file-system root)
-;;   (let [dir (DirectoryInfo. (Path/Combine root (::name spec)))]
-;;     (if (.Exists dir)
-;;       (doseq [fsi (.GetFileSystemInfos dir)]
-;;         (cond
-;;           (instance? DirectoryInfo fsi) (.Delete fsi true)
-;;           (instance? FileInfo fsi) (.Delete fsi)))
-;;       (.Create dir))
-;;     (doseq [child-spec (::children spec)]
-;;       (make-file-system (.FullName dir) child-spec))))
-
-;; (defmethod make-file-system :txt [root spec]
-;;   :bloo)
-
-;; (defmethod make-file-system :txt [root spec]
-;;   (ward-file-system root)
-;;   (let [file (FileInfo. (Path/Combine root (str (::name spec) ".txt")))]
-;;     (when (.Exists file) (. file (Delete)))
-;;     (spit (.FullName file)
-;;       (clojure.string/join (::contents spec) "\n"))))
-
-;; (defn- setup-test-1 []
-;;   (let [watch (start-watch test-path, 500)
-;;         side-state (atom {:new-file-log []})
-;;         listener (fn test-listener-1 [& args]
-;;                    (Debug/Log "Firing test-listener-1")
-;;                    (swap! side-state update :new-file-log conj args))]
-;;     ((::add-listener watch) :new-file listener ::alter-children)
-;;     (mu/lit-map watch side-state listener)))
-
-;; (defn- delete-in-directory [dir]
-;;   (let [dir (info dir)]
-;;     (ward-file-system (.FullName dir))
-;;     (doseq [^FileSystemInfo fsi (.GetFileSystemInfos dir)]
-;;       (if (instance? DirectoryInfo fsi)
-;;         (.Delete fsi true)
-;;         (.Delete fsi)))))
-
-;; (defn- correct-file-graph? [{:keys [::g] :as fg} root]
-;;   (let [fg-traversal (tree-seq
-;;                        (fn branch-a? [path]
-;;                          (instance? DirectoryInfo (get-info fg path)))
-;;                        (fn children-a [path]
-;;                          (get-children fg path))
-;;                        root)
-;;         baseline-traversal (tree-seq
-;;                              (fn branch-b? [path]
-;;                                (instance? DirectoryInfo (info path)))
-;;                              (fn children-b [path]
-;;                                (map #(.FullName (info %))
-;;                                  (.GetFileSystemInfos (info path))))
-;;                              root)]
-;;     ;; writing test for correct topology is a little harder since
-;;     ;; we're using sets in file-graph
-;;     (and 
-;;       (= (set fg-traversal) (set baseline-traversal))
-;;       (= (set (keys g)) (set baseline-traversal)))))
-
-;; (defmacro ^:private cleanup [& body]
-;;   `(try
-;;      (do ~@body)
-;;      (finally
-;;        (kill-all-watches))))
-
-;; ;; hard to know how to automate this without better support for
-;; ;; printing to repl from other threads
-;; (t/deftest create-modify-delete-test
-;;   (let [fs1 (dir "d1"
-;;               (txt "t1" "start\n")
-;;               (txt "t2" "start\n"))
-;;         interval 500
-;;         setup (fn setup
-;;                 ([] (setup nil))
-;;                 ([& listener-specs]
-;;                  (make-file-system test-path fs1)
-;;                  (Thread/Sleep 200)
-;;                  (let [watch (start-watch test-path interval)]
-;;                    (doseq [{:keys [k f e]} listener-specs]
-;;                      ((::add-listener watch) k f e))                   
-;;                    watch)))]
-;;     (t/testing "initial topology"
-;;       (cleanup
-;;         (let [watch (setup)]
-;;           (t/is (correct-file-graph?
-;;                   (::file-graph ((::state watch)))
-;;                   test-path)))))
-;;     (t/testing "create file"
-;;       (cleanup
-;;         (let [state (atom {::create []
-;;                            ::create-modify-delete-file []})
-;;               watch (setup
-;;                       {:f #(swap! state update ::create conj %)
-;;                        :e ::create
-;;                        :k ::create}
-;;                       {:f #(swap! state update ::create-modify-delete-file conj %)
-;;                        :e ::create-modify-delete-file
-;;                        :k ::create-modify-delete-file})]
-;;           (File/WriteAllText (path-combine test-path "d1" "t3.txt")
-;;             "start\n")
-;;           (Thread/Sleep (* 2 interval))
-;;           (let [s @state]
-;;             (t/is (= (map ::path (::create s))
-;;                     [(path-combine test-path "d1" "t3.txt")]))
-;;             (t/is (= (map ::path (::create-modify-delete-file s))
-;;                     [(path-combine test-path "d1" "t3.txt")]))))))))
+(def blort *assert*)
 
 (as/pop-assert)
