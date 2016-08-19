@@ -20,7 +20,7 @@
 ;; ============================================================
 
 (defn log
-  "Log message to the Unity console. Arguments are combined into a string."
+  "Log message to the [Unity console](https://docs.unity3d.com/Manual/Console.html). Arguments are combined into a string."
   [& args]
   (Debug/Log (apply str args)))
 
@@ -54,13 +54,15 @@
   
   This test is complicated by the fact that Unity uses
   a custom null object that evaluates to `true` in normal circumstances.
-  `null-obj?` will return `true` if `x` is nil or Unity's null object."
+  `null-obj?` will return `true` if `x` is nil *or* Unity's null object."
   [^UnityEngine.Object x]
   `(UnityEngine.Object/op_Equality ~x nil))
 
 
 ;; TODO better name
-(definline obj-nil [x]
+(definline obj-nil
+  "Inlined version of null-obj? Could be merged in the future."
+  [x]
   `(let [x# ~x]
      (when-not (null-obj? x#) x#)))
 
@@ -70,7 +72,9 @@
 
 ;; definline does not support arity overloaded functions... 
 (defn instantiate
-  "Clones the object original and returns the clone."
+  "Clones the original object and returns the clone. The clone can
+  optionally be given a new position or rotation as well. Wraps
+  UnityEngine.Object/Instantiate."
   {:inline (fn
              ([^UnityEngine.Object original]
               `(UnityEngine.Object/Instantiate ~original))
@@ -88,7 +92,7 @@
 (defn create-primitive
   "Creates a game object with a primitive mesh renderer and appropriate
   collider. `prim` can be a PrimitiveType or one of :sphere :capsule
-  :cylinder :cube :plane :quad"
+  :cylinder :cube :plane :quad. Wraps GameObject/CreatePrimitive."
   [prim]
   (if (= PrimitiveType (type prim))
     (GameObject/CreatePrimitive prim)
@@ -102,26 +106,34 @@
 
 (defn destroy 
   "Removes a gameobject, component or asset. When called with `t`, the removal
-  happens after `t` seconds."
+  happens after `t` seconds. Wraps UnityEngine.Object/Destroy.
+  
+  The difference between destroy and destroy-immediate is still being worked out."
   ([^UnityEngine.Object obj]
    (UnityEngine.Object/Destroy obj))
   ([^UnityEngine.Object obj ^double t]
    (UnityEngine.Object/Destroy obj t)))
 
 (defn destroy-immediate
+  "Wraps UnityEngine.Object/DestroyImmediate.
+  
+  The difference between destroy and destroy-immediate is still being worked out."
   [^UnityEngine.Object obj]
   (UnityEngine.Object/DestroyImmediate obj))
 
 (definline object-typed
-  "Returns the first active loaded object of Type `type`."
+  "Returns one object of Type `type`. The object selected seems to be
+  the first object in the array returned by objects-typed.
+  Wraps UnityEngine.Object/FindObjectOfType."
   [^Type t] `(UnityEngine.Object/FindObjectOfType ~t))
 
 (definline objects-typed
-  "Returns an array of all active loaded objects of Type `type`."
+  "Returns an array of all active loaded objects of Type `type`. The order is consistent
+  but undefined. UnityEngine.Object/FindObjectsOfType."
   [^Type t] `(UnityEngine.Object/FindObjectsOfType ~t))
 
 (definline object-named
-  "Returns one GameObject named `name`."
+  "Returns one GameObject named `name`. Wraps UnityEngine.GameObject/Find."
   [^String name] `(GameObject/Find ~name))
 
 (defn objects-named
@@ -138,11 +150,16 @@
           obj)))
 
 (definline object-tagged
-  "Returns one active GameObject tagged tag."
+  "Returns one active GameObject tagged `tag`. Tags are managed from the
+  [Unity Tag Manager](https://docs.unity3d.com/Manual/class-TagManager.html).
+  Wraps UnityEngine.GameObject/FindWithTag."
   [^String t] `(GameObject/FindWithTag ~t))
 
 (definline objects-tagged
-  "Returns an array of active GameObjects tagged tag. Returns empty array if no GameObject was found."
+  "Returns an array of active GameObjects tagged tag. Returns empty
+  array if no GameObject was found. Tags are managed from the
+  [Unity Tag Manager](https://docs.unity3d.com/Manual/class-TagManager.html).
+  Wraps UnityEngine.GameObject/FindGameObjectsWithTag."
   [^String t] `(GameObject/FindGameObjectsWithTag ~t))
 
 ;; ------------------------------------------------------------
@@ -363,18 +380,19 @@
   "Attach hook a Clojure function to a Unity message on `obj`. The funciton `f`
   will be invoked every time the message identified by `hook` is sent by Unity. `f`
   must have the same arity as the expected Unity message."
-  [obj hook f]
-  (let [hook-type (ensure-hook-type hook)
-        hook* (cmpt+ obj hook-type)]
-    (set! (.fn hook*) f)
-    obj))
+  ([obj hook f] (hook+ obj hook f f))
+  ([obj hook k f]
+   (let [hook-type (ensure-hook-type hook)
+         ^ArcadiaBehaviour hook-cmpt (ensure-cmpt obj hook-type)]
+     (.AddFunction hook-cmpt f k)
+     obj)))
 
 (defn hook-
   "Remove all `hook` components attached to `obj`"
-  [obj hook]
-  (let [hook-type (ensure-hook-type hook)]
-    (cmpt- obj hook-type)
-    obj))
+  [obj hook k]
+  (when-let [^ArcadiaBehaviour hook-cmpt (cmpt obj (ensure-hook-type hook))]
+    (.RemoveFunction hook-cmpt k))
+  obj)
 
 (defn hook
   "Return the `hook` component attached to `obj`. If there is more one component,
