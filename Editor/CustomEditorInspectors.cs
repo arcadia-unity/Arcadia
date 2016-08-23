@@ -1,7 +1,9 @@
 using System;
 using System.Linq;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEditor;
+using UnityEditorInternal;
 using UnityEngine;
 using clojure.lang;
 
@@ -10,7 +12,7 @@ public class ArcadiaBehaviourEditor : Editor
 {
 	public static IFn requireFn;
 	public static IFn intoArrayFn;
-	public static IFn allLoadedUserNamespacesFn;
+	public static IFn allUserFns;
 	public static IFn titleCase;
 	public static Symbol editorInteropSymbol;
 
@@ -19,49 +21,66 @@ public class ArcadiaBehaviourEditor : Editor
 		requireFn = RT.var("clojure.core", "require");
 		requireFn.invoke(Symbol.intern("arcadia.internal.editor-interop"));
 		intoArrayFn = RT.var("clojure.core", "into-array");
-		allLoadedUserNamespacesFn = RT.var("arcadia.internal.editor-interop", "all-loaded-user-namespaces");
+		allUserFns = RT.var("arcadia.internal.editor-interop", "all-user-fns");
+	}
+
+	public static ReorderableList rl;
+
+	void OnEnable()
+	{
+		ArcadiaBehaviour ab = (ArcadiaBehaviour)target;
+		if (rl == null)
+		{
+			rl = new ReorderableList(ab.fns, typeof(IFn), true, false, true, true);
+			rl.headerHeight = 4;
+			rl.onAddDropdownCallback = (buttonRect, list) =>
+			{
+				EditorGUI.Popup(buttonRect, 0, ((IList<object>)allUserFns.invoke()).Select(x => x.ToString().Substring(2)).ToArray());
+			};
+		}
 	}
 
 	void PopupInspector()
 	{
 		EditorGUILayout.Space();
 		ArcadiaBehaviour ab = (ArcadiaBehaviour)target;
-		if (ab.serializedVar != null)
-		{
-			// var, show popup
-			var loadedNamespaces = (ISeq)allLoadedUserNamespacesFn.invoke();
-			if (loadedNamespaces.count() == 0)
-				return;
-			Namespace[] namespaces = (Namespace[])intoArrayFn.invoke(loadedNamespaces);
-			var fullyQualifiedVars = namespaces.
-			SelectMany(ns => ns.getMappings().
-			  Select((IMapEntry me) => me.val()).
-			  Where(v => v.GetType() == typeof(Var) &&
-			   ((Var)v).Namespace == ns).
-			  Select(v => v.ToString().Substring(2)));
+		rl.DoLayoutList();
+	//	if (ab.serializedVar != null)
+	//	{
+	//		// var, show popup
+	//		var loadedNamespaces = (ISeq)allLoadedUserNamespacesFn.invoke();
+	//		if (loadedNamespaces.count() == 0)
+	//			return;
+	//		Namespace[] namespaces = (Namespace[])intoArrayFn.invoke(loadedNamespaces);
+	//		var fullyQualifiedVars = namespaces.
+	//		SelectMany(ns => ns.getMappings().
+	//		  Select((IMapEntry me) => me.val()).
+	//		  Where(v => v.GetType() == typeof(Var) &&
+	//		   ((Var)v).Namespace == ns).
+	//		  Select(v => v.ToString().Substring(2)));
 
-			string[] blank = new string[] { "" };
-			string[] popUpItems = blank.Concat(fullyQualifiedVars).ToArray();
+	//		string[] blank = new string[] { "" };
+	//		string[] popUpItems = blank.Concat(fullyQualifiedVars).ToArray();
 
-			int selectedVar = Array.IndexOf(popUpItems, ab.serializedVar);
-			if (selectedVar < 0) selectedVar = 0;
-			selectedVar = EditorGUILayout.Popup("Function", selectedVar, popUpItems);
+	//		int selectedVar = Array.IndexOf(popUpItems, ab.serializedVar);
+	//		if (selectedVar < 0) selectedVar = 0;
+	//		selectedVar = EditorGUILayout.Popup("Function", selectedVar, popUpItems);
 
-			ab.serializedVar = popUpItems[selectedVar];
-			ab.OnAfterDeserialize();
-		}
-		else {
-			EditorGUILayout.LabelField("Function", ab.fn == null ? "nil" : ab.fn.ToString());
+	//		ab.serializedVar = popUpItems[selectedVar];
+	//		ab.OnAfterDeserialize();
+	//	}
+	//	else {
+	//		EditorGUILayout.LabelField("Function", ab.fn == null ? "nil" : ab.fn.ToString());
 
-		}
+	//	}
 	}
 
 	void TextInspector()
 	{
-		EditorGUILayout.Space();
-		ArcadiaBehaviour ab = (ArcadiaBehaviour)target;
-		ab.serializedVar = EditorGUILayout.TextField("Function", ab.serializedVar);
-		ab.OnAfterDeserialize();
+		//EditorGUILayout.Space();
+		//ArcadiaBehaviour ab = (ArcadiaBehaviour)target;
+		//ab.serializedVar = EditorGUILayout.TextField("Function", ab.serializedVar);
+		//ab.OnAfterDeserialize();
 	}
 
 	public override void OnInspectorGUI()
