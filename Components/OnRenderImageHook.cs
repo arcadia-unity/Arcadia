@@ -5,7 +5,8 @@ public class OnRenderImageHook : ArcadiaBehaviour
 {
   public void OnRenderImage(UnityEngine.RenderTexture a, UnityEngine.RenderTexture b)
   {
-    if(fn != null)
-      fn.invoke(gameObject, a, b);
+      var _go = gameObject;
+      foreach (var fn in fns)
+        fn.invoke(_go, a, b);
   }
 }

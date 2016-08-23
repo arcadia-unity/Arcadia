@@ -6,7 +6,8 @@ public class OnEndDragHook : ArcadiaBehaviour, IEndDragHandler
 {
   public void OnEndDrag(PointerEventData a)
   {
-    if(fn != null)
-      fn.invoke(gameObject, a);
+      var _go = gameObject;
+      foreach (var fn in fns)
+        fn.invoke(_go, a);
   }
 }

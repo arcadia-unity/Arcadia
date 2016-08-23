@@ -5,7 +5,8 @@ public class OnMouseEnterHook : ArcadiaBehaviour
 {
   public void OnMouseEnter()
   {
-    if(fn != null)
-      fn.invoke(gameObject);
+      var _go = gameObject;
+      foreach (var fn in fns)
+        fn.invoke(_go);
   }
 }

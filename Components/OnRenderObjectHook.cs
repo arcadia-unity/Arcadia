@@ -5,7 +5,8 @@ public class OnRenderObjectHook : ArcadiaBehaviour
 {
   public void OnRenderObject()
   {
-    if(fn != null)
-      fn.invoke(gameObject);
+      var _go = gameObject;
+      foreach (var fn in fns)
+        fn.invoke(_go);
   }
 }

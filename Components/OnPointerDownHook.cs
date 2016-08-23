@@ -6,7 +6,8 @@ public class OnPointerDownHook : ArcadiaBehaviour, IPointerDownHandler
 {
   public void OnPointerDown(PointerEventData a)
   {
-    if(fn != null)
-      fn.invoke(gameObject, a);
+      var _go = gameObject;
+      foreach (var fn in fns)
+        fn.invoke(_go, a);
   }
 }

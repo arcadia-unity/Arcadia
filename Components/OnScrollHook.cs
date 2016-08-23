@@ -6,7 +6,8 @@ public class OnScrollHook : ArcadiaBehaviour, IScrollHandler
 {
   public void OnScroll(PointerEventData a)
   {
-    if(fn != null)
-      fn.invoke(gameObject, a);
+      var _go = gameObject;
+      foreach (var fn in fns)
+        fn.invoke(_go, a);
   }
 }
