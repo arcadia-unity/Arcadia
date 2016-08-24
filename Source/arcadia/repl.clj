@@ -2,7 +2,8 @@
   (:refer-clojure :exclude [with-bindings])
   (:require [clojure.main :as main]
             [clojure.string :as str]
-            [arcadia.config :as config])
+            [arcadia.config :as config]
+            [arcadia.internal.functions :as af])
   (:import
     [UnityEngine Debug]
     [System.IO EndOfStreamException]
@@ -82,6 +83,58 @@
 ;; (defmacro pack-config-bindings []
 ;;   `(pack-bindings ~config-binding-symbols))
 
+
+;; ============================================================
+;; stack trace cleanup
+
+(def ^:dynamic *short-stack-trace*)
+
+;; as seen in spec.test
+(def stack-frame-regex
+  (re-pattern
+    (clojure.string/join
+      (flatten
+        ["^\\s*at"
+         "\\s+(\\S+)\\.(\\S+)" ;; class & method
+         ".*(\\(.*\\))"        ;; params
+         "(?:\\s+(\\[.*\\]))?" ;; weirdness
+         "(?:\\s+in\\s+)?"
+         ["(?:"
+          "(\\S+?)"            ;; file
+          "\\:"
+          "(?:line\\D+)?"      ;; line
+          "(\\d+)"             ;; line number
+          ")?"]
+         ".*$"]))))
+
+(defn parse-stack-trace [stack-trace]
+  (for [frame (clojure.string/split-lines stack-trace)]
+    (when-let [[_ class method args _ file line] (first
+                                                   (re-seq stack-frame-regex
+                                                     frame))]
+      {::class class
+       ::method method
+       ::args args
+       ::file file
+       ::line line
+       ::original frame})))
+
+(defn cleanse-stack-trace [stack-trace]
+  (->> (parse-stack-trace stack-trace)
+       (remove
+         (fn [{:keys [::class]}]
+           (or (re-matches #"arcadia/repl.*" class)
+               (re-matches #"clojure.lang.Compiler.*" class)
+               (re-matches #"clojure/core\$eval.*" class))))
+       (map ::original)
+       (clojure.string/join "\n")))
+
+(defn exception-string [^Exception e]
+  (str (class e) ": " (.Message e) "\n"
+       (if *short-stack-trace*
+         (cleanse-stack-trace (.StackTrace e))
+         (.StackTrace e))))
+
 ;; ============================================================
 ;; state
 
@@ -104,29 +157,30 @@
   (with-out-str
     (binding [*err* *out*]
       (prn
-        (eval
-          `(do
-             ~(when-let [inj (read-string*
-                               (pr-str ((config/config) :repl/injections)))]
-                `(try
-                   ~inj
-                   (catch Exception e#
-                     (UnityEngine.Debug/Log (str e#)))))
-             ~frm))))))
+        (let [value (eval
+                      `(do
+                         ~(when-let [inj (read-string*
+                                           (pr-str ((config/config) :repl/injections)))]
+                            `(try
+                               ~inj
+                               (catch Exception e#
+                                 (UnityEngine.Debug/Log (str e#)))))
+                         ~frm))]
+          (set! *3 *2)
+          (set! *2 *1)
+          (set! *1 value)
+          value)))))
 
  ; need some stuff in here about read-eval maybe
 (defn repl-eval-print [repl-env s]
   (with-env-bindings repl-env
-    (let [frm (read-string* s)]
-      {:result (try
-                 (let [value (eval-to-string frm)]
-                   (set! *3 *2)
-                   (set! *2 *1)
-                   (set! *1 value)
-                   value)
-                 (catch Exception e
-                   (set! *e e) ;;; like in main
-                   (str e)))
+    (let [frm (read-string* s)
+          result (try
+                   (eval-to-string frm)
+                   (catch Exception e
+                     (set! *e e)
+                     (exception-string e)))]
+      {:result result
        :env (env-map)})))
 
 (def work-queue (Queue/Synchronized (Queue.)))
@@ -149,12 +203,11 @@
                      (let [bytes (byte-str s "\n" (ns-name (:*ns* env2)) "=> ")]
                        (.Send socket bytes (.Length bytes) destination)))]
           (swap! ip-map assoc destination env2)                  ; update ip-map with new env
-          (let [res (try
-                      (send result)
-                      (catch SocketException e
-                        (Debug/Log (str "SocketException encountered:\n" e))
-                        (send (.ToString e))))]
-            res))
+          (try
+            (send result)
+            (catch SocketException e
+              (Debug/Log (str "SocketException encountered:\n" e))
+              (send (.ToString e)))))
         (doseq [view (UnityEngine.Resources/FindObjectsOfTypeAll UnityEditor.GUIView)]
           (.Repaint view))
         (catch Exception e
