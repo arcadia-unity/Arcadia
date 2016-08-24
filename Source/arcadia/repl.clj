@@ -87,7 +87,7 @@
 ;; ============================================================
 ;; stack trace cleanup
 
-(def ^:dynamic *short-stack-trace*)
+(def ^:dynamic *short-stack-trace* true)
 
 ;; as seen in spec.test
 (def stack-frame-regex
@@ -120,14 +120,18 @@
        ::original frame})))
 
 (defn cleanse-stack-trace [stack-trace]
-  (->> (parse-stack-trace stack-trace)
-       (remove
-         (fn [{:keys [::class]}]
-           (or (re-matches #"arcadia/repl.*" class)
-               (re-matches #"clojure.lang.Compiler.*" class)
-               (re-matches #"clojure/core\$eval.*" class))))
-       (map ::original)
-       (clojure.string/join "\n")))
+  (let [st (->> (parse-stack-trace stack-trace)
+                (remove
+                  (fn [{:keys [::class]}]
+                    (or (re-matches #"arcadia/repl.*" class)
+                        (re-matches #"clojure.lang.Compiler.*" class)
+                        (re-matches #"clojure/core\$eval.*" class))))
+                (map ::original))]
+    (str (str/join "\n" st)
+         "\n("
+         (- (count (re-seq #"\n" stack-trace))
+            (count st))
+         " stack frames omitted)")))
 
 (defn exception-string [^Exception e]
   (str (class e) ": " (.Message e) "\n"
