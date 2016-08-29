@@ -90,7 +90,7 @@
 (def ^:dynamic *short-stack-trace* true)
 
 ;; as seen in spec.test
-(def stack-frame-regex
+(defonce stack-frame-regex
   (re-pattern
     (clojure.string/join
       (flatten
@@ -178,18 +178,18 @@
  ; need some stuff in here about read-eval maybe
 (defn repl-eval-print [repl-env s]
   (with-env-bindings repl-env
-    (let [frm (read-string* s)
-          result (try
-                   (eval-to-string frm)
+    (let [result (try
+                   (eval-to-string
+                     (read-string* s))
                    (catch Exception e
                      (set! *e e)
                      (exception-string e)))]
       {:result result
        :env (env-map)})))
 
-(def work-queue (Queue/Synchronized (Queue.)))
+(defonce work-queue (Queue/Synchronized (Queue.)))
 
-(def server-running (atom false))
+(defonce server-running (atom false))
 
 (defn byte-str [& xs]
   (.GetBytes Encoding/UTF8 (apply str xs)))
