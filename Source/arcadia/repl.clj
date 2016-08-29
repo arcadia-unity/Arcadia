@@ -3,7 +3,8 @@
   (:require [clojure.main :as main]
             [clojure.string :as str]
             [arcadia.config :as config]
-            [arcadia.internal.functions :as af])
+            [arcadia.internal.functions :as af]
+            [clojure.pprint :as pprint])
   (:import
     [UnityEngine Debug]
     [System.IO EndOfStreamException]
@@ -158,10 +159,13 @@
   (when-not (str/blank? s)
     (read-string s)))
 
+;; :P
+(def ^:dynamic *pprint-output* false)
+
 (defn eval-to-string [frm]
   (with-out-str
     (binding [*err* *out*]
-      (prn
+      ((if *pprint-output* pprint/pprint prn)
         (let [value (eval
                       `(do
                          ~(when-let [inj (read-string*
