@@ -115,7 +115,7 @@
   :args (s/cat :info ::info))
 
 (defn- info-children [info]
-  {:pre [(as/loud-valid? ::info info)]}
+  ;;{:pre [(as/loud-valid? ::info info)]}
   (condp instance? info
     FileInfo empty-set
     DirectoryInfo (set (.GetFileSystemInfos info))))
@@ -189,8 +189,8 @@
 (defn- add-file
   ([fg] fg)
   ([fg path]
-   {:pre [(as/loud-valid? ::path path)
-          (as/loud-valid? ::file-graph fg)]}
+   ;; {:pre [(as/loud-valid? ::path path)
+   ;;        (as/loud-valid? ::file-graph fg)]}
    (Debug/Log "Should be adding a file now")
    (merge-file-graphs fg (file-graph path))))
 
@@ -215,8 +215,8 @@
       type)))
 
 (defmethod get-info ::file-graph [fg path]
-  {:pre [(as/loud-valid? ::file-graph fg)
-         (as/loud-valid? ::path path)]}
+  ;; {:pre [(as/loud-valid? ::file-graph fg)
+  ;;        (as/loud-valid? ::path path)]}
   (mu/checked-keys [[::fsis] fg]
     (get fsis path)))
 
@@ -225,8 +225,8 @@
     (get-info file-graph path)))
 
 (defn contains-path? [fg, path]
-  {:pre [(as/loud-valid? ::file-graph fg)
-         (as/loud-valid? ::path path)]}
+  ;; {:pre [(as/loud-valid? ::file-graph fg)
+  ;;        (as/loud-valid? ::path path)]}
   (-> fg (get ::g) (contains? path)))
 
 (defmulti get-children
@@ -235,8 +235,8 @@
       type)))
 
 (defmethod get-children ::file-graph [fg, path]
-  {:pre [(as/loud-valid? ::file-graph fg)
-         (as/loud-valid? ::path path)]}
+  ;; {:pre [(as/loud-valid? ::file-graph fg)
+  ;;        (as/loud-valid? ::path path)]}
   (gets fg ::g path))
 
 (defmethod get-children ::watch-data [wd, path]
@@ -352,17 +352,25 @@
 ;; ============================================================
 ;; file listening
 
+(defn- regex? [x]
+  (instance? System.Text.RegularExpressions.Regex x))
+
+(s/def ::re-filter
+  (s/or
+    :directory #{:directory}
+    :regex regex?))
+
 (s/def ::listener
-  (s/keys :req [::listener-key ::func ::event-type] :opt [::re-filter]))
+  (s/keys :req [::listener-key ::func ::event-type ::re-filter]))
 
 (defn- apply-listener [{:keys [::func] :as listener} event]
-  {:pre [(as/loud-valid? ::listener listener)
-         (as/loud-valid? ::event event)]}
+  ;; {:pre [(as/loud-valid? ::listener listener)
+  ;;        (as/loud-valid? ::event event)]}
   (func event))
 
 ;; side-effecting
 (defn- run-listeners [event-type->listeners, changes]
-  {:pre [(as/loud-valid? ::event-type->listeners event-type->listeners)]}
+  ;; {:pre [(as/loud-valid? ::event-type->listeners event-type->listeners)]}
   (letfn [(process-change [ch]
             (doduce (map #(apply-listener % ch))
               (event-type->listeners (::event-type ch))))]
@@ -434,9 +442,9 @@
 ;; updating topology
 
 (defn- update-history [history changes]
-  {:pre [(as/loud-valid? (s/spec (s/* ::event)) changes)
-         (as/loud-valid? ::history history)]
-   :post [(as/loud-valid? ::history %)]}
+  ;; {:pre [(as/loud-valid? (s/spec (s/* ::event)) changes)
+  ;;        (as/loud-valid? ::history history)]
+  ;;  :post [(as/loud-valid? ::history %)]}
   (reduce (fn [history {:keys [::path ::event-type] :as change}]
             (assoc-in history [path event-type] change))
     history
