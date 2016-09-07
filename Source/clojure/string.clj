@@ -180,19 +180,26 @@ Design notes for clojure.string:
 
 (defn ^String join
   "Returns a string of all elements in coll, as returned by (seq coll),
-  separated by  an optional separator."
+  separated by  an optional separator."  
   {:added "1.2"}
   ([coll]
-     (apply str coll))
-  ([separator coll]
-     (loop [sb (StringBuilder. (str (first coll)))
-            more (next coll)
-            sep (str separator)]
-       (if more
-         (recur (-> sb (.Append sep) (.Append (str (first more))))               ;;; .append
-                (next more)
-                sep)
-         (str sb)))))
+   (str
+     (reduce (fn [^StringBuilder sb s]
+               (.Append sb (str s))
+               sb)
+       (StringBuilder.)
+       coll)))
+  ([sep coll]
+   (let [sep (str sep)]
+     (str
+       (reduce (fn [^StringBuilder sb s]
+                 (if (zero? (.Length sb))
+                   (.Append sb s)
+                   (do (.Append sb sep)
+                       (.Append sb (str s))))
+                 sb)
+         (StringBuilder.)
+         coll)))))
 
 (defn ^String capitalize
   "Converts first character of the string to upper-case, all other
