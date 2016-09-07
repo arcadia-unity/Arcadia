@@ -500,8 +500,8 @@
 (defn- watch-step [{:keys [::event-type->listeners] :as watch-data}]
   ;; {:pre [(as/loud-valid? ::watch-data watch-data)]}
   (let [chs (changes watch-data)]
-    (when (seq chs)
-      (Debug/Log (str "changes!\n" (with-out-str (pprint chs)))))
+    ;; (when (seq chs)
+    ;;   (Debug/Log (str "changes!\n" (with-out-str (pprint chs)))))
     (run-listeners event-type->listeners chs) ;; side effecting
     (let [wd2 (-> watch-data
                 (update ::history update-history chs)
