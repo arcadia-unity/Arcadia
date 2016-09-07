@@ -25,9 +25,6 @@
            [System.Threading Thread ThreadStart]
            [UnityEngine Debug]))
 
-(as/push-assert false)
-
-
 ;; ============================================================
 ;; utils
 
@@ -115,7 +112,7 @@
   :args (s/cat :info ::info))
 
 (defn- info-children [info]
-  {:pre [(as/loud-valid? ::info info)]}
+  ;;{:pre [(as/loud-valid? ::info info)]}
   (condp instance? info
     FileInfo empty-set
     DirectoryInfo (set (.GetFileSystemInfos info))))
@@ -189,8 +186,8 @@
 (defn- add-file
   ([fg] fg)
   ([fg path]
-   {:pre [(as/loud-valid? ::path path)
-          (as/loud-valid? ::file-graph fg)]}
+   ;; {:pre [(as/loud-valid? ::path path)
+   ;;        (as/loud-valid? ::file-graph fg)]}
    (Debug/Log "Should be adding a file now")
    (merge-file-graphs fg (file-graph path))))
 
@@ -215,8 +212,8 @@
       type)))
 
 (defmethod get-info ::file-graph [fg path]
-  {:pre [(as/loud-valid? ::file-graph fg)
-         (as/loud-valid? ::path path)]}
+  ;; {:pre [(as/loud-valid? ::file-graph fg)
+  ;;        (as/loud-valid? ::path path)]}
   (mu/checked-keys [[::fsis] fg]
     (get fsis path)))
 
@@ -225,8 +222,8 @@
     (get-info file-graph path)))
 
 (defn contains-path? [fg, path]
-  {:pre [(as/loud-valid? ::file-graph fg)
-         (as/loud-valid? ::path path)]}
+  ;; {:pre [(as/loud-valid? ::file-graph fg)
+  ;;        (as/loud-valid? ::path path)]}
   (-> fg (get ::g) (contains? path)))
 
 (defmulti get-children
@@ -235,8 +232,8 @@
       type)))
 
 (defmethod get-children ::file-graph [fg, path]
-  {:pre [(as/loud-valid? ::file-graph fg)
-         (as/loud-valid? ::path path)]}
+  ;; {:pre [(as/loud-valid? ::file-graph fg)
+  ;;        (as/loud-valid? ::path path)]}
   (gets fg ::g path))
 
 (defmethod get-children ::watch-data [wd, path]
@@ -352,17 +349,25 @@
 ;; ============================================================
 ;; file listening
 
+(defn- regex? [x]
+  (instance? System.Text.RegularExpressions.Regex x))
+
+(s/def ::re-filter
+  (s/or
+    :directory #{:directory}
+    :regex regex?))
+
 (s/def ::listener
-  (s/keys :req [::listener-key ::func ::event-type] :opt [::re-filter]))
+  (s/keys :req [::listener-key ::func ::event-type ::re-filter]))
 
 (defn- apply-listener [{:keys [::func] :as listener} event]
-  {:pre [(as/loud-valid? ::listener listener)
-         (as/loud-valid? ::event event)]}
+  ;; {:pre [(as/loud-valid? ::listener listener)
+  ;;        (as/loud-valid? ::event event)]}
   (func event))
 
 ;; side-effecting
 (defn- run-listeners [event-type->listeners, changes]
-  {:pre [(as/loud-valid? ::event-type->listeners event-type->listeners)]}
+  ;; {:pre [(as/loud-valid? ::event-type->listeners event-type->listeners)]}
   (letfn [(process-change [ch]
             (doduce (map #(apply-listener % ch))
               (event-type->listeners (::event-type ch))))]
@@ -405,38 +410,74 @@
         (before? time lwt)
         true))))
 
+;; I guess it makes sense for the regex prefilter to come from the
+;; listeners, rather than the event types? Because if they come from
+;; the event types you would have to make a new event type for each
+;; new file pattern, which would lead to redundant checks and more
+;; allocations and stuff
+(defn- file-path-filter-fn [{:keys [::event-type->listeners]}]
+  (let [regexs (into []
+                 (af/comp
+                   cat
+                   (map ::re-filter)
+                   (filter regex?)
+                   (map #(str "(" (.ToString %) ")")))
+                 (mu/valsr event-type->listeners))
+        regex (re-pattern
+                (clojure.string/join "|" regexs))]
+    (fn [^String path]
+      (boolean
+        (re-matches regex path)))))
+
 (defn- changes [{{:keys [::g, ::fsis], :as fg} ::file-graph,
                  started ::started,
                  :as watch-data}]
   (let [infos (mu/valsr (gets watch-data ::file-graph ::fsis))
         events (vec (keys (::event-type->listeners watch-data)))
-        new-files (af/comp
-                    (filter #(and (instance? FileInfo %)
-                                  (new-path? (.FullName %) watch-data)))
-                    (map refresh)
-                    (mapcat #(info-changes % watch-data events)))
-        changed-directories (af/comp
-                              (filter #(instance? DirectoryInfo %))
-                              (map refresh) ; !!
-                              (filter #(directory-written? % watch-data))
-                              (mapcat #(directory-changes % watch-data events)))
-        chs (into []
-              (r/cat
-                (af/transreducer
-                  new-files
-                  infos),
-                (af/transreducer  ; old files with changed parents
-                  changed-directories
-                  infos)))]
-    chs))
+        fpf (file-path-filter-fn watch-data)
+        filt (fn [x]
+               (or (and (instance? FileInfo x)
+                        (fpf (.FullName ^FileInfo x)))
+                   (instance? DirectoryInfo x)))] ;; need all directory infos for topology updating
+    (into []
+      (af/comp
+        (filter filt)
+        (map refresh)
+        (mapcat #(info-changes % watch-data events)))
+      infos)))
+
+;; (defn- changes [{{:keys [::g, ::fsis], :as fg} ::file-graph,
+;;                  started ::started,
+;;                  :as watch-data}]
+;;   (let [infos (mu/valsr (gets watch-data ::file-graph ::fsis))
+;;         events (vec (keys (::event-type->listeners watch-data)))
+;;         new-files (af/comp
+;;                     (filter #(and (instance? FileInfo %)
+;;                                   (new-path? (.FullName %) watch-data)))
+;;                     (map refresh)
+;;                     (mapcat #(info-changes % watch-data events)))
+;;         changed-directories (af/comp
+;;                               (filter #(instance? DirectoryInfo %))
+;;                               (map refresh) ; !!
+;;                               (filter #(directory-written? % watch-data))
+;;                               (mapcat #(directory-changes % watch-data events)))
+;;         chs (into []
+;;               (r/cat
+;;                 (af/transreducer
+;;                   new-files
+;;                   infos),
+;;                 (af/transreducer  ; old files with changed parents
+;;                   changed-directories
+;;                   infos)))]
+;;     chs))
 
 ;; ------------------------------------------------------------
 ;; updating topology
 
 (defn- update-history [history changes]
-  {:pre [(as/loud-valid? (s/spec (s/* ::event)) changes)
-         (as/loud-valid? ::history history)]
-   :post [(as/loud-valid? ::history %)]}
+  ;; {:pre [(as/loud-valid? (s/spec (s/* ::event)) changes)
+  ;;        (as/loud-valid? ::history history)]
+  ;;  :post [(as/loud-valid? ::history %)]}
   (reduce (fn [history {:keys [::path ::event-type] :as change}]
             (assoc-in history [path event-type] change))
     history
@@ -455,10 +496,10 @@
 ;; ------------------------------------------------------------
 ;; driver 
 
-(def ws-weirdness-log (atom []))
+(defonce ws-weirdness-log (atom []))
 
 (defn- watch-step [{:keys [::event-type->listeners] :as watch-data}]
-  {:pre [(as/loud-valid? ::watch-data watch-data)]}
+  ;; {:pre [(as/loud-valid? ::watch-data watch-data)]}
   (let [chs (changes watch-data)]
     (when (seq chs)
       (Debug/Log (str "changes!\n" (with-out-str (pprint chs)))))
@@ -558,12 +599,13 @@
 
 (defn- add-listener-fn [{:keys [::watch-state]}]
   ;; e is the event-type; k is
-  ;; the listener k; f is the
+  ;; the listener k; r is the regex filter; f is the
   ;; listener function
-  (fn [e k f]    
+  (fn [e k r f]    
     (let [listener {::listener-key k
                     ::func f
-                    ::event-type e}]
+                    ::event-type e
+                    ::re-filter r}]
       (if (as/loud-valid? ::listener listener)
         (swap! watch-state add-listener listener)
         (throw
@@ -612,7 +654,3 @@
                ::cancelled? (fn [] (not (and (::should-loop @control) (.IsAlive thread))))}]
     (swap! all-watches conj watch)
     watch))
-
-(def blort *assert*)
-
-(as/pop-assert)

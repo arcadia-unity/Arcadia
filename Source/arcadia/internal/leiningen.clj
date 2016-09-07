@@ -152,8 +152,8 @@
 
 (comment
   ((::fw/add-listener (aw/asset-watcher))
-   ::fw/create-modify-delete-file
-   ::config-reload
+   ::fw/create-modify-delete-file ::config-reload
+   #".*[^#]project.clj"
    (fn [{:keys [::fw/path]}]
      (when (and
              (leiningen-project-file? path)

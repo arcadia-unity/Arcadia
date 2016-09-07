@@ -33,10 +33,10 @@
 
 (defn add-listener
   "Asynchronously add a listener to the asset watcher. Returns thread."
-  [e k f]
+  [e k r f]
   (thr/start-thread
     (fn []
-      ((::fw/add-listener (asset-watcher)) e k f))))
+      ((::fw/add-listener (asset-watcher)) e k r f))))
 
 (defn remove-listener
   "Asynchronously remove a listener from the asset watcher. Returns thread."

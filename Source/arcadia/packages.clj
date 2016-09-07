@@ -303,8 +303,19 @@
 ;; ============================================================
 ;; installation
 
+;; stupid for now
+(s/def ::manifest
+  map?)
+
+(s/def ::install-opts
+  (s/keys :opt [::manifest]))
+
 (s/fdef install
-  :args (s/cat :group-artifact-version ::pd/vector-dependency) ;; would like to broaden this
+  :args (s/or
+          :no-opts (s/cat :group-artifact-version ::pd/vector-dependency)
+          :with-opts (s/cat
+                       :group-artifact-version ::pd/vector-dependency
+                       :opts ::install-opts)) ;; would like to broaden this
   :ret (s/coll-of ::extraction))
 
 (defn- blocked-coordinate? [coord installed]
@@ -418,10 +429,15 @@
     (when-let [cb (::callback @carrier)]
       (cb (::result @carrier)))))
 
+(defonce install-errors (atom []))
+
 (defn install-all-deps
   ([] (install-all-deps nil))
   ([callback]
    (thr/start-thread
      (fn []
-       (.Enqueue install-queue {::callback callback})
-       (drain-install-queue)))))
+       (try
+         (.Enqueue install-queue {::callback callback})
+         (drain-install-queue)
+         (catch Exception e
+           (swap! install-errors conj e)))))))
