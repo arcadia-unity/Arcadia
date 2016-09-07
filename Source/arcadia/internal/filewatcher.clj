@@ -487,7 +487,6 @@
   (->> changes
     (filter #(= ::alter-children (::event-type %)))
     (reduce (fn [fg {:keys [::path]}]
-              (Debug/Log (str "merging for path: " path))
               (let [fg2 (merge-file-graphs fg
                           (arcadia.internal.filewatcher/file-graph path))]
                 fg2))
