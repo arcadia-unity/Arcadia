@@ -429,7 +429,7 @@
     (when-let [cb (::callback @carrier)]
       (cb (::result @carrier)))))
 
-(def install-errors (atom []))
+(defonce install-errors (atom []))
 
 (defn install-all-deps
   ([] (install-all-deps nil))
