@@ -410,30 +410,66 @@
         (before? time lwt)
         true))))
 
+;; I guess it makes sense for the regex prefilter to come from the
+;; listeners, rather than the event types? Because if they come from
+;; the event types you would have to make a new event type for each
+;; new file pattern, which would lead to redundant checks and more
+;; allocations and stuff
+(defn- file-path-filter-fn [{:keys [::event-type->listeners]}]
+  (let [regexs (into []
+                 (af/comp
+                   cat
+                   (map ::re-filter)
+                   (filter regex?)
+                   (map #(str "(" (.ToString %) ")")))
+                 (mu/valsr event-type->listeners))
+        regex (re-pattern
+                (clojure.string/join "|" regexs))]
+    (fn [^String path]
+      (boolean
+        (re-matches regex path)))))
+
 (defn- changes [{{:keys [::g, ::fsis], :as fg} ::file-graph,
                  started ::started,
                  :as watch-data}]
   (let [infos (mu/valsr (gets watch-data ::file-graph ::fsis))
         events (vec (keys (::event-type->listeners watch-data)))
-        new-files (af/comp
-                    (filter #(and (instance? FileInfo %)
-                                  (new-path? (.FullName %) watch-data)))
-                    (map refresh)
-                    (mapcat #(info-changes % watch-data events)))
-        changed-directories (af/comp
-                              (filter #(instance? DirectoryInfo %))
-                              (map refresh) ; !!
-                              (filter #(directory-written? % watch-data))
-                              (mapcat #(directory-changes % watch-data events)))
-        chs (into []
-              (r/cat
-                (af/transreducer
-                  new-files
-                  infos),
-                (af/transreducer  ; old files with changed parents
-                  changed-directories
-                  infos)))]
-    chs))
+        fpf (file-path-filter-fn watch-data)
+        filt (fn [x]
+               (or (and (instance? FileInfo x)
+                        (fpf (.FullName ^FileInfo x)))
+                   (instance? DirectoryInfo x)))] ;; need all directory infos for topology updating
+    (into []
+      (af/comp
+        (filter filt)
+        (map refresh)
+        (mapcat #(info-changes % watch-data events)))
+      infos)))
+
+;; (defn- changes [{{:keys [::g, ::fsis], :as fg} ::file-graph,
+;;                  started ::started,
+;;                  :as watch-data}]
+;;   (let [infos (mu/valsr (gets watch-data ::file-graph ::fsis))
+;;         events (vec (keys (::event-type->listeners watch-data)))
+;;         new-files (af/comp
+;;                     (filter #(and (instance? FileInfo %)
+;;                                   (new-path? (.FullName %) watch-data)))
+;;                     (map refresh)
+;;                     (mapcat #(info-changes % watch-data events)))
+;;         changed-directories (af/comp
+;;                               (filter #(instance? DirectoryInfo %))
+;;                               (map refresh) ; !!
+;;                               (filter #(directory-written? % watch-data))
+;;                               (mapcat #(directory-changes % watch-data events)))
+;;         chs (into []
+;;               (r/cat
+;;                 (af/transreducer
+;;                   new-files
+;;                   infos),
+;;                 (af/transreducer  ; old files with changed parents
+;;                   changed-directories
+;;                   infos)))]
+;;     chs))
 
 ;; ------------------------------------------------------------
 ;; updating topology
@@ -460,10 +496,10 @@
 ;; ------------------------------------------------------------
 ;; driver 
 
-(def ws-weirdness-log (atom []))
+(defonce ws-weirdness-log (atom []))
 
 (defn- watch-step [{:keys [::event-type->listeners] :as watch-data}]
-  {:pre [(as/loud-valid? ::watch-data watch-data)]}
+  ;; {:pre [(as/loud-valid? ::watch-data watch-data)]}
   (let [chs (changes watch-data)]
     (when (seq chs)
       (Debug/Log (str "changes!\n" (with-out-str (pprint chs)))))
@@ -563,12 +599,13 @@
 
 (defn- add-listener-fn [{:keys [::watch-state]}]
   ;; e is the event-type; k is
-  ;; the listener k; f is the
+  ;; the listener k; r is the regex filter; f is the
   ;; listener function
-  (fn [e k f]    
+  (fn [e k r f]    
     (let [listener {::listener-key k
                     ::func f
-                    ::event-type e}]
+                    ::event-type e
+                    ::re-filter r}]
       (if (as/loud-valid? ::listener listener)
         (swap! watch-state add-listener listener)
         (throw

@@ -62,4 +62,6 @@
 
 (update!)
 
-(aw/add-listener ::fw/create-modify-delete-file ::config-listener #'config-listener)
+(aw/add-listener ::fw/create-modify-delete-file ::config-listener
+  #".*[^#]configuration.edn"
+  #'config-listener)
