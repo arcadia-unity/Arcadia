@@ -25,9 +25,6 @@
            [System.Threading Thread ThreadStart]
            [UnityEngine Debug]))
 
-(as/push-assert false)
-
-
 ;; ============================================================
 ;; utils
 
@@ -620,7 +617,3 @@
                ::cancelled? (fn [] (not (and (::should-loop @control) (.IsAlive thread))))}]
     (swap! all-watches conj watch)
     watch))
-
-(def blort *assert*)
-
-(as/pop-assert)
