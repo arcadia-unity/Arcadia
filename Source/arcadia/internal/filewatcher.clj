@@ -360,14 +360,20 @@
 (s/def ::listener
   (s/keys :req [::listener-key ::func ::event-type ::re-filter]))
 
+(s/fdef apply-listener
+  :args (s/cat :listener ::listener, :event ::event))
+
 (defn- apply-listener [{:keys [::func] :as listener} event]
-  ;; {:pre [(as/loud-valid? ::listener listener)
-  ;;        (as/loud-valid? ::event event)]}
   (func event))
+
+(s/fdef run-listeners
+  :args (s/cat
+          :event-type->listeners ::event-type->listeners,
+          :changes (s/every ::event))
+  :ret nil?)
 
 ;; side-effecting
 (defn- run-listeners [event-type->listeners, changes]
-  ;; {:pre [(as/loud-valid? ::event-type->listeners event-type->listeners)]}
   (letfn [(process-change [ch]
             (doduce (map #(apply-listener % ch))
               (event-type->listeners (::event-type ch))))]
@@ -389,42 +395,21 @@
 (defn- new-path? [p watch-data]
   (not (some-> watch-data ::prev-file-graph ::g (get p))))
 
-(defn- directory-changes [^DirectoryInfo di, {fg ::file-graph, :as watch-data}, events]
-  (let [child-files (eduction
-                      (af/comp
-                        (map #(get-info fg %))
-                        (filter #(instance? FileInfo %))
-                        (remove (fn [^FileInfo fi] ; needs to be disjoint with new files
-                                  (new-path? (.FullName fi) watch-data)))
-                        (map refresh)) ; !!
-                      (get-children fg (.FullName di)))]
-    (eduction
-      (af/comp cat (mapcat #(info-changes % watch-data events)))
-      [[di] child-files])))
-
-(defn- directory-written? [^DirectoryInfo di, {:keys [::started] :as watch-data}]
-  (let [p (.FullName di)
-        lwt (.LastWriteTime di)]
-    (when (before? started lwt)
-      (if-let [{:keys [::time]} (gets watch-data ::history p ::alter-directory)]
-        (before? time lwt)
-        true))))
-
 ;; I guess it makes sense for the regex prefilter to come from the
 ;; listeners, rather than the event types? Because if they come from
 ;; the event types you would have to make a new event type for each
 ;; new file pattern, which would lead to redundant checks and more
 ;; allocations and stuff
 (defn- file-path-filter-fn [{:keys [::event-type->listeners]}]
-  (let [regexs (into []
-                 (af/comp
-                   cat
-                   (map ::re-filter)
-                   (filter regex?)
-                   (map #(str "(" (.ToString %) ")")))
-                 (mu/valsr event-type->listeners))
-        regex (re-pattern
-                (clojure.string/join "|" regexs))]
+  (let [regex (re-pattern
+                (clojure.string/join "|"
+                  (af/transreducer
+                    (af/comp
+                      cat
+                      (map ::re-filter)
+                      (filter regex?)
+                      (map #(str "(" (.ToString %) ")")))
+                    (mu/valsr event-type->listeners))))]
     (fn [^String path]
       (boolean
         (re-matches regex path)))))
@@ -437,7 +422,8 @@
         fpf (file-path-filter-fn watch-data)
         filt (fn [x]
                (or (and (instance? FileInfo x)
-                        (fpf (.FullName ^FileInfo x)))
+                        (let [^FileInfo x x]
+                          (fpf (.FullName x))))
                    (instance? DirectoryInfo x)))] ;; need all directory infos for topology updating
     (into []
       (af/comp
@@ -446,38 +432,14 @@
         (mapcat #(info-changes % watch-data events)))
       infos)))
 
-;; (defn- changes [{{:keys [::g, ::fsis], :as fg} ::file-graph,
-;;                  started ::started,
-;;                  :as watch-data}]
-;;   (let [infos (mu/valsr (gets watch-data ::file-graph ::fsis))
-;;         events (vec (keys (::event-type->listeners watch-data)))
-;;         new-files (af/comp
-;;                     (filter #(and (instance? FileInfo %)
-;;                                   (new-path? (.FullName %) watch-data)))
-;;                     (map refresh)
-;;                     (mapcat #(info-changes % watch-data events)))
-;;         changed-directories (af/comp
-;;                               (filter #(instance? DirectoryInfo %))
-;;                               (map refresh) ; !!
-;;                               (filter #(directory-written? % watch-data))
-;;                               (mapcat #(directory-changes % watch-data events)))
-;;         chs (into []
-;;               (r/cat
-;;                 (af/transreducer
-;;                   new-files
-;;                   infos),
-;;                 (af/transreducer  ; old files with changed parents
-;;                   changed-directories
-;;                   infos)))]
-;;     chs))
-
 ;; ------------------------------------------------------------
 ;; updating topology
 
+(s/fdef update-history
+  :args (s/cat :history ::history, :changes (s/every ::event))
+  :ret ::history)
+
 (defn- update-history [history changes]
-  ;; {:pre [(as/loud-valid? (s/spec (s/* ::event)) changes)
-  ;;        (as/loud-valid? ::history history)]
-  ;;  :post [(as/loud-valid? ::history %)]}
   (reduce (fn [history {:keys [::path ::event-type] :as change}]
             (assoc-in history [path event-type] change))
     history
@@ -487,9 +449,8 @@
   (->> changes
     (filter #(= ::alter-children (::event-type %)))
     (reduce (fn [fg {:keys [::path]}]
-              (let [fg2 (merge-file-graphs fg
-                          (arcadia.internal.filewatcher/file-graph path))]
-                fg2))
+              (merge-file-graphs fg
+                (arcadia.internal.filewatcher/file-graph path)))
        file-graph)))
 
 ;; ------------------------------------------------------------
@@ -497,26 +458,26 @@
 
 (defonce ws-weirdness-log (atom []))
 
+(s/fdef watch-step
+  :args (s/cat :watch-data ::watch-data)
+  :ret ::watch-data)
+
 (defn- watch-step [{:keys [::event-type->listeners] :as watch-data}]
-  ;; {:pre [(as/loud-valid? ::watch-data watch-data)]}
   (let [chs (changes watch-data)]
-    ;; (when (seq chs)
-    ;;   (Debug/Log (str "changes!\n" (with-out-str (pprint chs)))))
     (run-listeners event-type->listeners chs) ;; side effecting
     (let [wd2 (-> watch-data
-                (update ::history update-history chs)
-                (update ::file-graph update-file-graph chs)
-                (assoc ::prev-file-graph (::file-graph watch-data)))]
-      (if (some #(= ::alter-children (::event-type %)) chs) ;; stupid but easy to type
-        (if (= (::file-graph wd2)
-              (::file-graph
-               (::prev-file-graph watch-data)))
-          (do
-            (swap! ws-weirdness-log conj
-              (filter #(= ::alter-children (::event-type %)) chs))
-            (throw (Exception. "something's up")))
-          (watch-step wd2))
-        wd2))))
+                   (update ::history update-history chs)
+                   (update ::file-graph update-file-graph chs)
+                   (assoc ::prev-file-graph (::file-graph watch-data)))]
+       (if (some #(= ::alter-children (::event-type %)) chs) ;; stupid but easy to type
+         (if (= (::file-graph wd2)
+                (::file-graph (::prev-file-graph watch-data)))
+           (do
+             (swap! ws-weirdness-log conj
+               (filter #(= ::alter-children (::event-type %)) chs))
+             (throw (Exception. "something's up")))
+           (watch-step wd2))
+         wd2))))
 
 ;; ------------------------------------------------------------
 ;; this def should go somewhere I guess
