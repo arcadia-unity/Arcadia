@@ -193,12 +193,12 @@ Design notes for clojure.string:
    (let [sep (str sep)]
      (str
        (reduce (fn [^StringBuilder sb s]
-                 (if (zero? (.Length sb))
-                   (.Append sb s)
+                 (if (nil? sb)
+                   (StringBuilder. (str s))
                    (do (.Append sb sep)
-                       (.Append sb (str s))))
-                 sb)
-         (StringBuilder.)
+                       (.Append sb (str s))
+                       sb)))
+         nil
          coll)))))
 
 (defn ^String capitalize
