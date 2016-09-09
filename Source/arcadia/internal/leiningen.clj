@@ -6,7 +6,10 @@
             [arcadia.packages.data :as pd]
             [clojure.spec :as s]
             [arcadia.internal.spec :as as]
-            [arcadia.compiler :as compiler]))
+            [arcadia.compiler :as compiler]
+            [arcadia.config :as config])
+  (:import [System.Text.RegularExpressions Regex]
+           [System.IO Path]))
 
 ;; ------------------------------------------------------------
 ;; grammar
@@ -77,8 +80,25 @@
 ;; ============================================================
 ;; filesystem
 
-(defn- leiningen-project-file? [fi]
-  (= "project.clj" (.Name (fs/info fi))))
+(def ^:private assets-dir
+  (.FullName (fs/info "Assets")))
+
+(def project-file-path-regex
+  (let [dsc (Regex/Escape (str Path/DirectorySeparatorChar))]
+    (re-pattern
+      (str
+        (Regex/Escape assets-dir)
+        (str dsc "[^" dsc "]*" dsc)
+        (Regex/Escape "project.clj")))))
+
+;; if anyone can think of another way lemme know -tsg
+(defn leiningen-project-file? [fi]
+  (let [fi (fs/info fi)]
+    (and (= "project.clj" (.Name fi))
+         (re-matches project-file-path-regex (.FullName fi))
+         (boolean
+           (re-find #"(?m)^\s*\(defproject(?:$|\s.*?$)"
+             (slurp fi))))))
 
 (s/fdef project-data
   :ret ::project)
@@ -141,22 +161,10 @@
 (compiler/add-loadpath-extension-fn ::loadpath-fn #'leiningen-loadpaths-string)
 
 ;; ============================================================
-;; hook up listeners. should be idempotent.
+;; hook up listener
 
-;; ((::fw/add-listener (aw/asset-watcher))
-;;  ::fw/create-modify-delete-file
-;;  ::config-reload
-;;  (fn [{:keys [::fw/time ::fw/path]}]
-;;    ;; stuff happens here
-;;    ))
-
-(comment
-  ((::fw/add-listener (aw/asset-watcher))
-   ::fw/create-modify-delete-file ::config-reload
-   #".*[^#]project.clj"
-   (fn [{:keys [::fw/path]}]
-     (when (and
-             (leiningen-project-file? path)
-             (let [[_ parent grandparent] (fs/path-supers (fs/path path))]
-               (leiningen-structured-directory? (info parent)) ;; this is stupid right now
-               (= )))))))
+(aw/add-listener ::fw/create-modify-delete-file ::config-reload
+  project-file-path-regex
+  (fn [{:keys [::fw/path]}]
+    (when (leiningen-project-file? path)
+      (config/update!))))

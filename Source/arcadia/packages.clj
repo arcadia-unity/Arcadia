@@ -441,3 +441,9 @@
          (drain-install-queue)
          (catch Exception e
            (swap! install-errors conj e)))))))
+
+;; ============================================================
+;; listeners
+
+(state/add-listener ::config/on-update ::install-all-deps
+  (fn [_] (install-all-deps)))

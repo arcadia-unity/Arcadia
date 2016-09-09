@@ -184,20 +184,24 @@ Design notes for clojure.string:
   {:added "1.2"}
   ([coll]
    (str
-     (reduce (fn [^StringBuilder sb s]
-               (.Append sb (str s))
-               sb)
+     (reduce (fn
+               ([sb] sb)
+               ([^StringBuilder sb s]
+                (.Append sb (str s))
+                sb))
        (StringBuilder.)
        coll)))
   ([sep coll]
    (let [sep (str sep)]
      (str
-       (reduce (fn [^StringBuilder sb s]
-                 (if (nil? sb)
-                   (StringBuilder. (str s))
-                   (do (.Append sb sep)
-                       (.Append sb (str s))
-                       sb)))
+       (reduce (fn
+                 ([sb] sb)
+                 ([^StringBuilder sb s]
+                  (if (nil? sb)
+                    (StringBuilder. (str s))
+                    (do (.Append sb sep)
+                        (.Append sb (str s))
+                        sb))))
          nil
          coll)))))
 
