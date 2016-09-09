@@ -568,7 +568,7 @@
 
 (defn- add-listener-fn [{:keys [::watch-state]}]
   ;; e is the event-type; k is
-  ;; the listener k; r is the regex filter; f is the
+  ;; the listener key; r is the regex filter; f is the
   ;; listener function
   (fn [e k r f]    
     (let [listener {::listener-key k

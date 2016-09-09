@@ -163,9 +163,8 @@
 ;; ============================================================
 ;; hook up listener
 
-((::fw/add-listener (aw/asset-watcher))
- ::fw/create-modify-delete-file ::config-reload
- project-file-path-regex
- (fn [{:keys [::fw/path]}]
-   (when (leiningen-project-file? path)
-     (config/update!))))
+(aw/add-listener ::fw/create-modify-delete-file ::config-reload
+  project-file-path-regex
+  (fn [{:keys [::fw/path]}]
+    (when (leiningen-project-file? path)
+      (config/update!))))
