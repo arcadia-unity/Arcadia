@@ -22,7 +22,7 @@
 (defn log
   "Log message to the [Unity console](https://docs.unity3d.com/Manual/Console.html). Arguments are combined into a string."
   [& args]
-  (Debug/Log (apply str args)))
+  (Debug/Log (clojure.string/join " " args)))
 
 ; (defonce ^:private editor-available
 ;   (boolean
