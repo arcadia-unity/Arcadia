@@ -77,8 +77,18 @@
 ;; ============================================================
 ;; filesystem
 
-(defn- leiningen-project-file? [fi]
-  (= "project.clj" (.Name (fs/info fi))))
+(def ^:private assets-dir
+  (fs/path-combine
+    (.FullName (fs/info "."))
+    "Assets"))
+
+;; if anyone can think of another way lemme know -tsg
+(defn leiningen-project-file? [fi]
+  (and (= "project.clj" (.Name (fs/info fi)))
+       (= assets-dir (first (drop 2 (fs/path-supers (.FullName fi)))))
+       (boolean
+         (re-find #"(?m)^\s*\(defproject(?:$|\s.*?$)"
+           (slurp fi)))))
 
 (s/fdef project-data
   :ret ::project)
