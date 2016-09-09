@@ -368,15 +368,24 @@
 
 (s/fdef run-listeners
   :args (s/cat
-          :event-type->listeners ::event-type->listeners,
+          :watch-data ::watch-data
           :changes (s/every ::event))
   :ret nil?)
 
-;; side-effecting
-(defn- run-listeners [event-type->listeners, changes]
-  (letfn [(process-change [ch]
-            (doduce (map #(apply-listener % ch))
-              (event-type->listeners (::event-type ch))))]
+(defn- run-listeners
+  "Side-effecting. Given the watch-data and a coll of changes, will
+  run all listeners matching both the event type and (via ::re-filter)
+  the path of the file for each change."
+  [{:keys [::event-type->listeners]
+    {:keys [::fsis]} ::file-graph,
+    :as watch-data},
+   changes]
+  (letfn [(process-change [{:keys [::path ::event-type] :as ch}]
+            (doseq [{:keys [::re-filter ::info]
+                     :as listener} (event-type->listeners event-type)
+                    :when (or (= :directory re-filter) ; bit permissive
+                              (re-matches re-filter path))]
+              (apply-listener listener ch)))]
     (doduce (map process-change) changes)))
 
 ;; ------------------------------------------------------------
@@ -464,7 +473,7 @@
 
 (defn- watch-step [{:keys [::event-type->listeners] :as watch-data}]
   (let [chs (changes watch-data)]
-    (run-listeners event-type->listeners chs) ;; side effecting
+    (run-listeners watch-data chs) ;; side effecting
     (let [wd2 (-> watch-data
                    (update ::history update-history chs)
                    (update ::file-graph update-file-graph chs)
