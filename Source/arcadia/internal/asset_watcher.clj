@@ -10,18 +10,22 @@
 ;; arcadia.internal.filewatcher itself, which is a general-purpose
 ;; filewatcher and shouldn't contain things this specific to Arcadia.
 
+(defonce dead-watch (atom true))
+
 ;; seems a little janky
 (defn- watch-promise
   "Returns a promise after starting a thread which will deliver a new filewatcher to the promise."
   []
   (let [p (promise)]
-    (thr/start-thread
-      (fn []
-        (deliver p
-          (fw/start-watch
-            (.FullName
-              (fs/info "Assets"))
-            500))))
+    (if-not @dead-watch
+      (thr/start-thread
+        (fn []
+          (deliver p
+            (fw/start-watch
+              (.FullName
+                (fs/info "Assets"))
+              500))))
+      (deliver p nil))
     p))
 
 (defonce ^:private asset-watcher-ref
@@ -36,11 +40,13 @@
   [e k r f]
   (thr/start-thread
     (fn []
-      ((::fw/add-listener (asset-watcher)) e k r f))))
+      (when-let [aw (asset-watcher)]
+        ((::fw/add-listener aw) e k r f)))))
 
 (defn remove-listener
   "Asynchronously remove a listener from the asset watcher. Returns thread."
   [k]
   (thr/start-thread
     (fn []
-      ((::fw/remove-listener (asset-watcher)) k))))
+      (when-let [aw (asset-watcher)]
+        ((::fw/remove-listener (asset-watcher)) k)))))
