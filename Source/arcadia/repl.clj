@@ -251,5 +251,7 @@
 (defn stop-server [^UdpClient socket]
   (if ((config/config) :verbose)
     (Debug/Log "Stopping REPL..."))
-  (reset! server-running false)
-  (.Close socket))
+  (locking server-running
+    (when @server-running
+      (reset! server-running false)
+      (.Close socket))))
