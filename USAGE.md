@@ -196,6 +196,32 @@ As another example, we will attach a hook to objects to log information about th
 
 This will start logging the collisions of an object named "Cube" in the scene. Note that Arcadia hooks reanme Unity's camel case names to more idiomatic Clojure hyphenated keywords with (`OnCollisionEnter` becomes `:on-collision-enter`). Also note that as per [OnCollisionEnter's documentation](https://docs.unity3d.com/ScriptReference/MonoBehaviour.OnCollisionEnter.html), the message includes a parameter, so our function takes two arguments: the attached object (`go`, the same as all Arcadia hook functions), and the collision information (`collision`, of type [Collision](https://docs.unity3d.com/ScriptReference/Collision.html)). We use interop to extract relevant data and log it.
 
+#### State
+*This part of Arcadia is under active development. We're documenting the parts that are most settled, but expect changes.*
+
+Unity components implement both behavior and state. State manifests as mutable fields on component instances that the component (or other components) are expected to read from and write to. Arcadia hooks are just functions, so they do not normally maintain state. Instead, a seperate Arcadia state component and related API are provided. This is still mutable state, but we hope to imbue this part of the engine with a little more composability and concurrency.
+
+The idea is to give every GameObject that uses Arcadia state a single persistent hashmap inside an atom. Code can read the whole map, or update a single key at a time (merging into the hashmap has also been suggested). If different libraries use namespace qualified keywords, then multiple codebases can write interact with the same single state atom without colliding or coordinating. Wrapping the hashmap in an atom means that updating Arcadia state is threadsafe and can be done safely from arbitrary Clojure code.
+
+State is set with `set-state!`, `remove-state!`, and `update-state!` and read with `state`
+
+```clojure
+(def cube (create-primitive :cube))
+
+(set-state! cube :friendly? true)
+(set-state! cube :health 100.0)
+
+(state cube) ;; {:friendly? true, :health 100.0}
+(state cube :friendly?) ;; true
+
+(remove-state! cube :friendly?)
+(state cube) ;; {:health 100.0}
+(state cube :friendly?) ;; nil
+
+(update-state! cube :health inc)
+(state cube :health) ;; 101.0
+```
+
 #### Multithreading
 While Unity's API is single threaded, the Mono VM that it runs on is not. That means that you can write multithreaded Clojure code with all the advantages that has as long as you do not call Unity API methods from anywhere but the main thread (they will throw an exception otherwise). The exception to this is the linear algebra types and associated methods are callable from non-main threads.
 
