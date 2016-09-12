@@ -236,21 +236,5 @@ Unity will restart the Mono VM at specific times
 
 When this happens, any state you had set up in the REPL will be lost and you will have to re-`require` any namespaces you were working with. This is a deep part of Unity's architechture and not something we can meaningfully affect.
 
-
-
-<!--
-* focus-dependent REPL
-* arcadia core
-* arcadia linear
-
-### State
-
-### Export
-
-### Future?
-* config
-* packages
--->
-
 [clojure]: http://clojure.org/
 [unity]: http://unity3d.com/
