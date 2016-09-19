@@ -242,9 +242,9 @@
   (parent ^GameObject [this]
           "Returns the object that contains `this` object, or `nil` if it is
           at the top of the hierarchy.")
-  (child+ ^GameObject
-    [this child]
-    [this child transform-to]
+  (child+ 
+    ^GameObject [this child]
+    ^GameObject [this child transform-to]
     "Moves `child` to under `this` object in the hierarchy, optionally
     recalculating its local transform.")
   (child- ^GameObject [this child]
@@ -260,12 +260,13 @@
       (.transform this)))
   (parent [this]
     (.. this transform parent gameObject))
-  (child+ [this child]
-    (child+ this child false))
-  (child+ [this child transform-to]
-    (let [^GameObject c (gobj child)]
-      (.SetParent (.transform c) (.transform this) transform-to)
-      this))
+  (child+
+    ([this child]
+     (child+ this child false))
+    ([this child transform-to]
+     (let [^GameObject c (gobj child)]
+       (.SetParent (.transform c) (.transform this) transform-to)
+       this)))
   (child- [this child]
     (let [^GameObject c (gobj child)]
       (.SetParent (.transform c) nil false)
@@ -278,10 +279,11 @@
     (into [] (.. this gameObject transform)))
   (parent [^Component this]
     (.. this gameObject parent))
-  (child+ [this child]
-    (child+ (.gameObject this) child))
-  (child+ [this child transform-to]
-    (child+ (.gameObject this) child transform-to))
+  (child+
+    ([this child]
+     (child+ (.gameObject this) child))
+    ([this child transform-to]
+     (child+ (.gameObject this) child transform-to)))
   (child- [this child]
     (child- (.gameObject this) child))
 
@@ -292,10 +294,11 @@
     (children (var-get this)))
   (parent [this]
     (parent (var-get this)))
-  (child+ [this child]
-    (child+ (var-get this) child))
-  (child+ [this child transform-to]
-    (child+ (var-get this) child transform-to))
+  (child+
+    ([this child]
+     (child+ (var-get this) child))
+    ([this child transform-to]
+     (child+ (var-get this) child transform-to)))
   (child- [this child]
     (child- (var-get this) child)))
 
