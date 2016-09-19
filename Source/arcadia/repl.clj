@@ -123,6 +123,7 @@
 (defn cleanse-stack-trace [stack-trace]
   (let [st (->> (parse-stack-trace stack-trace)
                 (remove nil?)
+                (filter ::class)
                 (remove
                   (fn [{:keys [::class]}]
                     (or (re-matches #"arcadia/repl.*" class)
