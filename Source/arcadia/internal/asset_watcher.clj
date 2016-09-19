@@ -10,7 +10,7 @@
 ;; arcadia.internal.filewatcher itself, which is a general-purpose
 ;; filewatcher and shouldn't contain things this specific to Arcadia.
 
-(defonce dead-watch (atom true))
+(defonce dead-watch (atom false))
 
 ;; seems a little janky
 (defn- watch-promise

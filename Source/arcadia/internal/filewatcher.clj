@@ -19,7 +19,8 @@
             [clojure.test :as t]
             [arcadia.internal.test :as at]
             [clojure.data :as d])
-  (:import [System.Collections Queue]
+  (:import [Arcadia StringHelper ArrayHelper]
+   [System.Collections Queue]
            [System.IO FileSystemInfo DirectoryInfo FileInfo Path File]
            [System DateTime]
            [System.Threading Thread ThreadStart]
@@ -392,7 +393,7 @@
             (doseq [{:keys [::re-filter ::info]
                      :as listener} (event-type->listeners event-type)
                     :when (or (= :directory re-filter) ; bit permissive
-                              (.EndsWith path re-filter))]
+                              (StringHelper/EndsWith path re-filter))]
               (apply-listener listener ch)))]
     (doduce (map process-change) changes)))
 
@@ -418,23 +419,15 @@
 ;; new file pattern, which would lead to redundant checks and more
 ;; allocations and stuff
 (defn- file-path-filter-fn [{:keys [::event-type->listeners]}]
-  (let [ends (into []
-               (af/comp
-                 cat
-                 (map ::re-filter)
-                 (filter string?))
-               (mu/valsr event-type->listeners))]
+  (let [^|System.String[]| ends (ArrayHelper/CountedArray (type-args System.String)
+                                  (into []
+                                    (af/comp
+                                      cat
+                                      (map ::re-filter)
+                                      (filter string?))
+                                    (mu/valsr event-type->listeners)))]
     (fn [^String path]
-      ;; (or
-      ;;   (.EndsWith path "project.clj")
-      ;;   (.EndsWith path "configuration.edn"))      
-      (loop [i (int 0)]
-        (when (< i (count ends))
-          (let [^String s (nth ends i)]
-            (if (.EndsWith ^String path s)
-              true
-              (recur (inc i))))))
-      )))
+      (StringHelper/EndsWithAny path ends))))
 
 (defn changes [{{:keys [::g, ::fsis], :as fg} ::file-graph,
                  started ::started,
@@ -449,11 +442,10 @@
                    (instance? DirectoryInfo x)))] ;; need all directory infos for topology updating
     (into []
       (af/comp
-        ;;(filter filt)
+        (filter filt) ;; takes us from 30-40% CPU to 7% CPU on my computer
         (map refresh)
         (mapcat #(info-changes % watch-data events)))
-      infos)
-    nil))
+      infos)))
 
 ;; ------------------------------------------------------------
 ;; updating topology
@@ -485,7 +477,7 @@
   :args (s/cat :watch-data ::watch-data)
   :ret ::watch-data)
 
-(defn- watch-step [{:keys [::event-type->listeners] :as watch-data}]
+(defn- watch-step [{:keys [::event-type->listeners] :as watch-data}] 
   (let [chs (changes watch-data)]
     (run-listeners watch-data chs) ;; side effecting
     (let [wd2 (-> watch-data
