@@ -89,22 +89,30 @@
   ([fg] fg)
   ([{g1 ::g :as fg1}
     {g2 ::g :as fg2}]
-   (let [removed (reduce-kv
+   (let [
+         ;; Path names are fully-qualified, and fully-qualified paths
+         ;; don't move, they are only created or deleted. We can
+         ;; therefore define nodes in the graph as a whole that should
+         ;; be removed via a merge. There are those that, for a given
+         ;; key shared by both graphs, are in that key's children for
+         ;; the first graph and missing from that key's children in
+         ;; the second.
+         removed (reduce-kv 
                    (fn [bldg k v]
                      (into bldg (set/difference v (get g2 k))))
                    []
                    (select-keys g1 (keys g2)))]
      (-> fg1
-       (update ::g
-         (fn [g]
-           (reduce dissoc
-             (merge g g2)
-             removed)))
-       (update ::fsis
-         (fn [fsis]
-           (reduce dissoc
-             (merge fsis (::fsis fg2))
-             removed)))))))
+         (update ::g
+           (fn [g]
+             (reduce dissoc
+               (merge g g2)
+               removed)))
+         (update ::fsis
+           (fn [fsis]
+             (reduce dissoc
+               (merge fsis (::fsis fg2))
+               removed)))))))
 
 (def empty-set #{}) ;;omg
 
@@ -355,7 +363,7 @@
 (s/def ::re-filter
   (s/or
     :directory #{:directory}
-    :regex regex?))
+    :string string?))
 
 (s/def ::listener
   (s/keys :req [::listener-key ::func ::event-type ::re-filter]))
@@ -384,7 +392,7 @@
             (doseq [{:keys [::re-filter ::info]
                      :as listener} (event-type->listeners event-type)
                     :when (or (= :directory re-filter) ; bit permissive
-                              (re-matches re-filter path))]
+                              (.EndsWith path re-filter))]
               (apply-listener listener ch)))]
     (doduce (map process-change) changes)))
 
@@ -410,20 +418,25 @@
 ;; new file pattern, which would lead to redundant checks and more
 ;; allocations and stuff
 (defn- file-path-filter-fn [{:keys [::event-type->listeners]}]
-  (let [regex (re-pattern
-                (clojure.string/join "|"
-                  (af/transreducer
-                    (af/comp
-                      cat
-                      (map ::re-filter)
-                      (filter regex?)
-                      (map #(str "(" (.ToString %) ")")))
-                    (mu/valsr event-type->listeners))))]
+  (let [ends (into []
+               (af/comp
+                 cat
+                 (map ::re-filter)
+                 (filter string?))
+               (mu/valsr event-type->listeners))]
     (fn [^String path]
-      (boolean
-        (re-matches regex path)))))
+      ;; (or
+      ;;   (.EndsWith path "project.clj")
+      ;;   (.EndsWith path "configuration.edn"))      
+      (loop [i (int 0)]
+        (when (< i (count ends))
+          (let [^String s (nth ends i)]
+            (if (.EndsWith ^String path s)
+              true
+              (recur (inc i))))))
+      )))
 
-(defn- changes [{{:keys [::g, ::fsis], :as fg} ::file-graph,
+(defn changes [{{:keys [::g, ::fsis], :as fg} ::file-graph,
                  started ::started,
                  :as watch-data}]
   (let [infos (mu/valsr (gets watch-data ::file-graph ::fsis))
@@ -436,10 +449,11 @@
                    (instance? DirectoryInfo x)))] ;; need all directory infos for topology updating
     (into []
       (af/comp
-        (filter filt)
+        ;;(filter filt)
         (map refresh)
         (mapcat #(info-changes % watch-data events)))
-      infos)))
+      infos)
+    nil))
 
 ;; ------------------------------------------------------------
 ;; updating topology

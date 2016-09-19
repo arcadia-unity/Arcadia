@@ -83,21 +83,13 @@
 (def ^:private assets-dir
   (.FullName (fs/info "Assets")))
 
-(def project-file-path-regex
-  (let [dsc (Regex/Escape (str Path/DirectorySeparatorChar))]
-    (re-pattern
-      (str
-        (Regex/Escape assets-dir)
-        (str dsc "[^" dsc "]*" dsc)
-        (Regex/Escape "project.clj")))))
-
 ;; if anyone can think of another way lemme know -tsg
 (defn leiningen-project-file? [fi]
-  (let [fi (fs/info fi)]
+  (when-let [fi (fs/info fi)] ;; not sure this stupid function returns nil if input is already a filesysteminfo for a non existant filesystemthing
     (and (= "project.clj" (.Name fi))
-         (re-matches project-file-path-regex (.FullName fi))
+         (= assets-dir (first (drop 2 (fs/path-supers (.FullName fi)))))
          (boolean
-           (re-find #"(?m)^\s*\(defproject(?:$|\s.*?$)"
+           (re-find #"(?m)^\s*\(defproject(?:$|\s.*?$)" ;; shift to something less expensive
              (slurp fi))))))
 
 (s/fdef project-data
@@ -164,7 +156,7 @@
 ;; hook up listener
 
 (aw/add-listener ::fw/create-modify-delete-file ::config-reload
-  project-file-path-regex
+  (str Path/DirectorySeparatorChar "project.clj")
   (fn [{:keys [::fw/path]}]
     (when (leiningen-project-file? path)
       (config/update!))))

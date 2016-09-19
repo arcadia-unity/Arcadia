@@ -8,7 +8,8 @@
     [Arcadia Configuration]
     [System DateTime]
     [System.IO File]
-    [UnityEngine Debug]))
+    [UnityEngine Debug]
+    [System.Text.RegularExpressions Regex]))
 
 (defn config []
   (@state/state ::config))
@@ -63,5 +64,5 @@
 (update!)
 
 (aw/add-listener ::fw/create-modify-delete-file ::config-listener
-  #".*[^#]configuration.edn"
+  (str Path/DirectorySeparatorChar "configuration.edn")
   #'config-listener)
