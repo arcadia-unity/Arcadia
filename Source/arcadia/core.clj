@@ -230,15 +230,6 @@
     (cmpt- (var-get this) t)))
 
 ;; ------------------------------------------------------------
-;; repercussions
-
-(defn ensure-cmpt
-  "If `obj` has a component of type `t`, returns is. Otherwise, adds
-  a component of type `t` and returns the new instance."
-  ^Component [obj ^Type t]
-  (or (cmpt obj t) (cmpt+ obj t)))
-
-;; ------------------------------------------------------------
 ;; ISceneGraph
 
 (defprotocol ISceneGraph
@@ -307,6 +298,16 @@
     (child+ (var-get this) child transform-to))
   (child- [this child]
     (child- (var-get this) child)))
+
+;; ------------------------------------------------------------
+;; repercussions
+
+(defn ensure-cmpt
+  "If `obj` has a component of type `t`, returns is. Otherwise, adds
+  a component of type `t` and returns the new instance."
+  ^Component [obj ^Type t]
+  (let [obj (gobj obj)]
+    (or (cmpt obj t) (cmpt+ obj t))))
 
 ;; ------------------------------------------------------------
 ;; happy macros

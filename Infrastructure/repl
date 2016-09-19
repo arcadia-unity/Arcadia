@@ -17,7 +17,7 @@ if [ -z "$@" ]
     then
     case `uname` in
       Darwin)
-        ARCADIA_MONO_ROOT=/Applications/Unity/Unity.app/Contents/Frameworks/Mono
+        ARCADIA_MONO_ROOT=/Applications/Unity/Unity.app/Contents/Mono
         ;;
       Linux)
         # TODO almost certainly not enough
@@ -36,7 +36,9 @@ else
   ARCADIA_MONO_ROOT="$@"  
 fi
 
+# http://stackoverflow.com/questions/59895/can-a-bash-script-tell-which-directory-it-is-stored-in
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 MONO_LIBS=$ARCADIA_MONO_ROOT/lib/mono/2.0/
 MONO=$ARCADIA_MONO_ROOT/bin/mono
 
-MONO_PATH=$MONO_LIBS $MONO Repl.exe
+MONO_PATH=$MONO_LIBS $MONO $DIR/Repl.exe
