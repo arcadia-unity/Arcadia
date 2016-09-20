@@ -4,6 +4,18 @@ namespace Arcadia
 {
 	public static class StringHelper
 	{
+		public static bool StartsWith(string s, string pat){
+			if (s.Length < pat.Length){
+				return false;
+			}
+			for (int i = 0; i < pat.Length; i++) {
+				if (s[i] != pat[i]) {
+					return false;
+				}
+			}
+			return true;
+		}
+
 		// considerably faster than the EndsWith method of Strings
 		public static bool EndsWith(string s, string pat){
 			if (s.Length < pat.Length) {

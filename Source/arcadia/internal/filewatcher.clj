@@ -124,7 +124,12 @@
   ;;{:pre [(as/loud-valid? ::info info)]}
   (condp instance? info
     FileInfo empty-set
-    DirectoryInfo (set (.GetFileSystemInfos info))))
+    DirectoryInfo (into #{} 
+                    (remove ;; for emacs nonsense
+                      #(let [n (.Name ^FileSystemInfo %)]
+                         (StringHelper/StartsWith n "#")
+                         (StringHelper/StartsWith n ".#"))) 
+                    (.GetFileSystemInfos info))))
 
 ;; (s/fdef path
 ;;   :args (s/cat :arg #(instance? FileSystemInfo %)))
@@ -364,7 +369,10 @@
 (s/def ::re-filter
   (s/or
     :directory #{:directory}
-    :string string?))
+    :string string?
+    :strings (s/and
+               vector?
+               (s/coll-of string?))))
 
 (s/def ::listener
   (s/keys :req [::listener-key ::func ::event-type ::re-filter]))
@@ -381,6 +389,17 @@
           :changes (s/every ::event))
   :ret nil?)
 
+(defn- re-filter-matches? [re-filter path]
+  (or (= :directory re-filter)
+      (if (string? re-filter)
+        (StringHelper/EndsWith path re-filter)
+        (if (vector? re-filter)
+          (loop [i (int 0)]
+            (when (< i (count re-filter))
+              (or (StringHelper/EndsWith path (nth re-filter i))
+                  (recur (inc i)))))
+          (throw (Exception. (str "Invalid re-filter type: " (type re-filter))))))))
+
 (defn- run-listeners
   "Side-effecting. Given the watch-data and a coll of changes, will
   run all listeners matching both the event type and (via ::re-filter)
@@ -392,8 +411,7 @@
   (letfn [(process-change [{:keys [::path ::event-type] :as ch}]
             (doseq [{:keys [::re-filter ::info]
                      :as listener} (event-type->listeners event-type)
-                    :when (or (= :directory re-filter) ; bit permissive
-                              (StringHelper/EndsWith path re-filter))]
+                    :when (re-filter-matches? re-filter path)]
               (apply-listener listener ch)))]
     (doduce (map process-change) changes)))
 
@@ -413,6 +431,19 @@
 (defn- new-path? [p watch-data]
   (not (some-> watch-data ::prev-file-graph ::g (get p))))
 
+(def ^:private preserving-reduced (var-get #'clojure.core/preserving-reduced))
+
+(defn- splice-if [pred]
+  (fn [rf]
+    (let [rrf (preserving-reduced rf)]
+      (fn
+        ([] (rf))
+        ([result] (rf result))
+        ([result input]
+         (if (pred input)
+           (reduce rrf result input)
+           (rf result input)))))))
+
 ;; I guess it makes sense for the regex prefilter to come from the
 ;; listeners, rather than the event types? Because if they come from
 ;; the event types you would have to make a new event type for each
@@ -424,6 +455,7 @@
                                     (af/comp
                                       cat
                                       (map ::re-filter)
+                                      (splice-if vector?)
                                       (filter string?))
                                     (mu/valsr event-type->listeners)))]
     (fn [^String path]

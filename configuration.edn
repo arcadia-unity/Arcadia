@@ -1,6 +1,13 @@
-{ :repl/injections (use 'clojure.repl)
-                  
-  :compiler/verbose true
-  :compiler/warn-on-reflection true
-  :compiler/on-file-change :reload }
+{;; This specifies a form that the repl will evaluate before
+ ;; evaluating every input:
+ 
+ ;; :repl/injections (use 'clojure.repl)
+ 
+ :compiler/verbose true
+ :compiler/warn-on-reflection true
+ 
+ ;; Set this to :reload to watch for changes in .clj & .cljc files:
+ 
+ ;; :compiler/on-file-change :reload  
+ }
 

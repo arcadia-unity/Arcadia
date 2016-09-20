@@ -7,8 +7,11 @@
             [clojure.spec :as s]
             [clojure.string :as str]
             [arcadia.internal.state :as state]
-            [arcadia.internal.spec :as as])
-  (:import [System.IO Path File StringWriter Directory]
+            [arcadia.internal.spec :as as]
+            [arcadia.internal.asset-watcher :as aw]
+            [arcadia.internal.filewatcher :as fw])
+  (:import [Arcadia StringHelper]
+           [System.IO Path File StringWriter Directory]
            [System.Text.RegularExpressions Regex]
            [System.Collections Queue]
            [System.Threading Thread ThreadStart]
@@ -296,3 +299,31 @@
 
 (defn refresh-loadpath []
   (Arcadia.Initialization/SetClojureLoadPath))
+
+
+;; ============================================================
+;; listeners
+
+(defn live-reload-listener [{:keys [::fw/path]}]
+  (import-asset path))
+
+(defn start-watching-files []
+  (UnityEngine.Debug/Log "Starting to watch for changes in Clojure files.")
+  (aw/add-listener
+    ::fw/create-modify-delete-file
+    ::live-reload-listener
+    [".clj" ".cljc"]
+    #'live-reload-listener))
+
+(defn stop-watching-files []
+  (aw/remove-listener ::live-reload-listener))
+
+(defn manage-reload-listener [{:keys [:compiler/on-file-change]}]
+  (if (= :reload on-file-change)
+    (start-watching-files)
+    (stop-watching-files)))
+
+(manage-reload-listener (config/config))
+
+(state/add-listener ::config/on-update ::live-reload
+  #'manage-reload-listener)
