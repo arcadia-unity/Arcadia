@@ -398,6 +398,13 @@
     (.RemoveFunction hook-cmpt k))
   obj)
 
+(defn hook-clear
+  "Remove all functions hooked to `hook` on `obj`"
+  [obj hook]
+  (when-let [^ArcadiaBehaviour hook-cmpt (cmpt obj (ensure-hook-type hook))]
+    (.RemoveAllFunctions hook-cmpt))
+  obj)
+
 (defn hook
   "Return the `hook` component attached to `obj`. If there is more one component,
   then behavior is the same as `cmpt`."

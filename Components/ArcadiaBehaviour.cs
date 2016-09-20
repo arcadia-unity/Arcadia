@@ -52,6 +52,13 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		return fns;
 	}
 
+	public IFn[] RemoveAllFunctions()
+	{
+		var oldFns = fns;
+		fns = new IFn[0];
+		return oldFns;
+	}
+
 	public IFn RemoveFunction(object key)
 	{
 		var indexToRemove = fnIndexes.valAt(key);
