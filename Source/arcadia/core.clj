@@ -413,6 +413,11 @@
   (let [hook-type (ensure-hook-type hook)]
     (cmpt obj hook-type)))
 
+(defn hook-fns
+  "Return the functions associated with `hook` on `obj`."
+  [obj h]
+  (.fns (hook obj h)))
+
 (defn hooks [obj hook]
   "Return all components for `hook` attached to `obj`"
   (let [hook-type (ensure-hook-type hook)]
