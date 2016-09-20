@@ -86,8 +86,22 @@ public class ArcadiaBehaviourEditor : Editor
 	public override void OnInspectorGUI()
 	{
 		// var inspectorConfig = ClojureConfiguration.Get("editor", "hooks-inspector");
-
-		PopupInspector();
+		
+		// EditorGUILayout.LabelField("Disabled For Now, use the REPL");
+		ArcadiaBehaviour ab = (ArcadiaBehaviour)target;
+		if(ab.fns.Length == 0)
+		{
+			EditorGUILayout.LabelField("No functions");
+		}
+		else
+		{
+			foreach(var fn in ab.fns)
+			{
+				EditorGUILayout.LabelField(fn.ToString());
+			}
+		}
+		
+		// PopupInspector();
 		/*
 		if(inspectorConfig == Keyword.intern(null, "popup")) {
 		  PopupInspector();
@@ -113,6 +127,7 @@ public class ArcadiaStateEditor : Editor
 
 	public override void OnInspectorGUI()
 	{
+
 		ArcadiaBehaviourEditor.requireFn.invoke(Symbol.intern("arcadia.internal.editor-interop"));
 		ArcadiaState stateComponent = (ArcadiaState)target;
 		RT.var("arcadia.internal.editor-interop", "state-inspector!").invoke(stateComponent.state);
