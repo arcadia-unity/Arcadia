@@ -383,7 +383,8 @@
 (defn hook+
   "Attach hook a Clojure function to a Unity message on `obj`. The funciton `f`
   will be invoked every time the message identified by `hook` is sent by Unity. `f`
-  must have the same arity as the expected Unity message."
+  must have the same arity as the expected Unity message. When called with a key `k`
+  this key can be passed to `hook-` to remove the function."
   ([obj hook f] (hook+ obj hook f f))
   ([obj hook k f]
    (let [hook-type (ensure-hook-type hook)
