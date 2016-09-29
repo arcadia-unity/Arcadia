@@ -510,21 +510,21 @@
   :ret ::watch-data)
 
 (defn- watch-step [{:keys [::event-type->listeners] :as watch-data}] 
-  (let [chs (changes watch-data)]
-    (run-listeners watch-data chs) ;; side effecting
-    (let [wd2 (-> watch-data
-                   (update ::history update-history chs)
-                   (update ::file-graph update-file-graph chs)
-                   (assoc ::prev-file-graph (::file-graph watch-data)))]
-       (if (some #(= ::alter-children (::event-type %)) chs) ;; stupid but easy to type
-         (if (= (::file-graph wd2)
-                (::file-graph (::prev-file-graph watch-data)))
-           (do
-             (swap! ws-weirdness-log conj
-               (filter #(= ::alter-children (::event-type %)) chs))
-             (throw (Exception. "something's up")))
-           (watch-step wd2))
-         wd2))))
+  (if-let [chs (seq (changes watch-data))]
+    (do (run-listeners watch-data chs) ;; side effecting
+        (let [wd2 (-> watch-data
+                      (update ::history update-history chs)
+                      (update ::file-graph update-file-graph chs)
+                      (assoc ::prev-file-graph (::file-graph watch-data)))]
+          (if (some #(= ::alter-children (::event-type %)) chs) ;; stupid but easy to type
+            (if (= (::file-graph wd2)
+                   (::file-graph (::prev-file-graph watch-data)))
+              (do (swap! ws-weirdness-log conj
+                    (filter #(= ::alter-children (::event-type %)) chs))
+                  (throw (Exception. "something's up")))
+              (watch-step wd2))
+            wd2)))
+    watch-data))
 
 ;; ------------------------------------------------------------
 ;; this def should go somewhere I guess
