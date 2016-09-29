@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace Arcadia {
 
-	public class LinearHelper{
+	public static class LinearHelper{
 
 		public static Matrix4x4 matrix (
 			float a, float b, float c, float d,
@@ -51,8 +51,63 @@ namespace Arcadia {
 			return m;
 		}
 
+		public static Matrix4x4 matrixPut(Matrix4x4 m, int row, int col, float val){
+			m[row, col] = val;
+			return m;
+		}
 
+		public static Vector2 putV2(Vector2 v, int inx, float val){
+			v[inx] = val;
+			return v;
+		}
+			
+		public static Vector3 putV3(Vector3 v, int inx, float val){
+			v[inx] = val;
+			return v;
+		}
 
+		public static Vector4 putV4(Vector4 v, int inx, float val){
+			v[inx] = val;
+			return v;
+		}
+
+		// swizzle help
+
+		public static Vector2 swizzV2(Vector2 v, int xInx, int yInx){
+			return new Vector2(v[xInx], v[yInx]);
+		}
+
+		public static Vector2 swizzV2(Vector3 v, int xInx, int yInx){
+			return new Vector2(v[xInx], v[yInx]);
+		}
+
+		public static Vector2 swizzV2(Vector4 v, int xInx, int yInx){
+			return new Vector2(v[xInx], v[yInx]);
+		}
+
+		public static Vector3 swizzV3(Vector2 v, int xInx, int yInx, int zInx){
+			return new Vector3(v[xInx], v[yInx], v[zInx]);
+		}
+
+		public static Vector3 swizzV3(Vector3 v, int xInx, int yInx, int zInx){
+			return new Vector3(v[xInx], v[yInx], v[zInx]);
+		}
+
+		public static Vector3 swizzV3(Vector4 v, int xInx, int yInx, int zInx){
+			return new Vector3(v[xInx], v[yInx], v[zInx]);
+		}
+
+		public static Vector4 swizzV4(Vector2 v, int xInx, int yInx, int zInx, int wInx){
+			return new Vector4(v[xInx], v[yInx], v[zInx], v[wInx]);
+		}
+
+		public static Vector4 swizzV4(Vector3 v, int xInx, int yInx, int zInx, int wInx){
+			return new Vector4(v[xInx], v[yInx], v[zInx], v[wInx]);
+		}
+
+		public static Vector4 swizzV4(Vector4 v, int xInx, int yInx, int zInx, int wInx){
+			return new Vector4(v[xInx], v[yInx], v[zInx], v[wInx]);
+		}
 	}
 	
 }
