@@ -1,0 +1,549 @@
+﻿using System;
+
+namespace Arcadia
+{	
+	public static class UnityStatusHelper
+	{
+
+		public static bool IsUnityEditor
+		{
+			get
+			{
+				#if UNITY_EDITOR
+					return true;
+				
+				#else 
+					return false;
+				
+				#endif
+			}
+			
+		}
+
+		public static bool IsUnityEditorWin
+		{
+			get
+			{
+				#if UNITY_EDITOR_WIN
+					return true;
+				
+				#else 
+					return false;
+				
+				#endif
+			}
+			
+		}
+
+		public static bool IsUnityEditorOsx
+		{
+			get
+			{
+				#if UNITY_EDITOR_OSX
+					return true;
+				
+				#else 
+					return false;
+				
+				#endif
+			}
+			
+		}
+
+		public static bool IsUnityStandaloneOsx
+		{
+			get
+			{
+				#if UNITY_STANDALONE_OSX
+					return true;
+				
+				#else 
+					return false;
+				
+				#endif
+			}
+			
+		}
+
+		public static bool IsUnityStandaloneWin
+		{
+			get
+			{
+				#if UNITY_STANDALONE_WIN
+					return true;
+				
+				#else 
+					return false;
+				
+				#endif
+			}
+			
+		}
+
+		public static bool IsUnityStandaloneLinux
+		{
+			get
+			{
+				#if UNITY_STANDALONE_LINUX
+					return true;
+				
+				#else 
+					return false;
+				
+				#endif
+			}
+			
+		}
+
+		public static bool IsUnityStandalone
+		{
+			get
+			{
+				#if UNITY_STANDALONE
+					return true;
+				
+				#else 
+					return false;
+				
+				#endif
+			}
+			
+		}
+
+		public static bool IsUnityWii
+		{
+			get
+			{
+				#if UNITY_WII
+					return true;
+				
+				#else 
+					return false;
+				
+				#endif
+			}
+			
+		}
+
+		public static bool IsUnityIos
+		{
+			get
+			{
+				#if UNITY_IOS
+					return true;
+				
+				#else 
+					return false;
+				
+				#endif
+			}
+			
+		}
+
+		public static bool IsUnityIphone
+		{
+			get
+			{
+				#if UNITY_IPHONE
+					return true;
+				
+				#else 
+					return false;
+				
+				#endif
+			}
+			
+		}
+
+		public static bool IsUnityAndroid
+		{
+			get
+			{
+				#if UNITY_ANDROID
+					return true;
+				
+				#else 
+					return false;
+				
+				#endif
+			}
+			
+		}
+
+		public static bool IsUnityPs3
+		{
+			get
+			{
+				#if UNITY_PS3
+					return true;
+				
+				#else 
+					return false;
+				
+				#endif
+			}
+			
+		}
+
+		public static bool IsUnityPs4
+		{
+			get
+			{
+				#if UNITY_PS4
+					return true;
+				
+				#else 
+					return false;
+				
+				#endif
+			}
+			
+		}
+
+		public static bool IsUnitySamsungtv
+		{
+			get
+			{
+				#if UNITY_SAMSUNGTV
+					return true;
+				
+				#else 
+					return false;
+				
+				#endif
+			}
+			
+		}
+
+		public static bool IsUnityXbox360
+		{
+			get
+			{
+				#if UNITY_XBOX360
+					return true;
+				
+				#else 
+					return false;
+				
+				#endif
+			}
+			
+		}
+
+		public static bool IsUnityXboxone
+		{
+			get
+			{
+				#if UNITY_XBOXONE
+					return true;
+				
+				#else 
+					return false;
+				
+				#endif
+			}
+			
+		}
+
+		public static bool IsUnityTizen
+		{
+			get
+			{
+				#if UNITY_TIZEN
+					return true;
+				
+				#else 
+					return false;
+				
+				#endif
+			}
+			
+		}
+
+		public static bool IsUnityTvos
+		{
+			get
+			{
+				#if UNITY_TVOS
+					return true;
+				
+				#else 
+					return false;
+				
+				#endif
+			}
+			
+		}
+
+		public static bool IsUnityWp8
+		{
+			get
+			{
+				#if UNITY_WP_8
+					return true;
+				
+				#else 
+					return false;
+				
+				#endif
+			}
+			
+		}
+
+		public static bool IsUnityWp81
+		{
+			get
+			{
+				#if UNITY_WP_8_1
+					return true;
+				
+				#else 
+					return false;
+				
+				#endif
+			}
+			
+		}
+
+		public static bool IsUnityWsa
+		{
+			get
+			{
+				#if UNITY_WSA
+					return true;
+				
+				#else 
+					return false;
+				
+				#endif
+			}
+			
+		}
+
+		public static bool IsUnityWsa80
+		{
+			get
+			{
+				#if UNITY_WSA_8_0
+					return true;
+				
+				#else 
+					return false;
+				
+				#endif
+			}
+			
+		}
+
+		public static bool IsUnityWsa81
+		{
+			get
+			{
+				#if UNITY_WSA_8_1
+					return true;
+				
+				#else 
+					return false;
+				
+				#endif
+			}
+			
+		}
+
+		public static bool IsUnityWsa100
+		{
+			get
+			{
+				#if UNITY_WSA_10_0
+					return true;
+				
+				#else 
+					return false;
+				
+				#endif
+			}
+			
+		}
+
+		public static bool IsUnityWinrt
+		{
+			get
+			{
+				#if UNITY_WINRT
+					return true;
+				
+				#else 
+					return false;
+				
+				#endif
+			}
+			
+		}
+
+		public static bool IsUnityWinrt80
+		{
+			get
+			{
+				#if UNITY_WINRT_8_0
+					return true;
+				
+				#else 
+					return false;
+				
+				#endif
+			}
+			
+		}
+
+		public static bool IsUnityWinrt81
+		{
+			get
+			{
+				#if UNITY_WINRT_8_1
+					return true;
+				
+				#else 
+					return false;
+				
+				#endif
+			}
+			
+		}
+
+		public static bool IsUnityWinrt100
+		{
+			get
+			{
+				#if UNITY_WINRT_10_0
+					return true;
+				
+				#else 
+					return false;
+				
+				#endif
+			}
+			
+		}
+
+		public static bool IsUnityWebgl
+		{
+			get
+			{
+				#if UNITY_WEBGL
+					return true;
+				
+				#else 
+					return false;
+				
+				#endif
+			}
+			
+		}
+
+		public static bool IsUnityAds
+		{
+			get
+			{
+				#if UNITY_ADS
+					return true;
+				
+				#else 
+					return false;
+				
+				#endif
+			}
+			
+		}
+
+		public static bool IsUnityAnalytics
+		{
+			get
+			{
+				#if UNITY_ANALYTICS
+					return true;
+				
+				#else 
+					return false;
+				
+				#endif
+			}
+			
+		}
+
+		public static bool IsUnityAssertions
+		{
+			get
+			{
+				#if UNITY_ASSERTIONS
+					return true;
+				
+				#else 
+					return false;
+				
+				#endif
+			}
+			
+		}
+
+		public static bool IsEnableMono
+		{
+			get
+			{
+				#if ENABLE_MONO
+					return true;
+				
+				#else 
+					return false;
+				
+				#endif
+			}
+			
+		}
+
+		public static bool IsEnableIl2cpp
+		{
+			get
+			{
+				#if ENABLE_IL2CPP
+					return true;
+				
+				#else 
+					return false;
+				
+				#endif
+			}
+			
+		}
+
+		public static bool IsEnableDotnet
+		{
+			get
+			{
+				#if ENABLE_DOTNET
+					return true;
+				
+				#else 
+					return false;
+				
+				#endif
+			}
+			
+		}
+
+		public static bool IsDevelopmentBuild
+		{
+			get
+			{
+				#if DEVELOPMENT_BUILD
+					return true;
+				
+				#else 
+					return false;
+				
+				#endif
+			}
+			
+		}
+	}
+}
+
