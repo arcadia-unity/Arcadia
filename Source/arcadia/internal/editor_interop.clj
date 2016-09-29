@@ -7,7 +7,7 @@
            [System.Reflection FieldInfo]
            [clojure.lang RT Symbol Keyword]
            [UnityEngine Debug GUILayout Vector2 Vector3 Vector4 AnimationCurve Color Bounds Rect]
-           [UnityEditor EditorGUILayout]))
+           [UnityEditor EditorGUILayout MessageType]))
 
 ;; PERF memoize 
 (defn all-user-namespaces-symbols []

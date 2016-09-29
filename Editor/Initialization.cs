@@ -88,13 +88,13 @@ namespace Arcadia
 			Debug.Log("Checking Unity Settings...");
 			if (PlayerSettings.apiCompatibilityLevel != ApiCompatibilityLevel.NET_2_0)
 			{
-				Debug.Log("Updating API Compatibility Level");
+				Debug.Log("Updating API Compatibility Level to .NET 20");
 				PlayerSettings.apiCompatibilityLevel = ApiCompatibilityLevel.NET_2_0;
 			}
 
 			if (!PlayerSettings.runInBackground)
 			{
-				Debug.Log("Updating Run In Background");
+				Debug.Log("Updating Run In Background to true");
 				PlayerSettings.runInBackground = true;
 			}
 		}

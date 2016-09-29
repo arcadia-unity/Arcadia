@@ -383,7 +383,8 @@
 (defn hook+
   "Attach hook a Clojure function to a Unity message on `obj`. The funciton `f`
   will be invoked every time the message identified by `hook` is sent by Unity. `f`
-  must have the same arity as the expected Unity message."
+  must have the same arity as the expected Unity message. When called with a key `k`
+  this key can be passed to `hook-` to remove the function."
   ([obj hook f] (hook+ obj hook f f))
   ([obj hook k f]
    (let [hook-type (ensure-hook-type hook)
@@ -398,12 +399,24 @@
     (.RemoveFunction hook-cmpt k))
   obj)
 
+(defn hook-clear
+  "Remove all functions hooked to `hook` on `obj`"
+  [obj hook]
+  (when-let [^ArcadiaBehaviour hook-cmpt (cmpt obj (ensure-hook-type hook))]
+    (.RemoveAllFunctions hook-cmpt))
+  obj)
+
 (defn hook
   "Return the `hook` component attached to `obj`. If there is more one component,
   then behavior is the same as `cmpt`."
   [obj hook]
   (let [hook-type (ensure-hook-type hook)]
     (cmpt obj hook-type)))
+
+(defn hook-fns
+  "Return the functions associated with `hook` on `obj`."
+  [obj h]
+  (.fns (hook obj h)))
 
 (defn hooks [obj hook]
   "Return all components for `hook` attached to `obj`"
