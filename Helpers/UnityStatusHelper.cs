@@ -1,9 +1,18 @@
 ﻿using System;
 
+// Facilities to query status of Unity, the build, etc.
+
+// Exposes all preprocessor directives given at
+// https://docs.unity3d.com/Manual/PlatformDependentCompilation.html
+// as public static boolean properties.
+
 namespace Arcadia
 {	
 	public static class UnityStatusHelper
 	{
+
+		// ============================================================
+		// Boolean properties for preprocessor directives
 
 		public static bool IsUnityEditor
 		{
@@ -275,7 +284,7 @@ namespace Arcadia
 			
 		}
 
-		public static bool IsUnityWp8
+		public static bool IsUnityWp_8
 		{
 			get
 			{
@@ -290,7 +299,7 @@ namespace Arcadia
 			
 		}
 
-		public static bool IsUnityWp81
+		public static bool IsUnityWp_8_1
 		{
 			get
 			{
@@ -320,7 +329,7 @@ namespace Arcadia
 			
 		}
 
-		public static bool IsUnityWsa80
+		public static bool IsUnityWsa_8_0
 		{
 			get
 			{
@@ -335,7 +344,7 @@ namespace Arcadia
 			
 		}
 
-		public static bool IsUnityWsa81
+		public static bool IsUnityWsa_8_1
 		{
 			get
 			{
@@ -350,7 +359,7 @@ namespace Arcadia
 			
 		}
 
-		public static bool IsUnityWsa100
+		public static bool IsUnityWsa_10_0
 		{
 			get
 			{
@@ -380,7 +389,7 @@ namespace Arcadia
 			
 		}
 
-		public static bool IsUnityWinrt80
+		public static bool IsUnityWinrt_8_0
 		{
 			get
 			{
@@ -395,7 +404,7 @@ namespace Arcadia
 			
 		}
 
-		public static bool IsUnityWinrt81
+		public static bool IsUnityWinrt_8_1
 		{
 			get
 			{
@@ -410,7 +419,7 @@ namespace Arcadia
 			
 		}
 
-		public static bool IsUnityWinrt100
+		public static bool IsUnityWinrt_10_0
 		{
 			get
 			{
