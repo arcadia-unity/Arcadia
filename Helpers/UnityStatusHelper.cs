@@ -7,6 +7,9 @@ using UnityEngine;
 // https://docs.unity3d.com/Manual/PlatformDependentCompilation.html
 // as public static boolean properties.
 
+// Also exposes boolean properties for whether the system is in the editor, 
+// and for whether it is in Edit mode or in Play mode.
+
 namespace Arcadia
 {	
 	public static class UnityStatusHelper
