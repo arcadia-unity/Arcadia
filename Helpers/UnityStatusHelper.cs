@@ -1,4 +1,5 @@
 ﻿using System;
+using UnityEngine;
 
 // Facilities to query status of Unity, the build, etc.
 
@@ -13,6 +14,10 @@ namespace Arcadia
 
 		// ============================================================
 		// Boolean properties for preprocessor directives
+
+		// Can use these to build compile-if-style macros to get equivalent of 
+		// Unity's preprocessor behavior in Clojure
+
 
 		public static bool IsUnityEditor
 		{
@@ -553,6 +558,34 @@ namespace Arcadia
 			}
 			
 		}
+
+		// ============================================================
+		// Editor vs deployed; Edit mode; Play mode.
+
+		public static bool IsInPlayMode
+		{
+			get
+			{
+				return Application.isPlaying;
+			}
+		}
+
+		public static bool IsInEditor
+		{
+			get
+			{
+				return Application.isEditor;
+			}
+		}
+
+		public static bool IsInEditMode
+		{
+			get
+			{
+				return IsInEditor && !IsInPlayMode;
+			}
+		}
+
 	}
 }
 
