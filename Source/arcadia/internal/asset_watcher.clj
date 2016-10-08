@@ -2,7 +2,8 @@
   (:require [arcadia.internal.filewatcher :as fw]
             [arcadia.internal.file-system :as fs]
             [arcadia.internal.thread :as thr])
-  (:import [System.IO FileSystemInfo]))
+  (:import [System.IO FileSystemInfo]
+           [Arcadia UnityStatusHelper]))
 
 ;; Contains the arcadia asset filewatcher. Separate namespace to
 ;; decouple from arcadia.internal.state (which just holds the
@@ -10,7 +11,9 @@
 ;; arcadia.internal.filewatcher itself, which is a general-purpose
 ;; filewatcher and shouldn't contain things this specific to Arcadia.
 
-(defonce dead-watch (atom false))
+(defonce dead-watch
+  (atom
+    (not UnityStatusHelper/IsInEditor)))
 
 ;; seems a little janky
 (defn- watch-promise

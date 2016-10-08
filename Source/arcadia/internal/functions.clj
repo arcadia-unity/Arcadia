@@ -131,3 +131,27 @@
 
 (defn some [pred coll]
   (reduce #(when (pred %2) (reduced %2)) nil coll))
+
+
+;; ============================================================
+;; assorted transducers etc
+
+;; (defn splice
+;;   "Given a predicate pred and collection coll, returns a lazy sequence splicing elements in coll that satisfying pred. If no collection is provided, returns a transducer that splices collections satisfying pred."
+;;   ([pred]
+;;    (fn [rf]
+;;      (let [rrf (preserving-reduced rf)]
+;;        (fn
+;;          ([] (rf))
+;;          ([result] (rf result))
+;;          ([result input]
+;;           (if (pred input)
+;;             (reduce rrf result input)
+;;             (rf result input)))))))
+;;   ([pred coll]
+;;    (lazy-seq
+;;      (when-let [xs (seq coll)]
+;;        (let [x (first xs)]
+;;          (if (pred x)
+;;            (concat x (splice pred (rest xs)))
+;;            (cons x (splice pred (rest xs)))))))))
