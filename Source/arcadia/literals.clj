@@ -3,8 +3,29 @@
             ConstructorInfo
             ParameterInfo]))
 
-(defn type-name [sym]
-  (.Name ^Type (resolve sym)))
+;; ============================================================
+;; object database 
+;; ============================================================
+
+;; TODO where should this lift? 
+;; TODO is the atom needed?
+(def ^:dynamic *object-db* (atom {}))
+
+(defn db-put [obj]
+  (let [id (.GetInstanceID obj)]
+    (swap! *object-db* assoc id obj)
+    id))
+
+;; TODO handle nil
+;; clojure errors out if this returns nil
+;; considers the dispatch to have failed... 
+(defn db-get [id]
+  (get @*object-db* id))
+
+
+;; ============================================================
+;; constructor wrangling
+;; ============================================================
 
 (defn longest-constructor-signature
   "Returns the longest parameter list for all constructors in type t"
@@ -29,133 +50,145 @@
       (map #(.Name ^ParameterInfo %)
            (longest-constructor-signature t))))
 
-(defmacro vector-constructor
-  "Generates a fn that takes a vector and constructs an instance of t. Vector
-  must have enough entries to fill the longest constructor arity in t."
-  [t]
-  (let [ctor (constructor-arguments (resolve t))
+;; ============================================================
+;; value types
+;; ============================================================
+
+(def value-types
+  (->> (Assembly/Load "UnityEngine")
+       .GetTypes
+       (filter #(.IsValueType %))
+       (remove #(.IsEnum %))))
+
+(defn parser-for-value-type [t]
+  (let [ctor (constructor-arguments t)
         params (map #(gensym %) ctor)]
-    (list 'fn [(vec params)]
-       (list* 'new t params))))
+    `(defn ~(symbol (str "parse-" (.Name t))) [~(vec params)]
+       (new ~(-> t .FullName symbol)
+            ~@params))))
 
-(defmacro install-type-parser [t]
-  `(def ~(symbol (str "parse-" (type-name t)))
-     (vector-constructor ~t)))
+(defn print-dup-for-value-type [type]
+  (let [param (gensym "value_1")
+        type-name (symbol (.FullName type))
+        ctor-arg-names (constructor-arguments type)
+        ctor-params (map #(list* '. param (-> % symbol list))
+                         ctor-arg-names)]
+    `(defmethod print-dup ~type [~(with-meta param {:tag type}) stream#]
+       (.Write stream#
+               (str ~(str "#=(" type-name ". ")
+                    ~@(drop-last (interleave ctor-params (repeat " ")))
+                    ")")))))
 
-(defmacro reconstructor
+(defn reconstructor
   "A vector of field access forms that mirrors a constructor's arguments"
   [targetsym t]
   (mapv
     (fn [arg]
       `(. ~targetsym
           ~(symbol arg)))
-    (constructor-arguments (resolve t))))
+    (constructor-arguments t)))
 
-(defmacro type-printer
-  "Generates a fn that takes an object and a writer and prints
-  the object out as a reader literal. Meant for print-method."
-  [t]
+(defn print-method-for-value-type [type]
   (let [v (with-meta (gensym "value")
-                     {:tag t})
+                     {:tag type})
         w (with-meta (gensym "writer")
                      {:tag 'System.IO.TextWriter})]
-    `(fn [~v ~w]
+    `(defmethod print-method ~type [~v ~w]
        (.Write ~w
-               (str "#unity/" ~(type-name t) " "
-                    (reconstructor ~v ~t))))))
+               (str ~(str "#unity/" (.Name type) " ")
+                    ~(reconstructor v type))))))
 
-(defmacro install-type-printer
-  "Register a printer for t with clojure's print-method"
-  [t]
-  `(. ~(with-meta 'print-method
-                  {:tag 'clojure.lang.MultiFn})
-      ~'addMethod ~t (type-printer ~t)))
+(defn install-parser-for-value-type [type]
+  `(alter-var-root
+     (var clojure.core/*data-readers*)
+     assoc
+     (quote ~(symbol (str "unity/" (.Name type))))
+     (var ~(symbol (str "arcadia.literals/parse-" (.Name type))))))
 
-(defmacro install-printers-and-parsers [types]
-  `(do
-     ~@(mapcat
-         (fn [t]
-           [`(install-type-printer ~t)
-            `(install-type-parser ~t)])
-         types)))
+(doseq [t value-types]
+  (eval (parser-for-value-type t))
+  (eval (install-parser-for-value-type t))
+  (eval (print-method-for-value-type t))
+  (eval (print-dup-for-value-type t)))
 
-(install-printers-and-parsers
-  [UnityEngine.Vector2
-   UnityEngine.Vector3
-   UnityEngine.Vector4
-   UnityEngine.Quaternion
-   UnityEngine.Color
-   UnityEngine.Color32
-   UnityEngine.Ray
-   UnityEngine.Ray2D
-   UnityEngine.Bounds
-   UnityEngine.LOD
-   UnityEngine.Plane
-   UnityEngine.GradientColorKey
-   UnityEngine.GradientAlphaKey
-   UnityEngine.Rect
-   UnityEngine.NetworkPlayer
-   UnityEngine.Keyframe
-   UnityEngine.MatchTargetWeightMask])
+;; ============================================================
+;; object types
+;; ============================================================
 
-;; AnimationCurve is a little different
-(.addMethod print-method
-            UnityEngine.AnimationCurve
-            (fn [v w]
-              (.Write w
-                      (str "#unity/AnimationCurve "
-                           [(into [] (.keys v))]))))
+(def object-types
+  (->> (Assembly/Load "UnityEngine")
+       .GetTypes
+       (filter #(isa? % UnityEngine.Object))))
 
-(defn parse-AnimationCurve [v]
-  (new UnityEngine.AnimationCurve (into-array (map eval (first v)))))
-
-
-;; TODO where should this lift? 
-;; TODO is the atom needed?
-(def ^:dynamic *object-db* (atom {}))
-
-(defn db-put [obj]
-  (let [id (.GetInstanceID obj)]
-    (swap! *object-db* assoc id obj)
-    id))
-
-;; TODO handle nil
-;; clojure errors out if this returns nil
-;; considers the dispatch to have failed... 
-(defn db-get [id]
-  (get @*object-db* id))
-
-(.addMethod
-  print-method
-  UnityEngine.Object
-  (fn [obj w]
-    (.Write w (str "#unity/Object " (db-put obj)))))
-
-(defn parse-Object [id]
+(defn parse-object [id]
   (or (db-get id)
       (do
         (UnityEngine.Debug/Log (str "Cant find object with ID " id))
         (UnityEngine.Object.))))
 
-(alter-var-root
-  #'clojure.core/*data-readers*
-  (constantly
-    {'unity/GradientAlphaKey #'arcadia.literals/parse-GradientAlphaKey
-     'unity/Bounds #'arcadia.literals/parse-Bounds
-     'unity/Rect #'arcadia.literals/parse-Rect
-     'unity/Vector2 #'arcadia.literals/parse-Vector2
-     'unity/Keyframe #'arcadia.literals/parse-Keyframe
-     'unity/GradientColorKey #'arcadia.literals/parse-GradientColorKey
-     'unity/NetworkPlayer #'arcadia.literals/parse-NetworkPlayer
-     'unity/LOD #'arcadia.literals/parse-LOD
-     'unity/MatchTargetWeightMask #'arcadia.literals/parse-MatchTargetWeightMask
-     'unity/Vector4 #'arcadia.literals/parse-Vector4
-     'unity/Quaternion #'arcadia.literals/parse-Quaternion
-     'unity/Color #'arcadia.literals/parse-Color
-     'unity/Ray #'arcadia.literals/parse-Ray
-     'unity/Object #'arcadia.literals/parse-Object
-     'unity/Ray2D #'arcadia.literals/parse-Ray2D
-     'unity/Plane #'arcadia.literals/parse-Plane
-     'unity/Color32 #'arcadia.literals/parse-Color32
-     'unity/AnimationCurve #'arcadia.literals/parse-AnimationCurve
-     'unity/Vector3 #'arcadia.literals/parse-Vector3}))
+(defn print-dup-for-object-type [type]
+  (let [param (gensym "obj_a_")
+        type-name (symbol (.FullName type))]
+    `(defmethod print-dup
+       ~type [~(with-meta param {:tag type}) stream#]
+       (.Write stream#
+               (str "#=(arcadia.literals/db-get "
+                    (.GetInstanceID ~param)
+                    ")")))))
+
+(defn print-method-for-object-type [type]
+  (let [v (with-meta (gensym "obj_b_")
+                     {:tag type})
+        w (with-meta (gensym "writer")
+                     {:tag 'System.IO.TextWriter})]
+    `(defmethod print-method ~type [~v ~w]
+       (.Write ~w
+               (str ~(str "#unity/" (.Name type) " ")
+                    (arcadia.literals/db-put ~v))))))
+
+(defn install-parser-for-object-type [type]
+  `(alter-var-root
+     (var clojure.core/*data-readers*)
+     assoc
+     (quote ~(symbol (str "unity/" (.Name type))))
+     (var ~(symbol (str "arcadia.literals/parse-object")))))
+
+(doseq [t object-types]
+  ;; object types share the same parser
+  (eval (install-parser-for-object-type t))
+  (eval (print-method-for-object-type t))
+  (eval (print-dup-for-object-type t)))
+
+;; AnimationCurves are different
+;; finish
+(comment 
+  (defmethod print-dup
+    UnityEngine.AnimationCurve [ac stream]
+    (.Write stream
+            (str "#=(UnityEngine.AnimationCurve. "
+                 "(into-array ["
+                 (apply str 
+                        (->> ac
+                             .keys
+                             (map #(str "(UnityEngine.Keyframe. "
+                                        (.time %)
+                                        (.value %)
+                                        (.inTangent %)
+                                        (.outTangent %)
+                                        ")"))
+                             (interleave (repeat " "))))
+                 ")")))
+  (defmethod print-method
+    UnityEngine.AnimationCurve [ac w]
+    (.Write w
+            (str "#unity/AnimationCurve"
+                 (.GetInstanceID ~v))))
+  
+  (defn parse-AnimationCurve [v]
+    (new UnityEngine.AnimationCurve (into-array (map eval (first v)))))
+  
+  (alter-var-root
+    #'clojure.core/*data-readers*
+    assoc
+    'unity/AnimationCurve
+    #'arcadia.literals/parse-AnimationCurve))

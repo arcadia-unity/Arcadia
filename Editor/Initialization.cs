@@ -47,6 +47,13 @@ namespace Arcadia
 			AssetPostprocessor.StartWatchingFiles();
 		}
 
+		public static void LoadLiterals()
+		{
+			// this has to happen here becasue the repl
+			// binds a thread local *data-readers*
+			RT.load("arcadia/literals");
+		}
+		
 		[MenuItem("Arcadia/Initialization/Rerun")]
 		public static void Initialize()
 		{
@@ -56,6 +63,7 @@ namespace Arcadia
 			SetInitialClojureLoadPath();
 			LoadConfig();
 			LoadPackages();
+			LoadLiterals();
 			SetClojureLoadPath();
 			ensureCompiledFolder();
 			// StartWatching();
