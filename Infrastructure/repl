@@ -37,8 +37,8 @@ else
 fi
 
 # http://stackoverflow.com/questions/59895/can-a-bash-script-tell-which-directory-it-is-stored-in
-DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-MONO_LIBS=$ARCADIA_MONO_ROOT/lib/mono/2.0/
-MONO=$ARCADIA_MONO_ROOT/bin/mono
+DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+MONO_LIBS="$ARCADIA_MONO_ROOT/lib/mono/2.0/"
+MONO="$ARCADIA_MONO_ROOT/bin/mono"
 
-MONO_PATH=$MONO_LIBS $MONO $DIR/Repl.exe
+MONO_PATH=$MONO_LIBS $MONO "$DIR/Repl.exe"
