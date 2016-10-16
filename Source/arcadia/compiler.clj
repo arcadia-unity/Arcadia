@@ -11,6 +11,7 @@
             [arcadia.internal.asset-watcher :as aw]
             [arcadia.internal.filewatcher :as fw])
   (:import [Arcadia StringHelper]
+           [clojure.lang Namespace]
            [System.IO Path File StringWriter Directory]
            [System.Text.RegularExpressions Regex]
            [System.Collections Queue]
