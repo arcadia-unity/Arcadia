@@ -131,7 +131,7 @@ namespace Arcadia
 
 				// zipalign
 				Progress("Arcadia : Android", "Zip Aligning APK");
-				var AndroidSDKTools = Types.GetType("UnityEditor.Android.AndroidSDKTools", "UnityEditor.Android.Extensions");
+				var AndroidSDKTools = System.Type.GetType("UnityEditor.Android.AndroidSDKTools, UnityEditor.Android.Extensions");
 				var androidSDKToolsGetInstanceMethod = AndroidSDKTools.GetMethod("GetInstance");
 				var androidSDKToolsInstance = androidSDKToolsGetInstanceMethod.Invoke(null, null);
 				var zipalignProperty = AndroidSDKTools.GetProperty("ZIPALIGN");
