@@ -97,7 +97,12 @@ namespace Arcadia
 				foreach (var file in cljFiles)
 				{
 					Progress("Arcadia : Android", "Adding " + Path.GetFileName(file) + " to APK");
-					apk.AddFile(file, "assets/bin/Data/Managed");
+#if UNITY_EDITOR_WIN
+					var assembliesPath = "assets\\bin\\Data\\Managed";
+#else
+					var assembliesPath = "assets/bin/Data/Managed";
+#endif
+					apk.AddFile(file, assembliesPath);
 				}
 				apk.Save();
 
