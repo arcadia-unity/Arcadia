@@ -423,11 +423,9 @@
   (let [hook-type (ensure-hook-type hook)]
     (cmpts obj hook-type)))
 
-(defn hook?
-  ([t hook] (= (type t)
-               (ensure-hook-type hook)))
-  ([t] (isa? (type t)
-             ArcadiaBehaviour)))
+(defn hook? [obj hook]
+  "Returns boolean of `hook` attached to `obj`" 
+  (not= (first (hooks obj hook)) nil))
 
 ;; ============================================================
 ;; state
