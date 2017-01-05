@@ -1,6 +1,6 @@
 *This document aims to capture the current state of Arcadia. The project is still pre-alpha and has not had an official release yet, so the ideas here remain in flux. That said, the API and architecture have stabilized enough that it merits recording for those willing to take the early plunge. The [community Gitter](https://gitter.im/arcadia-unity/Arcadia) is the best place to ask questions.*
 
-*Most videos and code snippets from a year ago are no longer valid, particularly anything to do with `defcomponent`, as we underwent a major rearchitecting some months ago.*
+*Most older videos and code snippets are no longer valid, particularly anything to do with `defcomponent`, as we underwent a major rearchitecting a year ago.*
 
 *This document assumes familiarity with [Clojure][clojure] and [Unity][unity].*
 
@@ -123,7 +123,7 @@ Work has started on an [alternative SumblimeText REPL integration](https://githu
 Arcadia is different from both Unity and Clojure in important ways. Knowledge of both is important, but so is understanding how Arcadia itself works is
 
 #### Clojure CLR
-Most Clojure programmers are familiar with the JVM-based version of the langauge, but Arcadia does not use that. Instead, it is built on the [official port to the Common Language Runtime](https://github.com/clojure/clojure-clr) that [David Miller](https://github.com/dmiller) maintains. We maintain [our own fork](https://github.com/arcadia-unity/clojure-clr) of the compiler so that we can introduce Unity specific fixes.
+Most Clojure programmers are familiar with the JVM-based version of the language, but Arcadia does not use that. Instead, it is built on the [official port to the Common Language Runtime](https://github.com/clojure/clojure-clr) that [David Miller](https://github.com/dmiller) maintains. We maintain [our own fork](https://github.com/arcadia-unity/clojure-clr) of the compiler so that we can introduce Unity specific fixes.
 
 As an Arcadia programmer you should be aware of the differences between ClojureCLR and ClojureJVM, and the [ClojureCLR wiki](https://github.com/clojure/clojure-clr/wiki) is a good place to start, in particular the pages on [interop](https://github.com/clojure/clojure-clr/wiki/Basic-CLR-interop) and [types](https://github.com/clojure/clojure-clr/wiki/Specifying-types).
 
@@ -139,7 +139,7 @@ This uses Clojure's [dot special form](http://clojure.org/reference/java_interop
 
 Unity is a highly mutable, stateful system. The above function will mutate the main camera's rotation to look at the new point. Furthermore, the reference to `Camera/main` could be changed by some other bit of code. Unity's API is single-threaded by design, so memory corruption is avoided. Your own Clojure code can still be be as functional and multi-threaded as you like, but keep in mind that talking to Unity side effecting and impure.
 
-There are parts of the Unity API that we have wrapped in Clojure functions, however. These are usually very commonly used methods that would be clumsy to use without wrapping, or would benifit from protocolization. The scope of what does and does not get wrapped is an on going design excersise of the framework, but in general we plan to be conservative about how much of our own ideas we impose on top of the Unity API.
+There are parts of the Unity API that we have wrapped in Clojure functions, however. These are usually very commonly used methods that would be clumsy to use without wrapping, or would benefit from protocolization. The scope of what does and does not get wrapped is an on going design exercise of the framework, but in general we plan to be conservative about how much of our own ideas we impose on top of the Unity API.
 
 #### Hooks
 *This part of Arcadia is under active development. We're documenting the parts that are most settled, but expect changes.*
@@ -167,7 +167,7 @@ Any reference that implements IFn can be used as the function, which means anony
   #(.. % transform (Rotate 0 1 0)))
 ```
 
-Importantly, this also includes symbols refering to functions, and – importantly – Vars.
+Importantly, this also includes symbols referring to functions, and – importantly – Vars.
 
 ```clojure
 (defn rotate-camera [cam]
@@ -177,9 +177,11 @@ Importantly, this also includes symbols refering to functions, and – important
 (hook+ Camera/main :update #'rotate-camera)
 ```
 
-The difference between the last two lines is that the first one will attach the current value of the `rotate-camera` function to the camera, while the second one will attach the Var, meaning the actual function is looked up on every invocation. That means if the function is changed e.g. in the REPL, camera's behaviour will also change. This is a major part of our live coding experience.
+The difference between the last two lines is that the first one will attach the current value of the `rotate-camera` function to the camera, while the second one will attach the Var, meaning the actual function is looked up on every invocation. That means if the function is changed e.g. in the REPL, camera's behavior will also change. This is a major part of our live coding experience.
 
-By the design of Unity, messages are always sent to GameObjects, even "global" seeming messages like [OnApplicationQuit](https://docs.unity3d.com/ScriptReference/MonoBehaviour.OnApplicationQuit.html). There is no way to handle a message without attaching behaviour to a GameObject.
+Additionally, Vars are the only kind of hook that *serialize*, meaning they can be saved into Unity scenes and prefabs. You can use anonymous functions as hooks, but they cannot be saved to disk as part of your Unity scene and - importantly - will not survive a VM restart (see below), meaning that anonymous functions added as hooks in the REPL will disappear in the game.
+
+By the design of Unity, messages are always sent to GameObjects, even "global" seeming messages like [OnApplicationQuit](https://docs.unity3d.com/ScriptReference/MonoBehaviour.OnApplicationQuit.html). There is no way to handle a message without attaching behavior to a GameObject.
 
 As another example, we will attach a hook to objects to log information about their collision with other objects. This is a common physics debugging technique.
 
@@ -194,12 +196,29 @@ As another example, we will attach a hook to objects to log information about th
               (.. collision relativeVelocity))))
 ```
 
-This will start logging the collisions of an object named "Cube" in the scene. Note that Arcadia hooks reanme Unity's camel case names to more idiomatic Clojure hyphenated keywords with (`OnCollisionEnter` becomes `:on-collision-enter`). Also note that as per [OnCollisionEnter's documentation](https://docs.unity3d.com/ScriptReference/MonoBehaviour.OnCollisionEnter.html), the message includes a parameter, so our function takes two arguments: the attached object (`go`, the same as all Arcadia hook functions), and the collision information (`collision`, of type [Collision](https://docs.unity3d.com/ScriptReference/Collision.html)). We use interop to extract relevant data and log it.
+This will start logging the collisions of an object named "Cube" in the scene. Note that Arcadia hooks rename Unity's camel case names to more idiomatic Clojure hyphenated keywords with (`OnCollisionEnter` becomes `:on-collision-enter`). Also note that as per [OnCollisionEnter's documentation](https://docs.unity3d.com/ScriptReference/MonoBehaviour.OnCollisionEnter.html), the message includes a parameter, so our function takes two arguments: the attached object (`go`, the same as all Arcadia hook functions), and the collision information (`collision`, of type [Collision](https://docs.unity3d.com/ScriptReference/Collision.html)). We use interop to extract relevant data and log it.
+
+##### Entry Point
+
+Clojure developers often look for a "main" function or an "entry point" that they can use to kick off their code. Unity does not have such a thing. *All* code at runtime is triggered through Messages, meaning *all code at runtime is triggered by Components attached to GameObjects*. If your game logic would benefit from an entry point, you will have to add an empty GameObject to the scene with a `:start` hook associated with the function you want to run at startup.
+
+##### Workflow
+
+For hooks that serialize and persist, writing code to a file is crucial. At the same time, the UI for adding hooks is not finished yet, so the REPL is still needed. A good workflow is the following:
+
+1. Start a Clojure file in `Assets` following Clojure folder naming conventions (e.g. `Assets/game/core.clj`)
+2. Give the file a namespace form as usual with any `require`s you need (e.g. `(ns game.core (:require arcadia.core))`)
+3. Define a function in that file that you want to use as a hook (e.g. `(defn rotate [gameobject] (.. gameobject transform (Rotate 0 1 0)))`)
+4. Save the file
+5. In the REPL, require the namespace and use `arcadia.core` (e.g. `(require 'game.core) (use 'arcadia.core)`)
+6. In the REPL, attach the var refering to the function to a GameObject as a hook (e.g. `(hook+ (object-named "Main Camera") :update #'game.core/rotate)`)
+7. Save the scene
+8. At play time, the GameObject will `require` the namespace associated with the var and lookup the function so that it can be invoked whenever unity sends its message
 
 #### State
 *This part of Arcadia is under active development. We're documenting the parts that are most settled, but expect changes.*
 
-Unity components implement both behavior and state. State manifests as mutable fields on component instances that the component (or other components) are expected to read from and write to. Arcadia hooks are just functions, so they do not normally maintain state. Instead, a seperate Arcadia state component and related API are provided. This is still mutable state, but we hope to imbue this part of the engine with a little more composability and concurrency.
+Unity components implement both behavior and state. State manifests as mutable fields on component instances that the component (or other components) are expected to read from and write to. Arcadia hooks are just functions, so they do not normally maintain state. Instead, a separate Arcadia state component and related API are provided. This is still mutable state, but we hope to imbue this part of the engine with a little more composability and concurrency.
 
 The idea is to give every GameObject that uses Arcadia state a single persistent hashmap inside an atom. Code can read the whole map, or update a single key at a time (merging into the hashmap has also been suggested). If different libraries use namespace qualified keywords, then multiple codebases can write interact with the same single state atom without colliding or coordinating. Wrapping the hashmap in an atom means that updating Arcadia state is threadsafe and can be done safely from arbitrary Clojure code.
 
@@ -226,7 +245,7 @@ State is set with `set-state!`, `remove-state!`, and `update-state!` and read wi
 While Unity's API is single threaded, the Mono VM that it runs on is not. That means that you can write multithreaded Clojure code with all the advantages that has as long as you do not call Unity API methods from anywhere but the main thread (they will throw an exception otherwise). The exception to this is the linear algebra types and associated methods are callable from non-main threads.
 
 #### Namespace Roots
-The `Assets` folder is the root of your namespaces. So a file at `Assets/game/logic/hard_ai.clj` should corespond to the namespace `game.logic.hard-ai`. Arcadia internally manages other namespace roots as well for its own operation, but `Assets` is where your own logic should go.
+The `Assets` folder is the root of your namespaces. So a file at `Assets/game/logic/hard_ai.clj` should correspond to the namespace `game.logic.hard-ai`. Arcadia internally manages other namespace roots as well for its own operation, but `Assets` is where your own logic should go.
 
 #### VM Restarting
 Unity will restart the Mono VM at specific times
@@ -234,7 +253,7 @@ Unity will restart the Mono VM at specific times
 * Whenever the editor compiles a file (e.g. when a `.cs` file under `Assets` is updated or a new `.dll` file is added)
 * Whenever the editor enters play mode
 
-When this happens, any state you had set up in the REPL will be lost and you will have to re-`require` any namespaces you were working with. This is a deep part of Unity's architechture and not something we can meaningfully affect.
+When this happens, any state you had set up in the REPL will be lost and you will have to re-`require` any namespaces you were working with. This is a deep part of Unity's architecture and not something we can meaningfully affect.
 
 [clojure]: http://clojure.org/
 [unity]: http://unity3d.com/
