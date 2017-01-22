@@ -259,7 +259,8 @@
       (map (fn [^Transform tr] (.gameObject tr)))
       (.transform this)))
   (parent [this]
-    (.. this transform parent gameObject))
+    (when-let [p (.. this transform parent)]
+      (.gameObject p)))
   (child+
     ([this child]
      (child+ this child false))
