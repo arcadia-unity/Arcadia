@@ -15,7 +15,9 @@
 
  
  (defmacro gen-delegate 
-    [type argVec & body] `(clojure.lang.GenDelegate/Create ~type (fn ~argVec ~@body)))
+    [type argVec & body] 
+	(with-meta `(clojure.lang.GenDelegate/Create ~type (fn ~argVec ~@body))
+	           (meta &form)))                                                ;;;  How can we tag with ~type if that is not computed yet
     
 ;;; Additional numeric casts
 ;;; Somewhat useless until our arithmetic package is extended to support all these types.

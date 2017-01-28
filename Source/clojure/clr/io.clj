@@ -333,11 +333,11 @@
     :make-input-stream (fn [^Uri x opts]
                          (if (.IsFile x)
                            (make-input-stream (FileInfo. (.LocalPath x)) opts)
-                           (throw (ArgumentException. (str "No easy way to get an input stream for a non-file URI <" x ">")))))
+                           (.OpenRead (System.Net.WebClient.)  x)))
     :make-output-stream (fn [^Uri x opts]
                          (if (.IsFile x)
                            (make-output-stream (FileInfo. (.LocalPath x)) opts)
-                           (throw (ArgumentException. (str "No easy way to get an output stream for a non-file URI <" x ">")))))))
+                           (.OpenWrite (System.Net.WebClient.)  x)))))
 
 
 (extend |System.Byte[]|
@@ -348,6 +348,17 @@
 (extend Object
   IOFactory
   default-streams-impl)
+
+(extend nil
+  IOFactory
+  (assoc default-streams-impl
+    :make-text-reader (fn [x opts]
+                   (throw (ArgumentException.                           
+                           (str "Cannot open <" (pr-str x) "> as a Reader."))))
+    :make-text-writer (fn [x opts]
+                   (throw (ArgumentException.
+                           (str "Cannot open <" (pr-str x) "> as a Writer."))))))
+
 
 (defmulti
   ^{:doc "Internal helper for copy"

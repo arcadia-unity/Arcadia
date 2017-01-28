@@ -72,6 +72,7 @@
   [^System.Diagnostics.StackFrame el]                                                   ;;; StackTraceElement
   (let [file (.GetFileName el)                                       ;;; getFileName
         clojure-fn? (and file (or (.EndsWith file ".clj")            ;;; endsWith
+                                  (.EndsWith file ".cljc")           ;;; endsWith
                                   (= file "NO_SOURCE_FILE")))]
     (str (if clojure-fn?
            (demunge (stack-element-classname el))                              ;;; (.getClassName el))
@@ -116,7 +117,7 @@
   must either be an instance of LineNumberingPushbackReader or duplicate
   its behavior of both supporting .unread and collapsing all of CR, LF, and
   CRLF to a single \\newline."
-  [^clojure.lang.PushbackTextReader s]
+  [s]
   (let [c (.Read s)]                             ;;; .read
     (cond
      (= c (int \newline)) :line-start
@@ -132,7 +133,7 @@
   instance of LineNumberingPushbackReader or duplicate its behavior of both
   supporting .unread and collapsing all of CR, LF, and CRLF to a single
   \\newline."
-  [^clojure.lang.PushbackTextReader s]
+  [s]
   (loop [c (.Read s)]							;;; .read
     (cond
      (= c (int \newline)) :line-start
@@ -155,7 +156,7 @@
   [request-prompt request-exit]
   (or ({:line-start request-prompt :stream-end request-exit}
        (skip-whitespace *in*))
-      (let [input (read)]
+      (let [input (read {:read-cond :allow} *in*)]
         (skip-if-eol *in*)
         input)))
 
@@ -168,7 +169,7 @@
   "Default :caught hook for repl"
   [e]
   (let [ex (repl-exception e)
-        ^|System.Diagnostics.StackFrame[]| tr (get-stack-trace ex)
+        tr (get-stack-trace ex)
         el (when-not (zero? (count tr)) (aget tr 0))]
 	(binding [*out* *err*]
       (println (str (-> ex class .Name)           ;;; .getSimpleName

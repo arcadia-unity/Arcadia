@@ -20,7 +20,7 @@
     (let [v (resolve s)]
       (if v
         @v
-        (throw (RuntimeException. (str "Var " s " is not on the classpath")))))))
+        (throw (Exception. (str "Var " s " is not on the classpath")))))))
 
 (def ^:private quick-check-ref
      (c/delay (dynaload 'clojure.test.check/quick-check)))
@@ -68,7 +68,7 @@
   (let [g (dynaload s)]
     (if (generator? g)
       g
-      (throw (RuntimeException. (str "Var " s " is not a generator"))))))
+      (throw (Exception. (str "Var " s " is not a generator"))))))
 
 (defmacro ^:skip-wiki lazy-combinator
   "Implementation macro, do not call directly."
