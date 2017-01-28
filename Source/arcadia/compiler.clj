@@ -47,7 +47,7 @@
   \"foo.bar.baz\""
   [p]
   (if-> p
-        (clojure.string/replace #"\.clj$" "")
+        (clojure.string/replace #"\.cljc?$" "")
         (clojure.string/replace dir-seperator-re ".")
         (clojure.string/replace "_" "-")))
 
@@ -63,7 +63,7 @@
 (defn clj-file?
   "Is `path` a Clojure file?"
   [path]
-  (boolean (re-find #"\.clj$" path)))
+  (boolean (re-find #"\.cljc?$" path)))
 
 (defn config-file?
   "Is `path` the configuration file?"
