@@ -4,6 +4,13 @@ using clojure.lang;
 
 public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 {
+#if (UNITY_IOS && !UNITY_EDITOR)
+	static ArcadiaBehaviour() {
+		clojure.lang.RuntimeBootstrapFlag.DisableFileLoad = true;
+		clojure.lang.RuntimeBootstrapFlag.DisableEval = true;
+	}
+#endif
+
 	IFn[] _fns = new IFn[0];
 	public IPersistentMap fnIndexes = PersistentHashMap.create();
 
