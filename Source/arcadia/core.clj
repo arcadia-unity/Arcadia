@@ -197,36 +197,36 @@
 
 (extend-protocol IEntityComponent
   GameObject
-  (cmpt [this t]
+  (cmpt [^GameObject this ^Type t]
     (obj-nil (.GetComponent this t)))
-  (cmpts [this t]
+  (cmpts [^GameObject this ^Type t]
     (into [] (.GetComponents this t)))
-  (cmpt+ [this t]
+  (cmpt+ [^GameObject this ^Type t]
     (.AddComponent this t))
-  (cmpt- [this t]
+  (cmpt- [^GameObject this ^Type t]
     (do-components [x (.GetComponents this t)]
       (destroy x)))
 
   ;; exactly the same:
   Component
-  (cmpt [this t]
+  (cmpt [^Component this ^Type t]
     (obj-nil (.GetComponent this t)))
-  (cmpts [this t]
+  (cmpts [^Component this ^Type t]
     (into [] (.GetComponents this t)))
-  (cmpt+ [this t]
-    (.AddComponent this t))
-  (cmpt- [this t]
+  (cmpt+ [^Component this ^Type t]
+    (.AddComponent (.gameObject this) t))
+  (cmpt- [^Component this ^Type t]
     (do-components [x (.GetComponents this t)]
       (destroy x))) 
   
   clojure.lang.Var
-  (cmpt [this t]
+  (cmpt [this ^Type t]
     (cmpt (var-get this) t))
-  (cmpts [this t]
+  (cmpts [this ^Type t]
     (cmpts (var-get this) t))
-  (cmpt+ [this t]
+  (cmpt+ [this ^Type t]
     (cmpt+ (var-get this) t))
-  (cmpt- [this t]
+  (cmpt- [this ^Type t]
     (cmpt- (var-get this) t)))
 
 ;; ------------------------------------------------------------
@@ -258,7 +258,7 @@
     (into []
       (map (fn [^Transform tr] (.gameObject tr)))
       (.transform this)))
-  (parent [this]
+  (parent [^GameObject this]
     (when-let [p (.. this transform parent)]
       (.gameObject p)))
   (child+
@@ -279,7 +279,7 @@
   (children [^Component this]
     (into [] (.. this gameObject transform)))
   (parent [^Component this]
-    (.. this gameObject parent))
+    (.. this gameObject transform parent))
   (child+
     ([this child]
      (child+ (.gameObject this) child))
@@ -410,7 +410,7 @@
 (defn hook
   "Return the `hook` component attached to `obj`. If there is more one component,
   then behavior is the same as `cmpt`."
-  [obj hook]
+  ^ArcadiaBehaviour [obj hook]
   (let [hook-type (ensure-hook-type hook)]
     (cmpt obj hook-type)))
 
@@ -435,11 +435,11 @@
 
 (defn- initialize-state [go]
   (cmpt- go ArcadiaState)
-  (let [c (cmpt+ go ArcadiaState)]
+  (let [^ArcadiaState c (cmpt+ go ArcadiaState)]
     (set! (.state c) (atom {}))
     c))
 
-(defn- ensure-state [go]
+(defn- ensure-state ^ArcadiaState [go]
   (or (cmpt go ArcadiaState)
       (initialize-state go)))
 
