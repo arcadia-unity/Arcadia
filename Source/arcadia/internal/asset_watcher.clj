@@ -13,7 +13,9 @@
 
 (defonce dead-watch
   (atom
-    (not UnityStatusHelper/IsInEditor)))
+    true
+    ;; (not UnityStatusHelper/IsInEditor)
+    ))
 
 ;; seems a little janky
 (defn- watch-promise
