@@ -2,7 +2,7 @@
       "Useful general-purpose higher order functions, with emphasis on perf.
  Includes optimized implementation of comp."}
     arcadia.internal.functions
-  (:refer-clojure :exclude [comp, partial])
+  (:refer-clojure :exclude [comp, partial, some])
   (:require [arcadia.internal.macro :as am]
             [arcadia.internal.benchmarking :as b]))
 
