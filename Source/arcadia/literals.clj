@@ -1,7 +1,10 @@
 (ns arcadia.literals
   (:import [System.Reflection
             ConstructorInfo
-            ParameterInfo]))
+            ParameterInfo]
+           [System TimeSpan]
+           [UnityEngine Debug]
+           [System.Diagnostics Stopwatch]))
 
 ;; ============================================================
 ;; object database 
@@ -105,11 +108,53 @@
      (quote ~(symbol (str "unity/" (.Name type))))
      (var ~(symbol (str "arcadia.literals/parse-" (.Name type))))))
 
-(doseq [t value-types]
-  (eval (parser-for-value-type t))
-  (eval (install-parser-for-value-type t))
-  (eval (print-method-for-value-type t))
-  (eval (print-dup-for-value-type t)))
+;; (def ^Stopwatch sw (Stopwatch.))
+;; (.Start sw)
+
+;; (doseq [t value-types]
+;;   (eval (parser-for-value-type t))
+;;   (eval (install-parser-for-value-type t))
+;;   (eval (print-method-for-value-type t))
+;;   (eval (print-dup-for-value-type t)))
+
+;; (.Stop sw)
+
+;; (Debug/Log
+;;   (str "Milliseconds to value type parser eval stuff: "
+;;        (.TotalMilliseconds (.Elapsed sw))))
+;; results:
+;; 1502.21
+;; 1524.607
+;; 1527.86
+
+;; results after aot:
+;; 1278.692
+
+
+(defmacro ^:private value-type-stuff []
+  (cons `do
+    (for [t value-types]
+      (list `do
+        (parser-for-value-type t)
+        (install-parser-for-value-type t)
+        (print-method-for-value-type t)
+        (print-dup-for-value-type t)))))
+
+(def ^Stopwatch sw (Stopwatch.))
+(.Start sw)
+
+(value-type-stuff)
+
+(.Stop sw)
+(Debug/Log
+  (str "Milliseconds to value type parser eval stuff: "
+       (.TotalMilliseconds (.Elapsed sw))))
+
+;; results after AOT:
+;; ~44 ms
+
+
+
 
 ;; ============================================================
 ;; object types
@@ -153,11 +198,16 @@
      (quote ~(symbol (str "unity/" (.Name type))))
      (var ~(symbol (str "arcadia.literals/parse-object")))))
 
-(doseq [t object-types]
-  ;; object types share the same parser
-  (eval (install-parser-for-object-type t))
-  (eval (print-method-for-object-type t))
-  (eval (print-dup-for-object-type t)))
+(defmacro ^:private object-type-stuff []
+  (cons `do
+    (for [t object-types]
+      (list `do
+        ;; object types share the same parser
+        (install-parser-for-object-type t)
+        (print-method-for-object-type t)
+        (print-dup-for-object-type t)))))
+
+(object-type-stuff)
 
 ;; AnimationCurves are different
 ;; finish
