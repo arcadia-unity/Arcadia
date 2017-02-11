@@ -20,9 +20,7 @@
 
 ;; should we just patch the compiler to make GetFindFilePaths public?
 (defn load-path []
-  (seq (.Invoke (.GetMethod clojure.lang.RT "GetFindFilePaths"
-                            (enum-or BindingFlags/Static BindingFlags/NonPublic))
-                clojure.lang.RT nil)))
+  (seq (clojure.lang.RT/GetFindFilePaths)))
 
 (defn rests
   "Returns a sequence of all rests of the input sequence
