@@ -1,4 +1,4 @@
-# Contributor License Agreement
+# Arcadia Contributor License Agreement
 The following terms are used throughout this agreement:
 
 * **You** - the person or legal entity including its affiliates asked to accept this agreement. An affiliate is any entity that controls or is controlled by the legal entity, or is under common control with it.
