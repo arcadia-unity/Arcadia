@@ -12,8 +12,8 @@ Community
 - [Gittr/IRC](https://gitter.im/arcadia-unity/Arcadia)
 - [Twitter](https://twitter.com/arcadiaunity)
 
-Usage
------
+Installing
+----------
 The contents of the repository should be copied to a folder named `Arcadia` in any Unity project's Assets folder to enable Clojure. In the future, this will be available from the Asset Store. Once copied, you have access to the REPL and the Clojure compiler.
 
 #### Download Zip File
