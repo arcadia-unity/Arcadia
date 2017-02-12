@@ -38,7 +38,7 @@ Arcadia ships with a simple networked REPL that is started automatically or from
 The core devs use the REPL from [Emacs (via Inferior Lisp)](https://github.com/arcadia-unity/arcadia/wiki/Editor-support#emacs) and [SublimeText (via Socket)](https://github.com/nasser/Socket).
 
 Name
------
+----
 This project was originally named "clojure-unity", but was changed to "Arcadia" to avoid infinging on Clojure's trademarks. It was suggested to us by @ztellman at a bar during StrangeLoop 2014, and we are eternally grateful.
 
 Legal
