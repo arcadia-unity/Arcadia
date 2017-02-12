@@ -37,6 +37,20 @@ Arcadia ships with a simple networked REPL that is started automatically or from
 
 The core devs use the REPL from [Emacs (via Inferior Lisp)](https://github.com/arcadia-unity/arcadia/wiki/Editor-support#emacs) and [SublimeText (via Socket)](https://github.com/nasser/Socket).
 
+Contributing
+------------
+If you're thinking of submitting code to Arcadia – thanks! We're excited to have your help. First, all contributors must read and agree to our [contributor license agreement](./CONTRIBUTOR-LICENSE-AGREEMENT.md). It is based on [GitHub's CLA](https://cla.github.com/) and ensures that the code you submit remains useable by Arcadia and its community without issue. It confirms that
+
+1. Anyone can use your contributions anywhere, for free, forever.
+2. Your contributions do not infringe on anyone else's rights.
+3. You retain ownership of your contribution.
+
+Once you have read and agree to it, submit a [Pull Request](https://github.com/arcadia-unity/Arcadia/pull/new) adding your name and GitHub id to [CONTRIBUTORS.md](./CONTRIBUTORS.md) with the following commit message:
+
+I have read and agree to the terms of the Arcadia Contributor License Agreement.
+
+You only need to do this once. After that, we can review and merge any contributions you send us!
+
 Name
 ----
 This project was originally named "clojure-unity", but was changed to "Arcadia" to avoid infinging on Clojure's trademarks. It was suggested to us by @ztellman at a bar during StrangeLoop 2014, and we are eternally grateful.
