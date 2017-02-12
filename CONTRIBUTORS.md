@@ -1,1 +1,1 @@
-+Joseph Parker - [selfsame](https://github.com/selfsame)
+* Joseph Parker - [selfsame](https://github.com/selfsame)
