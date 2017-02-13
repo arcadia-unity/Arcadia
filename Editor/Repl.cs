@@ -24,8 +24,6 @@ namespace Arcadia
 		static Repl()
 		{
 			RT.load("arcadia/repl");
-			// kill repl when exiting unity
-			AppDomain.CurrentDomain.ProcessExit += (object sender, EventArgs e) => { StopREPL(); };
 		}
 
 		[MenuItem("Arcadia/REPL/Window...")]
