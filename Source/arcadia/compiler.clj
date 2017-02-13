@@ -300,8 +300,13 @@
        (loadpath-extensions opts)
        (configuration-extensions)))))
 
-(defn refresh-loadpath []
-  (Arcadia.Initialization/SetClojureLoadPath))
+(defn refresh-loadpath
+  ([]
+   (Arcadia.Initialization/SetClojureLoadPath))
+  ([config]
+   (refresh-loadpath)))
+
+(state/add-listener ::config/on-update ::refresh-loadpath #'refresh-loadpath)
 
 ;; ============================================================
 ;; listeners
