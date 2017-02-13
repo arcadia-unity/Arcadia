@@ -1,6 +1,7 @@
 (ns arcadia.internal.state
   (:require [clojure.spec :as s]
-            [arcadia.internal.map-utils :as mu]))
+            [arcadia.internal.map-utils :as mu])
+  (:import [UnityEngine Debug]))
 
 ;; ============================================================
 ;; logging
@@ -51,34 +52,45 @@
           :listener ifn?))
 
 (defn add-listener [listener-group-key listener-key listener]
-  (swap! state assoc-in [listener-group-key listener-key] listener))
+  (swap! state assoc-in [::listeners listener-group-key listener-key] listener))
 
 (defn remove-listener
   ([listener-group-key]
-   (swap! state dissoc listener-group-key))
+   (swap! state mu/dissoc-in [::listeners listener-group-key]))
   ([listener-group-key listener-key]
-   (swap! state mu/dissoc-in [listener-group-key listener-key])))
+   (swap! state mu/dissoc-in [::listeners listener-group-key listener-key])))
+
+(defmacro ^:private run-listener-body [listener-group-key listener listener-form]
+  `(reduce-kv (fn [_# key# ~listener]
+                (try
+                  ~listener-form
+                  (catch Exception e#
+                    (Debug/Log
+                      (str "Exception encountered for " key#
+                           " in listener group " ~listener-group-key ":"))
+                    (Debug/Log e#)
+                    (Debug/Log
+                      (str "Removing listener " key#
+                           " in listener group " ~listener-group-key))
+                    (remove-listener ~listener-group-key key#)
+                    nil)))
+     nil
+     (get-in @state [::listeners ~listener-group-key])))
 
 (defn run-listeners
   ([listener-group-key]
-   (reduce (fn [_ listener]
-             (listener)
-             nil)
-     nil
-     (mu/valsr (get @state listener-group-key))))
+   (run-listener-body listener-group-key listener
+     (listener)))
   ([listener-group-key data]
-   (reduce (fn [_ listener]
-             (listener data)
-             nil)
-     nil
-     (mu/valsr (get @state listener-group-key))))
+   (run-listener-body listener-group-key listener
+     (listener data)))
   ([listener-group-key data & args]
    (let [args2 (cons data args)]
-     (reduce (fn [_ listener]
-               (apply listener args2)
-               nil)
-       nil
-       (mu/valsr (get @state listener-group-key))))))
+     (run-listener-body listener-group-key listener
+       (apply listener args2)))))
 
-(defn listeners [listener-group-key]
-  (get @state listener-group-key))
+(defn listeners
+  ([]
+   (get @state ::listeners))
+  ([listener-group-key]
+   (get-in @state [::listeners listener-group-key])))
