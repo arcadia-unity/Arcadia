@@ -289,15 +289,19 @@
                     bldg))))]
      (reduce-kv ap [] (::loadpath-extension-fns @state/state)))))
 
+(defn configuration-extensions []
+  (get-in @state/state [::config/config :arcadia.compiler/loadpaths]))
+
 (defn loadpath-extension-string
   ([] (loadpath-extension-string nil))
   ([opts]
    (str/join Path/PathSeparator
-     (loadpath-extensions opts))))
+     (concat
+       (loadpath-extensions opts)
+       (configuration-extensions)))))
 
 (defn refresh-loadpath []
   (Arcadia.Initialization/SetClojureLoadPath))
-
 
 ;; ============================================================
 ;; listeners
