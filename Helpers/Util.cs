@@ -1,4 +1,5 @@
 using System;
+using UnityEngine;
 #if UNITY_EDITOR
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -10,7 +11,9 @@ namespace Arcadia
 	{
 		public static void MarkScenesDirty(){
 			#if UNITY_EDITOR
-			EditorSceneManager.MarkAllScenesDirty();
+			if (Application.isPlaying){
+				EditorSceneManager.MarkAllScenesDirty();
+			}
 			#endif
 		}
 	}
