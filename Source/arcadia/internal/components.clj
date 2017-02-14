@@ -17,6 +17,14 @@
   (->> (range \a \z)
        (map (comp str char))))
 
+(def overrides
+  "Which methods of ArcadiaBehaviour should be overriden/hidden."
+  '{Awake override})
+
+(def call-base
+  "Which overriden methods should call the base method."
+  '{Awake true})
+
 (defn component-source
   ([message args] (component-source message args nil))
   ([message args interface]
@@ -30,10 +38,14 @@
 public class " (component-name message) " : ArcadiaBehaviour" (if interface (str ", " interface))
 "   
 {
-  public void " message "(" (string/join ", " (map #(str %1 " " %2) args arg-names)) ")
+  " (string/join " " (filter some? ['public (overrides message) 'void])) " "
+      message "(" (string/join ", " (map #(str %1 " " %2) args arg-names)) ")
   {
-    if(fn != null)
-      fn.invoke(" (string/join ", " (concat ['gameObject] arg-names)) ");
+" (if (call-base message)
+    (str "      base." message "(" (string/join ", " arg-names) ");\n"))
+"      var _go = gameObject;
+      foreach (var fn in fns)
+        fn.invoke(" (string/join ", " (concat ['_go] arg-names)) ");
   }
 }"))))
 
