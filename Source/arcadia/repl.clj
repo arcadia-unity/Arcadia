@@ -7,6 +7,7 @@
             [clojure.pprint :as pprint])
   (:import
     [UnityEngine Debug]
+    [Arcadia Util]
     [System.IO EndOfStreamException]
     [System.Collections Queue]
     [System.Net IPEndPoint IPAddress]
@@ -220,6 +221,7 @@
               (send (.ToString e)))))
         (doseq [view (UnityEngine.Resources/FindObjectsOfTypeAll UnityEditor.GUIView)]
           (.Repaint view))
+        (Util/MarkScenesDirty)
         (catch Exception e
           (Debug/Log (str e)))))))
 
