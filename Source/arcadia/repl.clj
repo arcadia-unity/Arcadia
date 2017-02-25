@@ -11,7 +11,7 @@
     [System.IO EndOfStreamException]
     [System.Collections Queue]
     [System.Net IPEndPoint IPAddress]
-    [System.Net.Sockets UdpClient SocketException]
+    [System.Net.Sockets UdpClient SocketException SocketError]
     [System.Threading Thread ThreadStart]
     [System.Text Encoding]))
 
@@ -239,13 +239,17 @@
   (when-not @server-running
     (reset! server-running true)
     (let [socket (UdpClient. (IPEndPoint. IPAddress/Any port))]
+      (set! (.. socket Client ReceiveTimeout) 200)
       (set! (.. socket Client SendBufferSize) (* 1024 5000)) ;; 5Mb
       (set! (.. socket Client ReceiveBufferSize) (* 1024 5000)) ;; 5Mb
       (.Start (Thread. (gen-delegate ThreadStart []
                                      (if ((config/config) :verbose)
                                        (Debug/Log "Starting REPL..."))
                                      (while @server-running
-                                       (listen-and-block socket))
+                                       (try (listen-and-block socket)
+                                        (catch SocketException ex
+                                          (if (not= (.ErrorCode ex) SocketError/TimedOut)
+                                            (throw (Exception. "Unexpected Socket error" ex))))))
                                      ;; TODO why does this line not execute?
                                      (if ((config/config) :verbose)
                                        (Debug/Log "REPL Stopped")))))
