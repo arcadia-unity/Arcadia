@@ -80,15 +80,19 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 	public void OnAfterDeserialize()
 	{
 #if UNITY_EDITOR
-		Awake();
+		Init();
 #endif
 	}
 
 	private static IFn requireFn = null;
 
 	// if serializedVar not null, set fn to var
-	public void Awake()
+	public virtual void Awake()
 	{
+		Init();
+	}
+
+	private void Init() {
 		if (requireFn == null)
 			requireFn = RT.var("clojure.core", "require");
 		if (qualifiedVarNames != null)
