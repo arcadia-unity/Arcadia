@@ -1,4 +1,5 @@
 (ns arcadia.internal.file-system
+  (:refer-clojure :exclude [file-seq])
   (:require [arcadia.internal.array-utils :as au]
             [clojure.spec :as s]
             [arcadia.internal.spec :as as]
@@ -73,8 +74,8 @@
 
 ;; !!!!THIS SOMETIMES RETURNS NIL!!!!
 (defn info ^FileSystemInfo [x]
-  {:pre [(as/loud-valid? ::info-path x)]
-   :post [(as/loud-valid? (s/or ::info ::info :nil nil?) %)]}
+  ;; {:pre [(as/loud-valid? ::info-path x)]
+  ;;  :post [(as/loud-valid? (s/or ::info ::info :nil nil?) %)]}
   (cond
     (instance? FileSystemInfo x) x
     ;; Yes I hate it too
