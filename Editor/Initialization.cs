@@ -66,6 +66,7 @@ namespace Arcadia
 			LoadLiterals();
 			SetClojureLoadPath();
 			ensureCompiledFolder();
+			StartEditorCallbacks();
 			// StartWatching();
 			StartREPL();
 
@@ -159,6 +160,11 @@ namespace Arcadia
 				path = Path.Combine(path, p);
 			}
 			return path;
+		}
+
+		public static void StartEditorCallbacks(){
+			RT.load("arcadia/internal/editor_callbacks");
+			EditorCallbacks.Initialize();
 		}
 	}
 }

@@ -9,7 +9,8 @@
             [arcadia.internal.state :as state]
             [arcadia.internal.spec :as as]
             [arcadia.internal.asset-watcher :as aw]
-            [arcadia.internal.filewatcher :as fw])
+            [arcadia.internal.filewatcher :as fw]
+            [arcadia.internal.editor-callbacks :as callbacks])
   (:import [Arcadia StringHelper]
            [clojure.lang Namespace]
            [System.IO Path File StringWriter Directory]
@@ -17,6 +18,11 @@
            [System.Collections Queue]
            [System.Threading Thread ThreadStart]
            [UnityEngine Debug]))
+
+(def main-thread System.Threading.Thread/CurrentThread)
+
+(defn on-main-thread? []
+  (.Equals main-thread System.Threading.Thread/CurrentThread))
 
 (defn load-path []
   (seq (clojure.lang.RT/GetFindFilePaths)))
@@ -302,7 +308,13 @@
 
 (defn refresh-loadpath
   ([]
-   (Arcadia.Initialization/SetClojureLoadPath))
+   (if (on-main-thread?)
+     (Arcadia.Initialization/SetClojureLoadPath)
+     (callbacks/set-callback ::refresh-loadpath
+       (fn []
+         (Arcadia.Initialization/SetClojureLoadPath)
+         (callbacks/remove-callback ::refresh-loadpath))))
+   nil)
   ([config]
    (refresh-loadpath)))
 
