@@ -254,12 +254,8 @@
 
 (defn refresh-loadpath
   ([]
-   (if (on-main-thread?)
-     (Arcadia.Initialization/SetClojureLoadPath)
-     (callbacks/set-callback ::refresh-loadpath
-       #(Arcadia.Initialization/SetClojureLoadPath)
-       {::callbacks/run-once true}))
-   nil)
+   (callbacks/add-callback
+     #(Arcadia.Initialization/SetClojureLoadPath)))
   ([config]
    (refresh-loadpath)))
 
@@ -268,15 +264,15 @@
 ;; ============================================================
 ;; listeners
 
+(defn reload-if-loaded [path]
+  (when (some-> path asset->ns find-ns)
+    (import-asset path)))
+
 (defn live-reload-listener [{:keys [::fw/path]}]
-  (if (on-main-thread?)
-    (import-asset path)
-    (callbacks/set-callback [:reload path] ;; <- this vector is the key
-      #(import-asset path)
-      {::callbacks/run-once true})))
+  (callbacks/add-callback #(reload-if-loaded path)))
 
 (defn start-watching-files []
-  (UnityEngine.Debug/Log "Starting to watch for changes in Clojure files.")
+  ;; (UnityEngine.Debug/Log "Starting to watch for changes in Clojure files.")
   (aw/add-listener
     ::fw/create-modify-delete-file
     ::live-reload-listener
@@ -295,4 +291,3 @@
   #'manage-reload-listener)
 
 (manage-reload-listener (config/config))
-
