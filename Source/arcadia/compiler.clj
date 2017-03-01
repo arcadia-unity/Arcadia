@@ -190,60 +190,6 @@
   (doseq [asset (clj-files deleted)]))
 
 ;; ============================================================
-;; old liveload
-
-;; (def import-queue (Queue/Synchronized (Queue.)))
-
-;; (defn import-changed-files []
-;;   (try
-;;     (while (pos? (.Count import-queue))
-;;       (let [file (.Dequeue import-queue)]
-;;         (if (config-file? file)
-;;           (config/update!)
-;;           (import-asset file))))
-;;     (catch Exception e
-;;       (Debug/LogException e))))
-
-;; (defn after? [^DateTime a ^DateTime b]
-;;   (pos? (.CompareTo a b)))
-
-;; (defn new? [file times]
-;;   (after? (File/GetLastWriteTime file)
-;;           (or (times file) (DateTime.))))
-
-;; (defn each-new-file [root pattern f times-atom]
-;;   (let [files
-;;         ^|System.String[]|
-;;         (Directory/GetFiles root
-;;                             pattern
-;;                             SearchOption/AllDirectories)]
-;;     (loop [i 0]
-;;       (let [file (aget files i)]
-;;         (when (new? file @times-atom)
-;;           (f file)
-;;           (swap! times-atom assoc file DateTime/Now)))
-;;       (if (< i (dec (count files))) (recur (inc i))))))
-
-;; (defonce last-read-times (atom {}))
-;; (defonce watching-files (atom true))
-
-;; (defn enqueue-asset [asset]
-;;   (.Enqueue import-queue asset))
-
-;; (defn start-watching-files []
-;;   (reset! watching-files true)
-;;   (-> (gen-delegate
-;;         ThreadStart []
-;;         (while @watching-files
-;;           (each-new-file "Assets" "*.clj" enqueue-asset last-read-times)
-;;           (Thread/Sleep 100)))
-;;       Thread.
-;;       .Start))
-
-;; (defn stop-watching-files []
-;;   (reset! watching-files false))
-
-;; ============================================================
 ;; stand-in while building new liveload
 
 (defn start-watching-files []
@@ -311,9 +257,8 @@
    (if (on-main-thread?)
      (Arcadia.Initialization/SetClojureLoadPath)
      (callbacks/set-callback ::refresh-loadpath
-       (fn []
-         (Arcadia.Initialization/SetClojureLoadPath)
-         (callbacks/remove-callback ::refresh-loadpath))))
+       #(Arcadia.Initialization/SetClojureLoadPath)
+       {::callbacks/run-once true}))
    nil)
   ([config]
    (refresh-loadpath)))
@@ -324,7 +269,11 @@
 ;; listeners
 
 (defn live-reload-listener [{:keys [::fw/path]}]
-  (import-asset path))
+  (if (on-main-thread?)
+    (import-asset path)
+    (callbacks/set-callback [:reload path] ;; <- this vector is the key
+      #(import-asset path)
+      {::callbacks/run-once true})))
 
 (defn start-watching-files []
   (UnityEngine.Debug/Log "Starting to watch for changes in Clojure files.")
@@ -337,12 +286,13 @@
 (defn stop-watching-files []
   (aw/remove-listener ::live-reload-listener))
 
-(defn manage-reload-listener [{:keys [:compiler/on-file-change]}]
-  (if (= :reload on-file-change)
+(defn manage-reload-listener [{:keys [reload-on-change]}]
+  (if reload-on-change
     (start-watching-files)
     (stop-watching-files)))
 
-(manage-reload-listener (config/config))
-
 (state/add-listener ::config/on-update ::live-reload
   #'manage-reload-listener)
+
+(manage-reload-listener (config/config))
+
