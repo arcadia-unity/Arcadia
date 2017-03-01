@@ -7,7 +7,7 @@
  ;; watching, and everything that depends on it, such as automaic file
  ;; loading on change (see :reload-on-change below) and responding to
  ;; changes in configuration.edn without a restart
- :reactive? true
+ :reactive true
  
  :compiler/verbose true
  :compiler/warn-on-reflection true

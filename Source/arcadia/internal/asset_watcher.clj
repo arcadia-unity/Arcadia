@@ -34,8 +34,8 @@
 (defn start-asset-watcher
   ;; handing in config map for the first argument here. This
   ;; indirection is due to awkward load-order concerns. see 
-  ([{:keys [reactive?]}] 
-   (when reactive?
+  ([{:keys [reactive]}] 
+   (when reactive
      (start-asset-watcher)))
   ([]
    (thr/start-thread

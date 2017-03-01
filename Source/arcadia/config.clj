@@ -69,8 +69,8 @@
 ;; Make the asset watcher itself reactive
 ;; I guess we have to do this here
 
-(defn update-reactive [{:keys [reactive?]}]
-  (if reactive?
+(defn update-reactive [{:keys [reactive]}]
+  (if reactive
     (aw/start-asset-watcher)
     (aw/stop-asset-watcher)))
 
