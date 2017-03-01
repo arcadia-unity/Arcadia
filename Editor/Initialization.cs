@@ -44,7 +44,10 @@ namespace Arcadia
 
 		public static void StartWatching()
 		{
-			AssetPostprocessor.StartWatchingFiles();
+			//AssetPostprocessor.StartWatchingFiles();
+			Var config = RT.var("arcadia.config", "config");
+			Var startAssetWatcher = RT.var("arcadia.internal.asset-watcher", "start-asset-watcher");
+			startAssetWatcher.invoke(config.invoke());
 		}
 
 		public static void LoadLiterals()
@@ -53,7 +56,7 @@ namespace Arcadia
 			// binds a thread local *data-readers*
 			RT.load("arcadia/literals");
 		}
-		
+
 		[MenuItem("Arcadia/Initialization/Rerun")]
 		public static void Initialize()
 		{
@@ -67,7 +70,7 @@ namespace Arcadia
 			SetClojureLoadPath();
 			ensureCompiledFolder();
 			StartEditorCallbacks();
-			// StartWatching();
+			StartWatching();
 			StartREPL();
 
 			Debug.Log("Arcadia Started!");
