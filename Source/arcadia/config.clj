@@ -7,7 +7,7 @@
   (:import
     [Arcadia Configuration]
     [System DateTime]
-    [System.IO File]
+    [System.IO File Path]
     [UnityEngine Debug]
     [System.Text.RegularExpressions Regex]))
 
