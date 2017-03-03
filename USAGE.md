@@ -266,7 +266,11 @@ State is set with `set-state!`, `remove-state!`, and `update-state!` and read wi
 ```
 
 #### Multithreading
-While Unity's API is single threaded, the Mono VM that it runs on is not. That means that you can write multithreaded Clojure code with all the advantages that has as long as you do not call Unity API methods from anywhere but the main thread (they will throw an exception otherwise). The exception to this is the linear algebra types and associated methods are callable from non-main threads.
+While the Unity scene graph API is ostensibly single threaded, the Mono VM it runs on is not. This means you can write multithreaded Clojure code in all its functional glory, provided that you do not call Unity scene graph methods off the main thread (they will throw an exception).
+
+Note that not all types in the UnityEngine namespace need to be used from the main thread. Value types such as Vector3 seem to be usable anywhere, for example.
+
+To trigger behavior restricted to the main thread from other threads, consider implementing a callback queue driven by the [Update Monobehaviour method](https://docs.unity3d.com/ScriptReference/MonoBehaviour.Update.html) of a  component in the scene graph, or an [EditorApplication.update](https://docs.unity3d.com/ScriptReference/EditorApplication-update.html) delegate for edit-mode operations. An example of the latter can be found in the (internal, unstable) Arcadia namespace [arcadia.internal.editor-callbacks](https://github.com/arcadia-unity/Arcadia/blob/develop/Source/arcadia/internal/editor_callbacks.clj).
 
 #### Namespace Roots
 The `Assets` folder is the root of your namespaces. So a file at `Assets/game/logic/hard_ai.clj` should correspond to the namespace `game.logic.hard-ai`. Arcadia internally manages other namespace roots as well for its own operation, but `Assets` is where your own logic should go.
