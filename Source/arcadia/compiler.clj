@@ -9,7 +9,8 @@
             [arcadia.internal.state :as state]
             [arcadia.internal.spec :as as]
             [arcadia.internal.asset-watcher :as aw]
-            [arcadia.internal.filewatcher :as fw])
+            [arcadia.internal.filewatcher :as fw]
+            [arcadia.internal.editor-callbacks :as callbacks])
   (:import [Arcadia StringHelper]
            [clojure.lang Namespace]
            [System.IO Path File StringWriter Directory]
@@ -18,11 +19,13 @@
            [System.Threading Thread ThreadStart]
            [UnityEngine Debug]))
 
-;; should we just patch the compiler to make GetFindFilePaths public?
+(def main-thread System.Threading.Thread/CurrentThread)
+
+(defn on-main-thread? []
+  (.Equals main-thread System.Threading.Thread/CurrentThread))
+
 (defn load-path []
-  (seq (.Invoke (.GetMethod clojure.lang.RT "GetFindFilePaths"
-                            (enum-or BindingFlags/Static BindingFlags/NonPublic))
-                clojure.lang.RT nil)))
+  (seq (clojure.lang.RT/GetFindFilePaths)))
 
 (defn rests
   "Returns a sequence of all rests of the input sequence
@@ -187,60 +190,6 @@
   (doseq [asset (clj-files deleted)]))
 
 ;; ============================================================
-;; old liveload
-
-;; (def import-queue (Queue/Synchronized (Queue.)))
-
-;; (defn import-changed-files []
-;;   (try
-;;     (while (pos? (.Count import-queue))
-;;       (let [file (.Dequeue import-queue)]
-;;         (if (config-file? file)
-;;           (config/update!)
-;;           (import-asset file))))
-;;     (catch Exception e
-;;       (Debug/LogException e))))
-
-;; (defn after? [^DateTime a ^DateTime b]
-;;   (pos? (.CompareTo a b)))
-
-;; (defn new? [file times]
-;;   (after? (File/GetLastWriteTime file)
-;;           (or (times file) (DateTime.))))
-
-;; (defn each-new-file [root pattern f times-atom]
-;;   (let [files
-;;         ^|System.String[]|
-;;         (Directory/GetFiles root
-;;                             pattern
-;;                             SearchOption/AllDirectories)]
-;;     (loop [i 0]
-;;       (let [file (aget files i)]
-;;         (when (new? file @times-atom)
-;;           (f file)
-;;           (swap! times-atom assoc file DateTime/Now)))
-;;       (if (< i (dec (count files))) (recur (inc i))))))
-
-;; (defonce last-read-times (atom {}))
-;; (defonce watching-files (atom true))
-
-;; (defn enqueue-asset [asset]
-;;   (.Enqueue import-queue asset))
-
-;; (defn start-watching-files []
-;;   (reset! watching-files true)
-;;   (-> (gen-delegate
-;;         ThreadStart []
-;;         (while @watching-files
-;;           (each-new-file "Assets" "*.clj" enqueue-asset last-read-times)
-;;           (Thread/Sleep 100)))
-;;       Thread.
-;;       .Start))
-
-;; (defn stop-watching-files []
-;;   (reset! watching-files false))
-
-;; ============================================================
 ;; stand-in while building new liveload
 
 (defn start-watching-files []
@@ -292,24 +241,38 @@
                     bldg))))]
      (reduce-kv ap [] (::loadpath-extension-fns @state/state)))))
 
+(defn configuration-extensions []
+  (get-in @state/state [::config/config :arcadia.compiler/loadpaths]))
+
 (defn loadpath-extension-string
   ([] (loadpath-extension-string nil))
   ([opts]
    (str/join Path/PathSeparator
-     (loadpath-extensions opts))))
+     (concat
+       (loadpath-extensions opts)
+       (configuration-extensions)))))
 
-(defn refresh-loadpath []
-  (Arcadia.Initialization/SetClojureLoadPath))
+(defn refresh-loadpath
+  ([]
+   (callbacks/add-callback
+     #(Arcadia.Initialization/SetClojureLoadPath)))
+  ([config]
+   (refresh-loadpath)))
 
+(state/add-listener ::config/on-update ::refresh-loadpath #'refresh-loadpath)
 
 ;; ============================================================
 ;; listeners
 
+(defn reload-if-loaded [path]
+  (when (some-> path asset->ns find-ns)
+    (import-asset path)))
+
 (defn live-reload-listener [{:keys [::fw/path]}]
-  (import-asset path))
+  (callbacks/add-callback #(reload-if-loaded path)))
 
 (defn start-watching-files []
-  (UnityEngine.Debug/Log "Starting to watch for changes in Clojure files.")
+  ;; (UnityEngine.Debug/Log "Starting to watch for changes in Clojure files.")
   (aw/add-listener
     ::fw/create-modify-delete-file
     ::live-reload-listener
@@ -319,12 +282,12 @@
 (defn stop-watching-files []
   (aw/remove-listener ::live-reload-listener))
 
-(defn manage-reload-listener [{:keys [:compiler/on-file-change]}]
-  (if (= :reload on-file-change)
+(defn manage-reload-listener [{:keys [reload-on-change]}]
+  (if reload-on-change
     (start-watching-files)
     (stop-watching-files)))
 
-(manage-reload-listener (config/config))
-
 (state/add-listener ::config/on-update ::live-reload
   #'manage-reload-listener)
+
+(manage-reload-listener (config/config))

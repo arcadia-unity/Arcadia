@@ -2,12 +2,19 @@
  ;; evaluating every input:
  
  ;; :repl/injections (use 'clojure.repl)
+
+ ;; set :reactive to false in user configuration file to disable file
+ ;; watching, and everything that depends on it, such as automaic file
+ ;; loading on change (see :reload-on-change below) and responding to
+ ;; changes in configuration.edn without a restart
+ :reactive true
  
  :compiler/verbose true
  :compiler/warn-on-reflection true
  
- ;; Set this to :reload to watch for changes in .clj & .cljc files:
- 
- ;; :compiler/on-file-change :reload  
+ ;; set to true in user configuration.edn to enable automatic code
+ ;; reloading when a clojure file is saved
+ :reload-on-change false
+
  }
 

@@ -7,7 +7,7 @@
   (:import
     [Arcadia Configuration]
     [System DateTime]
-    [System.IO File]
+    [System.IO File Path]
     [UnityEngine Debug]
     [System.Text.RegularExpressions Regex]))
 
@@ -61,8 +61,17 @@
   (when (config-file? path)
     (update!)))
 
-(update!)
-
 (aw/add-listener ::fw/create-modify-delete-file ::config-listener
   (str Path/DirectorySeparatorChar "configuration.edn")
   #'config-listener)
+
+;; ------------------------------------------------------------
+;; Make the asset watcher itself reactive
+;; I guess we have to do this here
+
+(defn update-reactive [{:keys [reactive]}]
+  (if reactive
+    (aw/start-asset-watcher)
+    (aw/stop-asset-watcher)))
+
+(state/add-listener ::on-update ::update-reactive #'update-reactive)

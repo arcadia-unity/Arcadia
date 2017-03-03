@@ -1,5 +1,8 @@
 (ns arcadia.internal.map-utils
-  (:require clojure.set))
+  (:require 
+    clojure.core.protocols
+    clojure.set)
+  (:import [clojure.core.protocols CollReduce]))
 
 ;;; other ways to do it, should benchmark all of this also could use
 ;;; transients. most maps are small tho. hm. how fast is count on
@@ -192,7 +195,7 @@
   "Returns reducible collection of keys in m. Fast."
   [m]
   (reify
-    clojure.core.protocols/CollReduce
+    CollReduce
     (coll-reduce [this f]
       (clojure.core.protocols/coll-reduce this f (f)))
     (coll-reduce [_ f init]
@@ -207,7 +210,7 @@
   "Returns reducible collection of vals in m. Fast."
   [m]
   (reify
-    clojure.core.protocols/CollReduce
+    CollReduce
     (coll-reduce [this f]
       (clojure.core.protocols/coll-reduce this f (f)))
     (coll-reduce [_ f init]
@@ -217,6 +220,3 @@
     clojure.lang.Counted
     (count [_]
       (count m))))
-
-
-

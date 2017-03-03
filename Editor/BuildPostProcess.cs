@@ -47,11 +47,6 @@ namespace Arcadia
 
 			Progress("Arcadia", "Compiling clojure.core");
 			RT.var("arcadia.compiler", "aot-namespace").invoke(targetFolder, Symbol.intern("clojure.core"));
-
-			// TODO get rid of data_readers.clj?
-			Progress("Arcadia", "Copying data_readers.clj");
-			File.Copy(RT.FindFile("data_readers.clj").FullName, targetFolder + "/data_readers.clj");
-
 		}
 
 		[PostProcessBuild(1)]

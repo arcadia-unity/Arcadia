@@ -400,47 +400,46 @@
      (Debug/Log (str s#))
      res#))
 
-(defn- drain-install-queue []
-  (let [carrier (volatile! {::result []})]
-    (locking install-queue
-      (while (> (count install-queue) 0)
-        (let [{:keys [::callback]} (.Dequeue install-queue)
-              _ (vswap! carrier assoc ::callback callback)
-              user-deps (:dependencies (config/config))
-              lein-deps (mapcat #(get-in % [::lein/defproject ::lein/dependencies])
-                          (lein/all-project-data))
-              work (->> (concat user-deps lein-deps)
-                        (map pd/normalize-coordinates)
-                        (map (juxt ::pd/group ::pd/artifact ::pd/version))
-                        most-recent-versions)]
+;; Using vacuous lock as thread queue, which seems kind of
+;; stupid. Suggestions welcome.
+(def ^:private lock (System.Object.))
+
+(defn- install-1 []
+  ;; Locking, because we don't want multiple threads operating on the
+  ;; file system at once here
+  (locking lock
+    (let [user-deps (:dependencies (config/config))
+          lein-deps (mapcat #(get-in % [::lein/defproject ::lein/dependencies])
+                      (lein/all-project-data))
+          work (->> (concat user-deps lein-deps)
+                    (map pd/normalize-coordinates)
+                    (map (juxt ::pd/group ::pd/artifact ::pd/version))
+                    most-recent-versions)]
+      (when (seq work)
+        (with-log-out
+          (println "Beginning installation:")
+          (doseq [wk work]
+            (println "------------------------------")
+            (pprint wk)))
+        (let [result (into [] (mapcat install-step) work)]
           (with-log-out
-            (println "Beginning installation:")
-            (doseq [wk work]
+            (println "Installation complete. Installed:")
+            (doseq [extr result]
               (println "------------------------------")
-              (pprint wk)))
-          (let [result (into [] (mapcat install-step) work)]
-            (with-log-out
-              (println "Installation complete. Installed:")
-              (doseq [extr result]
-                (println "------------------------------")
-                (pprint
-                  (select-keys extr [::succeeded ::coord]))))
-            (vswap! carrier update ::result conj result)))))
-    (when-let [cb (::callback @carrier)]
-      (cb (::result @carrier)))))
+              (pprint
+                (select-keys extr [::succeeded ::coord])))))))))
 
 (defonce install-errors (atom []))
 
-(defn install-all-deps
-  ([] (install-all-deps nil))
-  ([callback]
-   (thr/start-thread
-     (fn []
-       (try
-         (.Enqueue install-queue {::callback callback})
-         (drain-install-queue)
-         (catch Exception e
-           (swap! install-errors conj e)))))))
+(defn install-all-deps []
+  (thr/start-thread
+    (fn []
+      (try
+        (install-1)
+        (catch Exception e
+          (swap! install-errors conj e)
+          (Debug/Log "Exception encountered when installing dependencies:")
+          (Debug/Log e))))))
 
 ;; ============================================================
 ;; listeners
