@@ -37,13 +37,11 @@ Arcadia is the integration of the [Clojure programming language][clojure] with t
 The basic Arcadia workflow is:
 
 1. [Start a Unity project](#unity-projects)
-2. [Configure Unity to work with Arcadia](#unity-configuration)
-3. [Clone Arcadia repository into project](#cloning-arcadia)
-4. [Connect to the REPL](#livecoding-and-the-repl)
-5. [Write game logic into Clojure namespaces](#programming-in-arcadia)
-6. [Connect game logic to objects using Hooks](#hooks)
-7. [Associate state with game objects using State](#state)
-8. Export your project
+1. [Configure Unity to work with Arcadia](#unity-configuration)
+1. [Clone the Arcadia repository into project](#cloning-arcadia)
+1. [Connect to the REPL](#livecoding-and-the-repl)
+1. [Write a game](#programming-in-arcadia)
+1. Export your project
 
 ### Unity Projects
 *These steps are not Arcadia specific.*
