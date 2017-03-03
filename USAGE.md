@@ -4,6 +4,32 @@
 
 *This document assumes familiarity with [Clojure][clojure] and [Unity][unity].*
 
+### Contents
+
+- [Arcadia](#arcadia)
+- [Using Arcadia](#using-arcadia)
+  - [Unity Projects](#unity-projects)
+  - [Unity Configuration](#unity-configuration)
+	- [Mono Runtime](#mono-runtime)
+	- [Running in the Background](#running-in-the-background)
+  - [Cloning Arcadia](#cloning-arcadia)
+  - [Livecoding and the Repl](#livecoding-and-the-repl)
+	- [Under the Hood](#under-the-hood)
+	- [Editor Integration](#editor-integration)
+	  - [Command Line](#command-line)
+	  - [Emacs](#emacs)
+	  - [SublimeText](#sublimetext)
+  - [Programming in Arcadia](#programming-in-arcadia)
+	- [Clojure CLR](#clojure-clr)
+	- [Unity Interop](#unity-interop)
+	- [Hooks](#hooks)
+	  - [Entry Point](#entry-point)
+	- [Workflow](#workflow)
+  - [State](#state)
+  - [Multithreading](#multithreading)
+  - [Namespace Roots](#namespace-roots)
+  - [VM Restarting](#vm-restarting)
+  	
 ## Arcadia
 Arcadia is the integration of the [Clojure programming language][clojure] with the [Unity 3D game engine][unity]. The goal is to combine a modern, expressive programming language with the industry standard cross-platform engine for interactive media to transform the way we make creative work. Arcadia is free and open source and always will be.
 
@@ -114,7 +140,7 @@ They both do the same thing, though the node REPL is somewhat more robust. Use w
 ##### Emacs
 [Emacs support](https://github.com/arcadia-unity/arcadia-dot-el) uses the included Ruby and Node REPL clients.
 
-##### SumblimeText
+##### SublimeText
 Our [current SumblimeText support](https://github.com/arcadia-unity/repl-sublimetext) builds on [SublimeREPL](http://sublimerepl.readthedocs.io/en/latest/), which you will have to install first. It uses copies of the Ruby and Node REPL clients.
 
 Work has started on an [alternative SumblimeText REPL integration](https://github.com/nasser/pipe) that does not depend on the script clients.
