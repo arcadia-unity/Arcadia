@@ -6,29 +6,33 @@
 
 ### Contents
 
-- [Arcadia](#arcadia)
-- [Using Arcadia](#using-arcadia)
-- [Unity Projects](#unity-projects)
-- [Unity Configuration](#unity-configuration)
-	- [Mono Runtime](#mono-runtime)
-	- [Running in the Background](#running-in-the-background)
-- [Cloning Arcadia](#cloning-arcadia)
+- [Introduction]
+- [Starting Arcadia from Scratch](#starting-arcadia)
+  - [Unity Projects](#unity-projects)
+  - [Cloning Arcadia](#cloning-arcadia)
+  - [Unity Configuration](#unity-configuration)
+    - [Mono Runtime](#mono-runtime)
+    - [Running in the Background](#running-in-the-background)
+- [Arcadia Configuration](#arcadia-configuration)
 - [Livecoding and the Repl](#livecoding-and-the-repl)
-	- [Under the Hood](#under-the-hood)
-	- [Editor Integration](#editor-integration)
-	  - [Command Line](#command-line)
-	  - [Emacs](#emacs)
-	  - [SublimeText](#sublimetext)
+  - [Under the Hood](#under-the-hood)
+  - [Editor Integration](#editor-integration)
+    - [Command Line](#command-line)
+    - [Emacs](#emacs)
+    - [SublimeText](#sublimetext)
 - [Programming in Arcadia](#programming-in-arcadia)
-	- [Clojure CLR](#clojure-clr)
-	- [Unity Interop](#unity-interop)
-	- [Hooks](#hooks)
-	  - [Entry Point](#entry-point)
-	- [Workflow](#workflow)
-- [State](#state)
-- [Multithreading](#multithreading)
-- [Namespace Roots](#namespace-roots)
-- [VM Restarting](#vm-restarting)
+  - [Clojure CLR](#clojure-clr)
+  - [Unity Interop](#unity-interop)
+  - [Hooks](#hooks)
+    - [Entry Point](#entry-point)
+    - [Workflow](#workflow)
+  - [State](#state)
+  - [Multithreading](#multithreading)
+  - [Namespace Roots](#namespace-roots)
+  - [VM Restarting](#vm-restarting)
+- [Packages](#packages)
+  - [Leiningen Projects](#leiningen-projects)
+  - [Other Projects](#other-projects)
   	
 ## Arcadia
 Arcadia is the integration of the [Clojure programming language][clojure] with the [Unity 3D game engine][unity]. The goal is to combine a modern, expressive programming language with the industry standard cross-platform engine for interactive media to transform the way we make creative work. Arcadia is free and open source and always will be.
@@ -40,8 +44,9 @@ The basic Arcadia workflow is:
 1. [Configure Unity to work with Arcadia](#unity-configuration)
 1. [Clone the Arcadia repository into project](#cloning-arcadia)
 1. [Connect to the REPL](#livecoding-and-the-repl)
-1. [Write a game](#programming-in-arcadia)
-1. Export your project
+1. [Write a game, library, etc](#programming-in-arcadia)
+1. Export or publish(#leiningen) your project
+
 
 ### Unity Projects
 *These steps are not Arcadia specific.*
@@ -105,6 +110,8 @@ Switch back into Unity. It is normal for it to take a moment to load all the new
 To confirm Arcadia's installation, check your Unity console. If it is not open, select from the main menu Window → Console. There may be errors and warnings, but if it ends with `Starting REPL` and `Arcadia Started!` you should be set.
 
 ![](http://imgur.com/PrWoc0P.png)
+
+### Arcadia Configuration
 
 ### Livecoding and the REPL
 One of Arcadia's most exciting features is it's ability to livecode Unity. This is enabled by Clojure which, as a member of the Lisp family of programming languages, is designed with a Read Evaluate Print Loop (or REPL) in mind. The function of a REPL is to
@@ -268,7 +275,7 @@ State is set with `set-state!`, `remove-state!`, and `update-state!` and read wi
 #### Multithreading
 While the Unity scene graph API is ostensibly single threaded, the Mono VM it runs on is not. This means you can write multithreaded Clojure code in all its functional glory, provided that you do not call Unity scene graph methods off the main thread (they will throw an exception).
 
-Note that not all types in the UnityEngine namespace need to be used from the main thread. Value types such as Vector3 seem to be usable anywhere, for example.
+Note that not all types in the UnityEngine namespace need to be used from the main thread. Value types such as Vector3 are usable anywhere, for example.
 
 To trigger behavior restricted to the main thread from other threads, consider implementing a callback queue driven by the [Update Monobehaviour method](https://docs.unity3d.com/ScriptReference/MonoBehaviour.Update.html) of a  component in the scene graph, or an [EditorApplication.update](https://docs.unity3d.com/ScriptReference/EditorApplication-update.html) delegate for edit-mode operations. An example of the latter can be found in the (internal, unstable) Arcadia namespace [arcadia.internal.editor-callbacks](https://github.com/arcadia-unity/Arcadia/blob/develop/Source/arcadia/internal/editor_callbacks.clj).
 
@@ -285,3 +292,43 @@ When this happens, any state you had set up in the REPL will be lost and you wil
 
 [clojure]: http://clojure.org/
 [unity]: http://unity3d.com/
+
+
+## Packages
+
+Arcadia ships with a built-in package manager compatible with [Leiningen](https://leiningen.org/).
+
+### Leiningen Projects
+
+Leiningen projects should work correctly in Arcadia. Any directory in the `Assets` folder that contains a properly-formatted Leiningen `project.clj` will be considered a Leiningen project. Arcadia will treat the roots of these directories the same way Leiningen does, using `:source-paths` if it is defined and `src` otherwise.
+
+For example, say one has a Leiningen project `some_lein_project` under `Assets` with the following structure:
+
+```
+Assets
+|- some_lein_project
+   |- project.clj
+   |- src
+      |- top_namespace
+         |- inner_namespace
+            |- core.clj
+```
+
+```clojure
+(require 'top-namespace.inner-namespace.core)
+```
+
+In this case, Arcadia would look in `Assets/some_lein_project/src/top_namespace/inner_namespace/core.clj` for the corresponding file (and find it).
+
+Arcadia will extract the declared dependencies of a Leiningen project's `project.clj` and pull them in from Maven, just like running `lein deps`.
+
+Arcadia libraries can be published the same way you would publish a Leiningen library. Once published, a Leiningen library can be declared as a dependency either in `Assets/configuration.edn` or the `project.clj` of a Leiningen project directly under `Assets`.
+
+There is no guarantee, of course, that a Clojure library which works fine on the JVM will work in Arcadia. Porting JVM libraries to Arcadia is usually fairly easy, however. Libraries with no host interop can usually be ported directly, and C# is similar enough to Java that even porting libraries with heavy interop is often straightforward.
+
+### Other Projects
+
+If you need to set the root of a project somewhere else, you can specify it in the `Assets/configuration.edn` file. Place all paths you wish to consider roots for Clojure namespaces in a vector keyed to `:arcadia.compiler/loadpaths`, this works similarly to Leiningen `:source-paths`.
+
+This option is especially useful for cloning repositories into Arcadia that don't have a Leiningen-style structure, and that don't assume their containing directory should be their Clojure namespace root.
+
