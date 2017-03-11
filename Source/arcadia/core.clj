@@ -136,7 +136,7 @@
 
 (definline object-named
   "Returns one GameObject named `name`. Wraps UnityEngine.GameObject/Find."
-  [^String name] `(GameObject/Find ~name))
+  [^String name] `(UnityEngine.GameObject/Find ~name))
 
 (defn objects-named
   "Returns a sequence of all GameObjects named `name`."
@@ -155,14 +155,14 @@
   "Returns one active GameObject tagged `tag`. Tags are managed from the
   [Unity Tag Manager](https://docs.unity3d.com/Manual/class-TagManager.html).
   Wraps UnityEngine.GameObject/FindWithTag."
-  [^String t] `(GameObject/FindWithTag ~t))
+  [^String t] `(UnityEngine.GameObject/FindWithTag ~t))
 
 (definline objects-tagged
   "Returns an array of active GameObjects tagged tag. Returns empty
   array if no GameObject was found. Tags are managed from the
   [Unity Tag Manager](https://docs.unity3d.com/Manual/class-TagManager.html).
   Wraps UnityEngine.GameObject/FindGameObjectsWithTag."
-  [^String t] `(GameObject/FindGameObjectsWithTag ~t))
+  [^String t] `(UnityEngine.GameObject/FindGameObjectsWithTag ~t))
 
 ;; ------------------------------------------------------------
 ;; IEntityComponent
