@@ -9,7 +9,7 @@
             [arcadia.compiler :as compiler]
             [arcadia.config :as config])
   (:import [System.Text.RegularExpressions Regex]
-           [System.IO Path]))
+           [System.IO FileSystemInfo DirectoryInfo Path]))
 
 ;; ------------------------------------------------------------
 ;; grammar

@@ -5,6 +5,7 @@
             arcadia.literals)
   (:import ArcadiaBehaviour
            ArcadiaState
+           [clojure.lang RT]
            [UnityEngine
             Vector3
             Quaternion

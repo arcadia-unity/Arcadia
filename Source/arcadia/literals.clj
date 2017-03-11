@@ -6,6 +6,7 @@
             ParameterInfo]
            [System TimeSpan]
            [UnityEngine Debug]
+           [System.Reflection Assembly]
            [System.Diagnostics Stopwatch]))
 
 (def ^Stopwatch sw3 (Stopwatch.))
