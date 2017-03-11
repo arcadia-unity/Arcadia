@@ -11,6 +11,7 @@
             Application
             MonoBehaviour
             GameObject
+            Transform
             Component
             PrimitiveType
             Debug]))
