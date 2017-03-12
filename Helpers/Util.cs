@@ -11,7 +11,7 @@ namespace Arcadia
 	{
 		public static void MarkScenesDirty(){
 			#if UNITY_EDITOR
-			if (Application.isPlaying){
+			if (!Application.isPlaying){
 				EditorSceneManager.MarkAllScenesDirty();
 			}
 			#endif
