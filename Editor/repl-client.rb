@@ -45,4 +45,4 @@ __END__
   (do (println "; Arcadia REPL")
     (println (str "; Clojure " (clojure-version)))
     (println (str "; Unity " (UnityEditorInternal.InternalEditorUtility/GetFullUnityVersion)))
-    (println (str "; Mono " (.Invoke (.GetMethod Mono.Runtime "GetDisplayName" (enum-or BindingFlags/NonPublic BindingFlags/Static)) nil nil)))))
+    (println (str "; Mono " (.Invoke (.GetMethod Mono.Runtime "GetDisplayName" (enum-or System.Reflection.BindingFlags/NonPublic System.Reflection.BindingFlags/Static)) nil nil)))))

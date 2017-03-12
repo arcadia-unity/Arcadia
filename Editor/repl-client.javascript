@@ -42,7 +42,7 @@ server.on('message', (msg, rinfo) => {
 });
 
 // send header form to start prompt
-server.send('(binding [*warn-on-reflection* false] (do (println "; Arcadia REPL") (println (str "; Clojure " (clojure-version))) (println (str "; Unity " (UnityEditorInternal.InternalEditorUtility/GetFullUnityVersion))) (println (str "; Mono " (.Invoke (.GetMethod Mono.Runtime "GetDisplayName" (enum-or BindingFlags/NonPublic BindingFlags/Static)) nil nil)))))', arcadiaPort, arcadiaHost)
+server.send('(binding [*warn-on-reflection* false] (do (println "; Arcadia REPL") (println (str "; Clojure " (clojure-version))) (println (str "; Unity " (UnityEditorInternal.InternalEditorUtility/GetFullUnityVersion))) (println (str "; Mono " (.Invoke (.GetMethod Mono.Runtime "GetDisplayName" (enum-or System.Reflection.BindingFlags/NonPublic System.Reflection.BindingFlags/Static)) nil nil)))))', arcadiaPort, arcadiaHost)
 
 // http://codereview.stackexchange.com/questions/45991/balanced-parentheses
 function parenthesesAreBalanced(s)
