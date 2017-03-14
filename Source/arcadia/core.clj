@@ -13,7 +13,8 @@
             GameObject
             Component
             PrimitiveType
-            Debug]))
+            Debug]
+           [System Type]))
 
 ;; ============================================================
 ;; application
