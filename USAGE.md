@@ -298,6 +298,16 @@ When this happens, any state you had set up in the REPL will be lost and you wil
 
 Arcadia ships with a built-in package manager compatible with [Leiningen](https://leiningen.org/).
 
+Arcadia supports developing (and publishing, via Leiningen) multiple Clojure libraries in a single Unity project. Dependencies can be specified either in `Assets/configuration.edn` or in the `project.clj` file of any Leiningen project in `Assets`.
+
+By default, Arcadia will automatically pull in any newly-specified dependencies from Maven when one of these files changes. This happens on a separate thread, and will not block the normal operation of Unity or Arcadia.
+
+### Specifying Dependencies
+
+Dependencies may be specified in the user-supplied `Assets/configuration.edn` with a vector keyed to `:dependencies`, with the same vector-of-vectors format used by Leiningen.
+
+Arcadia will merge the dependencies declared in `Assets/configuration.edn` with those declared in all Leiningen `project.clj`s to compute the final set of dependencies and pull them in from Maven.
+
 ### Leiningen Projects
 
 Leiningen projects should work correctly in Arcadia. Any directory in the `Assets` folder that contains a properly-formatted Leiningen `project.clj` will be considered a Leiningen project. Arcadia will treat the roots of these directories the same way Leiningen does, using `:source-paths` if it is defined and `src` otherwise.
