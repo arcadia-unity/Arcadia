@@ -82,6 +82,8 @@
   (untrack var)
   (track var))
 
+(declare tracked?)
+
 (defn track [v]
   (assert (var? v))
   (locking tracked-vars
