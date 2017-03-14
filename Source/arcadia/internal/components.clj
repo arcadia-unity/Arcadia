@@ -2,7 +2,8 @@
   ^{:doc "Generates the C# implementation of the Arcadia hooks"}
   arcadia.internal.components
   (:require [clojure.string :as string]
-            [arcadia.internal.messages :as messages]))
+            [arcadia.internal.messages :as messages])
+  (:import [clojure.lang RT]))
 
 ;; TODO path seperators
 (def path "Assets/Arcadia/Components/")
