@@ -15,7 +15,7 @@
             [clojure.clr.io :as io]
             [clojure.spec :as s]
             [clojure.string :as string])
-  (:import XmlReader
+  (:import [System.Xml XmlReader XmlNodeType]
            [UnityEngine Debug]
            [System.Collections Queue]
            [System.Net WebClient WebException WebRequest HttpWebRequest]

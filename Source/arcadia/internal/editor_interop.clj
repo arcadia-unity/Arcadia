@@ -6,8 +6,8 @@
            [Arcadia AssetPostprocessor]
            [System.Reflection FieldInfo]
            [clojure.lang RT Symbol Keyword]
-           [UnityEngine Debug GUILayout Vector2 Vector3 Vector4 AnimationCurve Color Bounds Rect]
-           [UnityEditor EditorGUILayout MessageType]))
+           [UnityEngine Debug GUI GUILayout GUIStyle GUILayoutUtility Vector2 Vector3 Vector4 AnimationCurve Color Bounds Rect]
+           [UnityEditor EditorGUILayout EditorGUIUtility MessageType EditorStyles EditorSkin]))
 
 ;; PERF memoize 
 (defn all-user-namespaces-symbols []
