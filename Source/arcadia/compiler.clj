@@ -208,7 +208,8 @@
   (swap! state/state update ::loadpath-extension-fns
     (fn [loadpath-extensions]
       (let [res (assoc loadpath-extensions k f)]
-        (if (as/loud-valid? ::loadpath-extension-fns res)
+        (if (or *compile-files* ;; annoying fix for issue #212
+                (as/loud-valid? ::loadpath-extension-fns res))
           res
           (throw
             (Exception.
