@@ -1,6 +1,6 @@
 (ns arcadia.internal.editor-interop
   (:require [clojure.string :as string]
-            [arcadia.compiler :refer [asset->ns]]
+            [arcadia.compiler :refer [aot-namespaces asset->ns]]
             [arcadia.internal.name-utils :refer [title-case]])
   (:import [System.IO Directory File]
            [Arcadia AssetPostprocessor]
@@ -217,3 +217,24 @@
         GetType
         (GetField field-name)
         (SetValue obj field-value))))
+
+(defn aot-internal-namespaces [directory]
+  (aot-namespaces
+    directory
+    '[clojure.core clojure.core.protocols clojure.core.server
+      clojure.core.reducers clojure.main clojure.set clojure.zip
+      clojure.walk clojure.stacktrace clojure.template clojure.test
+      clojure.test.tap clojure.test.junit clojure.pprint clojure.clr.io
+      clojure.repl clojure.clr.shell clojure.string clojure.data
+      clojure.reflect clojure.edn])
+  (aot-namespaces
+    directory
+    '[arcadia.core arcadia.repl arcadia.packages arcadia.linear
+      arcadia.literals arcadia.config arcadia.compiler
+      arcadia.internal.tracker arcadia.internal.thread arcadia.internal.test
+      arcadia.internal.state arcadia.internal.spec
+      arcadia.internal.name-utils arcadia.internal.messages arcadia.internal.map-utils
+      arcadia.internal.macro arcadia.internal.leiningen arcadia.internal.functions
+      arcadia.internal.filewatcher-dummy arcadia.internal.file-system arcadia.internal.editor-interop
+      arcadia.internal.components arcadia.internal.benchmarking arcadia.internal.asset-watcher
+      arcadia.internal.array-utils arcadia.packages.data]))

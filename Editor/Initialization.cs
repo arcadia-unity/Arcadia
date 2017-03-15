@@ -110,6 +110,14 @@ namespace Arcadia
 				PlayerSettings.runInBackground = true;
 			}
 		}
+		
+		[MenuItem("Arcadia/Compiler/AOT Compile Internal Namespaces")]
+		public static void AOTInternalNamespaces()
+		{
+			RT.load("arcadia/internal/editor_interop");
+			RT.var("arcadia.internal.editor-interop", "aot-internal-namespaces").invoke("Assets/Arcadia/Compiled");
+			AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
+		}
 
 		// need this to set things up so we can get rest of loadpath after loading arcadia.compiler
 		public static void SetInitialClojureLoadPath()
