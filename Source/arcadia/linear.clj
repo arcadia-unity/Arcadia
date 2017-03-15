@@ -40,8 +40,8 @@
               (list (mtag (vec (take n args)) return-type)
                 (nestl op (take n args))))
           optspec {:inline-arities (if unary-op
-                                     #(< 0 %)
-                                     #(< 1 %))
+                                     `#(< 0 %)
+                                     `#(< 1 %))
                    :inline (remove nil?
                              ['fn
                               (when nullary-expr
