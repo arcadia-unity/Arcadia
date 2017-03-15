@@ -77,10 +77,16 @@
         (isa? (type t) Type) (let [^Type t t] (symbol (.FullName t)))
         :else (throw (Exception. (str t " is not a type or a symbol")))))
 
+(defn- obsolete? [t]
+  (some #(instance? ObsoleteAttribute %) (.GetCustomAttributes t false)))
+
 (def value-types
   (->> (Assembly/Load "UnityEngine")
        .GetTypes
        (filter #(.IsValueType ^Type %))
+       (filter #(.IsVisible ^Type %))
+       (filter #(= "UnityEngine" (.Namespace ^Type %)))
+       (remove obsolete?)
        (remove #(.IsEnum ^Type %))
        (remove #(.IsNested ^Type %))))
 
