@@ -312,7 +312,7 @@
 (defn ensure-cmpt
   "If `obj` has a component of type `t`, returns is. Otherwise, adds
   a component of type `t` and returns the new instance."
-  ^Component [obj ^Type t]
+  ^UnityEngine.Component [obj ^Type t]
   (let [obj (gobj obj)]
     (or (cmpt obj t) (cmpt+ obj t))))
 
@@ -336,11 +336,11 @@
   ([gob cmpt-name-types & body]
    (assert (vector? cmpt-name-types))
    (assert (even? (count cmpt-name-types)))
-   (let [gobsym (gentagged "gob__" 'GameObject)
+   (let [gobsym (gentagged "gob__" 'UnityEngine.GameObject)
          dcls  (->> cmpt-name-types
                  (partition 2)
                  (mapcat (fn [[n t]]
-                           [(meta-tag n t) `(cmpt ~gobsym ~t)])))]
+                           [(meta-tag n t) `(ensure-cmpt ~gobsym ~t)])))]
      `(with-gobj [~gobsym ~gob]
         (let [~@dcls]
           ~@body)))))
