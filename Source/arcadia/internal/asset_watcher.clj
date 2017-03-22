@@ -55,7 +55,7 @@
 (defn stop-asset-watcher []
   (locking asset-watcher-state
     (let [{:keys [::watch]} @asset-watcher-state]
-      (when watch ((::stop watch)))
+      (when watch ((::fw/stop watch)))
       (swap! asset-watcher-state dissoc ::watch))))
 
 (defn add-listener [e k r f]
