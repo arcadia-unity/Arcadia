@@ -243,7 +243,8 @@
      (reduce-kv ap [] (::loadpath-extension-fns @state/state)))))
 
 (defn configuration-extensions []
-  (get-in @state/state [::config/config :arcadia.compiler/loadpaths]))
+  (map #(System.IO.Path/GetFullPath %)
+    (get-in @state/state [::config/config :arcadia.compiler/loadpaths])))
 
 (defn loadpath-extension-string
   ([] (loadpath-extension-string nil))
