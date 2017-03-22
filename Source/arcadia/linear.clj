@@ -220,28 +220,28 @@
 
 (defn qq*
   {:inline (fn [& args]
-             (nestl 'Quaternion/op_Multiply args))
+             (nestl 'UnityEngine.Quaternion/op_Multiply args))
   :inline-arities >1?}
-  (^Quaternion [^Quaternion a ^Quaternion b]
-    (Quaternion/op_Multiply a b))
-  (^Quaternion [^Quaternion a ^Quaternion b & cs]
+  (^UnityEngine.Quaternion [^UnityEngine.Quaternion a ^UnityEngine.Quaternion b]
+    (UnityEngine.Quaternion/op_Multiply a b))
+  (^UnityEngine.Quaternion [^UnityEngine.Quaternion a ^UnityEngine.Quaternion b & cs]
     (reduce qq* (qq* a b) cs)))
 
-(definline qv* ^Vector3 [^Quaternion a ^Vector3 b]
-  `(Quaternion/op_Multiply ~a ~b))
+(definline qv* ^UnityEngine.Vector3 [^UnityEngine.Quaternion a ^UnityEngine.Vector3 b]
+  `(UnityEngine.Quaternion/op_Multiply ~a ~b))
 
 (definline q* [a b]
-  `(Quaternion/op_Multiply ~a ~b))
+  `(UnityEngine.Quaternion/op_Multiply ~a ~b))
 
-(definline euler ^Quaternion [^Vector3 v]
-  `(Quaternion/Euler ~v))
+(definline euler ^UnityEngine.Quaternion [^UnityEngine.Vector3 v]
+  `(UnityEngine.Quaternion/Euler ~v))
 
-(definline euler-angles ^Vector3 [^Quaternion q]
+(definline euler-angles ^UnityEngine.Vector3 [^UnityEngine.Quaternion q]
   `(.eulerAngles ~q))
 
-(definline to-angle-axis [^Quaternion q]
+(definline to-angle-axis [^UnityEngine.Quaternion q]
   `(let [ang# (float 0)
-         axis# Vector3/zero]
+         axis# UnityEngine.Vector3/zero]
      (.ToAngleAxis ~q (by-ref ang#) (by-ref axis#))
      [ang# axis#]))
 
@@ -249,26 +249,26 @@
 ;; (defn angle-axis [^Double angle, ^Vector3 axis]
 ;;   (Quaternion/AngleAxis angle, axis))
 
-(definline angle-axis ^Quaternion [angle, axis]
-  `(Quaternion/AngleAxis ~angle, ~axis))
+(definline angle-axis ^UnityEngine.Quaternion [angle, axis]
+  `(UnityEngine.Quaternion/AngleAxis ~angle, ~axis))
 
-(definline qforward ^Vector3 [^Quaternion q]
-  `(q* ~q Vector3/forward))
+(definline qforward ^UnityEngine.Vector3 [^UnityEngine.Quaternion q]
+  `(q* ~q UnityEngine.Vector3/forward))
 
-(definline aa ^Quaternion [ang x y z]
+(definline aa ^UnityEngine.Quaternion [ang x y z]
   `(angle-axis ~ang (v3 ~x ~y ~z)))
 
-(defn qlookat ^Quaternion
+(defn qlookat ^UnityEngine.Quaternion
   {:inline (fn
              ([here there]
-              `(qlookat ~here ~there Vector3/up))
+              `(qlookat ~here ~there UnityEngine.Vector3/up))
              ([here there up]
-              `(Quaternion/LookRotation (v3- ~there ~here) ~up)))
+              `(UnityEngine.Quaternion/LookRotation (v3- ~there ~here) ~up)))
    :inline-arities #{2 3}}
-  ([^Vector3 here, ^Vector3 there]
-     (qlookat here there Vector3/up))
-  ([^Vector3 here, ^Vector3 there, ^Vector3 up]
-     (Quaternion/LookRotation (v3- there here) up)))
+  ([^UnityEngine.Vector3 here, ^UnityEngine.Vector3 there]
+     (qlookat here there UnityEngine.Vector3/up))
+  ([^UnityEngine.Vector3 here, ^UnityEngine.Vector3 there, ^UnityEngine.Vector3 up]
+     (UnityEngine.Quaternion/LookRotation (v3- there here) up)))
 
 
 ;; ------------------------------------------------------------
@@ -286,7 +286,7 @@
 ;; ------------------------------------------------------------
 ;; more rotation
 
-(definline point-pivot ^Vector3 [^Vector3 pt, ^Vector3 piv, ^Quaternion rot]
+(definline point-pivot ^UnityEngine.Vector3 [^UnityEngine.Vector3 pt, ^UnityEngine.Vector3 piv, ^UnityEngine.Quaternion rot]
   `(let [piv# ~piv]
      (v3+ (qv* ~rot (v3- ~pt piv#))
        piv#)))
@@ -385,7 +385,7 @@
 (definline inverse [^Matrix4x4 m]
   `(Matrix4x4/Inverse ~m))
 
-(defn trs [^Vector3 t, ^Quaternion r, ^Vector3 s]
+(defn trs [^UnityEngine.Vector3 t, ^UnityEngine.Quaternion r, ^UnityEngine.Vector3 s]
   `(Matrix4x4/TRS ~t ~r ~s))
 
 ;; ============================================================
@@ -402,19 +402,19 @@
   ([a b]
    (close-enough-v2 default-epsilon))
   ([a b epsilon]
-   (< (Vector2/Distance a b) epsilon)))
+   (< (UnityEngine.Vector2/Distance a b) epsilon)))
 
 (defn- close-enough-v3
   ([a b]
    (close-enough-v3 default-epsilon))
   ([a b epsilon]
-   (< (Vector3/Distance a b) epsilon)))
+   (< (UnityEngine.Vector3/Distance a b) epsilon)))
 
 (defn- close-enough-v4
   ([a b]
    (close-enough-v4 default-epsilon))
   ([a b epsilon]
-   (< (Vector4/Distance a b) epsilon)))
+   (< (UnityEngine.Vector4/Distance a b) epsilon)))
 
 (test/deftest- test-addition
   (test/is
