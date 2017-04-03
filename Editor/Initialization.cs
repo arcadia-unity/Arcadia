@@ -61,8 +61,6 @@ namespace Arcadia
 		public static void Initialize()
 		{
 			Debug.Log("Starting Arcadia...");
-
-			CheckSettings();
 			SetInitialClojureLoadPath();
 			LoadConfig();
 			LoadPackages();
@@ -72,7 +70,6 @@ namespace Arcadia
 			StartEditorCallbacks();
 			StartWatching();
 			StartREPL();
-
 			Debug.Log("Arcadia Started!");
 		}
 
@@ -92,23 +89,6 @@ namespace Arcadia
 			Debug.Log("Loading configuration...");
 			RT.load("arcadia/config");
 			RT.var("arcadia.config", "update!").invoke();
-		}
-
-		[MenuItem("Arcadia/Initialization/Setup Player Settings")]
-		public static void CheckSettings()
-		{
-			Debug.Log("Checking Unity Settings...");
-			if (PlayerSettings.apiCompatibilityLevel != ApiCompatibilityLevel.NET_2_0)
-			{
-				Debug.Log("Updating API Compatibility Level to .NET 20");
-				PlayerSettings.apiCompatibilityLevel = ApiCompatibilityLevel.NET_2_0;
-			}
-
-			if (!PlayerSettings.runInBackground)
-			{
-				Debug.Log("Updating Run In Background to true");
-				PlayerSettings.runInBackground = true;
-			}
 		}
 		
 		[MenuItem("Arcadia/Compiler/AOT Compile Internal Namespaces")]

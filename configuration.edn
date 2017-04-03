@@ -12,6 +12,10 @@
  :compiler/verbose true
  :compiler/warn-on-reflection true
  
+ ;; map of https://clojuredocs.org/clojure.core/*compiler-options* 
+ ;; Example: {:elide-meta [:doc :file :line :added :column :arglists]}
+ :compiler/options {}
+
  ;; set to true in user configuration.edn to enable automatic code
  ;; reloading when a clojure file is saved
  :reload-on-change false

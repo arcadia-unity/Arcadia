@@ -159,7 +159,8 @@
   "Compile a namespace `ns` and all namespaces it depends on
   to disk, placing resulting assemblies in `path`"
   [path ns]
-  (binding [*compile-path* path
+  (binding [*compiler-options* (get (config/config) :compiler/options {})
+            *compile-path* path
             *compile-files* true
             *exporting?* true]
     (require ns :reload-all)))
