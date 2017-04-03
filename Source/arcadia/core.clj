@@ -284,11 +284,11 @@
   (parent [^Component this]
     (.. this gameObject parent))
   (child+
-    ([this child]
+    ([^Component this child]
      (child+ (.gameObject this) child))
-    ([this child transform-to]
+    ([^Component this, child, transform-to]
      (child+ (.gameObject this) child transform-to)))
-  (child- [this child]
+  (child- [^Component this, child]
     (child- (.gameObject this) child))
 
   clojure.lang.Var
