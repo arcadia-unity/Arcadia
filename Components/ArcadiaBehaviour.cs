@@ -13,7 +13,8 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		set
 		{
 			_fns = value;
-			OnBeforeSerialize();
+            qualifiedVarNames = null;
+            OnBeforeSerialize();
 		}
 	}
 
@@ -29,19 +30,12 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		for (int i = 0; i < fns.Length; i++)
 		{
 			var f = fns[i];
-			if (f == null)
-			{
-				newQualifiedVarNames.Add(qualifiedVarNames[i]);
-			}
-			else
-			{
-				Var v = f as Var;
-				if (v != null)
-				{
-					newQualifiedVarNames.Add(v.Namespace.Name + "/" + v.Symbol.Name);
-				}
-			}
-		}
+            Var v = f as Var;
+            if (v != null)
+            {
+                newQualifiedVarNames.Add(v.Namespace.Name + "/" + v.Symbol.Name);
+            }
+        }
 
 		qualifiedVarNames = newQualifiedVarNames;
 	}
@@ -126,8 +120,9 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 							fnList.Add(v);
 						} catch (System.Exception e)
 						{
-							fnList.Add(null);
-						}
+                            fnList.Add(RT.var(sym.Namespace, sym.Name));
+                            Debug.LogError(new System.Exception("ArcadiaBehaviour: Can't find #'"+ sym.Namespace+"/"+sym.Name));
+                        }
 					}
 				}
 			}

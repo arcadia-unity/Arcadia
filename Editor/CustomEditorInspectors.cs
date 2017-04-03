@@ -98,13 +98,14 @@ public class ArcadiaBehaviourEditor : Editor
 			for (int i = 0; i < ab.fns.Length; i++)
 			{
 				var fn = ab.fns[i];
-				if (fn != null)
+				Var v = fn as Var;
+				if (v.isBound)
 				{
 					EditorGUILayout.LabelField(fn.ToString());
 				} else {
 					GUIStyle style = new GUIStyle(GUI.skin.label);
 					style.normal.textColor = Color.red;
-					EditorGUILayout.LabelField("#'"+ab.qualifiedVarNames[i], style);
+					EditorGUILayout.LabelField(fn.ToString(), style);
 				}
 				
 			}
