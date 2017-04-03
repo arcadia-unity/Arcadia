@@ -33,7 +33,7 @@
 - [Packages](#packages)
   - [Leiningen Projects](#leiningen-projects)
   - [Other Projects](#other-projects)
-  	
+
 ## Arcadia
 Arcadia is the integration of the [Clojure programming language][clojure] with the [Unity 3D game engine][unity]. The goal is to combine a modern, expressive programming language with the industry standard cross-platform engine for interactive media to transform the way we make creative work. Arcadia is free and open source and always will be.
 
@@ -51,7 +51,7 @@ The basic Arcadia workflow is:
 ### Unity Projects
 *These steps are not Arcadia specific.*
 
-Arcadia is installed on a per-project basis. It is developed and tested Unity 5.2.x and 5.3.x. 
+Arcadia is installed on a per-project basis. It is developed and tested Unity 5.2.x and 5.3.x.
 
 Launch Unity and select *NEW* to start a new project
 
@@ -113,6 +113,32 @@ To confirm Arcadia's installation, check your Unity console. If it is not open, 
 
 ### Arcadia Configuration
 
+Configuration for Arcadia itself is done via a user-supplied `configuration.edn` file that should be placed under `Assets` in your Unity project. Options to `configuration.edn` are given in the format of a Clojure map literal, and are documented in `Arcadia/configuration.edn`, which is also the default configuration file.
+
+To determine the final set of configuration settings, Arcadia merges the user-supplied `Assets/configuration.edn` with the built-in `Assets/Arcadia/configuration.edn`; in other words, user settings overwrite those specified in `Assets/Arcadia/configuration.edn`. Please do not modify the default configuration file itself, as it provides the default behavior of Arcadia!
+
+Noteworthy configuration options include:
+
+- `:dependencies`
+
+  Specify project dependencies, using basically the same format as Leiningen; see [Packages](#packages) below.
+- `:arcadia.compiler/loadpaths`
+
+  Specify paths to Clojure source Arcadia wouldn't pick up on otherwise.
+
+- `:reactive`
+
+  Specify whether Arcadia should automatically respond to changes in the file system.
+  
+- `:reload-on-change`
+
+  Specify whether Arcadia should automatically reload Clojure files corresponding to already-loaded namespaces when they are saved, similar to Clojurescript's [Figwheel](https://github.com/bhauman/lein-figwheel) library.
+
+- `:repl/injections`
+
+  Specify forms to evaluate along with every form entered into the repl. Useful for things like always having the `clojure.repl` namespace available (ie, `:repl/injections (use 'clojure.repl)`).
+
+
 ### Livecoding and the REPL
 One of Arcadia's most exciting features is it's ability to livecode Unity. This is enabled by Clojure which, as a member of the Lisp family of programming languages, is designed with a Read Evaluate Print Loop (or REPL) in mind. The function of a REPL is to
 
@@ -121,7 +147,7 @@ One of Arcadia's most exciting features is it's ability to livecode Unity. This 
 3. **Print the results** back to the programmer
 4. **Loop** back to the first step, waiting for more code
 
-The evaluated code can be as large as a whole file, or as small as an individual expression. The REPL is used to incrementally sculpt your game while developing it, to query the state of things while debugging, to put on livecoding performances, and much more. 
+The evaluated code can be as large as a whole file, or as small as an individual expression. The REPL is used to incrementally sculpt your game while developing it, to query the state of things while debugging, to put on livecoding performances, and much more.
 
 #### Under the Hood
 Arcadia uses a custom UDP socket REPL listening on port 11211. *It does not use nREPL*, though it may move to the built in Clojure socket REPL at some point in the future.
@@ -341,4 +367,3 @@ There is no guarantee, of course, that a Clojure library which works fine on the
 If you need to set the root of a project somewhere else, you can specify it in the `Assets/configuration.edn` file. Place all paths you wish to consider roots for Clojure namespaces in a vector keyed to `:arcadia.compiler/loadpaths`, this works similarly to Leiningen `:source-paths`.
 
 This option is especially useful for cloning repositories into Arcadia that don't have a Leiningen-style structure, and that don't assume their containing directory should be their Clojure namespace root.
-
