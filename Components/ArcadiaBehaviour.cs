@@ -72,13 +72,12 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 			fnIndexes = fnIndexes.without(key);
 			foreach (IMapEntry entry in fnIndexes)
 			{
-				int eval = (int)entry.val();
-				if (eval > i)
+				int v = (int)entry.val();
+				if (v > i)
 				{
-					fnIndexes = fnIndexes.assoc(entry.key(), eval - 1);
+					fnIndexes = fnIndexes.assoc(entry.key(), v - 1);
 				}
 			}
-
 			return obj;
 		}
 		else
