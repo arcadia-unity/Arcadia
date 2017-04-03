@@ -13,7 +13,6 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		set
 		{
 			_fns = value;
-			qualifiedVarNames = null;
 			OnBeforeSerialize();
 		}
 	}
@@ -24,14 +23,23 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 	// if fn is a var, store in serializedVar 
 	public void OnBeforeSerialize()
 	{
+
 		List<string> newQualifiedVarNames = new List<string>(fns.Length);
 
-		foreach (var f in fns)
+		for (int i = 0; i < fns.Length; i++)
 		{
-			Var v = f as Var;
-			if (v != null)
+			var f = fns[i];
+			if (f == null)
 			{
-				newQualifiedVarNames.Add(v.Namespace.Name + "/" + v.Symbol.Name);
+				newQualifiedVarNames.Add(qualifiedVarNames[i]);
+			}
+			else
+			{
+				Var v = f as Var;
+				if (v != null)
+				{
+					newQualifiedVarNames.Add(v.Namespace.Name + "/" + v.Symbol.Name);
+				}
 			}
 		}
 
@@ -92,14 +100,18 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		Init();
 	}
 
+
 	private void Init() {
 		if (requireFn == null)
 			requireFn = RT.var("clojure.core", "require");
 		if (qualifiedVarNames != null)
 		{
-			List<IFn> fnList = new List<IFn>(qualifiedVarNames.Count);
-			foreach (var varName in qualifiedVarNames)
+			int varCount = qualifiedVarNames.Count;
+			List<IFn> fnList = new List<IFn>(varCount);
+			for (int idx = 0; idx < varCount;idx++)
 			{
+				var varName = qualifiedVarNames[idx]; 
+
 				if (varName != "")
 				{
 					Symbol sym = Symbol.intern(varName);
@@ -108,8 +120,14 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 						var nameSym = Symbol.intern(sym.Name);
 						var nsSym = Symbol.intern(sym.Namespace);
 						requireFn.invoke(nsSym);
-						var v = Namespace.find(nsSym).FindInternedVar(nameSym);
-						fnList.Add(v);
+						try
+						{
+							var v = Namespace.find(nsSym).FindInternedVar(nameSym);
+							fnList.Add(v);
+						} catch (System.Exception e)
+						{
+							fnList.Add(null);
+						}
 					}
 				}
 			}
