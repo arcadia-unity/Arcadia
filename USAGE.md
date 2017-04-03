@@ -115,7 +115,7 @@ To confirm Arcadia's installation, check your Unity console. If it is not open, 
 
 Configuration for Arcadia itself is done via a user-supplied `configuration.edn` file that should be placed under `Assets` in your Unity project. Options to `configuration.edn` are given in the format of a Clojure map literal, and are documented in `Arcadia/configuration.edn`, which is also the default configuration file.
 
-To determine the final set of configuration settings, Arcadia merges the user-supplied `Assets/configuration.edn` with the built-in `Assets/Arcadia/configuration.edn`; in other words, user settings overwrite those specified in `Assets/Arcadia/configuration.edn`. Please do not modify the default configuration file itself, as it provides the default behavior of Arcadia!
+To determine the final set of configuration settings, Arcadia merges the user-supplied `configuration.edn` under `Assets` with the built-in `Arcadia/configuration.edn`; in other words, user settings overwrite those specified in `Arcadia/configuration.edn`. Please do not modify the default configuration file itself, as it provides the default behavior of Arcadia!
 
 Noteworthy configuration options include:
 
@@ -138,6 +138,7 @@ Noteworthy configuration options include:
 
   Specify forms to evaluate along with every form entered into the repl. Useful for things like always having the `clojure.repl` namespace available (ie, `:repl/injections (use 'clojure.repl)`).
 
+See `Arcadia/configuration.edn` for more details.
 
 ### Livecoding and the REPL
 One of Arcadia's most exciting features is it's ability to livecode Unity. This is enabled by Clojure which, as a member of the Lisp family of programming languages, is designed with a Read Evaluate Print Loop (or REPL) in mind. The function of a REPL is to
