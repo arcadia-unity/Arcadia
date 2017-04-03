@@ -69,7 +69,17 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 			var fnList = new List<IFn>(fns);
 			fnList.RemoveAt((int)indexToRemove);
 			fns = fnList.ToArray();
-			return obj;
+            fnIndexes = fnIndexes.without(key);
+            foreach (IMapEntry entry in fnIndexes)
+            {
+                int eval = (int)entry.val();
+                if (eval > i)
+                {
+                    fnIndexes = fnIndexes.assoc(entry.key(), eval - 1);
+                }
+            }
+
+            return obj;
 		}
 		else
 		{
