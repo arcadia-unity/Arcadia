@@ -45,8 +45,14 @@ public class " (component-name message) " : ArcadiaBehaviour" (if interface (str
 " (if (call-base message)
     (str "      base." message "(" (string/join ", " arg-names) ");\n"))
 "      var _go = gameObject;
-      foreach (var fn in fns)
-        fn.invoke(" (string/join ", " (concat ['_go] arg-names)) ");
+      for (int i = 0; i < fns.Length; i++){
+        var fn = fns[i];
+        if (fn != null){
+          fn.invoke(" (string/join ", " (concat ['_go] arg-names)) ");
+        } else {
+          Debug.LogException(new System.Exception(\"Unresolved var: #'\"+qualifiedVarNames[i]));
+        }
+      }
   }
 }"))))
 
