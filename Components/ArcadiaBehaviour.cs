@@ -27,9 +27,8 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 		List<string> newQualifiedVarNames = new List<string>(fns.Length);
 
-		for (int i = 0; i < fns.Length; i++)
+		foreach (var f in fns)
 		{
-			var f = fns[i];
 			Var v = f as Var;
 			if (v != null)
 			{
@@ -100,12 +99,9 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 			requireFn = RT.var("clojure.core", "require");
 		if (qualifiedVarNames != null)
 		{
-			int varCount = qualifiedVarNames.Count;
-			List<IFn> fnList = new List<IFn>(varCount);
-			for (int idx = 0; idx < varCount;idx++)
+			List<IFn> fnList = new List<IFn>(qualifiedVarNames.Count);
+			foreach (var varName in qualifiedVarNames)
 			{
-				var varName = qualifiedVarNames[idx]; 
-
 				if (varName != "")
 				{
 					Symbol sym = Symbol.intern(varName);
@@ -121,7 +117,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 						} catch (System.Exception e)
 						{
 							fnList.Add(RT.var(sym.Namespace, sym.Name));
-							Debug.LogError(new System.Exception("ArcadiaBehaviour: Can't find #'"+ sym.Namespace+"/"+sym.Name));
+							Debug.LogError(new System.Exception("Failed to require namespace while attaching #'" + sym.Namespace+"/"+sym.Name+" to "+this.GetType().Name, e));
 						}
 					}
 				}
