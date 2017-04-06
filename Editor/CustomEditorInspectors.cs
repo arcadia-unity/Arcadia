@@ -95,9 +95,19 @@ public class ArcadiaBehaviourEditor : Editor
 		}
 		else
 		{
-			foreach(var fn in ab.fns)
+			for (int i = 0; i < ab.fns.Length; i++)
 			{
-				EditorGUILayout.LabelField(fn.ToString());
+				var fn = ab.fns[i];
+				Var v = fn as Var;
+				if (v.isBound)
+				{
+					EditorGUILayout.LabelField(fn.ToString());
+				} else {
+					GUIStyle style = new GUIStyle(GUI.skin.label);
+					style.normal.textColor = Color.red;
+					EditorGUILayout.LabelField(fn.ToString(), style);
+				}
+				
 			}
 		}
 		
