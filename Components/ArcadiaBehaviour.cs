@@ -45,11 +45,16 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 	}
 
 	public IFn[] AddFunction(IFn f, object key)
-	{
-		var fnList = new List<IFn>(fns);
-		fnIndexes = fnIndexes.assoc(key, fnList.Count);
-		fnList.Add(f);
-		fns = fnList.ToArray();
+	{		
+		var index = fnIndexes.valAt(key);
+		if (index != null) {
+			fns[(int)index] = f;
+		} else {
+			var fnList = new List<IFn>(fns);
+			fnIndexes = fnIndexes.assoc(key, fnList.Count);
+			fnList.Add(f);
+			fns = fnList.ToArray();
+		}
 		return fns;
 	}
 
