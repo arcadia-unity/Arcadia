@@ -4,7 +4,7 @@
    [System.Diagnostics Stopwatch]))
 
 (defmacro timing [& body]
-  `(let [^Stopwatch sw# (Stopwatch.)]
+  `(let [^System.Diagnostics.Stopwatch sw# (System.Diagnostics.Stopwatch.)]
      (.Start sw#)
      (do ~@body)
      (.Stop sw#)
