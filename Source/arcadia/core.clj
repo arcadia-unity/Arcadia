@@ -396,6 +396,16 @@
      (.AddFunction hook-cmpt f k)
      obj)))
 
+(defn hook-var [obj hook var]
+  (if (var? var)
+    (hook+ obj hook var var)
+    (throw
+      (clojure.lang.ExceptionInfo.
+        (str "Expects var, instead got: " (class var))
+        {:obj obj
+         :hook hook
+         :var var}))))
+
 (defn hook-
   "Remove all `hook` components attached to `obj`"
   ([obj hook]
