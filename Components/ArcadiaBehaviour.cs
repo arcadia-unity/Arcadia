@@ -24,6 +24,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 	// if fn is a var, store in serializedVar 
 	public void OnBeforeSerialize()
 	{
+
 		List<string> newQualifiedVarNames = new List<string>(fns.Length);
 
 		foreach (var f in fns)
@@ -101,6 +102,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		Init();
 	}
 
+
 	private void Init() {
 		if (requireFn == null)
 			requireFn = RT.var("clojure.core", "require");
@@ -117,8 +119,15 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 						var nameSym = Symbol.intern(sym.Name);
 						var nsSym = Symbol.intern(sym.Namespace);
 						requireFn.invoke(nsSym);
-						var v = Namespace.find(nsSym).FindInternedVar(nameSym);
-						fnList.Add(v);
+						try
+						{
+							var v = Namespace.find(nsSym).FindInternedVar(nameSym);
+							fnList.Add(v);
+						} catch (System.Exception e)
+						{
+							fnList.Add(RT.var(sym.Namespace, sym.Name));
+							Debug.LogError(new System.Exception("Failed to require namespace while attaching #'" + sym.Namespace+"/"+sym.Name+" to "+this.GetType().Name, e));
+						}
 					}
 				}
 			}
