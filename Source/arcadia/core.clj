@@ -482,3 +482,65 @@
   ([go kw f & args]
    (let [c (ensure-state go)]
      (apply swap! (.state c) update kw f args))))
+
+
+;; ============================================================
+;; roles (experimental)
+
+(defn give-role [obj k spec]
+  (reduce-kv
+    (fn [_ k2 v]
+      (cond
+        (hook-types k2) (hook+ obj k2 k v)
+        (= :state k2) (set-state! obj k v)))
+    nil
+    spec)
+  obj)
+
+(defn drop-role [obj k]
+  (reduce-kv
+    (fn [_ ht _]
+      (hook- obj ht k))
+    nil
+    hook-types)
+  (remove-state! obj k)
+  obj)
+
+;; reverse lookup would make this a little less painful
+(defn role [obj k]
+  (reduce-kv
+    (fn [bldg hook-key hook-type]
+      (if-let [^ArcadiaBehaviour ab (cmpt obj hook-type)]
+        (if-let [inx (get (.fnIndexes ab) k)]
+          (let [^|clojure.lang.IFn[]| hfns (.fns ab)]
+            (assoc bldg hook-key (aget hfns inx)))
+          bldg)
+        bldg))
+    (if-let [s (state obj k)]
+      {:state s}
+      {})
+    hook-types))
+
+;; map from hook, state keys to role specs
+(defn roles [obj]
+  (reduce-kv
+    (fn [bldg kw hook-type]
+      (if-let [^ArcadiaBehaviour ab (cmpt obj hook-type)]
+        (let [^|clojure.lang.IFn[]| hfns (.fns ab)]
+          (reduce-kv
+            (fn [bldg k v]
+              (assoc-in bldg [k kw] (aget hfns v)))
+            bldg
+            (.fnIndexes ab)))
+        bldg))
+    (if-let [^ArcadiaState s (cmpt obj ArcadiaState)]
+      (reduce-kv
+        (fn [bldg k v]
+          (assoc-in bldg [k :state] v))
+        {}
+        (deref (.state s)))
+      {})
+    hook-types))
+
+;; so, (reduce-kv give-role obj2 (roles obj)) gives obj2 same Arcadia
+;; state and behavior as obj
