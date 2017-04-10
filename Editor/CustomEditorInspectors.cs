@@ -99,7 +99,7 @@ public class ArcadiaBehaviourEditor : Editor
 			{
 				var fn = ab.fns[i];
 				Var v = fn as Var;
-				if (v.isBound)
+				if (v != null && v.isBound)
 				{
 					EditorGUILayout.LabelField(fn.ToString());
 				} else {
