@@ -24,7 +24,7 @@
 
 (defn remove-all-fns [state-component]
   (reset! (get-state-atom state-component)
-    (build-hook-state {} (into-array nil))))
+    (build-hook-state {})))
 
 (defn hook-state-serialized-edn [^ArcadiaBehaviour state-component]
   (pr-str (.indexes state-component)))
