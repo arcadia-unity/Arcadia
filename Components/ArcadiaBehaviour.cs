@@ -1,95 +1,113 @@
 ﻿using UnityEngine;
-using System.Collections.Generic;
+//using System.Collections.Generic;
 using clojure.lang;
 
 public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 {
-	IFn[] _fns = new IFn[0];
-	public IPersistentMap fnIndexes = PersistentHashMap.create();
+	[SerializeField]
+	public string edn = "{}";
+
+	// so we can avoid the whole question of defrecord, contravariance, etc for now
+	public class StateContainer
+	{
+		public readonly IPersistentMap indexes;
+		public readonly IFn[] fns;
+
+		public StateContainer ()
+		{
+			indexes = PersistentHashMap.EMPTY;
+			fns = new IFn[0];
+		}
+
+		public StateContainer (IPersistentMap _indexes, System.Object[] _fns)
+		{
+			indexes = _indexes;
+			fns = new IFn[_fns.Length];
+			for (var i = 0; i < fns.Length; i++) {
+				fns[i] = (IFn)_fns[i];
+			}
+		}
+	}
+
+	public Atom state = new Atom(new StateContainer());
+
+	private static IFn requireFn = null;
+
+	private static IFn hookStateDeserializeFn = null;
+
+	private static IFn hookStateSerializedEdnFn = null;
+
+	private static IFn addFnFn = null;
+
+	private static IFn removeFnFn = null;
+
+	private static IFn removeAllFnsFn = null;
+
+	private static IFn buildHookStateFn = null;
+
+	public IPersistentMap indexes 
+	{
+		get {
+			return ((StateContainer)state.deref()).indexes;
+		}
+	}
 
 	public IFn[] fns
-	{
-		get { return _fns; }
-		set
-		{
-			_fns = value;
-			qualifiedVarNames = null;
-			OnBeforeSerialize();
+	{		
+		get {
+			return ((StateContainer)state.deref()).fns;
 		}
 	}
 
-	[SerializeField]
-	public List<string> qualifiedVarNames;
+	private static void require (string s)
+	{
+		if (requireFn == null) {
+			requireFn = RT.var("clojure.core", "require");
+		}
+		requireFn.invoke(Symbol.intern(s));
+	}
 
-	// if fn is a var, store in serializedVar 
+	private static void initializeVars ()
+	{
+		string nsStr = "arcadia.internal.hook-help";
+		require(nsStr);
+		if (hookStateDeserializeFn == null)
+			hookStateDeserializeFn = RT.var(nsStr, "hook-state-deserialize");
+		if (hookStateSerializedEdnFn == null)
+			hookStateSerializedEdnFn = RT.var(nsStr, "hook-state-serialized-edn");
+		if (addFnFn == null)
+			addFnFn = RT.var(nsStr, "add-fn");
+		if (removeFnFn == null)
+			removeFnFn = RT.var(nsStr, "remove-fn");
+		if (removeAllFnsFn == null)
+			removeAllFnsFn = RT.var(nsStr, "remove-all-fns");
+		if (buildHookStateFn == null)
+			buildHookStateFn = RT.var(nsStr, "build-hook-state");
+	}
+
 	public void OnBeforeSerialize()
 	{
-
-		List<string> newQualifiedVarNames = new List<string>(fns.Length);
-
-		foreach (var f in fns)
-		{
-			Var v = f as Var;
-			if (v != null)
-			{
-				newQualifiedVarNames.Add(v.Namespace.Name + "/" + v.Symbol.Name);
-			}
-		}
-
-		qualifiedVarNames = newQualifiedVarNames;
+		edn = (string)hookStateSerializedEdnFn.invoke(this);
 	}
 
-	public IFn[] AddFunction(IFn f)
+	public void AddFunction (IFn f)
 	{
-		return AddFunction(f, f);
+		AddFunction(f, f);
 	}
 
-	public IFn[] AddFunction(IFn f, object key)
-	{		
-		var index = fnIndexes.valAt(key);
-		if (index != null) {
-			fns[(int)index] = f;
-		} else {
-			var fnList = new List<IFn>(fns);
-			fnIndexes = fnIndexes.assoc(key, fnList.Count);
-			fnList.Add(f);
-			fns = fnList.ToArray();
-		}
-		return fns;
-	}
-
-	public IFn[] RemoveAllFunctions()
+	public void AddFunction (IFn f, object key)
 	{
-		var oldFns = fns;
-		fns = new IFn[0];
-		return oldFns;
+		addFnFn.invoke(this, key, f);
 	}
 
-	public IFn RemoveFunction(object key)
+	public void RemoveAllFunctions ()
 	{
-		var indexToRemove = fnIndexes.valAt(key);
-		if (indexToRemove != null)
-		{
-			var i = (int)indexToRemove;
-			var obj = fns[i];
-			var fnList = new List<IFn>(fns);
-			fnList.RemoveAt((int)indexToRemove);
-			fns = fnList.ToArray();
-			fnIndexes = fnIndexes.without(key);
-			foreach (IMapEntry entry in fnIndexes)
-			{
-				int v = (int)entry.val();
-				if (v > i)
-				{
-					fnIndexes = fnIndexes.assoc(entry.key(), v - 1);
-				}
-			}
-			return obj;
-		}
-		else
-		{
-			return null;
-		}
+		removeAllFnsFn.invoke(this);
+	}
+
+	public void RemoveFunction (object key)
+	{
+		removeFnFn.invoke(this, key);
 	}
 
 	public void OnAfterDeserialize()
@@ -99,44 +117,14 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 #endif
 	}
 
-	private static IFn requireFn = null;
-
 	// if serializedVar not null, set fn to var
 	public virtual void Awake()
 	{
 		Init();
 	}
 
-
 	private void Init() {
-		if (requireFn == null)
-			requireFn = RT.var("clojure.core", "require");
-		if (qualifiedVarNames != null)
-		{
-			List<IFn> fnList = new List<IFn>(qualifiedVarNames.Count);
-			foreach (var varName in qualifiedVarNames)
-			{
-				if (varName != "")
-				{
-					Symbol sym = Symbol.intern(varName);
-					if (sym.Namespace != null)
-					{
-						var nameSym = Symbol.intern(sym.Name);
-						var nsSym = Symbol.intern(sym.Namespace);
-						requireFn.invoke(nsSym);
-						try
-						{
-							var v = Namespace.find(nsSym).FindInternedVar(nameSym);
-							fnList.Add(v);
-						} catch (System.Exception e)
-						{
-							fnList.Add(RT.var(sym.Namespace, sym.Name));
-							Debug.LogError(new System.Exception("Failed to require namespace while attaching #'" + sym.Namespace+"/"+sym.Name+" to "+this.GetType().Name, e));
-						}
-					}
-				}
-			}
-			fns = fnList.ToArray();
-		}
+		initializeVars();
+		hookStateDeserializeFn.invoke(this);
 	}
 }
