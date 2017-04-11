@@ -511,9 +511,8 @@
   (reduce-kv
     (fn [bldg hook-key hook-type]
       (if-let [^ArcadiaBehaviour ab (cmpt obj hook-type)]
-        (if-let [inx (get (.fnIndexes ab) k)]
-          (let [^|clojure.lang.IFn[]| hfns (.fns ab)]
-            (assoc bldg hook-key (aget hfns inx)))
+        (if-let [f (get (.indexes ab) k)]
+          (assoc bldg hook-key f)
           bldg)
         bldg))
     (if-let [s (state obj k)]
@@ -526,12 +525,11 @@
   (reduce-kv
     (fn [bldg kw hook-type]
       (if-let [^ArcadiaBehaviour ab (cmpt obj hook-type)]
-        (let [^|clojure.lang.IFn[]| hfns (.fns ab)]
-          (reduce-kv
-            (fn [bldg k v]
-              (assoc-in bldg [k kw] (aget hfns v)))
-            bldg
-            (.fnIndexes ab)))
+        (reduce-kv
+          (fn [bldg k v]
+            (assoc-in bldg [k kw] v))
+          bldg
+          (.indexes ab))
         bldg))
     (if-let [^ArcadiaState s (cmpt obj ArcadiaState)]
       (reduce-kv
