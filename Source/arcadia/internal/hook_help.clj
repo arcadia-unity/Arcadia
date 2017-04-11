@@ -18,6 +18,10 @@
   (swap! (get-state-atom state-component)
     update-hook-state assoc key f))
 
+(defn add-fns [state-component fnmap]
+  (swap! (get-state-atom state-component)
+    update-hook-state merge fnmap))
+
 (defn remove-fn [state-component key]
   (swap! (get-state-atom state-component)
     update-hook-state dissoc key))
