@@ -38,31 +38,47 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
     objectDatabase = new Atom(PersistentHashMap.EMPTY);
   }
   
-  public void Awake()
-  {
-    if(readString == null) readString = (IFn)RT.var("clojure.core", "read-string");
-    if(requireFn == null) requireFn = (IFn)RT.var("clojure.core", "require");
-    requireFn.invoke(Symbol.intern("arcadia.literals"));
-    Namespace ArcadiaLiteralsNamespace = Namespace.findOrCreate(Symbol.intern("arcadia.literals"));
-    Var ObjectDbVar = Var.intern(ArcadiaLiteralsNamespace, Symbol.intern("*object-db*")).setDynamic();
+	private static Var dataReaders;
 
-    BuildDatabaseAtom(true);
-    Var.pushThreadBindings(RT.map(ObjectDbVar, objectDatabase));
-    try {
-      state = new Atom(readString.invoke(edn));
-    } finally {
-      Var.popThreadBindings();
-    }
-  }
-    
-  public void OnBeforeSerialize()
+	private static Var awakeFn;
+
+	private static void require (string s)
+	{
+		if (requireFn == null) {
+			requireFn = RT.var("clojure.core", "require");
+		}
+		requireFn.invoke(Symbol.intern(s));
+	}
+
+	private static void initializeVars ()
+	{
+		string nsStr = "arcadia.literals";
+		require(nsStr);
+		if (dataReaders == null)
+			dataReaders = RT.var(nsStr, "*data-readers*");
+		string nsStr2 = "arcadia.internal.state-help";
+		require(nsStr2);
+		if (awakeFn == null)
+			awakeFn = RT.var(nsStr2, "awake");
+	}
+
+	public void Awake ()
+	{
+		initializeVars();
+		awakeFn.invoke(this);
+	}
+
+
+	public void OnBeforeSerialize()
   {
     if(prStr == null) prStr = (IFn)RT.var("clojure.core", "pr-str");
     if(requireFn == null) requireFn = (IFn)RT.var("clojure.core", "require");
     requireFn.invoke(Symbol.intern("arcadia.literals"));
     Namespace ArcadiaLiteralsNamespace = Namespace.findOrCreate(Symbol.intern("arcadia.literals"));
     Var ObjectDbVar = Var.intern(ArcadiaLiteralsNamespace, Symbol.intern("*object-db*")).setDynamic();
-    
+
+		initializeVars();
+
     WipeDatabase();
     Var.pushThreadBindings(RT.map(ObjectDbVar, objectDatabase));
     try {

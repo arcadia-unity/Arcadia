@@ -233,6 +233,18 @@
 
 
 (.Stop sw3)
-(Debug/Log
-  (str "Milliseconds to namespace eval stuff: "
-       (.TotalMilliseconds (.Elapsed sw3))))
+;; (Debug/Log
+;;   (str "Milliseconds to namespace eval stuff: "
+;;        (.TotalMilliseconds (.Elapsed sw3))))
+
+;; (Debug/Log "At end of arcadia.literals. *data-readers*:")
+;; (Debug/Log *data-readers*)
+
+;; (Debug/Log "At end of arcadia.literals. (.getRawRoot #'*data-readers*):")
+;; (Debug/Log (.getRawRoot #'*data-readers*))
+
+(def the-bucket (.getRawRoot #'*data-readers*))
+
+;; (Debug/Log "At end of arcadia.literals. the-bucket:")
+;; (Debug/Log the-bucket)
+
