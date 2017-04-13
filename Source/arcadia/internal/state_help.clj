@@ -10,7 +10,7 @@
       (binding [arcadia.literals/*object-db* objdb
                 *data-readers* arcadia.literals/the-bucket]
         (try
-          ;; this weirdness is what it does in the C#:
+          ;; new atom ensures clones made via .instantiate don't share the same atom
           (set! (.state as)
             (atom (read-string (.edn as))))
           (catch Exception e
