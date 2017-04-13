@@ -1,5 +1,7 @@
 (ns arcadia.internal.hook-help
-  (:import ArcadiaBehaviour
+  (:require arcadia.literals)
+  (:import [UnityEngine Debug]
+           ArcadiaBehaviour
            ArcadiaBehaviour+StateContainer))
 
 (defn get-state-atom [^ArcadiaBehaviour ab]
