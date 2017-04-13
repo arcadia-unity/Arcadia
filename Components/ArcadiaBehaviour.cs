@@ -45,6 +45,8 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 	private static IFn buildHookStateFn = null;
 
+	private static IFn requireVarNamespacesFn = null;
+
 	public IPersistentMap indexes 
 	{
 		get {
@@ -83,6 +85,8 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 			removeAllFnsFn = RT.var(nsStr, "remove-all-fns");
 		if (buildHookStateFn == null)
 			buildHookStateFn = RT.var(nsStr, "build-hook-state");
+		if (requireVarNamespacesFn == null)
+			requireVarNamespacesFn = RT.var(nsStr, "require-var-namespaces");
 	}
 
 	public void OnBeforeSerialize()
@@ -117,10 +121,10 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 #endif
 	}
 
-	// if serializedVar not null, set fn to var
 	public virtual void Awake()
 	{
 		Init();
+		requireVarNamespacesFn.invoke(this);
 	}
 
 	private void Init() {

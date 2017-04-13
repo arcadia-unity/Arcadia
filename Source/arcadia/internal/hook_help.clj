@@ -41,21 +41,24 @@
        (= (first v) 'var)
        (symbol? (second v))))
 
+(defn require-var-namespaces [^ArcadiaBehaviour state-component]
+  (letfn [(f [_ _ v]
+            (when (var? v)
+              (let [^clojure.lang.Var v v
+                    ns-sym (.. v Namespace Name)]
+                (try
+                  (require ns-sym)
+                  (catch Exception e
+                    (UnityEngine.Debug/LogError
+                      (str "Failed to require namespace for " (pr-str v))
+                      e))))))]
+    (reduce-kv f nil (.indexes state-component))))
+
 (defn deserialize-step [bldg k v]
   (if (deserialized-var-form? v)
     (let [[_ ^clojure.lang.Symbol sym] v
           ns-sym (symbol (.. sym Namespace))]
-      (require ns-sym)
-      (try
-        (assoc bldg k
-          (.FindInternedVar ^clojure.lang.Namespace (find-ns ns-sym) (symbol (name sym))))
-        (catch Exception e
-          (UnityEngine.Debug/LogError
-            (Exception.
-              (str "Failed to require namespace while attaching #'"
-                   (name ns-sym) "/" (name sym))
-              e))
-          (assoc bldg k (clojure.lang.RT/var (name ns-sym) (name sym))))))
+      (assoc bldg k (clojure.lang.RT/var (name ns-sym) (name sym))))
     bldg))
 
 (defn hook-state-deserialize [^ArcadiaBehaviour state-component]
