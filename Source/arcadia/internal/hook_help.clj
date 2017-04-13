@@ -51,7 +51,8 @@
                   (catch Exception e
                     (UnityEngine.Debug/LogError
                       (str "Failed to require namespace for " (pr-str v))
-                      e))))))]
+                      e)
+                    (throw e))))))]
     (reduce-kv f nil (.indexes state-component))))
 
 (defn deserialize-step [bldg k v]
