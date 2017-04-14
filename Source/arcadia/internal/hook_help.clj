@@ -49,9 +49,12 @@
                 (try
                   (require ns-sym)
                   (catch Exception e
-                    (UnityEngine.Debug/LogError
-                      (str "Failed to require namespace for " (pr-str v))
-                      e))))))]
+                    (if (instance? UnityEngine.Object state-component)
+                      (UnityEngine.Debug/LogError
+                        (str "Failed to require namespace for " (pr-str v))
+                        state-component)
+                      (UnityEngine.Debug/LogError
+                        (str "Failed to require namespace for " (pr-str v)))))))))]
     (reduce-kv f nil (.indexes state-component))))
 
 (defn deserialize-step [bldg k v]
