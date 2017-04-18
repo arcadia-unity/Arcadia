@@ -6,7 +6,10 @@ public class OnServerInitializedHook : ArcadiaBehaviour
   public void OnServerInitialized()
   {
       var _go = gameObject;
-      foreach (var fn in fns)
-        fn.invoke(_go);
+      var _fns = fns;
+      for (int i = 0; i < _fns.Length; i++){
+      	var fn = _fns[i];
+      	fn.invoke(_go);
+      }
   }
 }
