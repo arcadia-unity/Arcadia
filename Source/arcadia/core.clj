@@ -466,7 +466,10 @@
           (deref (.state c)))))
 
 (defn set-state!
-  "Updates the state of object `go` with funciton `f`."
+  "Updates the state of object `go`."
+  ([go newmap]
+   (let [c (ensure-state go)]
+     (reset! (.state c) newmap)))
   ([go kw v]
    (let [c (ensure-state go)]
      (swap! (.state c) assoc kw v))))
