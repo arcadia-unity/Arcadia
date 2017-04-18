@@ -57,12 +57,19 @@
                         (str "Failed to require namespace for " (pr-str v)))))))))]
     (reduce-kv f nil (.indexes state-component))))
 
+(defn var-form->var [v]
+  (let [[_ ^clojure.lang.Symbol sym] v
+        ns-sym (symbol (.. sym Namespace))]
+    (clojure.lang.RT/var (name ns-sym) (name sym))))
+
 (defn deserialize-step [bldg k v]
-  (if (deserialized-var-form? v)
-    (let [[_ ^clojure.lang.Symbol sym] v
-          ns-sym (symbol (.. sym Namespace))]
-      (assoc bldg k (clojure.lang.RT/var (name ns-sym) (name sym))))
-    bldg))
+  (let [k (if (deserialized-var-form? k)
+            (var-form->var k)
+            k)
+        v (if (deserialized-var-form? v)
+            (var-form->var v)
+            v)]
+    (assoc bldg k v)))
 
 (defn hook-state-deserialize [^ArcadiaBehaviour state-component]
   (reset! (get-state-atom state-component)
