@@ -7,6 +7,9 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 	[SerializeField]
 	public string edn = "{}";
 
+	[System.NonSerialized]
+	public bool fullyInitialized = false;
+		
 	// so we can avoid the whole question of defrecord, contravariance, etc for now
 	public class StateContainer
 	{
@@ -45,7 +48,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 	private static IFn buildHookStateFn = null;
 
-	private static IFn requireVarNamespacesFn = null;
+	public static IFn requireVarNamespacesFn = null;
 
 	public IPersistentMap indexes 
 	{
@@ -123,12 +126,17 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 	public virtual void Awake()
 	{
-		Init();
-		requireVarNamespacesFn.invoke(this);
+		FullInit();
 	}
 
-	private void Init() {
+	public void Init() {
 		initializeVars();
-		hookStateDeserializeFn.invoke(this);
+		hookStateDeserializeFn.invoke(this);		
+	}
+
+	public void FullInit() {
+		Init();
+		requireVarNamespacesFn.invoke(this);
+		fullyInitialized = true;
 	}
 }
