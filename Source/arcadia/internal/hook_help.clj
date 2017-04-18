@@ -49,12 +49,12 @@
                 (try
                   (require ns-sym)
                   (catch Exception e
-                    (if (instance? UnityEngine.Object state-component)
-                      (UnityEngine.Debug/LogError
-                        (str "Failed to require namespace for " (pr-str v))
-                        state-component)
-                      (UnityEngine.Debug/LogError
-                        (str "Failed to require namespace for " (pr-str v)))))))))]
+                    (let [msg (str "Failed to require namespace for " (pr-str v) "; threw:\n"
+                                   e
+                                   "\n\n")]
+                      (if (instance? UnityEngine.Object state-component)
+                        (UnityEngine.Debug/LogError msg state-component)
+                        (UnityEngine.Debug/LogError msg))))))))]
     (reduce-kv f nil (.indexes state-component))))
 
 (defn var-form->var [v]
