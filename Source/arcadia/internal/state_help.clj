@@ -4,8 +4,10 @@
            ArcadiaState))
 
 (defn better-merge [m1 m2]
-  (persistent!
-    (reduce-kv assoc! (transient m1) m2)))
+  (if (empty? m1)
+    m2
+    (persistent!
+      (reduce-kv assoc! (transient m1) m2))))
 
 (defn awake [^ArcadiaState as]
   (let [state (.state as)]
