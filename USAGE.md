@@ -14,6 +14,7 @@
     - [Mono Runtime](#mono-runtime)
     - [Running in the Background](#running-in-the-background)
 - [Arcadia Configuration](#arcadia-configuration)
+- [Improving Startup Times](#improving-startup-times)
 - [Livecoding and the Repl](#livecoding-and-the-repl)
   - [Under the Hood](#under-the-hood)
   - [Editor Integration](#editor-integration)
@@ -139,6 +140,11 @@ Noteworthy configuration options include:
   Specify forms to evaluate along with every form entered into the repl. Useful for things like always having the `clojure.repl` namespace available (ie, `:repl/injections (use 'clojure.repl)`).
 
 See [`Arcadia/configuration.edn`](configuration.edn) for more details.
+
+### Improving Startup Times
+Arcadia's startup time can be improved by clicking `Arcadia → Compiler → AOT Compile Internal Namespaces` menu item. You only need to do this once per project.
+
+This will compile all of Arcadia's internal namespaces (including Clojure's standard library) into `.clj.dll` files (containing MSIL bytecode) ahead of time. These files can be loaded faster than the `.clj` source code files we currently ship. Otherwise, internal namespaces are compiled every time [the VM is restarted](#vm-restarting), which can slow down your workflow considerably.
 
 ### Livecoding and the REPL
 One of Arcadia's most exciting features is it's ability to livecode Unity. This is enabled by Clojure which, as a member of the Lisp family of programming languages, is designed with a Read Evaluate Print Loop (or REPL) in mind. The function of a REPL is to
