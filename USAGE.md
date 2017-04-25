@@ -231,7 +231,7 @@ Any reference that implements IFn can be used as the function, which means anony
   #(.. % transform (Rotate 0 1 0)))
 ```
 
-Importantly, this also includes symbols referring to functions, and – importantly – Vars.
+This also includes functions, and – importantly – Vars.
 
 ```clojure
 (defn rotate-camera [cam]
@@ -241,9 +241,9 @@ Importantly, this also includes symbols referring to functions, and – importan
 (hook+ Camera/main :update #'rotate-camera)
 ```
 
-The difference between the last two lines is that the first one will attach the current value of the `rotate-camera` function to the camera, while the second one will attach the Var, meaning the actual function is looked up on every invocation. That means if the function is changed e.g. in the REPL, camera's behavior will also change. This is a major part of our live coding experience.
+The difference between the last two lines is that the first one will attach the current value of the `rotate-camera` function to the camera, while the second one will attach the Var, meaning the function currently bound to the `#'rotate-camera` Var is looked up on every invocation. That means if the function is changed e.g. in the REPL, camera's behavior will also change. This is a major part of our live coding experience.
 
-Additionally, Vars are the only kind of hook that *serialize*, meaning they can be saved into Unity scenes and prefabs. You can use anonymous functions as hooks, but they cannot be saved to disk as part of your Unity scene and - importantly - will not survive a VM restart (see below), meaning that anonymous functions added as hooks in the REPL will disappear in the game.
+Additionally, Vars are the only kind of hook that *serialize*, meaning they can be saved into Unity scenes and prefabs. You _can_ use anonymous functions as hooks, but they cannot be saved to disk as part of your Unity scene and - importantly - will not survive a VM restart (see below), meaning that anonymous functions added as hooks in the REPL will disappear in the game.
 
 By the design of Unity, messages are always sent to GameObjects, even "global" seeming messages like [OnApplicationQuit](https://docs.unity3d.com/ScriptReference/MonoBehaviour.OnApplicationQuit.html). There is no way to handle a message without attaching behavior to a GameObject.
 
