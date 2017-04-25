@@ -25,6 +25,7 @@
   - [Clojure CLR](#clojure-clr)
   - [Unity Interop](#unity-interop)
   - [Hooks](#hooks)
+    - [Hooks, Serialization and Namespaces](#hooks-serialization-and-namespaces)
     - [Entry Point](#entry-point)
     - [Workflow](#workflow)
   - [State](#state)
