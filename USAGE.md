@@ -262,6 +262,18 @@ As another example, we will attach a hook to objects to log information about th
 
 This will start logging the collisions of an object named "Cube" in the scene. Note that Arcadia hooks rename Unity's camel case names to more idiomatic Clojure hyphenated keywords with (`OnCollisionEnter` becomes `:on-collision-enter`). Also note that as per [OnCollisionEnter's documentation](https://docs.unity3d.com/ScriptReference/MonoBehaviour.OnCollisionEnter.html), the message includes a parameter, so our function takes two arguments: the attached object (`go`, the same as all Arcadia hook functions), and the collision information (`collision`, of type [Collision](https://docs.unity3d.com/ScriptReference/Collision.html)). We use interop to extract relevant data and log it.
 
+##### Hooks, Serialization and Namespaces
+
+Hooks attached to a GameObject are stored and managed by instances of [ArcadiaBehaviour](https://github.com/arcadia-unity/Arcadia/blob/develop/Components/ArcadiaBehaviour.cs) components. The hook functions (or Vars) and their keys are ultimately stored in a persistent hashmap, from which an array is derived for fast iteration.
+
+When the ArcadiaBehaviour instance is serialized, this hashmap is converted into an [edn](https://github.com/edn-format/edn) string. Upon deserialization, any Vars in the hashmap are [interned](https://clojuredocs.org/clojure.core/intern), but their corresponding namespace is not immediately required. If a referenced user namespace includes definitions or logic that assume the existence of certain elements in the scene graph, for example, or use methods forbidden during deserialization such as [`UnityEngine.Object/Find`](https://docs.unity3d.com/ScriptReference/GameObject.Find.html), we want to delay loading them. The situation is similar to that motivating [`window.onload`](https://developer.mozilla.org/en-US/docs/Web/API/GlobalEventHandlers/onload) in frontend Javascript.
+
+The namespace corresponding to a deserialized Var is `required` once for whichever of the following happens first:
+- The [`Awake`](https://docs.unity3d.com/ScriptReference/MonoBehaviour.Awake.html) method of the `ArcadiaBehaviour` instance is called.
+- The particular message method of the `ArcadiaBehaviour` instance is called -- ie, for an instance of the derived [`FixedUpdateHook.cs`](https://github.com/arcadia-unity/Arcadia/blob/develop/Components/FixedUpdateHook.cs) class, when the `FixedUpdate` method is first called.
+
+Remember `require` in Clojure by default will _not_ run the code, including definitions, in a given namespace if that namespace has already been `require`'d. It is therefore safe to call `require` multiple times on the same namespace.
+
 ##### Entry Point
 
 Clojure developers often look for a "main" function or an "entry point" that they can use to kick off their code. Unity does not have such a thing. *All* code at runtime is triggered through Messages, meaning *all code at runtime is triggered by Components attached to GameObjects*. If your game logic would benefit from an entry point, you will have to add an empty GameObject to the scene with a `:start` hook associated with the function you want to run at startup.
