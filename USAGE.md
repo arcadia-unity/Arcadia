@@ -6,7 +6,7 @@
 
 ### Contents
 
-- [Introduction]
+- [Introduction](#arcadia)
 - [Starting Arcadia from Scratch](#starting-arcadia)
   - [Unity Projects](#unity-projects)
   - [Cloning Arcadia](#cloning-arcadia)
