@@ -8,7 +8,14 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 	public string edn = "{}";
 
 	[System.NonSerialized]
-	public bool fullyInitialized = false;
+	protected bool _fullyInitialized = false;
+
+	public bool fullyInitialized 
+	{
+		get {
+			return _fullyInitialized;
+		}
+	}
 		
 	// so we can avoid the whole question of defrecord, contravariance, etc for now
 	public class StateContainer
@@ -137,6 +144,61 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 	public void FullInit() {
 		Init();
 		requireVarNamespacesFn.invoke(this);
-		fullyInitialized = true;
+		_fullyInitialized = true;
+	}
+
+	// ============================================================
+	// RunFunctions
+
+	public void RunFunctions ()
+	{
+		if (!_fullyInitialized) {
+			FullInit();
+		}
+
+		var _go = gameObject;
+		var _fns = fns;
+		for (int i = 0; i < _fns.Length; i++) {
+			_fns[i].invoke(_go);
+		}		
+	}
+
+	public void RunFunctions (object arg1)
+	{
+		if (!_fullyInitialized) {
+			FullInit();
+		}
+
+		var _go = gameObject;
+		var _fns = fns;
+		for (int i = 0; i < _fns.Length; i++) {
+			_fns[i].invoke(_go, arg1);
+		}
+	}
+
+	public void RunFunctions (object arg1, object arg2)
+	{
+		if (!_fullyInitialized) {
+			FullInit();
+		}
+
+		var _go = gameObject;
+		var _fns = fns;
+		for (int i = 0; i < _fns.Length; i++) {
+			_fns[i].invoke(_go, arg1, arg2);
+		}
+	}
+
+	public void RunFunctions (object arg1, object arg2, object arg3)
+	{
+		if (!_fullyInitialized) {
+			FullInit();
+		}
+
+		var _go = gameObject;
+		var _fns = fns;
+		for (int i = 0; i < _fns.Length; i++) {
+			_fns[i].invoke(_go, arg1, arg2, arg3);
+		}
 	}
 }
