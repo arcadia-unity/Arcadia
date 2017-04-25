@@ -271,7 +271,7 @@ For hooks that serialize and persist, writing code to a file is crucial. At the 
 5. In the REPL, require the namespace and use `arcadia.core` (e.g. `(require 'game.core) (use 'arcadia.core)`)
 6. In the REPL, attach the var refering to the function to a GameObject as a hook (e.g. `(hook+ (object-named "Main Camera") :update #'game.core/rotate)`)
 7. Save the scene
-8. At play time, the GameObject will `require` the namespace associated with the var and lookup the function so that it can be invoked whenever unity sends its message
+8. The GameObject will `require` the namespace associated with the var and lookup the function so that it can be invoked whenever unity sends its message. Hooks require the namespace of their associated vars once, either when their message is first called or on `Awake`, whichever comes first.
 
 #### State
 *This part of Arcadia is under active development. We're documenting the parts that are most settled, but expect changes.*
