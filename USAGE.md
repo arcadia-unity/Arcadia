@@ -6,7 +6,7 @@
 
 ### Contents
 
-- [Introduction]
+- [Introduction](#arcadia)
 - [Starting Arcadia from Scratch](#starting-arcadia)
   - [Unity Projects](#unity-projects)
   - [Cloning Arcadia](#cloning-arcadia)
@@ -14,6 +14,7 @@
     - [Mono Runtime](#mono-runtime)
     - [Running in the Background](#running-in-the-background)
 - [Arcadia Configuration](#arcadia-configuration)
+- [Improving Startup Times](#improving-startup-times)
 - [Livecoding and the Repl](#livecoding-and-the-repl)
   - [Under the Hood](#under-the-hood)
   - [Editor Integration](#editor-integration)
@@ -24,6 +25,7 @@
   - [Clojure CLR](#clojure-clr)
   - [Unity Interop](#unity-interop)
   - [Hooks](#hooks)
+    - [Hooks, Serialization and Namespaces](#hooks-serialization-and-namespaces)
     - [Entry Point](#entry-point)
     - [Workflow](#workflow)
   - [State](#state)
@@ -140,6 +142,11 @@ Noteworthy configuration options include:
 
 See [`Arcadia/configuration.edn`](configuration.edn) for more details.
 
+### Improving Startup Times
+Arcadia's startup time can be improved by clicking `Arcadia → Compiler → AOT Compile Internal Namespaces` menu item. You only need to do this once per project, and each time you update Arcadia from git.
+
+This will compile all of Arcadia's internal namespaces (including Clojure's standard library) into `.clj.dll` files (containing MSIL bytecode) ahead of time. These files can be loaded faster than the `.clj` source code files we currently ship. Otherwise, internal namespaces are compiled every time [the VM is restarted](#vm-restarting), which can slow down your workflow considerably.
+
 ### Livecoding and the REPL
 One of Arcadia's most exciting features is it's ability to livecode Unity. This is enabled by Clojure which, as a member of the Lisp family of programming languages, is designed with a Read Evaluate Print Loop (or REPL) in mind. The function of a REPL is to
 
@@ -225,7 +232,7 @@ Any reference that implements IFn can be used as the function, which means anony
   #(.. % transform (Rotate 0 1 0)))
 ```
 
-Importantly, this also includes symbols referring to functions, and – importantly – Vars.
+This also includes functions, and – importantly – Vars.
 
 ```clojure
 (defn rotate-camera [cam]
@@ -235,9 +242,9 @@ Importantly, this also includes symbols referring to functions, and – importan
 (hook+ Camera/main :update #'rotate-camera)
 ```
 
-The difference between the last two lines is that the first one will attach the current value of the `rotate-camera` function to the camera, while the second one will attach the Var, meaning the actual function is looked up on every invocation. That means if the function is changed e.g. in the REPL, camera's behavior will also change. This is a major part of our live coding experience.
+The difference between the last two lines is that the first one will attach the current value of the `rotate-camera` function to the camera, while the second one will attach the Var, meaning the function currently bound to the `#'rotate-camera` Var is looked up on every invocation. That means if the function is changed e.g. in the REPL, camera's behavior will also change. This is a major part of our live coding experience.
 
-Additionally, Vars are the only kind of hook that *serialize*, meaning they can be saved into Unity scenes and prefabs. You can use anonymous functions as hooks, but they cannot be saved to disk as part of your Unity scene and - importantly - will not survive a VM restart (see below), meaning that anonymous functions added as hooks in the REPL will disappear in the game.
+Additionally, Vars are the only kind of hook that *serialize*, meaning they can be saved into Unity scenes and prefabs. You _can_ use anonymous functions as hooks, but they cannot be saved to disk as part of your Unity scene and - importantly - will not survive a VM restart (see below), meaning that anonymous functions added as hooks in the REPL will disappear in the game.
 
 By the design of Unity, messages are always sent to GameObjects, even "global" seeming messages like [OnApplicationQuit](https://docs.unity3d.com/ScriptReference/MonoBehaviour.OnApplicationQuit.html). There is no way to handle a message without attaching behavior to a GameObject.
 
@@ -256,6 +263,18 @@ As another example, we will attach a hook to objects to log information about th
 
 This will start logging the collisions of an object named "Cube" in the scene. Note that Arcadia hooks rename Unity's camel case names to more idiomatic Clojure hyphenated keywords with (`OnCollisionEnter` becomes `:on-collision-enter`). Also note that as per [OnCollisionEnter's documentation](https://docs.unity3d.com/ScriptReference/MonoBehaviour.OnCollisionEnter.html), the message includes a parameter, so our function takes two arguments: the attached object (`go`, the same as all Arcadia hook functions), and the collision information (`collision`, of type [Collision](https://docs.unity3d.com/ScriptReference/Collision.html)). We use interop to extract relevant data and log it.
 
+##### Hooks, Serialization and Namespaces
+
+Hooks attached to a GameObject are stored and managed by instances of [ArcadiaBehaviour](https://github.com/arcadia-unity/Arcadia/blob/develop/Components/ArcadiaBehaviour.cs) components. The hook functions (or Vars) and their keys are ultimately stored in a persistent hashmap, from which an array is derived for fast iteration.
+
+When the ArcadiaBehaviour instance is [serialized](https://docs.unity3d.com/Manual/script-Serialization.html), this hashmap is converted into an [edn](https://github.com/edn-format/edn) string. Upon deserialization, any Vars in the hashmap are [interned](https://clojuredocs.org/clojure.core/intern), but their corresponding namespace is not immediately [`require`'d](https://clojuredocs.org/clojure.core/require). If a referenced user namespace includes definitions or logic that assume the existence of certain elements in the scene graph, for example, or use methods forbidden during deserialization such as [`UnityEngine.Object/Find`](https://docs.unity3d.com/ScriptReference/GameObject.Find.html), we want to delay loading them. The situation is similar to that motivating [`window.onload`](https://developer.mozilla.org/en-US/docs/Web/API/GlobalEventHandlers/onload) in frontend Javascript.
+
+The namespace corresponding to a deserialized Var is `required` once for whichever of the following happens first:
+- The [`Awake`](https://docs.unity3d.com/ScriptReference/MonoBehaviour.Awake.html) method of the `ArcadiaBehaviour` instance is called.
+- The particular message method of the `ArcadiaBehaviour` instance is called -- ie, for an instance of the derived [`FixedUpdateHook.cs`](https://github.com/arcadia-unity/Arcadia/blob/develop/Components/FixedUpdateHook.cs) class, when the `FixedUpdate` method is first called.
+
+Remember `require` in Clojure by default will _not_ run the code, including definitions, in a given namespace if that namespace has already been `require`'d. It is therefore safe to call `require` multiple times on the same namespace.
+
 ##### Entry Point
 
 Clojure developers often look for a "main" function or an "entry point" that they can use to kick off their code. Unity does not have such a thing. *All* code at runtime is triggered through Messages, meaning *all code at runtime is triggered by Components attached to GameObjects*. If your game logic would benefit from an entry point, you will have to add an empty GameObject to the scene with a `:start` hook associated with the function you want to run at startup.
@@ -271,7 +290,7 @@ For hooks that serialize and persist, writing code to a file is crucial. At the 
 5. In the REPL, require the namespace and use `arcadia.core` (e.g. `(require 'game.core) (use 'arcadia.core)`)
 6. In the REPL, attach the var refering to the function to a GameObject as a hook (e.g. `(hook+ (object-named "Main Camera") :update #'game.core/rotate)`)
 7. Save the scene
-8. At play time, the GameObject will `require` the namespace associated with the var and lookup the function so that it can be invoked whenever unity sends its message
+8. The GameObject will `require` the namespace associated with the var and lookup the function so that it can be invoked whenever unity sends its message. Hooks require the namespace of their associated vars once, either when their message is first called or on `Awake`, whichever comes first.
 
 #### State
 *This part of Arcadia is under active development. We're documenting the parts that are most settled, but expect changes.*

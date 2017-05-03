@@ -3,14 +3,21 @@
   (:import [UnityEngine Debug]
            ArcadiaState))
 
+(defn better-merge [m1 m2]
+  (if (empty? m1)
+    m2
+    (persistent!
+      (reduce-kv assoc! (transient m1) m2))))
+
 (defn awake [^ArcadiaState as]
   (let [state (.state as)]
     (.BuildDatabaseAtom as true)
     (let [objdb (.objectDatabase as)]
       (binding [arcadia.literals/*object-db* objdb
-                *data-readers* arcadia.literals/the-bucket]
+                *data-readers* (better-merge *data-readers*
+ arcadia.literals/the-bucket)]
         (try
-          ;; this weirdness is what it does in the C#:
+          ;; new atom ensures clones made via .instantiate don't share the same atom
           (set! (.state as)
             (atom (read-string (.edn as))))
           (catch Exception e
