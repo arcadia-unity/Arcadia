@@ -421,14 +421,14 @@
   ([obj hook k]
    (when-let [^ArcadiaBehaviour hook-cmpt (cmpt obj (ensure-hook-type hook))]
      (.RemoveFunction hook-cmpt k))
-   obj))
+   nil))
 
 (defn hook-clear
   "Remove all functions hooked to `hook` on `obj`"
   [obj hook]
   (when-let [^ArcadiaBehaviour hook-cmpt (cmpt obj (ensure-hook-type hook))]
     (.RemoveAllFunctions hook-cmpt))
-  obj)
+  nil)
 
 (defn hook
   "Return the `hook` component attached to `obj`. If there is more one component,
