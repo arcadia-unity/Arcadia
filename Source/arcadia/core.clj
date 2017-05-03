@@ -497,7 +497,7 @@
 ;; ============================================================
 ;; roles (experimental)
 
-(defn give-role [obj k spec]
+(defn role+ [obj k spec]
   (reduce-kv
     (fn [_ k2 v]
       (cond
@@ -507,7 +507,7 @@
     spec)
   obj)
 
-(defn drop-role [obj k]
+(defn role- [obj k]
   (reduce-kv
     (fn [_ ht _]
       (hook- obj ht k))
