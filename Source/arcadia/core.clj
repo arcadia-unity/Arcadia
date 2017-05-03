@@ -5,6 +5,7 @@
             arcadia.literals)
   (:import ArcadiaBehaviour
            ArcadiaState
+           [Arcadia UnityStatusHelper]
            [clojure.lang RT]
            [UnityEngine
             Vector3
@@ -123,6 +124,13 @@
   The difference between destroy and destroy-immediate is still being worked out."
   [^UnityEngine.Object obj]
   (UnityEngine.Object/DestroyImmediate obj))
+
+(defn retire
+  "If in Play mode, calls Destroy, otherwise calls DestroyImmediate."
+  ([^UnityEngine.Object obj]
+   (if UnityStatusHelper/IsInPlayMode
+     (UnityEngine.Object/Destroy obj)
+     (UnityEngine.Object/DestroyImmediate obj))))
 
 (definline object-typed
   "Returns one object of Type `type`. The object selected seems to be
@@ -454,6 +462,8 @@
     (set! (.state c) (atom {}))
     c))
 
+;; looks like a race condition, but remember scene graph can only be
+;; modified from main thread
 (defn- ensure-state [go]
   (or (cmpt go ArcadiaState)
       (initialize-state go)))
