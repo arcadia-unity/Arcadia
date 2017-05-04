@@ -135,8 +135,14 @@
 (defmethod value-widget Symbol [v] 
   (symbol (EditorGUILayout/TextField (str v) nil)))
 
-(defmethod value-widget Keyword [v] 
-  (keyword (EditorGUILayout/TextField (name v) nil)))
+(defmethod value-widget Keyword [v]
+  (let [^clojure.lang.Keyword kw v]
+    (if-let [ns (.Namespace kw)]
+      (keyword
+        (EditorGUILayout/TextField ns nil)
+        (EditorGUILayout/TextField (.Name kw) nil))
+      (keyword
+        (EditorGUILayout/TextField (.Name kw) nil)))))
 
 (defmethod value-widget AnimationCurve [v] 
   (EditorGUILayout/CurveField v nil))

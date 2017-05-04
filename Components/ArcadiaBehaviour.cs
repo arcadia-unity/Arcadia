@@ -106,21 +106,33 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 	public void AddFunction (IFn f)
 	{
+		if (!fullyInitialized) {
+			Init();
+		}
 		AddFunction(f, f);
 	}
 
 	public void AddFunction (IFn f, object key)
 	{
+		if (!fullyInitialized) {
+			Init();
+		}
 		addFnFn.invoke(this, key, f);
 	}
 
 	public void RemoveAllFunctions ()
 	{
+		if (!fullyInitialized) {
+			Init();
+		}
 		removeAllFnsFn.invoke(this);
 	}
 
 	public void RemoveFunction (object key)
 	{
+		if (!fullyInitialized) {
+			Init();
+		}
 		removeFnFn.invoke(this, key);
 	}
 
