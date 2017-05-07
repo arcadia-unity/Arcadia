@@ -50,12 +50,9 @@
 
 ;; Gets run by EditorCallbacks.cs on the main thread
 (defn run-callbacks []
-  ;; empty the work-queue
-  (doseq [f (safe-dequeue-all work-queue)]
-    (try
-      (f)
-      (catch Exception e
-        (Debug/Log
-          "Exception encountered when running editor callback")
-        (Debug/Log e))))
+  (let [ar (safe-dequeue-all work-queue)]
+    (loop [i (int 0)]
+      (when (< i (count ar))
+        (do ((aget ar i))
+            (recur (inc i))))))
   (run-repeating-callbacks @repeating-callbacks))
