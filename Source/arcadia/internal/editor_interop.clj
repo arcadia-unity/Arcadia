@@ -244,3 +244,34 @@
       arcadia.internal.filewatcher-dummy arcadia.internal.file-system arcadia.internal.editor-interop
       arcadia.internal.components arcadia.internal.benchmarking arcadia.internal.asset-watcher
       arcadia.internal.array-utils arcadia.packages.data]))
+
+;; ============================================================
+;; Inert inspector, for debugging etc. Safer.
+
+;; looks like this is getting called about twice a second with that inspector open
+;; (def state-representation-calls
+;;   (atom 0))
+
+(defn state-representation [state-map]
+  ;; (swap! state-representation-calls inc)
+  (let [printed (str state-map)
+        printed (if (< 1000 (count printed))
+                  (str (subs printed 0 1000) "\n...")
+                  printed)]
+    printed))
+
+(defn inert-state-inspector [state-map]
+  (if (map? state-map)    
+    (try
+      (EditorGUILayout/HelpBox
+        (state-representation state-map)
+        MessageType/Info)
+      (catch Exception e
+        (EditorGUILayout/HelpBox
+          (str "Error encountered in arcadia.internal.editor-interop/inert-state-inspector:\n"
+               e)
+          MessageType/Info)))
+    (EditorGUILayout/HelpBox
+      (str "arcadia.internal.editor-interop/inert-state-inspector expects map, instead got: "
+           (class state-map))
+      MessageType/Info)))

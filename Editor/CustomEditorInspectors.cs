@@ -130,16 +130,46 @@ public class ArcadiaBehaviourEditor : Editor
 [CustomEditor(typeof(ArcadiaState), true)]
 public class ArcadiaStateEditor : Editor
 {
-	static ArcadiaStateEditor()
+
+	static private Var inertStateInspectorVar;
+	static private Var requireFn;
+	static private bool varsInitialized = false;
+
+	static ArcadiaStateEditor ()
 	{
-		RT.load("arcadia/core");
+		
+		// RT.load("arcadia/core");
+		
 	}
 
-	public override void OnInspectorGUI()
+	private static void require (string s)
+	{
+		if (requireFn == null) {
+			requireFn = RT.var("clojure.core", "require");
+		}
+		requireFn.invoke(Symbol.intern(s));
+	}
+
+	private static void InitializeVars ()
+	{
+		string nsStr = "arcadia.internal.editor-interop";
+		require(nsStr);
+		if (inertStateInspectorVar == null)
+			inertStateInspectorVar = RT.var(nsStr, "inert-state-inspector");
+		varsInitialized = true;
+	}
+
+	public override void OnInspectorGUI ()
 	{
 
-		ArcadiaBehaviourEditor.requireFn.invoke(Symbol.intern("arcadia.internal.editor-interop"));
+		//ArcadiaBehaviourEditor.requireFn.invoke(Symbol.intern("arcadia.internal.editor-interop"));
+		//ArcadiaState stateComponent = (ArcadiaState)target;
+		//RT.var("arcadia.internal.editor-interop", "state-inspector!").invoke(stateComponent.state);
+
+		if (!varsInitialized)
+			InitializeVars();
+
 		ArcadiaState stateComponent = (ArcadiaState)target;
-		RT.var("arcadia.internal.editor-interop", "state-inspector!").invoke(stateComponent.state);
+		inertStateInspectorVar.invoke(stateComponent.state.deref());
 	}
 }
