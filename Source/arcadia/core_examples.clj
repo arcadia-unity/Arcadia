@@ -130,3 +130,27 @@
       (set! (.name cube) (str (gensym "cube")))))
   (count (objects-named #"cube.*")) ;; # => 20
   )
+
+(defn ^{:example #'set-state!}
+  set-state!-example-01 []
+  ;; regular expressions work as well
+  (set-state! (object-named "Main Camera") :a 1) ;; # => {:a 1}
+  )
+
+(defn ^{:example #'remove-state!}
+  remove-state!-example-01 []
+  ;; regular expressions work as well
+  (remove-state! (object-named "Main Camera") :a) ;; # => {}
+  )
+
+(defn ^{:example #'update-state!}
+  update-state!-example-01 []
+  ;; add state to object at some point, before updating it
+  (set-state! (object-named "Player") :health 10)
+  
+  ;; first argument of function is current value of state :health
+  (update-state! (object-named "Player") :health (fn [hp] (- hp 1)) ;; # => {:hp 9}
+                 
+  ;; example with passed args
+  (update-state! (object-named "Player") :health (fn [hp dmg] (- hp 1) 3) ;; # => {:hp 6}
+  )
