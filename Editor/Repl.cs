@@ -16,10 +16,10 @@ namespace Arcadia
 		private static UdpClient replSocket;
 
 
-#if UNITY_EDITOR_OSX
-		[DllImport("ForceEditorUpdates")]
-		private static extern void StartForcingEditorApplicationUpdates();
-#endif
+// #if UNITY_EDITOR_OSX
+// 		[DllImport("ForceEditorUpdates")]
+// 		private static extern void StartForcingEditorApplicationUpdates();
+// #endif
 
 		static Repl()
 		{
@@ -49,9 +49,9 @@ namespace Arcadia
 		{
 			replSocket = (UdpClient)RT.var("arcadia.repl", "start-server").invoke(11211);
 			EditorApplication.update += Repl.Update;
-#if UNITY_EDITOR_OSX
-			StartForcingEditorApplicationUpdates();
-#endif
+// #if UNITY_EDITOR_OSX
+// 			StartForcingEditorApplicationUpdates();
+// #endif
 		}
 
 		[MenuItem("Arcadia/REPL/Stop &#r")]
