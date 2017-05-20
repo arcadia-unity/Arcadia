@@ -196,7 +196,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		var _fns = fns;
 		var _keys = keys;
 		for (int i = 0; i < _fns.Length; i++) {
-			_fns[i].invoke(_go, _keys[i], arg1);
+			_fns[i].invoke(_go, arg1, _keys[i]);
 		}
 	}
 
@@ -210,7 +210,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		var _fns = fns;
 		var _keys = keys;
 		for (int i = 0; i < _fns.Length; i++) {
-			_fns[i].invoke(_go, _keys[i], arg1, arg2);
+			_fns[i].invoke(_go, arg1, arg2, _keys[i]);
 		}
 	}
 
@@ -224,7 +224,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		var _fns = fns;
 		var _keys = keys;
 		for (int i = 0; i < _fns.Length; i++) {
-			_fns[i].invoke(_go, _keys[i], arg1, arg2, arg3);
+			_fns[i].invoke(_go, arg1, arg2, arg3, _keys[i]);
 		}
 	}
 }
