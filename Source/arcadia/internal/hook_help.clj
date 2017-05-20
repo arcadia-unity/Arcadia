@@ -11,7 +11,9 @@
   ([]
    (build-hook-state {}))
   ([key-fns]
-   (ArcadiaBehaviour+StateContainer. key-fns (into-array (vals key-fns)))))
+   (ArcadiaBehaviour+StateContainer. key-fns
+     (into-array (keys key-fns))
+     (into-array (vals key-fns)))))
 
 (defn update-hook-state [^ArcadiaBehaviour+StateContainer hs, f & args]
   (build-hook-state (apply f (.indexes hs) args)))

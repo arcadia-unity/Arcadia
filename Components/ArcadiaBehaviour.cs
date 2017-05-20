@@ -22,17 +22,20 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 	{
 		public readonly IPersistentMap indexes;
 		public readonly IFn[] fns;
+		public readonly object[] keys;
 
 		public StateContainer ()
 		{
 			indexes = PersistentHashMap.EMPTY;
 			fns = new IFn[0];
+			keys = new Object[0];
 		}
 
-		public StateContainer (IPersistentMap _indexes, System.Object[] _fns)
+		public StateContainer (IPersistentMap _indexes, object[] _keys, object[] _fns)
 		{
 			indexes = _indexes;
 			fns = new IFn[_fns.Length];
+			keys = _keys;
 			for (var i = 0; i < fns.Length; i++) {
 				fns[i] = (IFn)_fns[i];
 			}
@@ -71,6 +74,13 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		}
 	}
 
+	public object[] keys 
+	{
+		get {
+			return ((StateContainer)state.deref()).keys;
+		}
+	}
+
 	private static void require (string s)
 	{
 		if (requireFn == null) {
@@ -106,21 +116,33 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 	public void AddFunction (IFn f)
 	{
+		if (!fullyInitialized) {
+			Init();
+		}
 		AddFunction(f, f);
 	}
 
 	public void AddFunction (IFn f, object key)
 	{
+		if (!fullyInitialized) {
+			Init();
+		}
 		addFnFn.invoke(this, key, f);
 	}
 
 	public void RemoveAllFunctions ()
 	{
+		if (!fullyInitialized) {
+			Init();
+		}
 		removeAllFnsFn.invoke(this);
 	}
 
 	public void RemoveFunction (object key)
 	{
+		if (!fullyInitialized) {
+			Init();
+		}
 		removeFnFn.invoke(this, key);
 	}
 
@@ -158,8 +180,9 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 		var _go = gameObject;
 		var _fns = fns;
+		var _keys = keys;
 		for (int i = 0; i < _fns.Length; i++) {
-			_fns[i].invoke(_go);
+			_fns[i].invoke(_go, _keys[i]);
 		}		
 	}
 
@@ -171,8 +194,9 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 		var _go = gameObject;
 		var _fns = fns;
+		var _keys = keys;
 		for (int i = 0; i < _fns.Length; i++) {
-			_fns[i].invoke(_go, arg1);
+			_fns[i].invoke(_go, _keys[i], arg1);
 		}
 	}
 
@@ -184,8 +208,9 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 		var _go = gameObject;
 		var _fns = fns;
+		var _keys = keys;
 		for (int i = 0; i < _fns.Length; i++) {
-			_fns[i].invoke(_go, arg1, arg2);
+			_fns[i].invoke(_go, _keys[i], arg1, arg2);
 		}
 	}
 
@@ -197,8 +222,9 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 		var _go = gameObject;
 		var _fns = fns;
+		var _keys = keys;
 		for (int i = 0; i < _fns.Length; i++) {
-			_fns[i].invoke(_go, arg1, arg2, arg3);
+			_fns[i].invoke(_go, _keys[i], arg1, arg2, arg3);
 		}
 	}
 }
