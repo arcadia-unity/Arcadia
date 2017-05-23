@@ -130,3 +130,34 @@
       (set! (.name cube) (str (gensym "cube")))))
   (count (objects-named #"cube.*")) ;; # => 20
   )
+
+(defn ^{:example #'set-state!}
+  set-state!-example-01 []
+  ;; add or set state :a of Main Camera
+  (set-state! (object-named "Main Camera") :a 1) ;; # => {:a 1}
+  )
+
+(defn ^{:example #'remove-state!}
+  remove-state!-example-01 []
+  ;; remove state :a of Main Camera
+  (remove-state! (object-named "Main Camera") :a) ;; # => {}
+  )
+
+(defn ^{:example #'update-state!}
+  update-state!-example-01 []
+  ;; add state to object at some point, before updating it
+  (set-state! (object-named "Player") :health 10)
+  
+  ;; first argument of function is current value of state we updating
+  ;; in this case value of :health
+  (update-state! (object-named "Player") :health (fn [hp] (- hp 1))) ;; # => {:health 9}
+                 
+  ;; example with passed args
+  (update-state! (object-named "Player") :health (fn [hp dmg] (- hp dmg)) 3) ;; # => {:health 6}
+
+  ;; update function doesn't have to be anonymous
+  (defn do-damage [hp dmg]
+    (- hp dmg))
+  
+  (update-state! (object-named "Player") :health do-damage 3) ;; # => {:health 3}
+  )
