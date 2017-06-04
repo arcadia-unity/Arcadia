@@ -28,10 +28,13 @@
 
 
  ;; Partially controls the socket-repl.
+ ;;
  ;; Value means:
+ ;;
  ;; `true`: make default socket-repl (localhost, port 5555)
- ;; `false`: stop ALL socket repls
- ;; a map: opts for server-socket. Means at least the specified server is running.
+ ;; `false`: stop ALL socket repls 
+ ;; a map: opts for `arcadia.socket-repl/server-socket`. Means at
+ ;; least the specified server is running.
  ;; 
  ;; In the future, a non-map collection of maps (eg, a sequence of
  ;; maps) should specify several servers that should at least be
