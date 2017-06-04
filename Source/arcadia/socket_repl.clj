@@ -6,9 +6,8 @@
 ;; Think this sleaziness has to be a macro, for `set!`
 ;; Getting these from clojure.main
 (def tracked-binding-symbols
-  (set
-    `(*ns* *warn-on-reflection* *math-context* *print-meta* *print-length* *print-level* *data-readers* *default-data-reader-fn* *compile-path* *command-line-args* *unchecked-math* *assert* *1 *2 *3 
-       *e)))
+  `(*ns* *warn-on-reflection* *math-context* *print-meta* *print-length* *print-level* *data-readers* *default-data-reader-fn* *compile-path* *command-line-args* *unchecked-math* *assert* *1 *2 *3 
+     *e))
 
 (defmacro set-tracked-bindings [map-expr]
   (let [m-sym (gensym "m_")
