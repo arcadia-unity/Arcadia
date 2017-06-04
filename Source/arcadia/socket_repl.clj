@@ -50,17 +50,11 @@
           value)
         (throw value)))))
 
-(defonce print-buddy-log (atom nil))
-
-(defn print-buddy [thing]
-  (reset! print-buddy-log thing)
-  nil)
-
 (defn repl []
   (m/repl
     :init s/repl-init
     :read s/repl-read
-    :print #'print-buddy
+    :print identity
     :eval #'game-thread-eval))
 
 (def server-defaults
