@@ -1,7 +1,9 @@
 (ns arcadia.socket-repl
   (:require [clojure.core.server :as s]
             [arcadia.internal.editor-callbacks :as cb]
-            [clojure.main :as m]))
+            [arcadia.config :as config]
+            [clojure.main :as m]
+            [arcadia.internal.state :as state]))
 
 ;; Think this sleaziness has to be a macro, for `set!`
 ;; Getting these from clojure.main
@@ -67,3 +69,25 @@
   ([opts]
    (s/start-server
      (merge server-defaults opts))))
+
+;; ============================================================
+;; control the server from config
+
+;; we could hook this up elsewhere too
+
+(defn server-reactive
+  ([]
+   (server-reactive (config/config)))
+  ([{:keys [socket-repl]}]
+   (cond
+     socket-repl
+     (let [opts (when (map? socket-repl)
+                  socket-repl)]
+       (start-server opts))
+
+     (= false socket-repl) ; lets think about this
+     (s/stop-servers))))
+
+(state/add-listener ::config/on-update ::server-reactive #'server-reactive)
+
+
