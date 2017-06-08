@@ -69,6 +69,7 @@ namespace Arcadia
 			ensureCompiledFolder();
 			StartEditorCallbacks();
 			StartWatching();
+			LoadSocketREPL();
 			StartREPL();
 			Debug.Log("Arcadia Started!");
 		}
@@ -135,6 +136,12 @@ namespace Arcadia
 				Path.GetFullPath(VariadicPathCombine(clojureDllFolder, "..", "Libraries")));
 
 			Debug.Log("Load Path is " + Environment.GetEnvironmentVariable("CLOJURE_LOAD_PATH"));
+		}
+
+		static void LoadSocketREPL ()
+		{
+			RT.load("arcadia/socket_repl");
+			RT.var("arcadia.socket-repl", "server-reactive").invoke();
 		}
 
 		static void StartREPL()
