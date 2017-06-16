@@ -71,6 +71,7 @@ namespace Arcadia
 			StartWatching();
 			LoadSocketREPL();
 			StartREPL();
+			StartNudge();
 			Debug.Log("Arcadia Started!");
 		}
 
@@ -90,6 +91,11 @@ namespace Arcadia
 			Debug.Log("Loading configuration...");
 			RT.load("arcadia/config");
 			RT.var("arcadia.config", "update!").invoke();
+		}
+
+		public static void StartNudge()
+		{
+			RT.load("arcadia/internal/nudge");
 		}
 		
 		[MenuItem("Arcadia/Compiler/AOT Compile Internal Namespaces")]
