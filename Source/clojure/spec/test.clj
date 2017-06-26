@@ -171,12 +171,23 @@ failure in instrument."
                        conformed)))]
     (fn
      [& args]
-     (if *instrument-enabled*
-       (with-instrument-disabled
-         (when (:args fn-spec) (conform! v :args (:args fn-spec) args args))
-         (binding [*instrument-enabled* true]
-           (.applyTo ^clojure.lang.IFn f args)))
-       (.applyTo ^clojure.lang.IFn f args)))))
+      (if *instrument-enabled*
+        ;; Restoring checking for args. This is pretty directly from mainline
+        ;; clojure at 92df7b2a72dad83a901f86c1a9ec8fbc5dc1d1c7
+        (with-instrument-disabled
+          (let [specs fn-spec]
+            (let [cargs (when (:args specs) (conform! v :args (:args specs) args args))
+                  ret (binding [*instrument-enabled* true]
+                        (.applyTo ^clojure.lang.IFn f args))
+                  cret (when (:ret specs) (conform! v :ret (:ret specs) ret args))]
+              (when (and (:args specs) (:ret specs) (:fn specs))
+                (conform! v :fn (:fn specs) {:args cargs :ret cret} args))
+              ret)))
+        ;; (with-instrument-disabled
+        ;;   (when (:args fn-spec) (conform! v :args (:args fn-spec) args args))
+        ;;   (binding [*instrument-enabled* true]
+        ;;     (.applyTo ^clojure.lang.IFn f args)))
+        (.applyTo ^clojure.lang.IFn f args)))))
 
 (defn- no-fspec
   [v spec]

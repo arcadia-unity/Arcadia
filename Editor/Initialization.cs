@@ -69,7 +69,9 @@ namespace Arcadia
 			ensureCompiledFolder();
 			StartEditorCallbacks();
 			StartWatching();
+			LoadSocketREPL();
 			StartREPL();
+			StartNudge();
 			Debug.Log("Arcadia Started!");
 		}
 
@@ -89,6 +91,11 @@ namespace Arcadia
 			Debug.Log("Loading configuration...");
 			RT.load("arcadia/config");
 			RT.var("arcadia.config", "update!").invoke();
+		}
+
+		public static void StartNudge()
+		{
+			RT.load("arcadia/internal/nudge");
 		}
 		
 		[MenuItem("Arcadia/Compiler/AOT Compile Internal Namespaces")]
@@ -135,6 +142,12 @@ namespace Arcadia
 				Path.GetFullPath(VariadicPathCombine(clojureDllFolder, "..", "Libraries")));
 
 			Debug.Log("Load Path is " + Environment.GetEnvironmentVariable("CLOJURE_LOAD_PATH"));
+		}
+
+		static void LoadSocketREPL ()
+		{
+			RT.load("arcadia/socket_repl");
+			RT.var("arcadia.socket-repl", "server-reactive").invoke();
 		}
 
 		static void StartREPL()

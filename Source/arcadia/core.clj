@@ -476,13 +476,13 @@
           (deref (.state c)))))
 
 (defn set-state!
-  "Updates the state of object `go` with funciton `f`."
+  "Sets the state `kw` of object `go` to value `v`."
   ([go kw v]
    (let [c (ensure-state go)]
      (swap! (.state c) assoc kw v))))
 
 (defn remove-state!
-  "Updates the state of object `go` with funciton `f`."
+  "Removes the state `kw` of object `go`."
   ([go kw]
    (let [c (ensure-state go)]
      (swap! (.state c) dissoc kw))))
