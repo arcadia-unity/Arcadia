@@ -471,6 +471,14 @@
 
 (defn state
   "Returns the state of object `go`."
+  ([gobj]
+   ;; returns a map, but the efficiency of this should not be relied
+   ;; upon; we may well have to contruct the map on the fly every
+   ;; time, depending on our internal representation of state. Main
+   ;; priority is making keyed reads fast, second priority is making
+   ;; sets sort of fast, third priority is the rest of it
+   (with-cmpt gobj [s ArcadiaState]
+     (deref (.state s))))
   ([gobj key]
    (Arcadia.HookStateSystem/Lookup gobj key)))
 
@@ -478,19 +486,24 @@
   "Sets the state `kw` of object `go` to value `v`."
   ([go kw v]
    (let [c (ensure-state go)]
-     (swap! (.state c) assoc kw v))))
+     (swap! (.state c) assoc kw v)
+     v)))
 
 (defn remove-state!
   "Removes the state `kw` of object `go`."
   ([go kw]
    (let [c (ensure-state go)]
-     (swap! (.state c) dissoc kw))))
+     (swap! (.state c) dissoc kw)
+     nil)))
 
 (defn update-state!
-  "Updates the state of object `go` with funciton `f`."
+  "Updates the state of object `go` with function `f` at key `kw`."
   ([go kw f & args]
    (let [c (ensure-state go)]
-     (apply swap! (.state c) update kw f args))))
+     ;; should have a faster path to this of course; for now trying to
+     ;; avoid necessity of returning state as a whole, since that
+     ;; might not really be a thing. Or at least, not a map
+     (get kw (apply swap! (.state c) update kw f args)))))
 
 
 ;; ============================================================
