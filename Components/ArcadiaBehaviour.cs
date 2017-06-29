@@ -45,6 +45,8 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 	public Atom state = new Atom(new StateContainer());
 
+	public ArcadiaState arcadiaState;
+
 	private static IFn requireFn = null;
 
 	private static IFn hookStateDeserializeFn = null;
@@ -166,6 +168,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 	public void FullInit() {
 		Init();
+		arcadiaState = this.GetComponent<ArcadiaState>();
 		requireVarNamespacesFn.invoke(this);
 		_fullyInitialized = true;
 	}
