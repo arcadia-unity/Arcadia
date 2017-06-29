@@ -5,7 +5,8 @@
             arcadia.literals)
   (:import ArcadiaBehaviour
            ArcadiaState
-           [Arcadia UnityStatusHelper]
+           [Arcadia UnityStatusHelper
+            HookStateSystem]
            [clojure.lang RT]
            [UnityEngine
             Vector3
@@ -470,10 +471,8 @@
 
 (defn state
   "Returns the state of object `go`."
-  ([go kw]
-   (kw (state go)))
-  ([go] (if-let [c (ensure-state go)]
-          (deref (.state c)))))
+  ([gobj key]
+   (Arcadia.HookStateSystem/Lookup gobj key)))
 
 (defn set-state!
   "Sets the state `kw` of object `go` to value `v`."

@@ -1,82 +1,43 @@
 using System;
 using UnityEngine;
 using clojure.lang;
+using System.Collections.Generic;
 
 namespace Arcadia
 {
-	public static class HookStateSystem
+	public class HookStateSystem
 	{
-		// Please don't rely on any of the public members in here;
-		// this class should be considered strictly an (extremely unstable)
-		// implementation detail, not part of the public API.
+		// at least start out *real* simple
+		public static ArcadiaState arcadiaState;
 
-		public static Var stateVar;
-
-		// we can microoptimize this stuff away later
-		// hm, this is circular if we're not careful
-		public static object SlowerLookup (object gobj, object key)
+		public static object FullLookup (object obj, object key)
 		{
-			return stateVar.invoke(gobj, key);
+			ArcadiaState arcs;
+			var gobj = obj as GameObject;
+			if (gobj != null) {
+				arcs = (ArcadiaState)gobj.GetComponent(typeof(ArcadiaState));
+			} else {
+				var cmpt = obj as Component;
+				if (cmpt != null) {
+					arcs = (ArcadiaState)cmpt.GetComponent(typeof(ArcadiaState));
+				} else {
+					throw new Exception(
+						"obj must be GameObject or Component, instead got " + obj.GetType()
+					);
+				}
+			}
+			if (arcs != null) {
+				return ((IPersistentMap)arcs.state.deref()).valAt(key);
+			}
+			return null;
 		}
 
-		public class ExpectedLookup
+		public static object Lookup (object gobj, object key)
 		{
-			public object currentObject;
-
-			public object currentKey;
-
-			public object currentState;
-
-			// clojure map style k-v pairs
-			public object[] otherKeyStates;
-
-			public ExpectedLookup (object currentKey_, object currentObject_,
-								   object currentState_, object[] otherKeyStates_)
-			{
-				currentKey = currentKey_;
-				currentObject = currentObject_;
-				currentState = currentState_;
-				otherKeyStates = otherKeyStates_;
+			if (arcadiaState != null && gobj == arcadiaState.gameObject) {
+				return ((IPersistentMap)arcadiaState.state.deref()).valAt(key);
 			}
-
-			// just for convenience/testing/etc
-			public void assoc (object k, object v)
-			{
-				object[] newAr = new object[otherKeyStates.Length + 2];
-				Array.Copy(otherKeyStates, newAr, otherKeyStates.Length);
-				newAr[newAr.Length - 2] = k;
-				newAr[newAr.Length - 1] = v;
-				otherKeyStates = newAr;
-			}
-
-			public object LookupByKeyState (object gobj, object key)
-			{
-				for (int i = 0; i < otherKeyStates.Length; i += 2) {
-					if (otherKeyStates[i] == key) {
-						return otherKeyStates[i + 1];
-					}
-				}
-				return SlowerLookup(gobj, key);
-			}
-
-			public object GetState (object gobj, object key)
-			{
-				if (gobj == currentObject) {
-					if (key == currentKey) {
-						return currentState;
-					}
-					return LookupByKeyState(gobj, key);
-				}
-				return SlowerLookup(gobj, key);
-			}
-
-		}
-
-		public static ExpectedLookup currentLookup;
-
-		public static object GetState (object gobj, object key)
-		{
-			return currentLookup.GetState(gobj, key);
+			return FullLookup(gobj, key);
 		}
 	}
 }

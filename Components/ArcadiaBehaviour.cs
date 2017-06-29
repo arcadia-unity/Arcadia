@@ -182,6 +182,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		var _go = gameObject;
 		var _fns = fns;
 		var _keys = keys;
+		Arcadia.HookStateSystem.arcadiaState = arcadiaState;
 		for (int i = 0; i < _fns.Length; i++) {
 			var f = _fns[i];
 			var v = f as Var;
@@ -202,6 +203,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		var _go = gameObject;
 		var _fns = fns;
 		var _keys = keys;
+		Arcadia.HookStateSystem.arcadiaState = arcadiaState;
 		for (int i = 0; i < _fns.Length; i++) {
 			var f = _fns[i];
 			var v = f as Var;
@@ -222,6 +224,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		var _go = gameObject;
 		var _fns = fns;
 		var _keys = keys;
+		Arcadia.HookStateSystem.arcadiaState = arcadiaState;
 		for (int i = 0; i < _fns.Length; i++) {
 			var f = _fns[i];
 			var v = f as Var;
@@ -242,6 +245,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		var _go = gameObject;
 		var _fns = fns;
 		var _keys = keys;
+		Arcadia.HookStateSystem.arcadiaState = arcadiaState;
 		for (int i = 0; i < _fns.Length; i++) {
 			var f = _fns[i];
 			var v = f as Var;
