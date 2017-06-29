@@ -2,6 +2,7 @@
 //using System.Collections.Generic;
 using clojure.lang;
 
+[RequireComponent(typeof(ArcadiaState))]
 public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 {
 	[SerializeField]
