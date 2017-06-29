@@ -183,8 +183,14 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		var _fns = fns;
 		var _keys = keys;
 		for (int i = 0; i < _fns.Length; i++) {
-			_fns[i].invoke(_go, _keys[i]);
-		}		
+			var f = _fns[i];
+			var v = f as Var;
+			if (v != null) {
+				((IFn)v.getRawRoot()).invoke(_go, _keys[i]);
+			} else {
+				f.invoke(_go, _keys[i]);
+			}
+		}
 	}
 
 	public void RunFunctions (object arg1)
@@ -197,7 +203,13 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		var _fns = fns;
 		var _keys = keys;
 		for (int i = 0; i < _fns.Length; i++) {
-			_fns[i].invoke(_go, _keys[i], arg1);
+			var f = _fns[i];
+			var v = f as Var;
+			if (v != null) {
+				((IFn)v.getRawRoot()).invoke(_go, _keys[i], arg1);
+			} else {
+				f.invoke(_go, _keys[i], arg1);
+			}
 		}
 	}
 
@@ -211,7 +223,13 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		var _fns = fns;
 		var _keys = keys;
 		for (int i = 0; i < _fns.Length; i++) {
-			_fns[i].invoke(_go, _keys[i], arg1, arg2);
+			var f = _fns[i];
+			var v = f as Var;
+			if (v != null) {
+				((IFn)v.getRawRoot()).invoke(_go, _keys[i], arg1, arg2);
+			} else {
+				f.invoke(_go, _keys[i], arg1, arg2);
+			}
 		}
 	}
 
@@ -225,7 +243,13 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		var _fns = fns;
 		var _keys = keys;
 		for (int i = 0; i < _fns.Length; i++) {
-			_fns[i].invoke(_go, _keys[i], arg1, arg2, arg3);
+			var f = _fns[i];
+			var v = f as Var;
+			if (v != null) {
+				((IFn)v.getRawRoot()).invoke(_go, _keys[i], arg1, arg2, arg3);
+			} else {
+				f.invoke(_go, _keys[i], arg1, arg2, arg3);
+			}
 		}
 	}
 }
