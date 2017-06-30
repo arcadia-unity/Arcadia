@@ -137,5 +137,43 @@ namespace Arcadia
 
 		}
 
+		// ==========================================================
+		// View
+
+		public class PartialArrayMapView
+		{
+			public KeyVal[] kvs;
+			public JumpMap source;
+
+			public PartialArrayMapView (object[] keys, JumpMap source_)
+			{
+				kvs = new KeyVal[keys.Length];
+				source = source_;
+				for (int i = 0; i < keys.Length; i++) {
+					kvs[i] = source.Subscribe(keys[i]);
+				}
+			}
+
+			public object ValueAtKey (object key)
+			{
+				for (int i = 0; i < kvs.Length; i++) {
+					if (kvs[i].key == key) {
+						return kvs[i].GetVal();
+					}
+				}
+				return source.ValueAtKey(key);
+			}
+
+			public void Refresh ()
+			{
+				for (int i = 0; i < kvs.Length; i++) {
+					if (!kvs[i].isInhabited && source.ContainsKey(kvs[i].key)) {
+						kvs[i] = source.Subscribe(kvs[i].key);
+					}
+				}
+			}
+
+		}
+
 	}
 }
