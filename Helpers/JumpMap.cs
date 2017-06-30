@@ -175,5 +175,10 @@ namespace Arcadia
 
 		}
 
+		public PartialArrayMapView pamv (object[] keys)
+		{
+			return new PartialArrayMapView(keys, this);
+		}
+
 	}
 }
