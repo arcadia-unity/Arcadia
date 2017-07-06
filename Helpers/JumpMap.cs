@@ -28,7 +28,7 @@ namespace Arcadia
 
 		public KeyVal[] KeyVals ()
 		{
-			return dict.Values.ToArray();			
+			return dict.Values.ToArray();
 		}
 
 		public object ValueAtKey (object k)
@@ -39,7 +39,7 @@ namespace Arcadia
 				return val.val;
 			} else {
 				return null;
-			}			
+			}
 		}
 
 		// sadly it seems we will need null keyvals
@@ -85,6 +85,14 @@ namespace Arcadia
 		{
 			foreach (var entry in map) {
 				Add(entry.key(), entry.val());
+			}
+		}
+
+		public void Clear ()
+		{
+			var ks = dict.Keys.ToArray();
+			for (int i = 0; i < ks.Length; i++) {
+				Remove(ks[i]);
 			}
 		}
 
@@ -144,6 +152,16 @@ namespace Arcadia
 		{
 			public KeyVal[] kvs;
 			public JumpMap source;
+
+			public object[] keys {
+				get {
+					object[] ks = new object[kvs.Length];
+					for (int i = 0; i < kvs.Length; i++) {
+						ks[i] = kvs[i].key;
+					}
+					return ks;
+				}
+			}
 
 			public PartialArrayMapView (object[] keys, JumpMap source_)
 			{

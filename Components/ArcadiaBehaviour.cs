@@ -1,6 +1,7 @@
 ﻿using UnityEngine;
 //using System.Collections.Generic;
 using clojure.lang;
+using Arcadia;
 
 [RequireComponent(typeof(ArcadiaState))]
 public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
@@ -11,36 +12,61 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 	[System.NonSerialized]
 	protected bool _fullyInitialized = false;
 
-	public bool fullyInitialized 
-	{
+	public bool fullyInitialized {
 		get {
 			return _fullyInitialized;
 		}
 	}
-		
+
 	// so we can avoid the whole question of defrecord, contravariance, etc for now
 	public class StateContainer
 	{
 		public readonly IPersistentMap indexes;
 		public readonly IFn[] fns;
 		public readonly object[] keys;
+		public readonly JumpMap.PartialArrayMapView[] pamvs;
 
 		public StateContainer ()
 		{
 			indexes = PersistentHashMap.EMPTY;
 			fns = new IFn[0];
 			keys = new Object[0];
+			pamvs = new JumpMap.PartialArrayMapView[0];
 		}
 
-		public StateContainer (IPersistentMap _indexes, object[] _keys, object[] _fns)
+		// our method resolution machinery is currently too stupid to disambiguate the constructors
+		public static StateContainer BuildStateContainer (IPersistentMap _indexes, object[] _keys, 
+		                                                  object[] _fns, ArcadiaState arcs)
+		{
+			return new StateContainer(_indexes, _keys, _fns, arcs);
+		}
+
+		public StateContainer (IPersistentMap _indexes, object[] _keys, object[] _fns, ArcadiaState arcs)
 		{
 			indexes = _indexes;
 			fns = new IFn[_fns.Length];
 			keys = _keys;
+			pamvs = new JumpMap.PartialArrayMapView[_fns.Length];
+			for (var i = 0; i < fns.Length; i++) {
+				fns[i] = (IFn)_fns[i];
+				pamvs[i] = arcs.pamv(new object[0]);
+			}
+		}
+
+		public StateContainer (IPersistentMap _indexes, object[] _keys,
+							   object[] _fns,
+							   JumpMap.PartialArrayMapView[] _pamvs)
+		{
+			indexes = _indexes;
+			fns = new IFn[_fns.Length];
+			keys = _keys;
+			pamvs = _pamvs;
 			for (var i = 0; i < fns.Length; i++) {
 				fns[i] = (IFn)_fns[i];
 			}
 		}
+
+
 	}
 
 	public Atom state = new Atom(new StateContainer());
@@ -63,22 +89,19 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 	public static IFn requireVarNamespacesFn = null;
 
-	public IPersistentMap indexes 
-	{
+	public IPersistentMap indexes {
 		get {
 			return ((StateContainer)state.deref()).indexes;
 		}
 	}
 
-	public IFn[] fns
-	{		
+	public IFn[] fns {
 		get {
 			return ((StateContainer)state.deref()).fns;
 		}
 	}
 
-	public object[] keys 
-	{
+	public object[] keys {
 		get {
 			return ((StateContainer)state.deref()).keys;
 		}
@@ -112,7 +135,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 			requireVarNamespacesFn = RT.var(nsStr, "require-var-namespaces");
 	}
 
-	public void OnBeforeSerialize()
+	public void OnBeforeSerialize ()
 	{
 		edn = (string)hookStateSerializedEdnFn.invoke(this);
 	}
@@ -149,28 +172,43 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		removeFnFn.invoke(this, key);
 	}
 
-	public void OnAfterDeserialize()
+	public void OnAfterDeserialize ()
 	{
 #if UNITY_EDITOR
 		Init();
 #endif
 	}
 
-	public virtual void Awake()
+	public virtual void Awake ()
 	{
 		FullInit();
 	}
 
-	public void Init() {
+	public void Init ()
+	{
 		initializeVars();
-		hookStateDeserializeFn.invoke(this);		
+		hookStateDeserializeFn.invoke(this);
 	}
 
-	public void FullInit() {
+	public void FullInit ()
+	{
 		Init();
-		arcadiaState = this.GetComponent<ArcadiaState>();
+		arcadiaState = GetComponent<ArcadiaState>();
+		arcadiaState.Initialize();
 		requireVarNamespacesFn.invoke(this);
 		_fullyInitialized = true;
+	}
+
+	// ============================================================
+	// refresh
+
+	public void RefreshPamvs ()
+	{
+		StateContainer sc = (StateContainer)state.deref();
+		var pamvs = sc.pamvs;
+		for (int i = 0; i < pamvs.Length; i++) {
+			pamvs[i].Refresh();
+		}
 	}
 
 	// ============================================================

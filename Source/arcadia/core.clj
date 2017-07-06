@@ -6,7 +6,8 @@
   (:import ArcadiaBehaviour
            ArcadiaState
            [Arcadia UnityStatusHelper
-            HookStateSystem]
+            HookStateSystem JumpMap
+            JumpMap+KeyVal JumpMap+PartialArrayMapView]
            [clojure.lang RT]
            [UnityEngine
             Vector3
@@ -457,54 +458,50 @@
 ;; ============================================================
 ;; state
 
-(defn- initialize-state [go]
-  (cmpt- go ArcadiaState)
-  (let [c (cmpt+ go ArcadiaState)]
-    (set! (.state c) (atom {}))
-    c))
-
-;; looks like a race condition, but remember scene graph can only be
-;; modified from main thread
-(defn- ensure-state [go]
-  (or (cmpt go ArcadiaState)
-      (initialize-state go)))
+(defn- ensure-state ^ArcadiaState [go]
+  (ensure-cmpt go ArcadiaState))
 
 (defn state
-  "Returns the state of object `go`."
+  "Returns the state of object `go` at key `k`."
   ([gobj]
-   ;; returns a map, but the efficiency of this should not be relied
-   ;; upon; we may well have to contruct the map on the fly every
-   ;; time, depending on our internal representation of state. Main
-   ;; priority is making keyed reads fast, second priority is making
-   ;; sets sort of fast, third priority is the rest of it
    (with-cmpt gobj [s ArcadiaState]
-     (deref (.state s))))
-  ([gobj key]
-   (Arcadia.HookStateSystem/Lookup gobj key)))
+     (persistent!
+       (reduce (fn [m, ^Arcadia.JumpMap+KeyVal kv]
+                 (assoc! m (.key kv) (.val kv)))
+         (transient {})
+         (.. s state KeyVals)))))
+  ([gobj k]
+   (Arcadia.HookStateSystem/Lookup gobj k)))
 
 (defn set-state!
-  "Sets the state `kw` of object `go` to value `v`."
-  ([go kw v]
-   (let [c (ensure-state go)]
-     (swap! (.state c) assoc kw v)
+  "Sets the state of object `go` to value `v` at key `k`."
+  ([go k v]
+   (with-cmpt go [arcs ArcadiaState]
+     (.Add arcs k v)
      v)))
 
 (defn remove-state!
-  "Removes the state `kw` of object `go`."
-  ([go kw]
-   (let [c (ensure-state go)]
-     (swap! (.state c) dissoc kw)
-     nil)))
+  "Removes the state object `go` at key `k`. Returns `nil`."
+  ([go k]
+   (with-cmpt go [arcs ArcadiaState]
+     (.Remove arcs k))))
 
 (defn update-state!
-  "Updates the state of object `go` with function `f` at key `kw`."
-  ([go kw f & args]
-   (let [c (ensure-state go)]
-     ;; should have a faster path to this of course; for now trying to
-     ;; avoid necessity of returning state as a whole, since that
-     ;; might not really be a thing. Or at least, not a map
-     (get kw (apply swap! (.state c) update kw f args)))))
-
+  "Updates the state of object `go` with function `f` and additional
+  arguments `args` at key `k`. Args are applied in the same order as
+  `clojure.core/update`."
+  ([go k f x]
+   (with-cmpt go [arcs ArcadiaState]
+     (.Add arcs (f (.ValueAtKey arcs k) x))))
+  ([go k f x y]
+   (with-cmpt go [arcs ArcadiaState]
+     (.Add arcs (f (.ValueAtKey arcs k) x y))))
+  ([go k f x y z]
+   (with-cmpt go [arcs ArcadiaState]
+     (.Add arcs (f (.ValueAtKey arcs k) x y z))))
+  ([go k f x y z & args]
+   (with-cmpt go [arcs ArcadiaState]
+     (.Add arcs (apply f (.ValueAtKey arcs k) x y z args)))))
 
 ;; ============================================================
 ;; roles (experimental)

@@ -1,12 +1,13 @@
 ﻿using UnityEngine;
 using System.Collections;
 using clojure.lang;
+using Arcadia;
 
 public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 {
 	// TODO sorted maps?
 	public string edn = "{}";
-	public Atom state = new Atom(PersistentHashMap.EMPTY);
+	public JumpMap state = new JumpMap();
 
 	public Atom objectDatabase = null;
 	public int[] objectDatabaseIds = new int[0];
@@ -40,9 +41,27 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 		objectDatabase = new Atom(PersistentHashMap.EMPTY);
 	}
 
-	private static Var dataReaders;
+	// =====================================================
+	// TODO: make all these private
+	public static Var dataReaders;
 
-	private static Var awakeFn;
+	public static Var awakeFn;
+
+	public static Var jumpMapToMapVar;
+
+	public static Var initializeVar;
+
+	public static bool varsInitialized = false;
+
+	public static bool fullyInitialized_ = false;
+
+	// =====================================================
+
+	public bool fullyInitialized {
+		get {
+			return fullyInitialized_;
+		}
+	}
 
 	private static void require (string s)
 	{
@@ -54,6 +73,9 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 
 	private static void initializeVars ()
 	{
+		if (varsInitialized)
+			return;
+
 		string nsStr = "arcadia.literals";
 		require(nsStr);
 		if (dataReaders == null)
@@ -62,14 +84,30 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 		require(nsStr2);
 		if (awakeFn == null)
 			awakeFn = RT.var(nsStr2, "awake");
+		if (jumpMapToMapVar == null)
+			jumpMapToMapVar = RT.var(nsStr2, "jumpmap-to-map");
+		if (initializeVar == null)
+			initializeVar = RT.var(nsStr2, "initialize");
+
+		varsInitialized = true;
+	}
+
+
+	// require vars and full deserialize
+	public void Initialize ()
+	{
+		if (fullyInitialized_)
+			return;
+
+		initializeVars();
+		initializeVar.invoke(this);
+		fullyInitialized_ = true;
 	}
 
 	public void Awake ()
 	{
-		initializeVars();
-		awakeFn.invoke(this);
+		Initialize();
 	}
-
 
 	public void OnBeforeSerialize ()
 	{
@@ -84,7 +122,7 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 		WipeDatabase();
 		Var.pushThreadBindings(RT.map(ObjectDbVar, objectDatabase));
 		try {
-			edn = (string)prStr.invoke(state.deref()); // side effects, updating objectDatabase
+			edn = (string)prStr.invoke(jumpMapToMapVar.invoke(state)); // side effects, updating objectDatabase
 			var map = (PersistentHashMap)objectDatabase.deref();
 			objectDatabaseIds = (int[])RT.seqToTypedArray(typeof(int), RT.keys(map));
 			objectDatabaseObjects = (Object[])RT.seqToTypedArray(typeof(Object), RT.vals(map));
@@ -95,8 +133,43 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 
 	public void OnAfterDeserialize ()
 	{
-#if UNITY_EDITOR
-		Awake();
-#endif
+		initializeVars();
+		//deserializeVar.invoke();
+	}
+
+	// ============================================================
+	// modification
+	public void RefreshAll ()
+	{
+		var arcadiaBehaviours = gameObject.GetComponents<ArcadiaBehaviour>();
+		for (var i = 0; i < arcadiaBehaviours.Length; i++) {
+			arcadiaBehaviours[i].RefreshPamvs();
+		}
+	}
+
+	public void Add (object k, object v)
+	{
+		bool hadKey = state.ContainsKey(k);
+		state.Add(k, v);
+		// determine if this warrants refreshing the pamv's
+		if (!hadKey) {
+			RefreshAll();
+		}
+	}
+
+	public void Remove (object k)
+	{
+		state.Remove(k);
+		// don't need to refresh anything
+	}
+
+	public object ValueAtKey (object k)
+	{
+		return state.ValueAtKey(k);
+	}
+
+	public JumpMap.PartialArrayMapView pamv (object[] ks)
+	{
+		return this.state.pamv(ks);
 	}
 }

@@ -2,6 +2,7 @@ using System;
 using UnityEngine;
 using clojure.lang;
 using System.Collections.Generic;
+using Arcadia;
 
 namespace Arcadia
 {
@@ -9,6 +10,8 @@ namespace Arcadia
 	{
 		// at least start out *real* simple
 		public static ArcadiaState arcadiaState;
+
+		public static JumpMap.PartialArrayMapView pamv;
 
 		public static object FullLookup (object obj, object key)
 		{
@@ -27,7 +30,7 @@ namespace Arcadia
 				}
 			}
 			if (arcs != null) {
-				return ((IPersistentMap)arcs.state.deref()).valAt(key);
+				return arcs.state.ValueAtKey(key);
 			}
 			return null;
 		}
@@ -35,9 +38,13 @@ namespace Arcadia
 		public static object Lookup (object gobj, object key)
 		{
 			if (arcadiaState != null && gobj == arcadiaState.gameObject) {
-				return ((IPersistentMap)arcadiaState.state.deref()).valAt(key);
+				if (pamv != null) {
+					return pamv.ValueAtKey(key);
+				}
+				return arcadiaState.state.ValueAtKey(key);
 			}
 			return FullLookup(gobj, key);
 		}
+
 	}
 }

@@ -1,38 +1,62 @@
 (ns arcadia.internal.hook-help
-  (:require arcadia.literals)
+  (:require arcadia.literals
+            [clojure.spec :as s])
   (:import [UnityEngine Debug]
            ArcadiaBehaviour
+           ArcadiaState
            ArcadiaBehaviour+StateContainer))
 
 (defn get-state-atom [^ArcadiaBehaviour ab]
   (.state ab))
 
-(defn build-hook-state
-  ([]
-   (build-hook-state {}))
-  ([key-fns]
-   (ArcadiaBehaviour+StateContainer. key-fns
-     (into-array (keys key-fns))
-     (into-array (vals key-fns)))))
+(s/fdef build-hook-state
+  :args (s/cat
+          :arcs #(instance? ArcadiaBehaviour %)
+          :key-fns (s/? map?))
+  :ret #(instance? ArcadiaBehaviour+StateContainer %))
 
-(defn update-hook-state [^ArcadiaBehaviour+StateContainer hs, f & args]
-  (build-hook-state (apply f (.indexes hs) args)))
+(def bhs-log (atom ::initial))
+
+(defn build-hook-state
+  ([^ArcadiaBehaviour arcb]
+   (build-hook-state arcb {}))
+  ([^ArcadiaBehaviour arcb, key-fns]
+   (reset! bhs-log {:arcb arcb, :key-fns key-fns})
+   (when (nil? (.arcadiaState arcb))
+     (set! (.arcadiaState arcb)
+       (.GetComponent arcb ArcadiaState)))
+   (ArcadiaBehaviour+StateContainer/BuildStateContainer
+     key-fns 
+     (into-array (keys key-fns))
+     (into-array (vals key-fns))
+     (.arcadiaState arcb))))
+
+(s/fdef update-hook-state
+  :args (s/cat
+          :hs #(instance? ArcadiaBehaviour+StateContainer %)
+          :arcs #(instance? ArcadiaBehaviour %)
+          :f ifn?
+          :args (s/* any?))
+  :ret #(instance? ArcadiaBehaviour+StateContainer %))
+
+(defn update-hook-state [^ArcadiaBehaviour+StateContainer hs, ^ArcadiaBehaviour arcs, f & args]
+  (build-hook-state arcs (apply f (.indexes hs) args)))
 
 (defn add-fn [state-component key f]
   (swap! (get-state-atom state-component)
-    update-hook-state assoc key f))
+    update-hook-state state-component assoc key f))
 
 (defn add-fns [state-component fnmap]
   (swap! (get-state-atom state-component)
-    update-hook-state merge fnmap))
+    update-hook-state state-component merge fnmap))
 
 (defn remove-fn [state-component key]
   (swap! (get-state-atom state-component)
-    update-hook-state dissoc key))
+    update-hook-state state-component dissoc key))
 
 (defn remove-all-fns [state-component]
   (reset! (get-state-atom state-component)
-    (build-hook-state {})))
+    (build-hook-state state-component {})))
 
 (defn hook-state-serialized-edn [^ArcadiaBehaviour state-component]
   (pr-str (.indexes state-component)))
@@ -75,7 +99,7 @@
 
 (defn hook-state-deserialize [^ArcadiaBehaviour state-component]
   (reset! (get-state-atom state-component)
-    (build-hook-state
+    (build-hook-state state-component
       (reduce-kv
         deserialize-step
         {}
