@@ -555,7 +555,7 @@
         (fn [bldg k v]
           (assoc-in bldg [k :state] v))
         {}
-        (deref (.state s)))
+        (state s))
       {})
     hook-types))
 
