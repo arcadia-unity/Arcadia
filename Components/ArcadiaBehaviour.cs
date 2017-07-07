@@ -52,7 +52,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 				pamvs[i] = arcs.pamv(new object[0]);
 			}
 		}
-
+	
 		public StateContainer (IPersistentMap _indexes, object[] _keys,
 							   object[] _fns,
 							   JumpMap.PartialArrayMapView[] _pamvs)
@@ -142,9 +142,6 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 	public void AddFunction (IFn f)
 	{
-		if (!fullyInitialized) {
-			Init();
-		}
 		AddFunction(f, f);
 	}
 
@@ -154,6 +151,13 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 			Init();
 		}
 		addFnFn.invoke(this, key, f);
+	}
+
+	public void AddFunction (IFn f, object key, object[] fastKeys)
+	{
+		if (!fullyInitialized)
+			Init();
+		addFnFn.invoke(this, key, f, fastKeys);
 	}
 
 	public void RemoveAllFunctions ()
@@ -272,7 +276,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 			if (v != null) {
 				((IFn)v.getRawRoot()).invoke(_go, arg1, arg2, _keys[i]);
 			} else {
-				f.invoke(_go, arg1, arg2, _keys[i]);
+				f.invoke(_go, arg1, arg2, 	_keys[i]);
 			}
 		}
 	}

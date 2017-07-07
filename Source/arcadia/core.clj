@@ -394,6 +394,18 @@
   (or (hook-types hook)
       (throw (ArgumentException. (str hook " is not a valid Arcadia hook")))))
 
+(s/fdef hook+
+  :args (s/cat
+          :obj ::scenegraphable
+          :hook ::hook-kw
+          :rest (s/alt
+                  :n3 (s/cat
+                        :f ifn?)
+                  :n4+ (s/cat
+                         :k any?
+                         :f ifn?
+                         :fast-keys sequential?))))
+
 (defn hook+
   "Attach hook a Clojure function to a Unity message on `obj`. The funciton `f`
   will be invoked every time the message identified by `hook` is sent by Unity. `f`
@@ -404,6 +416,12 @@
    (let [hook-type (ensure-hook-type hook)
          ^ArcadiaBehaviour hook-cmpt (ensure-cmpt obj hook-type)]
      (.AddFunction hook-cmpt f k)
+     obj))
+  ([obj hook k f fast-keys]
+   ;; need to actually do something here
+   (let [hook-type (ensure-hook-type hook)
+         ^ArcadiaBehaviour hook-cmpt (ensure-cmpt obj hook-type)]
+     (.AddFunction hook-cmpt f k fast-keys)
      obj)))
 
 (defn hook-var [obj hook var]

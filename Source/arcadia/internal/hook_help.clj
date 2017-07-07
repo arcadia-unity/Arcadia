@@ -4,47 +4,96 @@
   (:import [UnityEngine Debug]
            ArcadiaBehaviour
            ArcadiaState
-           ArcadiaBehaviour+StateContainer))
+           ArcadiaBehaviour+StateContainer
+           [Arcadia JumpMap JumpMap+PartialArrayMapView]))
 
 (defn get-state-atom [^ArcadiaBehaviour ab]
   (.state ab))
 
+(comment
+  (s/fdef build-hook-state
+    :args (s/cat
+            :arcs #(instance? ArcadiaBehaviour %)
+            :key-fns (s/? map?))
+    :ret #(instance? ArcadiaBehaviour+StateContainer %))
+
+  (def bhs-log (atom ::initial))
+
+  (defn build-hook-state
+    ([^ArcadiaBehaviour arcb]
+     (build-hook-state arcb {}))
+    ([^ArcadiaBehaviour arcb, key-fns]
+     (reset! bhs-log {:arcb arcb, :key-fns key-fns})
+     (when (nil? (.arcadiaState arcb))
+       (set! (.arcadiaState arcb)
+         (.GetComponent arcb ArcadiaState)))
+     (ArcadiaBehaviour+StateContainer/BuildStateContainer
+       key-fns 
+       (into-array (keys key-fns))
+       (into-array (vals key-fns))
+       (.arcadiaState arcb)))))
+
+(s/def ::behaviour #(instance? ArcadiaBehaviour %))
+
+(s/def ::fn ifn?)
+
+(s/def ::key any?)
+
+(s/def ::pamv #(instance? JumpMap+PartialArrayMapView %))
+
+(s/def ::key-fn
+  (s/keys
+    :req [::fn ::key]
+    :opt [::pamv ::fast-keys]))
+
+(s/def ::key-fns (s/coll-of ::key-fn))
+
 (s/fdef build-hook-state
-  :args (s/cat
-          :arcs #(instance? ArcadiaBehaviour %)
-          :key-fns (s/? map?))
+  :args (s/keys
+          :req [::behaviour ::key-fns])
   :ret #(instance? ArcadiaBehaviour+StateContainer %))
 
-(def bhs-log (atom ::initial))
+;; TODO: too allocatey
+(defn build-hook-state [{:keys [::behaviour ::key-fns]}]
+  (let [^ArcadiaBehaviour behaviour behaviour]
+    (with-cmpt behaviour [arcs ArcadiaState]
+      (let [[fns keys pamvs] (->> key-fns
+                                  (map (fn [{:keys [::pamv ::fast-keys]
+                                             :as data}]
+                                         (if-not pamv
+                                           (assoc data ::pamv
+                                             (.pamv arcs
+                                               (into-array System.Object fast-keys)))
+                                           data)))
+                                  ;; transpose:
+                                  (map (juxt ::fn ::key ::pamv))
+                                  (apply map list))
+            indexes (zipmap keys fns)]
+        (StateContainer. indexes
+          (into-array System.Object keys)
+          (into-array System.Object fns)
+          (into-array JumpMap+PartialArrayMapView pamvs))))))
 
-(defn build-hook-state
-  ([^ArcadiaBehaviour arcb]
-   (build-hook-state arcb {}))
-  ([^ArcadiaBehaviour arcb, key-fns]
-   (reset! bhs-log {:arcb arcb, :key-fns key-fns})
-   (when (nil? (.arcadiaState arcb))
-     (set! (.arcadiaState arcb)
-       (.GetComponent arcb ArcadiaState)))
-   (ArcadiaBehaviour+StateContainer/BuildStateContainer
-     key-fns 
-     (into-array (keys key-fns))
-     (into-array (vals key-fns))
-     (.arcadiaState arcb))))
-
-(s/fdef update-hook-state
-  :args (s/cat
-          :hs #(instance? ArcadiaBehaviour+StateContainer %)
-          :arcs #(instance? ArcadiaBehaviour %)
-          :f ifn?
-          :args (s/* any?))
-  :ret #(instance? ArcadiaBehaviour+StateContainer %))
+;; (s/fdef update-hook-state
+;;   :args (s/cat
+;;           :hs #(instance? ArcadiaBehaviour+StateContainer %)
+;;           :arcs #(instance? ArcadiaBehaviour %)
+;;           :f ifn?
+;;           :args (s/* any?))
+;;   :ret #(instance? ArcadiaBehaviour+StateContainer %))
 
 (defn update-hook-state [^ArcadiaBehaviour+StateContainer hs, ^ArcadiaBehaviour arcs, f & args]
   (build-hook-state arcs (apply f (.indexes hs) args)))
 
-(defn add-fn [state-component key f]
-  (swap! (get-state-atom state-component)
-    update-hook-state state-component assoc key f))
+(defn add-fn
+  ([state-component key f]
+   (swap! (get-state-atom state-component)
+     update-hook-state state-component assoc key f))
+  ([state-component key f fast-keys]
+   ;; TODO: HERE IS WHERE WE NEED TO PICK UP TOMORROW
+   ;; (swap! (get-state-atom state-component)
+   ;;   update-hook-state )
+   ))
 
 (defn add-fns [state-component fnmap]
   (swap! (get-state-atom state-component)
