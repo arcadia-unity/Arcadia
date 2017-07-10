@@ -29,15 +29,15 @@ public class ArcadiaBehaviourEditor : Editor
 	void OnEnable()
 	{
 		ArcadiaBehaviour ab = (ArcadiaBehaviour)target;
-		if (rl == null)
-		{
-			rl = new ReorderableList(ab.fns, typeof(IFn), true, false, true, true);
-			rl.headerHeight = 4;
-			rl.onAddDropdownCallback = (buttonRect, list) =>
-			{
-				EditorGUI.Popup(buttonRect, 0, ((IList<object>)allUserFns.invoke()).Select(x => x.ToString().Substring(2)).ToArray());
-			};
-		}
+		//if (rl == null)
+		//{
+		//	rl = new ReorderableList(ab.fns, typeof(IFn), true, false, true, true);
+		//	rl.headerHeight = 4;
+		//	rl.onAddDropdownCallback = (buttonRect, list) =>
+		//	{
+		//		EditorGUI.Popup(buttonRect, 0, ((IList<object>)allUserFns.invoke()).Select(x => x.ToString().Substring(2)).ToArray());
+		//	};
+		//}
 	}
 
 	void PopupInspector()
@@ -89,27 +89,27 @@ public class ArcadiaBehaviourEditor : Editor
 		
 		// EditorGUILayout.LabelField("Disabled For Now, use the REPL");
 		ArcadiaBehaviour ab = (ArcadiaBehaviour)target;
-		if(ab.fns.Length == 0)
-		{
-			EditorGUILayout.LabelField("No functions");
-		}
-		else
-		{
-			for (int i = 0; i < ab.fns.Length; i++)
-			{
-				var fn = ab.fns[i];
-				Var v = fn as Var;
-				if (v != null && v.isBound)
-				{
-					EditorGUILayout.LabelField(fn.ToString());
-				} else {
-					GUIStyle style = new GUIStyle(GUI.skin.label);
-					style.normal.textColor = Color.red;
-					EditorGUILayout.LabelField(fn.ToString(), style);
-				}
+		//if(ab.fns.Length == 0)
+		//{
+		//	EditorGUILayout.LabelField("No functions");
+		//}
+		//else
+		//{
+		//	for (int i = 0; i < ab.fns.Length; i++)
+		//	{
+		//		var fn = ab.fns[i];
+		//		Var v = fn as Var;
+		//		if (v != null && v.isBound)
+		//		{
+		//			EditorGUILayout.LabelField(fn.ToString());
+		//		} else {
+		//			GUIStyle style = new GUIStyle(GUI.skin.label);
+		//			style.normal.textColor = Color.red;
+		//			EditorGUILayout.LabelField(fn.ToString(), style);
+		//		}
 				
-			}
-		}
+		//	}
+		//}
 		
 		// PopupInspector();
 		/*

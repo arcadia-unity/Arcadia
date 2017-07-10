@@ -1,37 +1,16 @@
 (ns arcadia.internal.hook-help
+  (:use arcadia.core)
   (:require arcadia.literals
-            [clojure.spec :as s])
+            [clojure.spec :as s]
+            [arcadia.internal.namespace :as ans])
   (:import [UnityEngine Debug]
            ArcadiaBehaviour
            ArcadiaState
-           ArcadiaBehaviour+StateContainer
+           ;; ArcadiaBehaviour+StateContainer
            [Arcadia JumpMap JumpMap+PartialArrayMapView]))
 
 (defn get-state-atom [^ArcadiaBehaviour ab]
   (.state ab))
-
-(comment
-  (s/fdef build-hook-state
-    :args (s/cat
-            :arcs #(instance? ArcadiaBehaviour %)
-            :key-fns (s/? map?))
-    :ret #(instance? ArcadiaBehaviour+StateContainer %))
-
-  (def bhs-log (atom ::initial))
-
-  (defn build-hook-state
-    ([^ArcadiaBehaviour arcb]
-     (build-hook-state arcb {}))
-    ([^ArcadiaBehaviour arcb, key-fns]
-     (reset! bhs-log {:arcb arcb, :key-fns key-fns})
-     (when (nil? (.arcadiaState arcb))
-       (set! (.arcadiaState arcb)
-         (.GetComponent arcb ArcadiaState)))
-     (ArcadiaBehaviour+StateContainer/BuildStateContainer
-       key-fns 
-       (into-array (keys key-fns))
-       (into-array (vals key-fns))
-       (.arcadiaState arcb)))))
 
 (s/def ::behaviour #(instance? ArcadiaBehaviour %))
 
@@ -48,42 +27,7 @@
 
 (s/def ::key-fns (s/coll-of ::key-fn))
 
-(s/fdef build-hook-state
-  :args (s/keys
-          :req [::behaviour ::key-fns])
-  :ret #(instance? ArcadiaBehaviour+StateContainer %))
-
-;; TODO: too allocatey
-(defn build-hook-state [{:keys [::behaviour ::key-fns]}]
-  (let [^ArcadiaBehaviour behaviour behaviour]
-    (with-cmpt behaviour [arcs ArcadiaState]
-      (let [[fns keys pamvs] (->> key-fns
-                                  (map (fn [{:keys [::pamv ::fast-keys]
-                                             :as data}]
-                                         (if-not pamv
-                                           (assoc data ::pamv
-                                             (.pamv arcs
-                                               (into-array System.Object fast-keys)))
-                                           data)))
-                                  ;; transpose:
-                                  (map (juxt ::fn ::key ::pamv))
-                                  (apply map list))
-            indexes (zipmap keys fns)]
-        (StateContainer. indexes
-          (into-array System.Object keys)
-          (into-array System.Object fns)
-          (into-array JumpMap+PartialArrayMapView pamvs))))))
-
-;; (s/fdef update-hook-state
-;;   :args (s/cat
-;;           :hs #(instance? ArcadiaBehaviour+StateContainer %)
-;;           :arcs #(instance? ArcadiaBehaviour %)
-;;           :f ifn?
-;;           :args (s/* any?))
-;;   :ret #(instance? ArcadiaBehaviour+StateContainer %))
-
-(defn update-hook-state [^ArcadiaBehaviour+StateContainer hs, ^ArcadiaBehaviour arcs, f & args]
-  (build-hook-state arcs (apply f (.indexes hs) args)))
+(defn update-hook-state [& args])
 
 (defn add-fn
   ([state-component key f]
@@ -122,7 +66,7 @@
               (let [^clojure.lang.Var v v
                     ns-sym (.. v Namespace Name)]
                 (try
-                  (require ns-sym)
+                  (ans/quickquire ns-sym)
                   (catch Exception e
                     (let [msg (str "Failed to require namespace for " (pr-str v) "; threw:\n"
                                    e

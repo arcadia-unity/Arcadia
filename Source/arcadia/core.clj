@@ -1,5 +1,6 @@
 (ns arcadia.core
   (:require [clojure.string :as string]
+            [clojure.spec :as s]
             [arcadia.internal.messages :refer [messages interface-messages]]
             [arcadia.internal.name-utils :refer [camels-to-hyphens]]
             arcadia.literals)
@@ -413,11 +414,9 @@
   this key can be passed to `hook-` to remove the function."
   ([obj hook f] (hook+ obj hook hook f))
   ([obj hook k f]
-   (let [hook-type (ensure-hook-type hook)
-         ^ArcadiaBehaviour hook-cmpt (ensure-cmpt obj hook-type)]
-     (.AddFunction hook-cmpt f k)
-     obj))
-  ([obj hook k f fast-keys]
+   (hook+ obj hook k f nil))
+  ([obj hook k f {:keys [^|System.Object[]| fast-keys]
+                  :or {^|System.Object[]| fast-keys (make-array System.Object 0)}}]
    ;; need to actually do something here
    (let [hook-type (ensure-hook-type hook)
          ^ArcadiaBehaviour hook-cmpt (ensure-cmpt obj hook-type)]
