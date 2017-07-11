@@ -90,14 +90,6 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 	private static Var serializeBehaviourFn;
 
-	private static Var addFnFn;
-
-	private static Var removeFnFn;
-
-	private static Var removeAllFnsFn;
-
-	private static Var buildHookStateFn;
-
 	public static Var requireVarNamespacesFn;
 
 	public static bool varsInitialized = false;
@@ -108,10 +100,6 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		Arcadia.Util.require(nsStr);
 		Arcadia.Util.getVar(ref hookStateDeserializeFn, nsStr, "hook-state-deserialize");
 		Arcadia.Util.getVar(ref serializeBehaviourFn, nsStr, "serialize-behaviour");
-		//Arcadia.Util.getVar(ref addFnFn, nsStr, "add-fn");
-		//Arcadia.Util.getVar(ref removeFnFn, nsStr, "remove-fn");
-		//Arcadia.Util.getVar(ref removeAllFnsFn, nsStr, "remove-all-fns");
-		//Arcadia.Util.getVar(ref buildHookStateFn, nsStr, "build-hook-state");
 		Arcadia.Util.getVar(ref requireVarNamespacesFn, nsStr, "require-var-namespaces");
 
 		varsInitialized = true;
@@ -185,15 +173,6 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 	// ============================================================
 	// setup
 
-	//public void Init ()
-	//{
-	//	if (_fullyInitialized)
-	//		return;
-
-	//	initializeVars();
-	//	hookStateDeserializeFn.invoke(this);
-	//}
-
 	public void FullInit ()
 	{
 		if (_fullyInitialized)
@@ -236,9 +215,6 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 	{
 		if (!varsInitialized)
 			initializeVars();
-		//#if UNITY_EDITOR
-		//		/Init();
-		//#endif
 	}
 
 	// ============================================================
