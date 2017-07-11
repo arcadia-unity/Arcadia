@@ -27,8 +27,8 @@ namespace Arcadia
 		public static void require (string s)
 		{
 			if (requireVar == null) {
-				Invoke(RT.var("clojure.core", "require"), 
-				       Symbol.intern("arcadia.internal.namespace"));
+				Invoke(RT.var("clojure.core", "require"),
+					   Symbol.intern("arcadia.internal.namespace"));
 				requireVar = RT.var("arcadia.internal.namespace", "quickquire");
 			}
 			Invoke(requireVar, Symbol.intern(s));
@@ -103,6 +103,27 @@ namespace Arcadia
 			return arr2;
 		}
 
+		// mutating ops
+
+		public static void WindowShift<T> (T[] arr, int windowStart, int windowEnd, int shiftTo)
+		{
+			Array.Copy(arr, windowStart, arr, shiftTo, windowEnd - windowStart);
+		}
+
+		// move an item to another place and shift everything else to fill in
+		public static void Reposition<T> (T[] arr, int sourceInx, int targInx)
+		{
+			var x = arr[sourceInx];
+			if (sourceInx == targInx) {
+				return;
+			} else if (sourceInx < targInx) {
+				WindowShift(arr, sourceInx + 1, targInx, sourceInx);
+			} else {
+				WindowShift(arr, targInx, sourceInx, targInx + 1);
+			}
+			arr[targInx] = x;
+		}
+
 		// ==================================================================
 		// Persistent maps
 
@@ -110,7 +131,7 @@ namespace Arcadia
 		{
 			var len = Mathf.Min(ks.Length, vs.Length) * 2;
 			object[] kvs = new object[len];
-			for (int i = 0; i < len; i+=2) {
+			for (int i = 0; i < len; i += 2) {
 				kvs[i] = ks[i];
 				kvs[i + 1] = vs[i];
 			}

@@ -135,12 +135,9 @@ namespace Arcadia
 
 			public object GetVal ()
 			{
-				if (isInhabited) {
+				if (isInhabited)
 					return val;
-				} else {
-					// fallback to hash lookup
-					return this.jumpMap.ValueAtKey(key);
-				}
+				return this.jumpMap.ValueAtKey(key);
 			}
 
 		}
@@ -174,8 +171,10 @@ namespace Arcadia
 
 			public object ValueAtKey (object key)
 			{
+				// consider (and benchmark) foreach rather than for loop
 				for (int i = 0; i < kvs.Length; i++) {
 					if (kvs[i].key == key) {
+						// if we want to get cute we can inline GetVal here
 						return kvs[i].GetVal();
 					}
 				}

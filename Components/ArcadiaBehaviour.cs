@@ -36,7 +36,9 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 	// ============================================================
 	// data
 
-	private IFnInfo[] ifnInfos_;
+	private IFnInfo[] ifnInfos_ = new IFnInfo[0];
+
+	public ArcadiaState arcadiaState;
 
 	// compute indexes lazily
 	private IPersistentMap indexes_;
@@ -50,8 +52,6 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 			InvalidateIndexes();
 		}
 	}
-
-	public ArcadiaState arcadiaState;
 
 	public object[] keys {
 		get {
@@ -88,7 +88,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 	private static Var hookStateDeserializeFn;
 
-	private static Var hookStateSerializedEdnFn;
+	private static Var serializeBehaviourFn;
 
 	private static Var addFnFn;
 
@@ -100,17 +100,21 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 	public static Var requireVarNamespacesFn;
 
+	public static bool varsInitialized = false;
+
 	private static void initializeVars ()
 	{
 		string nsStr = "arcadia.internal.hook-help";
 		Arcadia.Util.require(nsStr);
 		Arcadia.Util.getVar(ref hookStateDeserializeFn, nsStr, "hook-state-deserialize");
-		Arcadia.Util.getVar(ref hookStateSerializedEdnFn, nsStr, "hook-state-serialized-edn");
-		Arcadia.Util.getVar(ref addFnFn, nsStr, "add-fn");
-		Arcadia.Util.getVar(ref removeFnFn, nsStr, "remove-fn");
-		Arcadia.Util.getVar(ref removeAllFnsFn, nsStr, "remove-all-fns");
-		Arcadia.Util.getVar(ref buildHookStateFn, nsStr, "build-hook-state");
+		Arcadia.Util.getVar(ref serializeBehaviourFn, nsStr, "serialize-behaviour");
+		//Arcadia.Util.getVar(ref addFnFn, nsStr, "add-fn");
+		//Arcadia.Util.getVar(ref removeFnFn, nsStr, "remove-fn");
+		//Arcadia.Util.getVar(ref removeAllFnsFn, nsStr, "remove-all-fns");
+		//Arcadia.Util.getVar(ref buildHookStateFn, nsStr, "build-hook-state");
 		Arcadia.Util.getVar(ref requireVarNamespacesFn, nsStr, "require-var-namespaces");
+
+		varsInitialized = true;
 	}
 
 	// ============================================================
@@ -127,20 +131,20 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 	public void AddFunction (IFn f, object key, object[] fastKeys)
 	{
-		if (!_fullyInitialized)
-			Init();
-
 		for (int i = 0; i < ifnInfos_.Length; i++) {
 			var inf = ifnInfos_[i];
 			if (inf.key == key) {
 				InvalidateIndexes();
 				// shift over
-				if (i != ifnInfos_.Length - 1)
-					System.Array.Copy(ifnInfos_, i + 1, ifnInfos_, i, ifnInfos_.Length - (i + 1));
+				if (i < ifnInfos_.Length - 1)
+					Arcadia.Util.WindowShift(ifnInfos_, i + 1, ifnInfos_.Length - 1, i);
 				ifnInfos_[ifnInfos_.Length - 1] = new IFnInfo(key, f, arcadiaState.pamv(fastKeys));
 				return;
 			}
 		}
+
+		if (arcadiaState == null)
+			arcadiaState = GetComponent<ArcadiaState>();
 
 		ifnInfos = Arcadia.Util.ArrayAppend(
 			ifnInfos_,
@@ -160,17 +164,11 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 	public void RemoveAllFunctions ()
 	{
-		if (!_fullyInitialized)
-			Init();
-
 		ifnInfos = new IFnInfo[0];
 	}
 
 	public void RemoveFunction (object key)
 	{
-		if (!_fullyInitialized)
-			Init();
-
 		int inx = -1;
 		for (int i = 0; i < ifnInfos_.Length; i++) {
 			if (ifnInfos_[i].key == key) {
@@ -183,21 +181,27 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		}
 	}
 
-	public void Init ()
-	{
-		if (_fullyInitialized)
-			return;
 
-		initializeVars();
-		hookStateDeserializeFn.invoke(this);
-	}
+	// ============================================================
+	// setup
+
+	//public void Init ()
+	//{
+	//	if (_fullyInitialized)
+	//		return;
+
+	//	initializeVars();
+	//	hookStateDeserializeFn.invoke(this);
+	//}
 
 	public void FullInit ()
 	{
 		if (_fullyInitialized)
 			return;
 
-		Init();
+		//Init();
+		initializeVars();
+		hookStateDeserializeFn.invoke(this);
 		arcadiaState = GetComponent<ArcadiaState>();
 		arcadiaState.Initialize();
 		requireVarNamespacesFn.invoke(this);
@@ -221,14 +225,20 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 	public void OnBeforeSerialize ()
 	{
-		edn = (string)hookStateSerializedEdnFn.invoke(this);
+		if (arcadiaState == null)
+			arcadiaState = GetComponent<ArcadiaState>();
+		if (!varsInitialized)
+			initializeVars();
+		edn = (string)serializeBehaviourFn.invoke(this);
 	}
 
 	public void OnAfterDeserialize ()
 	{
-#if UNITY_EDITOR
-		Init();
-#endif
+		if (!varsInitialized)
+			initializeVars();
+		//#if UNITY_EDITOR
+		//		/Init();
+		//#endif
 	}
 
 	// ============================================================

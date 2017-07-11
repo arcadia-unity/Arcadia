@@ -395,6 +395,12 @@
   (or (hook-types hook)
       (throw (ArgumentException. (str hook " is not a valid Arcadia hook")))))
 
+(s/def ::scenegraphable
+  #(satisfies? ISceneGraph %))
+
+(s/def ::hook-kw
+  #(contains? hook-types %))
+
 (s/fdef hook+
   :args (s/cat
           :obj ::scenegraphable
@@ -405,7 +411,7 @@
                   :n4+ (s/cat
                          :k any?
                          :f ifn?
-                         :fast-keys sequential?))))
+                         :fast-keys (s/? (s/nilable sequential?))))))
 
 (defn hook+
   "Attach hook a Clojure function to a Unity message on `obj`. The funciton `f`
