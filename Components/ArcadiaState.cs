@@ -17,6 +17,9 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 	private static IFn readString = null;
 	private static IFn requireFn = null;
 
+	[System.NonSerialized]
+	public bool fullyInitialized = false;
+
 	// creates objectDatabase atom from
 	// objectDatabaseIds and objectDatabaseObjects
 	public void BuildDatabaseAtom (bool force = false)
@@ -42,66 +45,50 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 	}
 
 	// =====================================================
-	// TODO: make all these private
+	// Static Data
+
 	public static Var dataReaders;
 
 	public static Var awakeFn;
 
 	public static Var jumpMapToMapVar;
 
-	public static Var initializeVar;
+	public static Var deserializeVar;
 
 	public static bool varsInitialized = false;
 
-	public static bool fullyInitialized_ = false;
-
 	// =====================================================
 
-	public bool fullyInitialized {
-		get {
-			return fullyInitialized_;
-		}
-	}
-
-	private static void require (string s)
-	{
-		if (requireFn == null) {
-			requireFn = RT.var("clojure.core", "require");
-		}
-		requireFn.invoke(Symbol.intern(s));
-	}
-
-	private static void initializeVars ()
+	private static void InitializeOwnVars ()
 	{
 		if (varsInitialized)
 			return;
 
-		string nsStr = "arcadia.literals";
-		require(nsStr);
-		if (dataReaders == null)
-			dataReaders = RT.var(nsStr, "*data-readers*");
-		string nsStr2 = "arcadia.internal.state-help";
-		require(nsStr2);
-		if (awakeFn == null)
-			awakeFn = RT.var(nsStr2, "awake");
-		if (jumpMapToMapVar == null)
-			jumpMapToMapVar = RT.var(nsStr2, "jumpmap-to-map");
-		if (initializeVar == null)
-			initializeVar = RT.var(nsStr2, "initialize");
+		string literalsNs = "arcadia.literals";
+		Arcadia.Util.require(literalsNs);
+		Arcadia.Util.getVar(ref dataReaders, literalsNs, "*data-readers*");
+
+		string stateHelpNs = "arcadia.internal.state-help";
+		Arcadia.Util.require(stateHelpNs);
+		Arcadia.Util.getVar(ref awakeFn, stateHelpNs, "awake");
+		Arcadia.Util.getVar(ref jumpMapToMapVar, stateHelpNs, "jumpmap-to-map");
+		Arcadia.Util.getVar(ref deserializeVar, stateHelpNs, "deserialize");
 
 		varsInitialized = true;
 	}
 
 
-	// require vars and full deserialize
+	// Require vars and full deserialize.
+	// Will eventually call GetComponent via RefreshAll, so can't be called during OnAfterDeserialize
+	// Triggered by Awake, also by FullInit in ArcadiaBehaviour
 	public void Initialize ()
 	{
-		if (fullyInitialized_)
+		if (fullyInitialized)
 			return;
 
-		initializeVars();
-		initializeVar.invoke(this);
-		fullyInitialized_ = true;
+		InitializeOwnVars();
+		RefreshAll();
+		fullyInitialized = true;
 	}
 
 	public void Awake ()
@@ -117,7 +104,7 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 		Namespace ArcadiaLiteralsNamespace = Namespace.findOrCreate(Symbol.intern("arcadia.literals"));
 		Var ObjectDbVar = Var.intern(ArcadiaLiteralsNamespace, Symbol.intern("*object-db*")).setDynamic();
 
-		initializeVars();
+		InitializeOwnVars();
 
 		WipeDatabase();
 		Var.pushThreadBindings(RT.map(ObjectDbVar, objectDatabase));
@@ -133,8 +120,8 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 
 	public void OnAfterDeserialize ()
 	{
-		initializeVars();
-		//deserializeVar.invoke();
+		InitializeOwnVars();
+		deserializeVar.invoke(this);
 	}
 
 	// ============================================================
@@ -170,6 +157,6 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 
 	public JumpMap.PartialArrayMapView pamv (object[] ks)
 	{
-		return this.state.pamv(ks);
+		return state.pamv(ks);
 	}
 }

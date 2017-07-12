@@ -24,25 +24,24 @@
     x))
 
 (defn deserialize [^ArcadiaState as]
-  (let [state (.state as)]
-    (.BuildDatabaseAtom as true)
-    (let [objdb (.objectDatabase as)]
-      (binding [arcadia.literals/*object-db* objdb
-                *data-readers* (if-not (empty? *data-readers*)
-                                 (merge *data-readers* arcadia.literals/the-bucket)
-                                 arcadia.literals/the-bucket)]
-        (try
-          (let [jm (.state as)]
-            (.Clear jm)
-            (.AddAll jm
-              (convert-vars
-                (read-string (.edn as)))))
-          (catch Exception e
-            (Debug/Log "Exception encountered in arcadia.internal.state-help/deserialize:")
-            (Debug/Log e)
-            (Debug/Log "arcadia.literals/*object-db*:")
-            (Debug/Log arcadia.literals/*object-db*)
-            (throw e)))))))
+  (.BuildDatabaseAtom as true)
+  (let [objdb (.objectDatabase as)]
+    (binding [arcadia.literals/*object-db* objdb
+              *data-readers* (if-not (empty? *data-readers*)
+                               (merge *data-readers* arcadia.literals/the-bucket)
+                               arcadia.literals/the-bucket)]
+      (try
+        (let [^JumpMap jm (.state as)]
+          (.Clear jm)
+          (.AddAll jm
+            (convert-vars
+              (read-string (.edn as)))))
+        (catch Exception e
+          (Debug/Log "Exception encountered in arcadia.internal.state-help/deserialize:")
+          (Debug/Log e)
+          (Debug/Log "arcadia.literals/*object-db*:")
+          (Debug/Log arcadia.literals/*object-db*)
+          (throw e))))))
 
 (defn initialize [^ArcadiaState as]
   (deserialize as)

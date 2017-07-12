@@ -89,7 +89,6 @@ public class ArcadiaBehaviourEditor : Editor
 
 		// EditorGUILayout.LabelField("Disabled For Now, use the REPL");
 
-		Debug.Log("boop boop boop");
 		ArcadiaBehaviour ab = (ArcadiaBehaviour)target;
 		var fns = ab.fns;
 		if(fns.Length == 0)

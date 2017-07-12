@@ -26,7 +26,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		public JumpMap.PartialArrayMapView pamv;
 
 		// for the awkward pause between deserialization and connection to the scene graph
-		public object[] fastKeys;
+		public object[] fastKeys = new object[0];
 
 		public IFnInfo (object key, IFn fn, JumpMap.PartialArrayMapView pamv)
 		{
@@ -49,13 +49,8 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 		public void Realize (JumpMap jm)
 		{
-			if (pamv == null) {
-				if (fastKeys != null) {
-					pamv = jm.pamv(fastKeys);
-				} else {
-					throw new System.Exception("Missing both pamv and fastKeys");
-				}
-			}
+			if (pamv == null)
+				pamv = jm.pamv(fastKeys);
 		}
 	}
 
@@ -220,6 +215,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		initializeVars();
 		arcadiaState = GetComponent<ArcadiaState>();
 		arcadiaState.Initialize();
+		RealizeAll(arcadiaState.state);
 		requireVarNamespacesFn.invoke(this);
 		_fullyInitialized = true;
 	}
@@ -227,8 +223,26 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 	public void RefreshPamvs ()
 	{
 		for (int i = 0; i < ifnInfos_.Length; i++) {
-			ifnInfos_[i].pamv.Refresh();
+			var inf = ifnInfos_[i];
+			if (!inf.IsLarval()) {
+				ifnInfos_[i].pamv.Refresh();
+			}
 		}
+	}
+
+	public bool HasEvacuatedKV ()
+	{
+		for (int i = 0; i < ifnInfos_.Length; i++) {
+			var pamv = ifnInfos_[i].pamv;
+			if (pamv != null) {
+				var kvs = pamv.kvs;
+				for (int j = 0; j < kvs.Length; j++) {
+					if (!kvs[j].isInhabited)
+						return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	// ============================================================
@@ -241,7 +255,6 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 	public void OnBeforeSerialize ()
 	{
-		Debug.Log("In OnBeforeSerialize for ArcadiaBehaviour");
 		if (arcadiaState == null)
 			arcadiaState = GetComponent<ArcadiaState>();
 		if (!varsInitialized)
@@ -253,7 +266,6 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 	public void OnAfterDeserialize ()
 	{
-		Debug.Log("In OnAfterDeserialize for ArcadiaBehaviour");
 		Debug.Log("edn:\n" + edn);
 		if (!varsInitialized)
 			initializeVars();
