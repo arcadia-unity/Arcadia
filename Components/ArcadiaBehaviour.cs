@@ -260,7 +260,9 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		if (!varsInitialized)
 			initializeVars();
 		// will populate potentially larval ArcadiaBehaviours
-		RealizeAll(GetComponent<ArcadiaState>().state);
+		// var arcs = GetComponent<ArcadiaState>();
+		//if (arcs != null)
+		//	RealizeAll(arcs.state);
 		edn = (string)serializeBehaviourFn.invoke(this);
 	}
 

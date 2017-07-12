@@ -62,7 +62,9 @@
 (defn ifn-info-data [^ArcadiaBehaviour+IFnInfo inf]
   {::key (.key inf)
    ::fn (.fn inf)
-   ::pamv-data (pamv-data (.pamv inf))})
+   ::pamv-data (if (.pamv inf)
+                 (pamv-data (.pamv inf))
+                 (vec (.fastKeys inf)))})
 
 (s/fdef deserialize-ifn-info
   :args (s/cat :ifn-info-data ::ifn-info-data

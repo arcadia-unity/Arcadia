@@ -90,24 +90,26 @@ public class ArcadiaBehaviourEditor : Editor
 		// EditorGUILayout.LabelField("Disabled For Now, use the REPL");
 
 		ArcadiaBehaviour ab = (ArcadiaBehaviour)target;
-		var fns = ab.fns;
-		if(fns.Length == 0)
+		//var fns = ab.fns;
+		//var keys = ab.keys;
+		var ifns = ab.ifnInfos;
+		if(ifns.Length == 0)
 		{
 			EditorGUILayout.LabelField("No functions");
 		}
 		else
 		{
-			for (int i = 0; i < fns.Length; i++)
+			for (int i = 0; i < ifns.Length; i++)
 			{
-				var fn = fns[i];
-				Var v = fn as Var;
+				var ifn = ifns[i];				
+				Var v = ifn.fn as Var;
 				if (v != null && v.isBound)
 				{
-					EditorGUILayout.LabelField(fn.ToString());
+					EditorGUILayout.LabelField(ifn.key.ToString() + ": " + v.ToString());
 				} else {
 					GUIStyle style = new GUIStyle(GUI.skin.label);
 					style.normal.textColor = Color.red;
-					EditorGUILayout.LabelField(fn.ToString(), style);
+					EditorGUILayout.LabelField(ifn.key.ToString() + ": " + ifn.fn.ToString(), style);
 				}
 				
 			}
@@ -136,6 +138,7 @@ public class ArcadiaStateEditor : Editor
 	{
 		RT.load("arcadia/core");
 	}
+
 
 	public override void OnInspectorGUI()
 	{
