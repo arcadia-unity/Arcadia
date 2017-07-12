@@ -86,30 +86,33 @@ public class ArcadiaBehaviourEditor : Editor
 	public override void OnInspectorGUI()
 	{
 		// var inspectorConfig = ClojureConfiguration.Get("editor", "hooks-inspector");
-		
+
 		// EditorGUILayout.LabelField("Disabled For Now, use the REPL");
+
+		Debug.Log("boop boop boop");
 		ArcadiaBehaviour ab = (ArcadiaBehaviour)target;
-		//if(ab.fns.Length == 0)
-		//{
-		//	EditorGUILayout.LabelField("No functions");
-		//}
-		//else
-		//{
-		//	for (int i = 0; i < ab.fns.Length; i++)
-		//	{
-		//		var fn = ab.fns[i];
-		//		Var v = fn as Var;
-		//		if (v != null && v.isBound)
-		//		{
-		//			EditorGUILayout.LabelField(fn.ToString());
-		//		} else {
-		//			GUIStyle style = new GUIStyle(GUI.skin.label);
-		//			style.normal.textColor = Color.red;
-		//			EditorGUILayout.LabelField(fn.ToString(), style);
-		//		}
+		var fns = ab.fns;
+		if(fns.Length == 0)
+		{
+			EditorGUILayout.LabelField("No functions");
+		}
+		else
+		{
+			for (int i = 0; i < fns.Length; i++)
+			{
+				var fn = fns[i];
+				Var v = fn as Var;
+				if (v != null && v.isBound)
+				{
+					EditorGUILayout.LabelField(fn.ToString());
+				} else {
+					GUIStyle style = new GUIStyle(GUI.skin.label);
+					style.normal.textColor = Color.red;
+					EditorGUILayout.LabelField(fn.ToString(), style);
+				}
 				
-		//	}
-		//}
+			}
+		}
 		
 		// PopupInspector();
 		/*

@@ -8,7 +8,7 @@ using Arcadia;
 public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 {
 	[SerializeField]
-	public string edn = "{}";
+	public string edn = "[]";
 
 	[System.NonSerialized]
 	protected bool _fullyInitialized = false;
@@ -25,11 +25,37 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		public IFn fn;
 		public JumpMap.PartialArrayMapView pamv;
 
+		// for the awkward pause between deserialization and connection to the scene graph
+		public object[] fastKeys;
+
 		public IFnInfo (object key, IFn fn, JumpMap.PartialArrayMapView pamv)
 		{
 			this.key = key;
 			this.fn = fn;
 			this.pamv = pamv;
+		}
+
+		public static IFnInfo LarvalIFnInfo (object key, IFn fn, object[] fastKeys)
+		{
+			var inf = new IFnInfo(key, fn, null);
+			inf.fastKeys = fastKeys;
+			return inf;
+		}
+
+		public bool IsLarval ()
+		{
+			return pamv == null;
+		}
+
+		public void Realize (JumpMap jm)
+		{
+			if (pamv == null) {
+				if (fastKeys != null) {
+					pamv = jm.pamv(fastKeys);
+				} else {
+					throw new System.Exception("Missing both pamv and fastKeys");
+				}
+			}
 		}
 	}
 
@@ -38,6 +64,8 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 	private IFnInfo[] ifnInfos_ = new IFnInfo[0];
 
+	// maybe this should be NonSerialized
+	// [System.NonSerialized]
 	public ArcadiaState arcadiaState;
 
 	// compute indexes lazily
@@ -92,6 +120,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 	public static Var requireVarNamespacesFn;
 
+	[System.NonSerialized]
 	public static bool varsInitialized = false;
 
 	private static void initializeVars ()
@@ -173,6 +202,15 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 	// ============================================================
 	// setup
 
+	public void RealizeAll (JumpMap jm)
+	{
+		foreach (var inf in ifnInfos) {
+			if (inf.IsLarval()) {
+				inf.Realize(jm);
+			}
+		}
+	}
+
 	public void FullInit ()
 	{
 		if (_fullyInitialized)
@@ -180,7 +218,6 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 		//Init();
 		initializeVars();
-		hookStateDeserializeFn.invoke(this);
 		arcadiaState = GetComponent<ArcadiaState>();
 		arcadiaState.Initialize();
 		requireVarNamespacesFn.invoke(this);
@@ -204,17 +241,23 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 	public void OnBeforeSerialize ()
 	{
+		Debug.Log("In OnBeforeSerialize for ArcadiaBehaviour");
 		if (arcadiaState == null)
 			arcadiaState = GetComponent<ArcadiaState>();
 		if (!varsInitialized)
 			initializeVars();
+		// will populate potentially larval ArcadiaBehaviours
+		RealizeAll(GetComponent<ArcadiaState>().state);
 		edn = (string)serializeBehaviourFn.invoke(this);
 	}
 
 	public void OnAfterDeserialize ()
 	{
+		Debug.Log("In OnAfterDeserialize for ArcadiaBehaviour");
+		Debug.Log("edn:\n" + edn);
 		if (!varsInitialized)
 			initializeVars();
+		hookStateDeserializeFn.invoke(this);
 	}
 
 	// ============================================================

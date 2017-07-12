@@ -162,6 +162,9 @@ namespace Arcadia
 
 			public PartialArrayMapView (object[] keys, JumpMap source_)
 			{
+				if (source_ == null) {
+					throw new System.Exception("source_ must be JumpMap, instead got null");
+				}
 				kvs = new KeyVal[keys.Length];
 				source = source_;
 				for (int i = 0; i < keys.Length; i++) {

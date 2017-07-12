@@ -66,13 +66,14 @@
 
 (s/fdef deserialize-ifn-info
   :args (s/cat :ifn-info-data ::ifn-info-data
-               :jm #(instance? JumpMap %))
+               :jm (s/nilable #(instance? JumpMap %)))
   :ret #(instance? ArcadiaBehaviour+IFnInfo %))
 
 (defn deserialize-ifn-info ^ArcadiaBehaviour+IFnInfo [{:keys [::key ::fn ::pamv-data]},
                                                       ^JumpMap jm]
   (ArcadiaBehaviour+IFnInfo. key fn
-    (deserialize-pamv pamv-data jm)))
+    (when jm
+      (deserialize-pamv pamv-data jm))))
 
 ;; ------------------------------------------------------------
 ;; arcadia behaviour
@@ -128,12 +129,29 @@
   :args (s/cat :behaviour #(instance? ArcadiaBehaviour %)))
 
 (defn hook-state-deserialize [^ArcadiaBehaviour behaviour]
+  (UnityEngine.Debug/Log "in hook-state-deserialize")
   (let [raw (read-string (.edn behaviour))]
-    (with-cmpt behaviour [state ArcadiaState]
-      (let [jm (.state state)]
-        (set! (.ifnInfos behaviour)
-          (->> raw
-               (map realize-vars)
-               (map #(deserialize-ifn-info % jm))
-               (into-array ArcadiaBehaviour+IFnInfo)))
-        behaviour))))
+    (let []
+      (set! (.ifnInfos behaviour)
+        (->> raw
+             (map realize-vars)
+             (map #(deserialize-ifn-info % nil)) ;; note the nil
+             (into-array ArcadiaBehaviour+IFnInfo)))
+      behaviour)
+    ;; (with-cmpt behaviour [state ArcadiaState]
+    ;;   (let [jm (.state state)]
+    ;;     (set! (.ifnInfos behaviour)
+    ;;       (->> raw
+    ;;            (map realize-vars)
+    ;;            (map #(deserialize-ifn-info % nil)) ;; note the nil
+    ;;            (into-array ArcadiaBehaviour+IFnInfo)))
+    ;;     behaviour))
+    ;; (with-cmpt behaviour [state ArcadiaState]
+    ;;   (let [jm (.state state)]
+    ;;     (set! (.ifnInfos behaviour)
+    ;;       (->> raw
+    ;;            (map realize-vars)
+    ;;            (map #(deserialize-ifn-info % jm))
+    ;;            (into-array ArcadiaBehaviour+IFnInfo)))
+    ;;     behaviour))
+    ))
