@@ -30,9 +30,17 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 		public IFnInfo (object key, IFn fn, JumpMap.PartialArrayMapView pamv)
 		{
+
 			this.key = key;
 			this.fn = fn;
 			this.pamv = pamv;
+			if (pamv != null)
+				this.fastKeys = pamv.keys;
+		}
+
+		public static IFnInfo LarvalIFnInfo (object key, IFn fn)
+		{
+			return LarvalIFnInfo(key, fn, new object[0]);
 		}
 
 		public static IFnInfo LarvalIFnInfo (object key, IFn fn, object[] fastKeys)
@@ -118,7 +126,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 	[System.NonSerialized]
 	public static bool varsInitialized = false;
 
-	private static void initializeVars ()
+	private static void InitializeOwnVars ()
 	{
 		string nsStr = "arcadia.internal.hook-help";
 		Arcadia.Util.require(nsStr);
@@ -212,7 +220,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 			return;
 
 		//Init();
-		initializeVars();
+		InitializeOwnVars();
 		arcadiaState = GetComponent<ArcadiaState>();
 		arcadiaState.Initialize();
 		RealizeAll(arcadiaState.state);
@@ -258,10 +266,10 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		if (arcadiaState == null)
 			arcadiaState = GetComponent<ArcadiaState>();
 		if (!varsInitialized)
-			initializeVars();
+			InitializeOwnVars();
 		// will populate potentially larval ArcadiaBehaviours
 		// var arcs = GetComponent<ArcadiaState>();
-		//if (arcs != null)
+		//if (arcs != null)	
 		//	RealizeAll(arcs.state);
 		edn = (string)serializeBehaviourFn.invoke(this);
 	}
@@ -270,7 +278,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 	{
 		Debug.Log("edn:\n" + edn);
 		if (!varsInitialized)
-			initializeVars();
+			InitializeOwnVars();
 		hookStateDeserializeFn.invoke(this);
 	}
 
@@ -285,6 +293,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 		var _go = gameObject;
 		HookStateSystem.arcadiaState = arcadiaState;
+		HookStateSystem.hasState = true;
 		for (int i = 0; i < ifnInfos_.Length; i++) {
 			var inf = ifnInfos_[i];
 			HookStateSystem.pamv = inf.pamv;
@@ -305,6 +314,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 		var _go = gameObject;
 		HookStateSystem.arcadiaState = arcadiaState;
+		HookStateSystem.hasState = true;
 		for (int i = 0; i < ifnInfos_.Length; i++) {
 			var inf = ifnInfos_[i];
 			HookStateSystem.pamv = inf.pamv;
@@ -325,6 +335,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 		var _go = gameObject;
 		HookStateSystem.arcadiaState = arcadiaState;
+		HookStateSystem.hasState = true;
 		for (int i = 0; i < ifnInfos_.Length; i++) {
 			var inf = ifnInfos_[i];
 			HookStateSystem.pamv = inf.pamv;
@@ -345,6 +356,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 		var _go = gameObject;
 		HookStateSystem.arcadiaState = arcadiaState;
+		HookStateSystem.hasState = true;
 		for (int i = 0; i < ifnInfos_.Length; i++) {
 			var inf = ifnInfos_[i];
 			HookStateSystem.pamv = inf.pamv;

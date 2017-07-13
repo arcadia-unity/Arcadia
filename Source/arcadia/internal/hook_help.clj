@@ -73,9 +73,17 @@
 
 (defn deserialize-ifn-info ^ArcadiaBehaviour+IFnInfo [{:keys [::key ::fn ::pamv-data]},
                                                       ^JumpMap jm]
-  (ArcadiaBehaviour+IFnInfo. key fn
-    (when jm
-      (deserialize-pamv pamv-data jm))))
+  (log "here we are in deserialize-ifn-info. pamv-data:\n"
+    (pr-str pamv-data))
+  (if jm
+    (do
+      (log "branch 1")
+      (ArcadiaBehaviour+IFnInfo. key fn
+        (deserialize-pamv pamv-data jm)))
+    (do
+      (log "branch 2")
+      (ArcadiaBehaviour+IFnInfo/LarvalIFnInfo key fn
+        (into-array System.Object pamv-data)))))
 
 ;; ------------------------------------------------------------
 ;; arcadia behaviour
