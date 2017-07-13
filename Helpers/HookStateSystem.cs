@@ -19,21 +19,19 @@ namespace Arcadia
 		public static object FullLookup (object obj, object key)
 		{
 			ArcadiaState arcs;
-			var gobj = obj as GameObject;
-			if (gobj != null) {
-				arcs = (ArcadiaState)gobj.GetComponent(typeof(ArcadiaState));
+
+			if (obj is GameObject) {
+				arcs = (ArcadiaState)((GameObject)obj).GetComponent(typeof(ArcadiaState));
+			} else if (obj is Component) {
+				arcs = (ArcadiaState)((Component)obj).GetComponent(typeof(ArcadiaState));
 			} else {
-				var cmpt = obj as Component;
-				if (cmpt != null) {
-					arcs = (ArcadiaState)cmpt.GetComponent(typeof(ArcadiaState));
-				} else {
-					throw new Exception(
-						"obj must be GameObject or Component, instead got " + obj.GetType()
-					);
-				}
+				return null;
 			}
-			if (arcs != null) {
-				return arcs.state.ValueAtKey(key);
+
+			var jm = arcs.state;
+			Arcadia.JumpMap.KeyVal kv;
+			if (jm.dict.TryGetValue(key, out kv)) {
+				return kv.val;
 			}
 			return null;
 		}
