@@ -139,12 +139,22 @@ public class ArcadiaStateEditor : Editor
 		RT.load("arcadia/core");
 	}
 
+	public static Var OnInspectorGUIVar;
+	public static bool ownVarsInitialized = false;
 
+	public static void RequireOwnVars ()
+	{
+		if (ownVarsInitialized)
+			return;
+		string ns = "arcadia.internal.editor-interop";
+		Arcadia.Util.require(ns);
+		Arcadia.Util.getVar(ref OnInspectorGUIVar, ns, "state-inspector!");
+		ownVarsInitialized = true;
+	}
+	
 	public override void OnInspectorGUI()
 	{
-
-		ArcadiaBehaviourEditor.requireFn.invoke(Symbol.intern("arcadia.internal.editor-interop"));
-		ArcadiaState stateComponent = (ArcadiaState)target;
-		RT.var("arcadia.internal.editor-interop", "state-inspector!").invoke(stateComponent.state);
+		RequireOwnVars();
+		Arcadia.Util.Invoke(OnInspectorGUIVar, target);
 	}
 }

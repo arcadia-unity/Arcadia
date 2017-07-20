@@ -124,6 +124,18 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 		deserializeVar.invoke(this);
 	}
 
+	void OnDestroy ()
+	{
+		if (ReferenceEquals(HookStateSystem.arcadiaState, this)) {
+			HookStateSystem.hasState = false;
+		}
+	}
+
+	// ============================================================
+	// retrieval
+
+
+
 	// ============================================================
 	// modification
 	public void RefreshAll ()
@@ -157,6 +169,7 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 
 	public JumpMap.PartialArrayMapView pamv (object[] ks)
 	{
+		Debug.Log("In ArcadiaState.pamv. ks.Length:" + ks.Length);
 		return state.pamv(ks);
 	}
 }

@@ -3,8 +3,10 @@
             [clojure.spec :as s]
             [arcadia.internal.messages :refer [messages interface-messages]]
             [arcadia.internal.name-utils :refer [camels-to-hyphens]]
+            [arcadia.internal.state-help :as sh]
             arcadia.literals)
   (:import ArcadiaBehaviour
+           ArcadiaBehaviour+IFnInfo
            ArcadiaState
            [Arcadia UnityStatusHelper
             HookStateSystem JumpMap
@@ -411,7 +413,7 @@
                   :n4+ (s/cat
                          :k any?
                          :f ifn?
-                         :fast-keys (s/? (s/nilable sequential?))))))
+                         :keys (s/? (s/nilable sequential?))))))
 
 (defn hook+
   "Attach hook a Clojure function to a Unity message on `obj`. The funciton `f`
@@ -421,13 +423,16 @@
   ([obj hook f] (hook+ obj hook hook f))
   ([obj hook k f]
    (hook+ obj hook k f nil))
-  ([obj hook k f {:keys [^|System.Object[]| fast-keys]
-                  :or {^|System.Object[]| fast-keys (make-array System.Object 0)}}]
-   ;; need to actually do something here
-   (let [hook-type (ensure-hook-type hook)
-         ^ArcadiaBehaviour hook-cmpt (ensure-cmpt obj hook-type)]
-     (.AddFunction hook-cmpt f k fast-keys)
-     obj)))
+  ([obj hook k f {:keys [fast-keys]}]
+   (let [fast-keys (or fast-keys
+                       (when (instance? clojure.lang.IMeta f)
+                         (::keys (meta f))))]
+     ;; need to actually do something here
+     (when-not (empty? fast-keys) (println "fast-keys: " fast-keys))
+     (let [hook-type (ensure-hook-type hook)
+           ^ArcadiaBehaviour hook-cmpt (ensure-cmpt obj hook-type)]
+       (.AddFunction hook-cmpt f k (into-array System.Object fast-keys))
+       obj))))
 
 (defn hook-var [obj hook var]
   (if (var? var)
@@ -527,14 +532,65 @@
      (.Add arcs (apply f (.ValueAtKey arcs k) x y z args)))))
 
 ;; ============================================================
-;; roles (experimental)
+;; roles 
+
+(def ^:private hook-type->hook-type-key
+  (clojure.set/map-invert hook-types))
+
+(defn- hook->hook-type-key [hook]
+  (get hook-type->hook-type-key (class hook)))
+
+(def ^:private hook-type-key->fastkeys-key
+  (let [ks (keys hook-types)]
+    (zipmap ks (map #(keyword (str (name %) "-ks")) ks))))
+
+;; sketched this while not connected to repl, check it all
+(def ^:private hook-ks
+  (let [ks (keys hook-types)]
+    (zipmap ks
+      (map #(keyword (str (name %) "-ks"))
+        ks))))
+
+(def ^:private hook-fastkeys
+  (set (vals hook-type-key->fastkeys-key)))
+
+;; spec isn't very informative for our role system, but the following
+;; is at least true of it.
+;; Note that ::role's also support :state, which can't really be
+;; spec'd (could be anything)
+
+(s/def ::role
+  (s/and
+    map?
+    (s/coll-of
+      (fn hook-type-keys-to-ifns [[k v]]
+        (if (contains? hook-types k)
+          (ifn? v)
+          true)))
+    (s/coll-of
+      (fn hook-fastkeys-to-sequentials [[k v]]
+        (if (contains? hook-fastkeys k)
+          (sequential? v)
+          true)))))
+
+(s/fdef role+
+  :args (s/cat :obj #(satisfies? ISceneGraph %)
+               :k any?
+               :spec ::role)
+  :ret any?
+  :fn (fn [{:keys [obj]} ret]
+        (= obj ret)))
 
 (defn role+ [obj k spec]
   (reduce-kv
     (fn [_ k2 v]
       (cond
-        (hook-types k2) (hook+ obj k2 k v)
-        (= :state k2) (set-state! obj k v)))
+        (hook-types k2)
+        (hook+ obj k2 k v
+          (get spec (get hook-ks k2)))
+        
+        (= :state k2)
+        (set-state! obj k v)))
     nil
     spec)
   obj)
@@ -548,31 +604,74 @@
   (remove-state! obj k)
   obj)
 
-;; reverse lookup would make this a little less painful
+;; (defn role [obj k]
+;;   (into (if-let [s (state obj k)] {:state s} {})
+;;     cat
+;;     (for [^ArcadiaBehaviour ab (cmpts obj ArcadiaBehaviour)
+;;           ^ArcadiaBehaviour+IFnInfo inf (.ifnInfos ab)
+;;           :when (= (.key inf) k)
+;;           :let [htk (hook->hook-type-key ab)
+;;                 kv1 [htk (.fn inf)]
+;;                 fks (.fastKeys inf)]]
+;;       (if-not (empty? fks)
+;;         [kv1 [(hook-fastkeys-key hook-type-key) (vec kfs)]]
+;;         [kv1]))))
+
+;; (s/def ::role
+;;   (s/map-of ))
+
+
+;; (s/fdef role
+;;   :args (s/cat :obj #(satisfies? ISceneGraph %)
+;;                :k any?)
+;;   :ret ::role)
+
+(s/fdef role
+  :args (s/cat :obj #(satisfies? ISceneGraph %)
+               :k any?)
+  :ret ::role)
+
 (defn role [obj k]
-  (reduce-kv
-    (fn [bldg hook-key hook-type]
-      (if-let [^ArcadiaBehaviour ab (cmpt obj hook-type)]
-        (if-let [f (get (.indexes ab) k)]
-          (assoc bldg hook-key f)
-          bldg)
-        bldg))
+  (reduce
+    (fn [bldg ^ArcadiaBehaviour ab]
+      (reduce
+        (fn [bldg ^ArcadiaBehaviour+IFnInfo inf]
+          (if (= (.key inf) k)
+            (let [hook-type-key (hook->hook-type-key ab)]
+              (reduced
+                (as-> bldg bldg
+                      (assoc bldg hook-type-key (.fn inf))
+                      (if-not (empty? (.fastKeys inf))
+                        (assoc bldg (hook-type-key->fastkeys-key hook-type-key)
+                          (vec (.fastKeys inf)))
+                        bldg))))
+            bldg))
+        bldg
+        (.ifnInfos ab)))
     (if-let [s (state obj k)]
       {:state s}
       {})
-    hook-types))
+    (cmpts obj ArcadiaBehaviour)))
+
+(defn- roles-step [bldg ^ArcadiaBehaviour hook]
+  (let [hook-type-key (hook->hook-type-key hook)]
+    (reduce
+      (fn [bldg ^ArcadiaBehaviour+IFnInfo info]
+        (update bldg (.key info)
+          (fn [m]
+            (as-> m m
+                  (assoc m hook-type-key (.fn info))
+                  (if-not (empty? (.fastKeys info))
+                    (assoc m (hook-type-key->fastkeys-key hook-type-key)
+                      (vec (.fastKeys info)))
+                    m)))))
+      bldg
+      (.ifnInfos hook))))
 
 ;; map from hook, state keys to role specs
 (defn roles [obj]
-  (reduce-kv
-    (fn [bldg kw hook-type]
-      (if-let [^ArcadiaBehaviour ab (cmpt obj hook-type)]
-        (reduce-kv
-          (fn [bldg k v]
-            (assoc-in bldg [k kw] v))
-          bldg
-          (.indexes ab))
-        bldg))
+  (reduce
+    roles-step
     (if-let [^ArcadiaState s (cmpt obj ArcadiaState)]
       (reduce-kv
         (fn [bldg k v]
@@ -580,7 +679,7 @@
         {}
         (state s))
       {})
-    hook-types))
+    (cmpts obj ArcadiaBehaviour)))
 
 ;; so, (reduce-kv give-role obj2 (roles obj)) gives obj2 same Arcadia
 ;; state and behavior as obj
