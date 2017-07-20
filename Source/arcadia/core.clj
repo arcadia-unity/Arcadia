@@ -714,10 +714,11 @@
     :fields (s/coll-of symbol?, :kind vector?)))
 
 ;; different namespace?
+;; this should probably be a multimethod, to match `mutable`
 (defprotocol ISnapshotable
   (snapshot [self]))
 
-(defn mutable-dispatch [{t ::type}]
+(defn mutable-dispatch [{t ::mutable-type}]
   (cond (instance? System.Type t) t
         (symbol? t) (resolve t)
         :else (throw
@@ -730,9 +731,11 @@
 
 (defn- expand-type-sym [type-sym]
   (symbol
-    (-> (name (ns-name *ns*))
-        (clojure.string/replace "-" "_"))
-    (name type-sym)))
+    (str
+      (-> (name (ns-name *ns*))
+          (clojure.string/replace "-" "_"))
+      "."
+      (name type-sym))))
 
 ;; maybe this doesn't need to be in core, could be off to the side
 (defmacro defmutable [& args]
