@@ -713,6 +713,27 @@
     :name symbol?
     :fields (s/coll-of symbol?, :kind vector?)))
 
+;; different namespace?
+(defprotocol ISnapshotable
+  (snapshot [self]))
+
+(defn mutable-dispatch [{t ::type}]
+  (cond (instance? System.Type t) t
+        (symbol? t) (resolve t)
+        :else (throw
+                (Exception.
+                  (str "Expects type or symbol, instead got instance of " (class t))))))
+
+;; constructor (no instance), so this has to be a multimethod
+;; if we're sticking to clojure stuff
+(defmulti mutable #'mutable-dispatch)
+
+(defn- expand-type-sym [type-sym]
+  (symbol
+    (-> (name (ns-name *ns*))
+        (clojure.string/replace "-" "_"))
+    (name type-sym)))
+
 ;; maybe this doesn't need to be in core, could be off to the side
 (defmacro defmutable [& args]
   (let [parse (s/conform ::defmutable-args args)]
@@ -729,9 +750,21 @@
            (deftype ~name ~(->> fields (mapv #(vary-meta % assoc :unsynchronized-mutable true)))
              System.ICloneable
              (Clone [_#]
-               ~(list* (symbol (str name ".")) fields)))
+               ~(list* (symbol (str name ".")) fields))
+             ISnapshotable
+             (snapshot [_#]
+               ;; if we try dropping the type itself in we get the stubclass instead
+               ;; and this is a bit more robust anyway (redefs)
+               ~(into {::mutable-type `(quote ~(expand-type-sym name))}
+                  (for [field fields] [(keyword (str field)) field]))))
+           (defmethod mutable ~name [{:keys [~@fields]}]
+             ~(list* (symbol (str name ".")) fields))
            (defmethod parse-user-type ~name [[_# ~@fields]]
              ~(list* (symbol (str name ".")) fields))
            (defmethod print-method ~name [~param-sym ^System.IO.TextWriter stream#]
              (.Write stream#
                (str "#arcadia.core/mutable " (pr-str ~datavec)))))))))
+
+(defmacro defmutable-once [& [name :as args]]
+  (when-not (resolve name)
+    `(defmutable ~@args)))
