@@ -1,7 +1,9 @@
 (ns arcadia.internal.editor-interop
+  (:use clojure.pprint)
   (:require [clojure.string :as string]
             [arcadia.compiler :refer [aot-namespaces asset->ns]]
-            [arcadia.internal.name-utils :refer [title-case]])
+            [arcadia.internal.name-utils :refer [title-case]]
+            [arcadia.internal.state-help :as sh])
   (:import [System.IO Directory File]
            [Arcadia AssetPostprocessor]
            [System.Reflection FieldInfo]
@@ -106,7 +108,26 @@
 ;;         (when-not (= state state*)
 ;;           (reset! atm state*))))))
 
-(defn state-inspector! [atm]
+(defn trim-str ^String [^String s max]
+  (. s (Substring 0 (min max (count s)))))
+
+(defn state-inspector! [^ArcadiaState arcs]
+  (let [state (sh/jumpmap-to-map (.state arcs))]
+    (if (empty? state)
+      (EditorGUILayout/HelpBox "Empty" MessageType/Info)
+      (let [s (binding [*print-level* 15
+                        *print-length* 10]
+                (try
+                  (with-out-str
+                    (pprint
+                      (sh/jumpmap-to-map (.state arcs))))
+                  (catch Exception e
+                    (str e))))]
+        (EditorGUILayout/HelpBox
+          (if (< 3e3 (count s))
+            (str (trim-str s 3e3) "...")
+            s)
+          MessageType/Info))))
   ;; (let [state @atm]
   ;;   (if (empty? state)
   ;;     (EditorGUILayout/HelpBox "Empty" MessageType/Info)
