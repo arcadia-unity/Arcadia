@@ -3,7 +3,8 @@
             [arcadia.internal.editor-callbacks :as cb]
             [arcadia.config :as config]
             [clojure.main :as m]
-            [arcadia.internal.state :as state]))
+            [arcadia.internal.state :as state]
+            arcadia.literals))
 
 ;; Think this sleaziness has to be a macro, for `set!`
 ;; Getting these from clojure.main
