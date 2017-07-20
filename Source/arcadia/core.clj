@@ -102,16 +102,21 @@
   "Creates a game object with a primitive mesh renderer and appropriate
   collider. `prim` can be a PrimitiveType or one of :sphere :capsule
   :cylinder :cube :plane :quad. Wraps GameObject/CreatePrimitive."
-  [prim]
-  (if (= PrimitiveType (type prim))
-    (GameObject/CreatePrimitive prim)
-    (GameObject/CreatePrimitive (case prim
-                                  :sphere   PrimitiveType/Sphere
-                                  :capsule  PrimitiveType/Capsule
-                                  :cylinder PrimitiveType/Cylinder
-                                  :cube     PrimitiveType/Cube
-                                  :plane    PrimitiveType/Plane
-                                  :quad     PrimitiveType/Quad))))
+  (^GameObject [prim] (create-primitive prim nil))
+  (^GameObject [prim name]
+   (let [prim' (if (instance? PrimitiveType prim)
+                 prim
+                 (case prim
+                   :sphere   PrimitiveType/Sphere
+                   :capsule  PrimitiveType/Capsule
+                   :cylinder PrimitiveType/Cylinder
+                   :cube     PrimitiveType/Cube
+                   :plane    PrimitiveType/Plane
+                   :quad     PrimitiveType/Quad))
+         obj (GameObject/CreatePrimitive prim')]
+     (when name
+       (set! (.name obj) name))
+     obj)))
 
 (defn destroy 
   "Removes a gameobject, component or asset. When called with `t`, the removal
