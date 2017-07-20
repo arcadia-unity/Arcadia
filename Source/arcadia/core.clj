@@ -701,12 +701,12 @@
 ;; (defn parse-user-type [[type-sym & args :as input]]
 ;;   (Activator/CreateInstance (resolve type-sym) (into-array Object args)))
 
-(alter-var-root #'*data-readers* assoc 'arcadia.core/parse-user-type #'parse-user-type)
+(alter-var-root #'*data-readers* assoc 'arcadia.core/mutable #'parse-user-type)
 
 ;; and we also have to do this, for the repl:
 (when (.getThreadBinding ^clojure.lang.Var #'*data-readers*)
   (set! *data-readers*
-    (assoc *data-readers* 'arcadia.core/parse-user-type #'parse-user-type)))
+    (assoc *data-readers* 'arcadia.core/mutable #'parse-user-type)))
 
 (s/def ::defmutable-args
   (s/cat
@@ -734,13 +734,4 @@
              ~(list* (symbol (str name ".")) fields))
            (defmethod print-method ~name [~param-sym ^System.IO.TextWriter stream#]
              (.Write stream#
-               (str "#arcadia.core/parse-user-type " (pr-str ~datavec)))))))))
-
-(comment
-  (defmutable Monkdata [^Single alarm, target, ^Vector3 halo-vec])
-
-  (binding [*print-meta* true]
-    (pprint
-      (s/conform ::defmutable-args
-        '(Monkdata [^Single alarm, target, ^Vector3 halo-vec]))))
-  )
+               (str "#arcadia.core/mutable " (pr-str ~datavec)))))))))
