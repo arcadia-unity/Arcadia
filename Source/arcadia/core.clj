@@ -515,6 +515,8 @@
   ([gobj k]
    (Arcadia.HookStateSystem/Lookup gobj k)))
 
+(declare mutable)
+
 (defn maybe-mutable [x]
   (if (and (map? x)
            (contains? x ::mutable-type))
