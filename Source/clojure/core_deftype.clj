@@ -482,7 +482,6 @@
   multiple threads. On the other hand `:unsynchronized-mutable` fields
   may be slightly faster (at the level of nanoseconds, of which there
   are about 16,666,667 in a 60 fps game frame).
-
   
   Method definitions take the form:
   
