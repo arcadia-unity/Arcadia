@@ -486,7 +486,16 @@
   ([t hook] (= (type t)
                (ensure-hook-type hook)))
   ([t] (isa? (type t)
-             ArcadiaBehaviour)))
+         ArcadiaBehaviour)))
+
+;; ============================================================
+;; ISnapShotable
+
+;; see `defmutable` below
+;; different namespace?
+;; this should probably be a multimethod, to match `mutable`
+(defprotocol ISnapshotable
+  (snapshot [self]))
 
 ;; ============================================================
 ;; state
@@ -506,11 +515,17 @@
   ([gobj k]
    (Arcadia.HookStateSystem/Lookup gobj k)))
 
+(defn maybe-mutable [x]
+  (if (and (map? x)
+           (contains? x ::mutable-type))
+    (mutable x)
+    x))
+
 (defn set-state!
   "Sets the state of object `go` to value `v` at key `k`."
   ([go k v]
    (with-cmpt go [arcs ArcadiaState]
-     (.Add arcs k v)
+     (.Add arcs k (maybe-mutable v))
      v)))
 
 (defn remove-state!
@@ -595,7 +610,7 @@
           (get spec (get hook-ks k2)))
         
         (= :state k2)
-        (set-state! obj k v)))
+        (set-state! obj k (maybe-mutable v))))
     nil
     spec)
   obj)
@@ -636,6 +651,15 @@
                :k any?)
   :ret ::role)
 
+;; TODO: better name
+;; also instance vs satisfies, here
+;; maybe this should be a definterface or something
+;; yeah definitely should be a definterface, this is just here for `defmutable`
+(defn maybe-snapshot [x]
+  (if (instance? arcadia.core.ISnapshotable x)
+    (snapshot x)
+    x))
+
 (defn role [obj k]
   (reduce
     (fn [bldg ^ArcadiaBehaviour ab]
@@ -654,7 +678,7 @@
         bldg
         (.ifnInfos ab)))
     (if-let [s (state obj k)]
-      {:state s}
+      {:state (maybe-snapshot s)}
       {})
     (cmpts obj ArcadiaBehaviour)))
 
@@ -677,13 +701,11 @@
 (defn roles [obj]
   (reduce
     roles-step
-    (if-let [^ArcadiaState s (cmpt obj ArcadiaState)]
-      (reduce-kv
-        (fn [bldg k v]
-          (assoc-in bldg [k :state] v))
-        {}
-        (state s))
-      {})
+    (reduce-kv
+      (fn [bldg k v]
+        (assoc-in bldg [k :state] (maybe-snapshot v)))
+      {}
+      (or (state obj) {}))
     (cmpts obj ArcadiaBehaviour)))
 
 ;; so, (reduce-kv give-role obj2 (roles obj)) gives obj2 same Arcadia
@@ -718,10 +740,6 @@
     :name symbol?
     :fields (s/coll-of symbol?, :kind vector?)))
 
-;; different namespace?
-;; this should probably be a multimethod, to match `mutable`
-(defprotocol ISnapshotable
-  (snapshot [self]))
 
 (defn mutable-dispatch [{t ::mutable-type}]
   (cond (instance? System.Type t) t
@@ -749,29 +767,30 @@
       (throw (Exception. "Invalid arguments to defmutable. Spec explanation: "
                (with-out-str (clojure.spec/explain ::defmutable-args args))))
       (let [{:keys [name fields]} parse
+            type-name (expand-type-sym name)
             param-sym (-> (gensym (str name "_"))
-                          (with-meta {:tag name}))
+                          (with-meta {:tag type-name}))
             datavec (->> (map (fn [arg] `(. ~param-sym ~arg)) fields)
-                         (cons name)
+                         (cons type-name)
                          vec)]
-        `(do
-           (deftype ~name ~(->> fields (mapv #(vary-meta % assoc :unsynchronized-mutable true)))
-             System.ICloneable
-             (Clone [_#]
-               ~(list* (symbol (str name ".")) fields))
-             ISnapshotable
-             (snapshot [_#]
-               ;; if we try dropping the type itself in we get the stubclass instead
-               ;; and this is a bit more robust anyway (redefs)
-               ~(into {::mutable-type `(quote ~(expand-type-sym name))}
-                  (for [field fields] [(keyword (str field)) field]))))
-           (defmethod mutable ~name [{:keys [~@fields]}]
-             ~(list* (symbol (str name ".")) fields))
-           (defmethod parse-user-type ~name [[_# ~@fields]]
-             ~(list* (symbol (str name ".")) fields))
-           (defmethod print-method ~name [~param-sym ^System.IO.TextWriter stream#]
+        `(let [t# (deftype ~name ~(->> fields (mapv #(vary-meta % assoc :unsynchronized-mutable true)))
+                    System.ICloneable
+                    (Clone [_#]
+                      ~(list* (symbol (str type-name ".")) fields))
+                    ISnapshotable
+                    (snapshot [_#]
+                      ;; if we try dropping the type itself in we get the stubclass instead
+                      ;; and this is a bit more robust anyway (redefs)
+                      ~(into {::mutable-type `(quote ~type-name)}
+                         (for [field fields] [(keyword (str field)) field]))))]
+           (defmethod mutable ~type-name [{:keys [~@fields]}]
+             ~(list* (symbol (str type-name ".")) fields))
+           (defmethod parse-user-type ~type-name [[_# ~@fields]]
+             ~(list* (symbol (str type-name ".")) fields))
+           (defmethod print-method ~type-name [~param-sym ^System.IO.TextWriter stream#]
              (.Write stream#
-               (str "#arcadia.core/mutable " (pr-str ~datavec)))))))))
+               (str "#arcadia.core/mutable " (pr-str ~datavec))))
+           t#)))))
 
 (defmacro defmutable-once [& [name :as args]]
   (when-not (resolve name)
