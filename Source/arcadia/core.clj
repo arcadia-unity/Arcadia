@@ -683,3 +683,64 @@
 
 ;; so, (reduce-kv give-role obj2 (roles obj)) gives obj2 same Arcadia
 ;; state and behavior as obj
+
+
+;; ============================================================
+;; defmutable
+
+;; defn using Activator/CreateInstance sort of screws up
+;; (defn parse-user-type [[type-sym & args :as input]]
+;;   (reset! put-log input)
+;;   (Activator/CreateInstance (resolve type-sym) (into-array Object args)))
+
+(defn- parse-user-type-dispatch [[t]]
+  (resolve t))
+
+(defmulti parse-user-type #'parse-user-type-dispatch)
+
+;; (defn parse-user-type [[type-sym & args :as input]]
+;;   (Activator/CreateInstance (resolve type-sym) (into-array Object args)))
+
+(alter-var-root #'*data-readers* assoc 'arcadia.core/parse-user-type #'parse-user-type)
+
+;; and we also have to do this, for the repl:
+(when (.getThreadBinding ^clojure.lang.Var #'*data-readers*)
+  (set! *data-readers*
+    (assoc *data-readers* 'arcadia.core/parse-user-type #'parse-user-type)))
+
+(s/def ::defmutable-args
+  (s/cat
+    :name symbol?
+    :fields (s/coll-of symbol?, :kind vector?)))
+
+;; maybe this doesn't need to be in core, could be off to the side
+(defmacro defmutable [& args]
+  (let [parse (s/conform ::defmutable-args args)]
+    (if (= ::s/invalid parse)
+      (throw (Exception. "Invalid arguments to defmutable. Spec explanation: "
+               (with-out-str (clojure.spec/explain ::defmutable-args args))))
+      (let [{:keys [name fields]} parse
+            param-sym (-> (gensym (str name "_"))
+                          (with-meta {:tag name}))
+            datavec (->> (map (fn [arg] `(. ~param-sym ~arg)) fields)
+                         (cons name)
+                         vec)]
+        `(do
+           (deftype ~name ~(->> fields (mapv #(vary-meta % assoc :unsynchronized-mutable true)))
+             System.ICloneable
+             (Clone [_#]
+               ~(list* (symbol (str name ".")) fields)))
+           (defmethod parse-user-type ~name [[_# ~@fields]]
+             ~(list* (symbol (str name ".")) fields))
+           (defmethod print-method ~name [~param-sym ^System.IO.TextWriter stream#]
+             (.Write stream#
+               (str "#arcadia.core/parse-user-type " (pr-str ~datavec)))))))))
+
+(comment
+  (defmutable Monkdata [^Single alarm, target, ^Vector3 halo-vec])
+
+  (binding [*print-meta* true]
+    (pprint
+      (s/conform ::defmutable-args
+        '(Monkdata [^Single alarm, target, ^Vector3 halo-vec]))))
+  )
