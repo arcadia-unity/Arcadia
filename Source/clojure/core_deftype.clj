@@ -475,8 +475,8 @@
   optimizations and caching that could (easily) be invalidated by
   concurrent access, with disastrous results. More documentation on
   volatile fields in C# can be found here:
-  https://msdn.microsoft.com/en-us/library/aa645755(v=vs.71).aspx
-
+ https://docs.microsoft.com/en-us/dotnet/csharp/language-reference/language-specification/classes#volatile-fields
+  
   Fields marked `:unsynchronized-mutable` lack this protection, and are
   usually unsuitable for datastructures that *might* be accessed from
   multiple threads. On the other hand `:unsynchronized-mutable` fields
