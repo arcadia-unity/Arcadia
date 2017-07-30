@@ -596,6 +596,15 @@
           (sequential? v)
           true)))))
 
+(defn role- [obj k]
+  (reduce-kv
+    (fn [_ ht _]
+      (hook- obj ht k))
+    nil
+    hook-types)
+  (remove-state! obj k)
+  obj)
+
 (s/fdef role+
   :args (s/cat :obj #(satisfies? ISceneGraph %)
                :k any?
@@ -605,6 +614,7 @@
         (= obj ret)))
 
 (defn role+ [obj k spec]
+  (role- obj k)
   (reduce-kv
     (fn [_ k2 v]
       (cond
@@ -616,15 +626,6 @@
         (set-state! obj k (maybe-mutable v))))
     nil
     spec)
-  obj)
-
-(defn role- [obj k]
-  (reduce-kv
-    (fn [_ ht _]
-      (hook- obj ht k))
-    nil
-    hook-types)
-  (remove-state! obj k)
   obj)
 
 ;; (defn role [obj k]
