@@ -492,8 +492,9 @@
 ;; ISnapShotable
 
 ;; see `defmutable` below
-;; different namespace?
-;; this should probably be a multimethod, to match `mutable`
+;; This protocol should be considered an internal, unstable
+;; implementation detail of `snapshot` for now. Please refrain from
+;; extending it.
 (defprotocol ISnapshotable
   (snapshot [self]))
 
