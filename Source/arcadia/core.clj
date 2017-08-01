@@ -659,7 +659,7 @@
 ;; also instance vs satisfies, here
 ;; maybe this should be a definterface or something
 ;; yeah definitely should be a definterface, this is just here for `defmutable`
-(defn maybe-snapshot [x]
+(defn- maybe-snapshot [x]
   (if (instance? arcadia.core.ISnapshotable x)
     (snapshot x)
     x))
