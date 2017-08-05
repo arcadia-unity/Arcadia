@@ -41,12 +41,6 @@ namespace Arcadia
 				Progress("Arcadia", "Compiling " + nsSymbol);
 				RT.var("arcadia.compiler", "aot-namespace").invoke(targetFolder, nsSymbol);
 			}
-
-			Progress("Arcadia", "Compiling arcadia.core");
-			RT.var("arcadia.compiler", "aot-namespace").invoke(targetFolder, Symbol.intern("arcadia.core"));
-
-			Progress("Arcadia", "Compiling clojure.core");
-			RT.var("arcadia.compiler", "aot-namespace").invoke(targetFolder, Symbol.intern("clojure.core"));
 		}
 
 		[PostProcessBuild(1)]

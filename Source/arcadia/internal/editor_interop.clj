@@ -17,7 +17,8 @@
        (remove #(or (re-find #"^arcadia.*" (name %))
                     (re-find #"^clojure.*" (name %))
                     (re-find #".*project$" (name %))
-                    (= 'data-readers %)))))
+                    (= 'data-readers %)))
+       (concat '(arcadia.core clojure.core))))
 
 (defn all-loaded-user-namespaces []
   (keep find-ns (all-user-namespaces-symbols)))
