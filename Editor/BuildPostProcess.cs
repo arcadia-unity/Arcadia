@@ -13,12 +13,12 @@ namespace Arcadia
 {
 	public static class BuildPostProcess
 	{
-		static int buildProgressCurrent = 0;
+		static int buildProgressCurrent = 1;
 		static float buildProgressTotal = 0;
 
 		static void ResetProgress(float newTotal)
 		{
-			buildProgressCurrent = 0;
+			buildProgressCurrent = 1;
 			buildProgressTotal = newTotal;
 			EditorUtility.ClearProgressBar();
 		}
@@ -54,27 +54,27 @@ namespace Arcadia
 
 			if (target == BuildTarget.StandaloneOSXUniversal || target == BuildTarget.StandaloneOSXIntel || target == BuildTarget.StandaloneOSXIntel64)
 			{
-				ResetProgress(userNameSpaces.Count + 3);
+				ResetProgress(userNameSpaces.Count);
 				CompileNamespacesToFolder(userNameSpaces, Initialization.VariadicPathCombine(pathToBuiltProject, "Contents", "Resources", "Data", "Managed"));
 
 			}
 			else if (target == BuildTarget.StandaloneWindows || target == BuildTarget.StandaloneWindows64)
 			{
-				ResetProgress(userNameSpaces.Count + 3);
+				ResetProgress(userNameSpaces.Count);
 				var dataPath = pathToBuiltProject.Replace(".exe", "_Data");
 				CompileNamespacesToFolder(userNameSpaces, Path.Combine(dataPath, "Managed"));
 
 			}
 			else if (target == BuildTarget.StandaloneLinux || target == BuildTarget.StandaloneLinux64 || target == BuildTarget.StandaloneLinuxUniversal)
 			{
-				ResetProgress(userNameSpaces.Count + 3);
+				ResetProgress(userNameSpaces.Count);
 				var linuxBuildEnding = new Regex("\\..*$");
 				var dataPath = linuxBuildEnding.Replace(pathToBuiltProject, "_Data");
 				CompileNamespacesToFolder(userNameSpaces, Path.Combine(dataPath, "Managed"));
 			}
 			else if (target == BuildTarget.Android)
 			{
-				ResetProgress(userNameSpaces.Count + 3);
+				ResetProgress(userNameSpaces.Count);
 				var targetPath = Path.Combine(Directory.GetParent(pathToBuiltProject).FullName, pathToBuiltProject + "-clj-build");  // Initialization.VariadicPathCombine(Directory.GetParent(pathToBuiltProject).FullName, "assets", "bin", "Data", "Managed");
 				var signedApk = pathToBuiltProject + "-signed";
 				var alignedApk = pathToBuiltProject + "-aligned";
@@ -83,7 +83,7 @@ namespace Arcadia
 
 				// add *.clj.dll files to apk
 				var cljFiles = Directory.GetFiles(targetPath);
-				ResetProgress(cljFiles.Length + 3);
+				ResetProgress(cljFiles.Length);
 				var apk = ZipFile.Read(pathToBuiltProject);
 				foreach (var file in cljFiles)
 				{
