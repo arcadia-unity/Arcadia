@@ -36,11 +36,13 @@ namespace Arcadia
 
 		static void CompileNamespacesToFolder(IList userNameSpaces, string targetFolder)
 		{
+			Initialization.SetBuildClojureLoadPath();
 			foreach (var nsSymbol in userNameSpaces)
 			{
 				Progress("Arcadia", "Compiling " + nsSymbol);
 				RT.var("arcadia.compiler", "aot-namespace").invoke(targetFolder, nsSymbol);
 			}
+			Initialization.SetInitialClojureLoadPath();
 		}
 
 		[PostProcessBuild(1)]
