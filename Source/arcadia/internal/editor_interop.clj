@@ -12,13 +12,15 @@
 
 ;; PERF memoize 
 (defn all-user-namespaces-symbols []
-  (->> AssetPostprocessor/cljFiles
-       (map arcadia.compiler/asset->ns)
-       (remove #(or (re-find #"^arcadia.*" (name %))
-                    (re-find #"^clojure.*" (name %))
-                    (re-find #".*project$" (name %))
-                    (= 'data-readers %)))
-       (concat '(arcadia.core clojure.core))))
+  (cons 'clojure.core
+    (or (-> (config/config) :build-namespaces)
+        (->> AssetPostprocessor/cljFiles
+             (map arcadia.compiler/asset->ns)
+             (remove #(or (re-find #"^arcadia.*" (name %))
+                          (re-find #"^clojure.*" (name %))
+                          (re-find #".*project$" (name %))
+                          (= 'data-readers %)))
+             (concat '(arcadia.core))))))
 
 (defn all-loaded-user-namespaces []
   (keep find-ns (all-user-namespaces-symbols)))
