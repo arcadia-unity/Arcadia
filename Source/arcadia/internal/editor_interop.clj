@@ -1,7 +1,8 @@
 (ns arcadia.internal.editor-interop
   (:require [clojure.string :as string]
             [arcadia.compiler :refer [aot-namespaces asset->ns]]
-            [arcadia.internal.name-utils :refer [title-case]])
+            [arcadia.internal.name-utils :refer [title-case]]
+            [arcadia.config :as config])
   (:import [System.IO Directory File]
            [Arcadia AssetPostprocessor]
            [System.Reflection FieldInfo]
@@ -15,6 +16,7 @@
        (map arcadia.compiler/asset->ns)
        (remove #(or (re-find #"^arcadia.*" (name %))
                     (re-find #"^clojure.*" (name %))
+                    (re-find #".*project$" (name %))
                     (= 'data-readers %)))))
 
 (defn all-loaded-user-namespaces []
