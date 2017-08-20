@@ -1,6 +1,7 @@
 (ns arcadia.internal.hook-help
   (:require arcadia.literals)
   (:import [UnityEngine Debug]
+           clojure.lang.IFn
            ArcadiaBehaviour
            ArcadiaBehaviour+StateContainer))
 
@@ -11,7 +12,7 @@
   ([]
    (build-hook-state {}))
   ([key-fns]
-   (ArcadiaBehaviour+StateContainer. key-fns (into-array (vals key-fns)))))
+   (ArcadiaBehaviour+StateContainer. key-fns (into-array IFn (vals key-fns)))))
 
 (defn update-hook-state [^ArcadiaBehaviour+StateContainer hs, f & args]
   (build-hook-state (apply f (.indexes hs) args)))
