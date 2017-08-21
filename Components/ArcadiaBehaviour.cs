@@ -170,9 +170,17 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 		var _go = gameObject;
 		var _fns = fns;
-		for (int i = 0; i < _fns.Length; i++) {
-			_fns[i].invoke(_go);
-		}		
+		int i = 0;
+		try {
+			for (i = 0; i < _fns.Length; i++) {
+				_fns[i].invoke(_go);
+			}
+		}
+		catch (System.Exception e)
+		{
+			Debug.LogError("Context: " + _fns[i] + ", " + _go, _go);
+			throw e;
+		}
 	}
 
 	public void RunFunctions (object arg1)
@@ -183,8 +191,16 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 		var _go = gameObject;
 		var _fns = fns;
-		for (int i = 0; i < _fns.Length; i++) {
-			_fns[i].invoke(_go, arg1);
+		int i = 0;
+		try {
+			for (i = 0; i < _fns.Length; i++) {
+				_fns[i].invoke(_go, arg1);
+			}
+		}
+		catch (System.Exception e)
+		{
+			Debug.LogError("Context: " + _fns[i] + ", " + _go, _go);
+			throw e;
 		}
 	}
 
@@ -196,8 +212,16 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 		var _go = gameObject;
 		var _fns = fns;
-		for (int i = 0; i < _fns.Length; i++) {
-			_fns[i].invoke(_go, arg1, arg2);
+		int i = 0;
+		try {
+			for (i = 0; i < _fns.Length; i++) {
+				_fns[i].invoke(_go, arg1, arg2);
+			}
+		}
+		catch (System.Exception e)
+		{
+			Debug.LogError("Context: " + _fns[i] + ", " + _go, _go);
+			throw e;
 		}
 	}
 
@@ -209,8 +233,16 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 		var _go = gameObject;
 		var _fns = fns;
-		for (int i = 0; i < _fns.Length; i++) {
-			_fns[i].invoke(_go, arg1, arg2, arg3);
+		int i = 0;
+		try {
+			for (i = 0; i < _fns.Length; i++) {
+				_fns[i].invoke(_go, arg1, arg2, arg3);
+			}
+		}
+		catch (System.Exception e)
+		{
+			Debug.LogError("Context: " + _fns[i] + ", " + _go, _go);
+			throw e;
 		}
 	}
 }
