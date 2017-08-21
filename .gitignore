@@ -1,9 +1,10 @@
 # =============== #
 #  Clojure Unity  #
 # =============== #
-*.mdb
+*.mdb*
 **/Compiled/*.exe*
 **/Compiled/*.dll*
+**/Compiled/Editor*.dll*
 
 # =============== #
 # Unity generated #
@@ -39,3 +40,5 @@ Icon?
 ehthumbs.db
 Thumbs.db
 
+/Libraries.meta
+/Libraries/

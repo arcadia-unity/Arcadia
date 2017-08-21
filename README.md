@@ -6,22 +6,16 @@ Status
 ------
 Arcadia is alpha-quality software, and shouldn't be used for anything important yet.
 
-Until the next release, the most reliable branch is [```unstable```](https://github.com/arcadia-unity/Arcadia/tree/unstable). This is where we put versions of Arcadia we're relatively confident aren't grossly broken, and is the best place to get started. As the name implies, ```unstable``` (and everything else, at least until the next release) is potentially subject to breaking changes.
-
-Primary work is done on the rapidly evolving [```develop``` branch](https://github.com/arcadia-unity/Arcadia/tree/develop). Use that for bleeding edge features.
 
 Community
 ---------
-- [Mailing List](https://groups.google.com/forum/#!forum/arcadia-unity)
+- [Homepage](https://arcadia-unity.github.io/)
+- [Gittr/IRC](https://gitter.im/arcadia-unity/Arcadia)
 - [Twitter](https://twitter.com/arcadiaunity)
-- [Gittr](https://gitter.im/arcadia-unity/Arcadia)
-- IRC freenode #arcadiaunity
 
-Usage
------
+Installing
+----------
 The contents of the repository should be copied to a folder named `Arcadia` in any Unity project's Assets folder to enable Clojure. In the future, this will be available from the Asset Store. Once copied, you have access to the REPL and the Clojure compiler.
-
-There's a screencast on getting set up [here](https://www.youtube.com/watch?v=KLq9b9lDmkc).
 
 #### Download Zip File
 
@@ -35,38 +29,38 @@ cd path/to/unity/project/Assets
 git clone https://github.com/arcadia-unity/Arcadia.git
 ```
 
-### Prerequisites
-Before doing anything, Arcadia requires that Unity be set to run in the background and use the full .NET API
-
-#### Run in Background
-Click `Edit > Project Settings > Player`, then in the Inspector under Resolution and Presentation make sure Run In Background is checked.
-
-#### .NET API
-Click `Edit > Project Settings > Player`, then in the Inspector under Other Settings make sure Api Compatibility Level is set to .NET 2.0 and not .NET 2.0 Subset.
+Usage
+-----
+[USAGE.md](https://github.com/arcadia-unity/Arcadia/blob/develop/USAGE.md) us a good place to start, as is the [Wiki](https://github.com/arcadia-unity/Arcadia/wiki). They both cover how to get started and all the prerequisites you'll need. The community on the [Gitter](https://gitter.im/arcadia-unity/Arcadia) is very helpful and happy to answer questions. 
 
 ### REPL
-Arcadia ships with a simple networked REPL that is started automatically or from `Clojure > REPL > Start`. You can connect to this REPL using `Clojure/Editor/repl-client.rb`. This script is also the basis of our [Sublime Text support (via SublimeREPL)](https://github.com/clojure-unity/repl-sublimetext) and [our Emacs support (via Inferior Lisp)](https://github.com/arcadia-unity/arcadia/wiki/Editor-support#emacs).
+Arcadia ships with a simple networked REPL that is started automatically or from `Clojure > REPL > Start`. To integrate your text editor with Arcadia, there are a few clients listed on [the Wiki](https://github.com/arcadia-unity/Arcadia/wiki/Resources). Additionally, there are three command line scripts that act as REPL clients if that makes your integration easier. `Editor/repl-client.rb`, `Editor/repl-client.javascript`, and `Infrastructure/repl`. `Infrastructure/repl` is the future, but not totally stable yet. You should try them all and use what works best.
 
-### Clojure Components
-You can write components in pure Clojure using our [`defcomponent`](https://github.com/arcadia-unity/arcadia/wiki/arcadia.core#defcomponent) form. To be recognized by Unity these must be saved in Clojure files, not just defined in the REPL.
+The core devs use the REPL from [Emacs (via Inferior Lisp)](https://github.com/arcadia-unity/arcadia/wiki/Editor-support#emacs) and [SublimeText (via Socket)](https://github.com/nasser/Socket).
 
-Mailing List
+Contributing
 ------------
-The mailing list is [here](https://groups.google.com/forum/#!forum/arcadia-unity).
+If you're thinking of submitting code to Arcadia – thanks! We're excited to have your help. First, all contributors must read and agree to our [contributor license agreement](./CONTRIBUTOR-LICENSE-AGREEMENT.md). It is based on [GitHub's CLA](https://cla.github.com/) and ensures that the code you submit remains useable by Arcadia and its community without issue. It confirms that
 
-IRC
----
-The IRC channel for Arcadia is #arcadiaunity on freenode, if we're online we're usually on the channel.
+1. Anyone can use your contributions anywhere, for free, forever.
+2. Your contributions do not infringe on anyone else's rights.
+3. You retain ownership of your contribution.
+
+Once you have read and agree to it, submit a [Pull Request](https://github.com/arcadia-unity/Arcadia/pull/new) adding your name and GitHub id to [CONTRIBUTORS.md](./CONTRIBUTORS.md) with the following commit message:
+
+I have read and agree to the terms of the Arcadia Contributor License Agreement.
+
+You only need to do this once. After that, we can review and merge any contributions you send us!
 
 Name
------
+----
 This project was originally named "clojure-unity", but was changed to "Arcadia" to avoid infinging on Clojure's trademarks. It was suggested to us by @ztellman at a bar during StrangeLoop 2014, and we are eternally grateful.
 
 Legal
 -----
-Copyright © 2014 Tims Gardner and Ramsey Nasser
+Copyright © 2014-2017 Tims Gardner, Ramsey Nasser, and [contributors](./CONTRIBUTORS.md).
 
-Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this project except in compliance with the License. You may obtain a copy of the License at
 
 ```
 http://www.apache.org/licenses/LICENSE-2.0
