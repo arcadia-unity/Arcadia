@@ -6,7 +6,6 @@ Status
 ------
 Arcadia is alpha-quality software, and shouldn't be used for anything important yet.
 
-
 Community
 ---------
 - [Homepage](https://arcadia-unity.github.io/)
