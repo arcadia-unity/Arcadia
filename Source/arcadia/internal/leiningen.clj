@@ -87,7 +87,7 @@
 (defn leiningen-project-file? [fi]
   (when-let [fi (fs/info fi)] ;; not sure this stupid function returns nil if input is already a filesysteminfo for a non existant filesystemthing
     (and (= "project.clj" (.Name fi))
-         (= assets-dir (first (drop 2 (fs/path-supers (.FullName fi)))))
+         (some? #(= assets-dir %) (take 2 (drop 1 (fs/path-supers (.FullName fi)))))
          (boolean
            (re-find #"(?m)^\s*\(defproject(?:$|\s.*?$)" ;; shift to something less expensive
              (slurp fi))))))
@@ -117,6 +117,7 @@
 
 (defn leiningen-project-directories []
   (->> (.GetDirectories (DirectoryInfo. "Assets"))
+       (cons (DirectoryInfo. "Assets"))
        (filter leiningen-structured-directory?)))
 
 (s/fdef all-project-data
