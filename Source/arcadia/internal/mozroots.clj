@@ -1,4 +1,4 @@
-(ns ^{:doc "Fix for obscure https bug (#175) on Windows and Linux
+(ns ^{:doc "Fix for obscure https bug (#175, #245) on Windows and Linux
            
            Root SSL certificates are not installed by default on Windows,
            and Linux, so making web requests to HTTPS URLs will fail. This
