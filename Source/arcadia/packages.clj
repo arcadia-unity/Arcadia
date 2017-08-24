@@ -144,14 +144,22 @@
          (string/join "-"))))
 
 (defn base-jar-url [group artifact version]
-  (string/replace (str (base-url group artifact version) ".jar")
-                  #"-SNAPSHOT.jar"
-                  (str "-" (snapshot-timestamp group artifact version) ".jar")))
+  (let [url (str (base-url group artifact version) ".jar")]
+    (if-not (.Contains url "-SNAPSHOT")
+      url
+      (string/replace
+        url
+        #"-SNAPSHOT.jar"
+        (str "-" (snapshot-timestamp group artifact version) ".jar")))))
 
 (defn base-pom-url [group artifact version]
-  (string/replace (str (base-url group artifact version) ".pom")
-                  #"-SNAPSHOT.pom"
-                  (str "-" (snapshot-timestamp group artifact version) ".pom")))
+  (let [url (str (base-url group artifact version) ".pom")]
+    (if-not (.Contains url "-SNAPSHOT")
+      url
+      (string/replace
+        url
+        #"-SNAPSHOT.pom"
+        (str "-" (snapshot-timestamp group artifact version) ".pom")))))
 
 (defn jar-urls [group artifact version]
   (->> (map #(str % (base-jar-url group artifact version)) url-prefixes)
