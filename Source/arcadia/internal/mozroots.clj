@@ -23,7 +23,7 @@
     ;; e.g. "D:/Programs/Unity-Win/Editor/Unity.exe"
     (Path/Combine
       (Path/GetDirectoryName EditorApplication/applicationPath) 
-      "Data\\Mono\\bin\\mozroots")
+      "Data/MonoBleedingEdge/lib/mono/4.5/mozroots.exe")
     UnityStatusHelper/IsUnityEditorLinux
     ;; e.g. "/home/selfsame/unity-editor-2017.1.0xf3Linux/Editor/Unity"
     (Path/Combine
