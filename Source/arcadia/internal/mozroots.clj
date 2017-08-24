@@ -34,10 +34,26 @@
 
 (import Mono.Tools.MozRoots)
 
+(def parse-options-method
+  (.GetMethod MozRoots "ParseOptions"
+              (enum-or BindingFlags/NonPublic BindingFlags/Static)))
+
+(def parse-opts
+  (.GetMethod MozRoots "ParseOptions"
+              (enum-or BindingFlags/NonPublic BindingFlags/Static)))
+
+(def process
+  (.GetMethod MozRoots "Process"
+              (enum-or BindingFlags/NonPublic BindingFlags/Static)))
+
+(def cert-data-file
+  "Assets/Arcadia/Infrastructure/certdata.txt")
+
+(def arguments
+  (into-array
+    Object
+    [(into-array ["--file" cert-data-file "--import" "--sync"])]))
+
 (defn import-sync-mozroots []
-  (let [parse-opts (.GetMethod MozRoots "ParseOptions"
-                               (enum-or BindingFlags/NonPublic BindingFlags/Static))
-        process (.GetMethod MozRoots "Process"
-                            (enum-or BindingFlags/NonPublic BindingFlags/Static))]
-    (.Invoke parse-opts nil (into-array Object [(into-array ["--import" "--sync"])]))
-    (.Invoke process nil (into-array Object []))))
+  (.Invoke parse-opts nil arguments)
+  (.Invoke process nil (make-array Object 0)))
