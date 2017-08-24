@@ -75,14 +75,17 @@ namespace Arcadia
 			Debug.Log("Arcadia Started!");
 		}
 
+
 		// code is so durn orthogonal we have to explicitly call this
 		// (necessary for package-sensitive loadpaths in presence of stuff like leiningen)
 		// on the other hand, packages pulls in almost everything else
 		public static void LoadPackages(){
 			Debug.Log("Loading packages...");
 			RT.load("arcadia/packages");
-			// may want to make this conditional on some config thing
-			RT.var("arcadia.packages", "install-all-deps").invoke();
+			if(((int)RT.var("arcadia.packages", "dependency-count").invoke()) > 0) {
+				// may want to make this conditional on some config thing
+				RT.var("arcadia.packages", "install-all-deps").invoke();
+			}
 		}
 
 		[MenuItem("Arcadia/Initialization/Load Configuration")]

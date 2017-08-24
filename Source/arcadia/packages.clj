@@ -2,6 +2,7 @@
   (:use clojure.pprint
         clojure.repl)
   (:require [arcadia.compiler :refer [dir-seperator-re]]
+            [arcadia.internal.mozroots :refer [import-sync-mozroots]]
             [arcadia.config :as config]
             [arcadia.internal.asset-watcher :as aw]
             [arcadia.internal.file-system :as fs]
@@ -432,6 +433,7 @@
 (defonce install-errors (atom []))
 
 (defn install-all-deps []
+  (import-sync-mozroots)
   (thr/start-thread
     (fn []
       (try
@@ -440,6 +442,9 @@
           (swap! install-errors conj e)
           (Debug/Log "Exception encountered when installing dependencies:")
           (Debug/Log e))))))
+
+(defn dependency-count []
+  (count (:dependencies (config/config))))
 
 ;; ============================================================
 ;; listeners
