@@ -151,6 +151,22 @@ namespace Arcadia
 
 			Debug.Log("Load Path is " + Environment.GetEnvironmentVariable("CLOJURE_LOAD_PATH"));
 		}
+		
+		[MenuItem("Arcadia/Initialization/Download Root SSL Certificates")]
+		public static void DownloadRootSSLCertificates()
+		{
+			// Leaving out of Initialization for now because its so slow (~2.8s, makes a network request). Ideally we'd be able to track
+			RT.load("arcadia/internal/mozroots");
+			int result = (int)RT.var("arcadia.internal.mozroots", "import-sync-mozroots").invoke();
+			if(result == 0)
+			{
+				Debug.Log("Root Certificates Downloaded");
+			}
+			else
+			{
+				Debug.LogError("Root Certificates Download Failed");
+			}
+		}
 
 		static void LoadSocketREPL ()
 		{
