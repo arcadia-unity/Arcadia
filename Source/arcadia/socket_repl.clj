@@ -59,7 +59,7 @@
     :eval #'game-thread-eval))
 
 (def server-defaults
-  {:port 5555
+  {:port 5656
    :name "default-server"
    :accept `repl})
 

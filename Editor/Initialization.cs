@@ -70,6 +70,7 @@ namespace Arcadia
 			StartEditorCallbacks();
 			StartWatching();
 			LoadSocketREPL();
+			StartSocketREPLProxy();
 			StartREPL();
 			StartNudge();
 			Debug.Log("Arcadia Started!");
@@ -159,6 +160,12 @@ namespace Arcadia
 		{
 			RT.load("arcadia/socket_repl");
 			RT.var("arcadia.socket-repl", "server-reactive").invoke();
+		}
+
+		static void StartSocketREPLProxy()
+		{
+			RT.load("arcadia/internal/repl_proxy");
+			RT.var("arcadia.internal.repl-proxy", "launch").invoke(5656, 5555);
 		}
 
 		static void StartREPL()
