@@ -9,6 +9,9 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 	[System.NonSerialized]
 	protected bool _fullyInitialized = false;
+	
+	[System.NonSerialized]
+	protected GameObject _go;
 
 	public bool fullyInitialized 
 	{
@@ -142,9 +145,10 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		Init();
 #endif
 	}
-
+	
 	public virtual void Awake()
 	{
+		_go = gameObject;
 		FullInit();
 	}
 
@@ -168,7 +172,6 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 			FullInit();
 		}
 
-		var _go = gameObject;
 		var _fns = fns;
 		for (int i = 0; i < _fns.Length; i++) {
 			_fns[i].invoke(_go);
@@ -181,7 +184,6 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 			FullInit();
 		}
 
-		var _go = gameObject;
 		var _fns = fns;
 		for (int i = 0; i < _fns.Length; i++) {
 			_fns[i].invoke(_go, arg1);
@@ -194,7 +196,6 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 			FullInit();
 		}
 
-		var _go = gameObject;
 		var _fns = fns;
 		for (int i = 0; i < _fns.Length; i++) {
 			_fns[i].invoke(_go, arg1, arg2);
@@ -207,7 +208,6 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 			FullInit();
 		}
 
-		var _go = gameObject;
 		var _fns = fns;
 		for (int i = 0; i < _fns.Length; i++) {
 			_fns[i].invoke(_go, arg1, arg2, arg3);
