@@ -44,7 +44,7 @@
       (cond (or (.EOF xml)
                 (= (.NodeType xml)
                    XmlNodeType/EndElement)) (seq (filter identity accumulator)) ;; remove nils?
-            (.IsEmptyElement xml) (recur accumulator)
+            (.IsEmptyElement xml) (recur (conj accumulator (xml-content xml)))
             :else (if (> (.Depth xml)
                          depth)
                     (recur (conj accumulator
