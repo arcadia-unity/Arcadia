@@ -186,7 +186,7 @@
          (remove #(= (% :scope) "test"))
          (remove #(= (% :optional) "true"))
          (remove #(= (% :artifactId) "clojure"))
-         (map (juxt :groupId :artifactId :version)))))
+         (mapv (juxt :groupId :artifactId :version)))))
 
 (defn all-dependencies [[group artifact version]]
   (into #{}
