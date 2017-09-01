@@ -449,8 +449,8 @@
         (install-1)
         (catch Exception e
           (swap! install-errors conj e)
-          (Debug/Log "Exception encountered when installing dependencies:")
-          (Debug/Log e))))))
+          (Debug/LogError "Exception encountered when installing dependencies:")
+          (Debug/LogError e))))))
 
 (defn dependency-count []
   (count (:dependencies (config/config))))
