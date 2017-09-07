@@ -4,6 +4,7 @@
 *.mdb*
 **/Compiled/*.exe*
 **/Compiled/*.dll*
+**/Compiled/Editor*.dll*
 
 # =============== #
 # Unity generated #

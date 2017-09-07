@@ -72,6 +72,7 @@
   [^System.Diagnostics.StackFrame el]                                                   ;;; StackTraceElement
   (let [file (.GetFileName el)                                       ;;; getFileName
         clojure-fn? (and file (or (.EndsWith file ".clj")            ;;; endsWith
+                                  (.EndsWith file ".cljc")           ;;; endsWith
                                   (= file "NO_SOURCE_FILE")))]
     (str (if clojure-fn?
            (demunge (stack-element-classname el))                              ;;; (.getClassName el))
@@ -155,7 +156,7 @@
   [request-prompt request-exit]
   (or ({:line-start request-prompt :stream-end request-exit}
        (skip-whitespace *in*))
-      (let [input (read)]
+      (let [input (read {:read-cond :allow} *in*)]
         (skip-if-eol *in*)
         input)))
 

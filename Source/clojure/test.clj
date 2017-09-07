@@ -233,7 +233,8 @@
 "}
   clojure.test
   (:require [clojure.template :as temp]
-            [clojure.stacktrace :as stack]))
+            [clojure.stacktrace :as stack]
+            [clojure.string :as str]))
 
 ;; Nothing is marked "private" here, so you can rebind things to plug
 ;; in your own testing or reporting frameworks.
@@ -316,8 +317,7 @@
   {:added "1.1"} 
   [name]
   (when *report-counters*
-    (dosync (commute *report-counters* assoc name
-                     (inc (or (*report-counters* name) 0))))))
+    (dosync (commute *report-counters* update-in [name] (fnil inc 0)))))
 
 ;;; TEST RESULT REPORTING
 
@@ -333,6 +333,7 @@
   report :type)
 
 (defn- file-and-line 
+  {:deprecated "1.8"}
   [^Exception exception depth]                                                    ;;; Throwable
   (let [stacktrace (System.Diagnostics.StackTrace. exception true)]               ;;; (.getStackTrace exception)
     (if (< depth (.FrameCount stacktrace))                                        ;;; (count stacktrace)
@@ -340,6 +341,13 @@
         {:file (.GetFileName s) :line (.GetFileLineNumber s)})                    ;;; .getFileName  .getLineNumber
       {:file nil :line nil})))
 
+(defn- stacktrace-file-and-line
+   [stacktrace]
+   (if (seq stacktrace)
+     (let [^System.Diagnostics.StackFrame s (first stacktrace)]                   ;;; ^StackTraceElement
+       {:file (.GetFileName s) :line (.GetFileLineNumber s)})                     ;;;  .getFileName  .getLineNumber
+     {:file nil :line nil}))
+ 
 (defn do-report
   "Add file and line information to a test result and call report.
    If you are writing a custom assert-expr method, call this function
@@ -349,8 +357,12 @@
   (report
    (case
     (:type m)
-    ;:fail (let [ex (try (throw (new Exception)) (catch Exception e e))] (merge (file-and-line ex 1) m)                       ;;; (new java.lang.Throwable) 1
-    :error (merge (file-and-line (:actual m) 0) m) 
+    :fail (merge (stacktrace-file-and-line (drop-while
+                                              #(let [cl-name (.FullName (.DeclaringType (.GetMethod ^System.Diagnostics.StackFrame %)))]    ;;; .getClassName ^StackTraceElement
+                                                 (or (str/starts-with? cl-name "System.")                                                   ;;; "java.lang.""
+                                                     (str/starts-with? cl-name "clojure.test$")))
+                                              (.GetFrames (System.Diagnostics.StackTrace.)))) m)                                            ;;; (.getStackTrace (Thread/currentThread))
+     :error (merge (stacktrace-file-and-line (.GetFrames (System.Diagnostics.StackTrace. ^Exception (:actual m) true))) m)                  ;;; (.getStackTrace ^Throwable (:actual m))
     m)))
 
 (defmethod report :default [m]
@@ -657,7 +669,7 @@
 (defmulti use-fixtures
   "Wrap test runs in a fixture function to perform setup and
   teardown. Using a fixture-type of :each wraps every test
-  individually, while:once wraps the whole run in a single function."
+  individually, while :once wraps the whole run in a single function."
   {:added "1.1"} 
   (fn [fixture-type & args] fixture-type))
 

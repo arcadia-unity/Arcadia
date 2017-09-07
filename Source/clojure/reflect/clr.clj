@@ -146,10 +146,10 @@
 
 (defn- declared-constructors
   "Return a set of the declared constructors of class as a Clojure map."
-  [cls]
+  [^Type cls]
   (set (map
         constructor->map
-        (.GetConstructors (cast Type cls) basic-binding-flags)))) 
+        (.GetConstructors cls basic-binding-flags)))) 
 
 (defrecord Method
   [name return-type declaring-class parameter-types flags])
@@ -165,10 +165,10 @@
 
 (defn- declared-methods
   "Return a set of the declared constructors of class as a Clojure map."
-  [cls]
+  [^Type cls]
   (set (map
         method->map
-        (.GetMethods (cast Type cls) basic-binding-flags))))
+        (.GetMethods cls basic-binding-flags))))
 
 (defrecord Field
   [name type declaring-class flags])
@@ -183,10 +183,10 @@
 
 (defn- declared-fields
   "Return a set of the declared fields of class as a Clojure map."
-  [cls]
+  [^Type cls]
   (set (map
         field->map
-        (.GetFields (cast Type cls) basic-binding-flags))))
+        (.GetFields cls basic-binding-flags))))
 
 (defrecord Property
   [name type declaring-class flags])
@@ -201,10 +201,10 @@
 
 (defn- declared-properties
   "Return a set of the declared fields of class as a Clojure map."
-  [cls]
+  [^Type cls]
   (set (map
         property->map
-        (.GetProperties (cast Type cls) basic-binding-flags))))
+        (.GetProperties cls basic-binding-flags))))
 
 
 (deftype ClrReflector [a]

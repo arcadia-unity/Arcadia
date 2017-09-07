@@ -1,10 +1,10 @@
-(ns arcadia.introspection
+(ns ^{:doc "C# Introspection functionality, useful for hacking the Unity API."}
+  arcadia.introspection
   (:refer-clojure :exclude [methods])
   (:require [clojure.pprint :as pprint]
-            [clojure.test :as test]
-            [arcadia.core :as ac])
+            [clojure.test :as test])
   (:import [System.Reflection
-            MonoMethod MonoProperty MonoField]))
+            BindingFlags MonoMethod MonoProperty MonoField]))
 
 (def inclusive-binding-flag
   (enum-or
@@ -75,23 +75,57 @@
 (defn members
   ([^Type t]
    (sort-by
-     #(ac/condcast-> % x
-        MonoMethod (.Name x)
-        MonoProperty (.Name x)
-        MonoField (.Name x))
+     #(.Name %)
      (concat
        (fields t)
        (properties t)
        (methods t))))
   ([^Type t, sr]
    (sort-by
-     #(ac/condcast-> % x
-        MonoMethod (.Name x)
-        MonoProperty (.Name x)
-        MonoField (.Name x))
+     #(.Name %)
      (concat
        (fields t sr)
        (properties t sr)
        (methods t sr)))))
 
 ;; TODO: printing conveniences, aproprint, version of apropos returning richer data, etc
+
+;; ============================================================
+;;
+
+(defn snapshot-data-fn [type]
+  (let [fields (fields type)
+        props  (properties type)]
+    (fn [obj]
+      (merge
+        (zipmap
+          (map (fn [^MonoField mf] (.Name mf))
+            fields)
+          (map (fn [^MonoField mf] (.GetValue mf obj))
+            fields))
+        (zipmap
+          (map (fn [^MonoProperty mp] (.Name mp))
+            props)
+          (map (fn [^MonoProperty mp] (.GetValue mp obj nil))
+            props))))))
+
+(defn methods-report
+  ([type] (methods-report type nil))
+  ([type pat]
+   (let [cmpr (comparator #(< (count (.GetParameters %1))
+                              (count (.GetParameters %2))))]
+     (->> (if pat
+            (methods type pat)
+            (methods type))
+          (sort (fn [a b]
+                  (let [cmp (compare (.Name a) (.Name b))]
+                    (if-not (zero? cmp)
+                      cmp
+                      (cmpr a b)))))
+          (map (fn [meth]
+                 {:name (.Name meth)
+                  :parameters (vec
+                                (for [param (.GetParameters meth)]
+                                  {:name (.Name param)
+                                   :type (.ParameterType param)}))
+                  :return-type (.. meth ReturnParameter ParameterType)}))))))

@@ -12,6 +12,7 @@
 
 (import '(System.IO.TextWriter))   ;;; was (import '(java.io Writer))    (I have replaced ^Writer with ^System.IO.TextWriter throughout
 ;; Other global replaces:  .write => .Write, .append => .Write, ^Class => ^Type, ^Character => ^Char
+(set! *warn-on-reflection* true)
 (def ^:dynamic 
  ^{:doc "*print-length* controls how many items of each collection the
   printer will print. If it is bound to logical false, there is no
@@ -93,16 +94,21 @@
   (print-args o w)
   (.Write w ")"))
 
-(defn- print-object [o, ^System.IO.TextWriter w]
+(defn- print-tagged-object [o rep ^System.IO.TextWriter w]
   (when (instance? clojure.lang.IMeta o)
     (print-meta o w))
-  (.Write w "#<")
-  (let [name (.Name (class o))]                                         ;;; .getSimpleName => .Name
-    (when (seq name) ;; anonymous classes have a simple name of ""
-      (.Write w name)
-      (.Write w " ")))
-  (.Write w (str o))
-  (.Write w ">"))
+  (.Write w "#object[")
+  (let [c (class o)]
+    (if (.IsArray c)                               ;;; .isArray
+      (print-method (.Name c) w)                   ;;; .getName
+      (.Write w (.Name c))))                       ;;; .getName
+  (.Write w " ")
+  (.Write w (format "0x%x " (System.Runtime.CompilerServices.RuntimeHelpers/GetHashCode o)))   ;;; (System/identityHashCode o)
+  (print-method rep w)
+  (.Write w "]"))
+
+(defn- print-object [o, ^System.IO.TextWriter w]
+  (print-tagged-object o (str o) w))
 
 (defmethod print-method Object [o, ^System.IO.TextWriter w]
   (print-object o w))
@@ -360,7 +366,7 @@
 
 ;;; ADDED LINES
 (defmethod print-method clojure.lang.Ratio [o  ^System.IO.TextWriter w]   (.Write w (str o)))
-(defmethod print-dup clojure.lang.BigInteger [o w] 
+(defmethod print-dup clojure.lang.BigInteger [o ^System.IO.TextWriter w] 
   (.Write w "#=(clojure.lang.BigInteger/Parse ")
   (print-dup (str o) w)
   (.Write w ")"))
@@ -436,17 +442,101 @@
   (print-dup (.Name n) w)    ;; .name
   (.Write w ")"))
 
+(defn- deref-as-map [^clojure.lang.IDeref o]
+  (let [pending (and (instance? clojure.lang.IPending o)
+                     (not (.isRealized ^clojure.lang.IPending o)))
+        [ex val]
+        (when-not pending
+          (try [false (deref o)]
+               (catch Exception e                                  ;;; Throwable
+                 [true e])))]
+    {:status
+     (cond
+      (or ex
+          (and (instance? clojure.lang.Agent o)
+               (agent-error o)))
+      :failed
+
+      pending
+      :pending
+
+      :else
+      :ready)
+
+     :val val}))
+
 (defmethod print-method clojure.lang.IDeref [o ^System.IO.TextWriter w]
-  (print-sequential (format "#<%s@%x%s: "
-                            (.Name (class o))     ;;; .getSimpleName => .Name
-                            (.GetHashCode o)     ;;; No easy equivelent in CLR: (System/identityHashCode o)))
-                            (if (and (instance? clojure.lang.Agent o)
-                                     (agent-error o))
-                              " FAILED"
-                              ""))
-                    pr-on, "", ">", (list (if (and (instance? clojure.lang.IPending o)
-                                                   (not (.isRealized ^clojure.lang.IPending o)))
-                                            :pending
-                                            @o)), w))
+  (print-tagged-object o (deref-as-map o) w))
+
+(defmethod print-method  System.Diagnostics.StackFrame [^System.Diagnostics.StackFrame o ^System.IO.TextWriter w]                            ;;;  StackTraceElement  ^StackTraceElement
+  (print-method [(symbol (.FullName (.GetType o))) (symbol (.Name (.GetMethod o))) (.GetFileName o) (.GetFileLineNumber o)] w))      ;;; (.getClassName o)  (.getMethodName o) .getFileName .getLineNumber
+
+(defn Throwable->map
+  "Constructs a data representation for a Throwable."
+  {:added "1.7"}
+  [^Exception o]                                                                                                 ;;; ^Throwable
+  (let [base (fn [^Exception t]                                                                                  ;;; ^Throwable
+                 (let [m {:type (class t)
+                        :message (.Message t)                                                                    ;;; .getLocalizedMessage
+                        :at (.GetFrame (System.Diagnostics.StackTrace. t true) 0)}                               ;;; (get (.getStackTrace t) 0)
+                     data (ex-data t)]
+                 (if data
+                   (assoc m :data data)
+                   m)))
+        via (loop [via [], ^Exception t o]                                                                       ;;; ^Throwable
+              (if t
+                (recur (conj via t) (.InnerException t))                                                         ;;; .getCause
+                via))
+        ^Exception root (peek via)                                                                               ;;; Throwable
+        m {:cause (.Message root)                                                                                   ;;; (.getLocalizedMessage root)
+           :via (vec (map base via))
+          :trace (vec (.GetFrames (System.Diagnostics.StackTrace. (or root o) true)))}                           ;;;  .getStackTrace ^Throwable  
+        data (ex-data root)]
+    (if data
+      (assoc m :data data)
+      m)))
+
+(defn print-throwable [^Exception o ^System.IO.TextWriter w]                                                     ;;; ^Throwable
+  (.Write w "#error {\n :cause ")
+  (let [{:keys [cause via trace]} (Throwable->map o)
+        print-via #(do (.Write w "{:type ")
+		               (print-method (:type %) w)
+					   (.Write w "\n   :message ")
+					   (print-method (:message %) w)
+					   (.Write w "\n   :at ")
+					   (print-method (:at %) w)
+					   (.Write w "}"))]
+    (print-method cause w)
+    (when via
+      (.Write w "\n :via\n [")
+      (when-let [fv (first via)]
+	    (print-via fv)
+        (doseq [v (rest via)]
+          (.Write w "\n  ")
+		  (print-via v)))
+      (.Write w "]"))
+    (when trace
+      (.Write w "\n :trace\n [")
+      (when-let [ft (first trace)]
+        (print-method ft w)
+        (doseq [t (rest trace)]
+          (.Write w "\n  ")
+          (print-method t w)))
+      (.Write w "]")))
+  (.Write w "}"))
+
+(defmethod print-method Exception [^Exception o ^System.IO.TextWriter w]                                         ;;; Throwable ^Throwable
+  (print-throwable o w))
+
+(defmethod print-method clojure.lang.TaggedLiteral [o ^System.IO.TextWriter w]
+  (.Write w "#")
+  (print-method (:tag o) w)
+  (.Write w " ")
+  (print-method (:form o) w))
+
+(defmethod print-method clojure.lang.ReaderConditional [o ^System.IO.TextWriter w]
+  (.Write w "#?")
+  (when (:splicing? o) (.Write w "@"))
+  (print-method (:form o) w))
 
 (def ^{:private true} print-initialized true)  

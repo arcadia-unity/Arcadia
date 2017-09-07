@@ -53,7 +53,7 @@
   string."
   {:added "1.1"} 
   [data]
-  (doseq [line (.split ^String data "\n")]
+  (doseq [line (.Split ^String data "\n")]
     (println "#" line)))
 
 (defn print-tap-pass

@@ -40,9 +40,11 @@ Design notes for clojure.string:
       :author "Stuart Sierra, Stuart Halloway, David Liebke"}
   clojure.string
   (:refer-clojure :exclude (replace reverse))
-  (:import (System.Text.RegularExpressions Regex MatchEvaluator Match)              ; java.util.regex Pattern
+  (:import (System.Text.RegularExpressions Regex MatchEvaluator Match Group)              ; java.util.regex Pattern
            clojure.lang.LazilyPersistentVector))
 (declare re-groups-direct)                                    ;;; I'm going to add a little helper
+(set! *warn-on-reflection* true)
+
 (defn ^String reverse
   "Returns s with its characters reversed."
   {:added "1.2"}
@@ -59,8 +61,8 @@ Design notes for clojure.string:
 
 (defn- replace-by
   [^String s re f]
-  (.Replace re s                                                              ;;; (let [m (re-matcher re s)]
-     ^MatchEvaluator (gen-delegate MatchEvaluator [m] (f (re-groups-direct m)))))   ;;;    (if (.find m)
+  (.Replace ^Regex re s                                                              ;;; (let [m (re-matcher re s)]    DM: Added ^Regex
+     ^MatchEvaluator (gen-delegate MatchEvaluator [m] (f (re-groups-direct m)))))   ;;;    (if (.find m)                               TODO: Figure out why the tag of ^MatchEvaluator does not help
                                                                               ;;;      (let [buffer (StringBuffer. (.length s))]
                                                                               ;;;        (loop [found true]
                                                                               ;;;           (if found
@@ -101,7 +103,7 @@ Design notes for clojure.string:
      (instance? Char match) (.Replace s ^Char match ^Char replacement)                         ;;;  Character  .replace
      (instance? String match) (.Replace s ^String match ^String replacement)                   ;;; .replace
      (instance? Regex match) (if (string? replacement)                                         ;;; Pattern
-                               (.Replace match s replacement)                                  ;;; (.replaceAll (re-matcher ^Pattern match s)
+                               (.Replace ^Regex match s ^String replacement)                                  ;;; (.replaceAll (re-matcher ^Pattern match s)
 							                                                                   ;;;     (.toString ^CharSequence replacement))
                                (replace-by s match replacement))
      :else (throw (ArgumentException. (str "Invalid match arg: " match))))))                   ;;; IllegalArgumentException
@@ -111,7 +113,7 @@ Design notes for clojure.string:
                                                                                 ;;; (let [m (re-matcher re s)]
   (.Replace re s                                                                ;;;   (if (.find m)
      ^MatchEvaluator (gen-delegate MatchEvaluator [m] (f (re-groups-direct m)))      ;;;     (let [buffer (StringBuffer. (.length s))
-      1))                                                                       ;;;           rep (Matcher/quoteReplacement (f (re-groups m)))]
+      (int 1)))                                                                       ;;;           rep (Matcher/quoteReplacement (f (re-groups m)))]
                                                                                 ;;;        (.appendReplacement m buffer rep)
                                                                                 ;;;        (.appendTail m buffer)
                                                                                 ;;;        (str buffer))
@@ -317,9 +319,68 @@ Design notes for clojure.string:
 (defn- re-groups-direct
   "similar to re-groups, but works on a Match directly, rather than JReMatcher"
   [^Match m]
-  (let [strs (map #(.Value %) (.Groups ^Match m))
+  (let [strs (map #(.Value ^Group %) (.Groups ^Match m))
         cnt (count strs)]
 	 (if (<= cnt 1) 
 	   (first strs)
 	   (into [] strs))))
-	    
+	
+(defn index-of
+  "Return index of value (string or char) in s, optionally searching
+  forward from from-index or nil if not found."
+  {:added "1.8"}
+  ([^String s value]                                                                    ;;; ^CharSequence
+  (let [result ^long
+        (if (instance? Char value)                                                      ;;; ^Character
+          (.IndexOf s  ^Char value)                                                     ;;; (.toString s) ^int(.charValue ^Character value)
+          (.IndexOf s ^String value))]                                                  ;;; (.toString s)
+    (if (= result -1)
+      nil
+      result)))
+  ([^String s value ^long from-index]                                                   ;;; ^CharSequence
+  (let [result ^long
+        (if (instance? Char value)                                                      ;;; ^Character
+          (.IndexOf s ^Char value (unchecked-int from-index))                           ;;; (.toString s)  ^int (.charValue ^Character value)
+          (.IndexOf s ^String value (unchecked-int from-index)))]                            ;;; (.toString s)
+    (if (= result -1)
+      nil
+      result))))
+
+(defn last-index-of
+  "Return last index of value (string or char) in s, optionally
+  searching backward from from-index or nil if not found."
+  {:added "1.8"}
+  ([^String s value]                                                                    ;;; ^CharSequence
+  (let [result ^long
+        (if (instance? Char value)                                                      ;;; ^Character
+          (.LastIndexOf s ^Char value)                                                  ;;; (.toString s) ^int (.charValue ^Character value)
+          (.LastIndexOf s ^String value))]                                              ;;; (.toString s)
+    (if (= result -1)
+      nil
+      result)))
+  ([^String s value ^long from-index]                                                   ;;; ^CharSequence
+  (let [result ^long
+        (if (instance? Char value)                                                      ;;; ^Character
+          (.LastIndexOf s ^Char value (unchecked-int from-index))                            ;;; (.toString s) ^int (.charValue ^Character value)
+          (.LastIndexOf s ^String value (unchecked-int from-index)))]                            ;;; (.toString s)
+    (if (= result -1)
+      nil
+      result))))
+
+(defn starts-with?
+  "True if s starts with substr."
+  {:added "1.8"}
+  [^String s ^String substr]                                                            ;;; ^CharSequence
+  (.StartsWith s substr))                            ;;; (.toString s)
+
+(defn ends-with?
+  "True if s ends with substr."
+  {:added "1.8"}
+  [^String s ^String substr]                                                            ;;; ^CharSequence
+  (.EndsWith s substr))                            ;;; (.toString s)
+
+(defn includes?
+  "True if s includes substr."
+  {:added "1.8"}
+  [^String s ^String substr]                                                            ;;; ^CharSequence
+  (.Contains s substr))	                                ;;; (.toString s)

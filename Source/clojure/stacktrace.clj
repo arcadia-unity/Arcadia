@@ -26,7 +26,7 @@
 (defn print-trace-element
   "Prints a Clojure-oriented view of one element in a stack trace."
   {:added "1.1"} 
-  [e]                   ;;; in CLR, e will be a StackFrame
+  [^System.Diagnostics.StackFrame e]                   ;;; in CLR, e will be a StackFrame
   (let [class   (if-let [t (.. e  (GetMethod) ReflectedType)] (.FullName t) "")         ;;;  (.getClassName e)
 	method      (.. e (GetMethod)  Name)]                             ;;;  (.getMethodName e)] 
     (let [match (re-matches #"^([A-Za-z0-9_.-]+)\$(\w+)__\d+$" (str class))]
@@ -35,7 +35,7 @@
 	(print (str class "." method)))))                                   ;;;  use when we have printf:  (printf "%s.%s" class method))))
   (print (str " (" (.GetFileName e) ":" (.GetFileLineNumber e) ")")))   ;;;  use when we have printf:  (printf " (%s:%d)" (or (.getFileName e) "") (.getLineNumber e)))
 
-(defn print-throwable
+(defn print-throwable1
   "Prints the class and message of a Throwable."
   {:added "1.1"} 
   [tr]
@@ -49,7 +49,7 @@
   ([tr] (print-stack-trace tr nil))
   ([^Exception tr n]                                                     ;;; Throwable
      (let [st (.GetFrames (System.Diagnostics.StackTrace. tr true))]     ;;;  (.getStackTrace tr)]
-       (print-throwable tr)
+       (print-throwable1 tr)
        (newline)
        (print " at ") 
        (if-let [e (first st)]

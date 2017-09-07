@@ -19,7 +19,7 @@
 
 (defn- use-method
   "Installs a function as a new method of multimethod associated with dispatch-value. "
-  [multifn dispatch-val func]
+  [^clojure.lang.MultiFn multifn dispatch-val func]
   (. multifn addMethod dispatch-val func))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -122,7 +122,7 @@
 (defn- pprint-ideref [o]
   (let [prefix (format "#<%s@%x%s: "
                        (map-ref-type (.Name (class o)))           ;;; getSimpleName
-                       (.GetHashCode o)                           ;;; System/identityHashCode
+                       (.GetHashCode ^Object o)                           ;;; System/identityHashCode, added type hint
                        (if (and (instance? clojure.lang.Agent o)
                                 (agent-error o))
                          " FAILED"
@@ -132,7 +132,7 @@
                            (pprint-newline :linear)
                            (write-out (cond 
                                        (and (future? o) (not (future-done? o))) :pending
-									   (and (instance? clojure.lang.IPending o) (not (.isRealized o))) :not-delivered
+									   (and (instance? clojure.lang.IPending o) (not (.isRealized ^clojure.lang.IPending o))) :not-delivered
                                        :else @o)))))
 
 (def ^{:private true} pprint-pqueue (formatter-out "~<<-(~;~@{~w~^ ~_~}~;)-<~:>"))
@@ -155,6 +155,7 @@
 (use-method simple-dispatch clojure.lang.IPersistentMap pprint-map)
 (use-method simple-dispatch clojure.lang.IPersistentSet pprint-set)
 (use-method simple-dispatch clojure.lang.PersistentQueue pprint-pqueue)
+(use-method simple-dispatch clojure.lang.Var pprint-simple-default)
 (use-method simple-dispatch clojure.lang.IDeref pprint-ideref)
 (use-method simple-dispatch nil pr)
 (use-method simple-dispatch :default pprint-simple-default)
@@ -210,7 +211,7 @@
                   (when (next args)
                     ((formatter-out "~:_"))))))
             (recur (next args))))))
-    (write-out reference)))
+    (when reference (write-out reference))))
 
 (defn- pprint-ns
   "The pretty print dispatch chunk for the ns macro"

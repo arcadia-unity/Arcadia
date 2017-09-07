@@ -52,17 +52,9 @@
 	    (set-field this :cur (inc (get-field this :cur)))))
   (.Write ^TextWriter (get-field this :base) (char c))) )
   
-;(defn- cc-write-char [^TextWriter this ^Char c]                  ;;; ADDED
-;  (dosync (if (= c \newline)
-;	    (do
-;              (set-field this :cur 0)
-;              (set-field this :line (inc (get-field this :line))))
-;	    (set-field this :cur (inc (get-field this :cur)))))
-;  (.Write ^TextWriter (get-field this :base) c))  
-
 (defn- column-writer   
   ([writer] (column-writer writer *default-page-width*))
-  ([writer max-columns]
+  ([^TextWriter writer max-columns]
      (let [fields (ref {:max max-columns, :cur 0, :line 0 :base writer})]
        (proxy [TextWriter IDeref] []
          (deref [] fields)

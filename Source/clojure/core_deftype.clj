@@ -63,7 +63,7 @@
         methods (map (fn [[name params & body]]
                        (cons name (maybe-destructured params body)))
                      (apply concat (vals impls)))]
-    (when-let [bad-opts (seq (remove #{:no-print} (keys opts)))]
+    (when-let [bad-opts (seq (remove #{:no-print :load-ns} (keys opts)))]
       (throw (ArgumentException. (apply print-str "Unsupported option(s) -" bad-opts))))   ;;; IllegalArgumentException
     [interfaces methods opts]))
 
@@ -132,12 +132,15 @@
 (defn- imap-cons
   [^clojure.lang.IPersistentMap this o]
   (cond
-   (instance? clojure.lang.IMapEntry o)                             ;;; java.util.Map$Entry
-     (let [^clojure.lang.IMapEntry pair o]                          ;;; java.util.Map$Entry
-       (.assoc this (.key pair) (.val pair)))                       ;;; .getKey .getValue
-   (instance? System.Collections.DictionaryEntry o)                 ;;; DM: Added
-   (let [^clojure.lang.IMapEntry pair o]                            ;;; DM: Added
-       (.assoc this (.Key pair) (.Value pair)))                     ;;; DM: Added
+     (map-entry? o)                                                                                        ;;; java.util.Map$Entry
+     (let [^clojure.lang.IMapEntry pair o]                                                                 ;;; java.util.Map$Entry
+       (.assoc this (.key pair) (.val pair)))                                                              ;;; .getKey .getValue
+   (instance? System.Collections.DictionaryEntry o)                                                        ;;; DM: Added
+   (let [^System.Collections.DictionaryEntry pair o]                                                       ;;; DM: Added
+       (.assoc this (.Key pair) (.Value pair)))                                                            ;;; DM: Added
+   (instance? |System.Collections.Generic.KeyValuePair`2[System.Object,System.Object]|  o)                 ;;; DM: Added
+   (let [^|System.Collections.Generic.KeyValuePair`2[System.Object,System.Object]| pair o]                      ;;; DM: Added
+       (.assoc this (.Key pair) (.Value pair)))                                                            ;;; DM: Added
    (instance? clojure.lang.IPersistentVector o)
      (let [^clojure.lang.IPersistentVector vec o]
        (.assoc this (.nth vec 0) (.nth vec 1)))
@@ -151,8 +154,8 @@
 (defn- emit-defrecord 
   "Do not use this directly - use defrecord"
   {:added "1.2"} 
-  [tagname name fields interfaces methods]
-  (let [classname (with-meta (symbol (str (namespace-munge *ns*) "." name)) (meta name))
+  [tagname cname fields interfaces methods opts]
+  (let [classname (with-meta (symbol (str (namespace-munge *ns*) "." cname)) (meta cname))
         interfaces (vec interfaces)
         interface-set (set (map resolve interfaces))
         methodname-set (set (map first methods))
@@ -215,10 +218,10 @@
                    `(containsKey [this# k#] (not (identical? this# (.valAt this# k# this#))))
                    `(entryAt [this# k#] (let [v# (.valAt this# k# this#)]
                                             (when-not (identical? this# v#)
-                                              (clojure.lang.MapEntry. k# v#))))
-                   `(seq [this#] (seq (concat [~@(map #(list `new `clojure.lang.MapEntry (keyword %) %) base-fields)] 
+                                              (clojure.lang.Tuple/create k# v#))))
+                   `(seq [this#] (seq (concat [~@(map #(list `clojure.lang.Tuple/create (keyword %) %) base-fields)]
                                           ~'__extmap)))
-					`(|System.Collections.Generic.IEnumerable`1[clojure.lang.IMapEntry]|.GetEnumerator [this#]  (clojure.lang.IMapEntrySeqEnumerator. this#))
+				   `(|System.Collections.Generic.IEnumerable`1[clojure.lang.IMapEntry]|.GetEnumerator [this#]  (.GetEnumerator (clojure.lang.RecordEnumerable. this# [~@(map keyword base-fields)] (clojure.lang.RT/iter ~'__extmap))))
                    `(^clojure.lang.IPersistentMap assoc [this# k# ~gs]                        ;;; type hint added
                      (condp identical? k#
                        ~@(mapcat (fn [fld]
@@ -251,7 +254,7 @@
                   `(Contains [this# k#] (.containsKey this# k#))
                   `(CopyTo [this# a# i#]  (throw (InvalidOperationException.)))   ;;; TODO: implement this.  Got lazy.
                   `(System.Collections.IDictionary.GetEnumerator [this#]  (clojure.lang.Runtime.ImmutableDictionaryEnumerator. this#))
-                  `(System.Collections.IEnumerable.GetEnumerator [this#]  (clojure.lang.IMapEntrySeqEnumerator. (seq this#)))
+			      `(System.Collections.IEnumerable.GetEnumerator [this#]  (.GetEnumerator (clojure.lang.RecordEnumerable. this# [~@(map keyword base-fields)] (clojure.lang.RT/iter ~'__extmap))))
                   )])
 	  (cntd [[i m]]                                                                                       ;;; ADDED
 	        [(conj i 'clojure.lang.Counted)                                                               ;;; ADDED
@@ -261,7 +264,8 @@
            [(conj i 'clojure.lang.IPersistentCollection)                                                  ;;; ADDED
             (conj m                                                                                       ;;; ADDED                   
                   `(clojure.lang.IPersistentCollection.cons [this# e#]                                    ;;; ADDED
-                        ((var imap-cons) this# e#)))])                                                    ;;; ADDED
+                        ((var imap-cons) this# e#))                                                       ;;; ADDED                   
+			      `(clojure.lang.IPersistentCollection.count [this#] (+ ~(count base-fields) (count ~'__extmap))))])	  ;;; ADDED
       (associative                                                                                        ;;; ADDED
             [[i m]]                                                                                       ;;; ADDED
             [(conj i 'clojure.lang.Associative)                                                           ;;; ADDED
@@ -273,8 +277,9 @@
                                  base-fields)                                                             ;;; ADDED
                        (new ~tagname ~@(remove #{'__extmap} fields) (assoc ~'__extmap k# ~gs)))))])]      ;;; ADDED
      (let [[i m] (-> [interfaces methods] irecord eqhash iobj ilookup imap associative cntd ipc dict)]                              ;;; Associative, ipc, cntd added
-       `(deftype* ~tagname ~(vary-meta classname merge {System.SerializableAttribute {}}) ~(conj hinted-fields '__meta '__extmap) 
-          :implements ~(vec i) 
+       `(deftype* ~(symbol (name (ns-name *ns*)) (name tagname)) ~classname ~(conj hinted-fields '__meta '__extmap)
+	      :implements ~(vec i)
+          ~@(mapcat identity opts)
           ~@m))))))
 
 (defn- build-positional-factory
@@ -326,7 +331,12 @@
 (defmacro defrecord
   "(defrecord name [fields*]  options* specs*)
   
-  Currently there are no options.
+  Options are expressed as sequential keywords and arguments (in any order).
+
+  Supported options:
+  :load-ns - if true, importing the record class will cause the
+             namespace in which the record was defined to be loaded.
+             Defaults to false.
 
   Each spec consists of a protocol or interface name followed by zero
   or more method bodies:
@@ -402,7 +412,7 @@
     `(let []
        (declare ~(symbol (str  '-> gname)))
        (declare ~(symbol (str 'map-> gname)))
-	   ~(emit-defrecord name gname (vec hinted-fields) (vec interfaces) methods)
+       ~(emit-defrecord name gname (vec hinted-fields) (vec interfaces) methods opts)
        (import ~classname)
        ~(build-positional-factory gname classname fields)
        (defn ~(symbol (str 'map-> gname))
@@ -418,19 +428,25 @@
   [x]
   (instance? clojure.lang.IRecord x))
 
-(defn- emit-deftype* 
+ (defn- emit-deftype* 
   "Do not use this directly - use deftype"
-  [tagname name fields interfaces methods]
-  (let [classname (with-meta (symbol (str (namespace-munge *ns*) "." name)) (meta name))
+  [tagname cname fields interfaces methods opts]
+  (let [classname (with-meta (symbol (str (namespace-munge *ns*) "." cname)) (meta cname))
         interfaces (conj interfaces 'clojure.lang.IType)]
-    `(deftype* ~tagname ~classname ~fields 
+    `(deftype* ~(symbol (name (ns-name *ns*)) (name tagname)) ~classname ~fields
        :implements ~interfaces 
-       ~@methods)))
+       ~@(mapcat identity opts)
+	   ~@methods)))
 
 (defmacro deftype
   "(deftype name [fields*]  options* specs*)
   
-  Currently there are no options.
+  Options are expressed as sequential keywords and arguments (in any order).
+
+  Supported options:
+  :load-ns - if true, importing the record class will cause the
+             namespace in which the record was defined to be loaded.
+             Defaults to false.
 
   Each spec consists of a protocol or interface name followed by zero
   or more method bodies:
@@ -501,7 +517,7 @@
         fields (vec (map #(with-meta % nil) fields))
 		[field-args over] (split-at 20 fields)]
     `(let []
-       ~(emit-deftype* name gname (vec hinted-fields) (vec interfaces) methods)
+       ~(emit-deftype* name gname (vec hinted-fields) (vec interfaces) methods opts)
        (import ~classname)
        ~(build-positional-factory gname classname fields)
 	   ~classname)))
@@ -794,7 +810,7 @@
 
 (defn- emit-impl [[p fs]]
   [p (zipmap (map #(-> % first keyword) fs)
-             (map #(cons 'fn (drop 1 %)) fs))])
+             (map #(cons `fn (drop 1 %)) fs))])
 
 (defn- emit-hinted-impl [c [p fs]]
   (let [hint (fn [specs]
@@ -806,7 +822,7 @@
                               body))
                       specs)))]
     [p (zipmap (map #(-> % first name keyword) fs)
-               (map #(cons 'fn (hint (drop 1 %))) fs))]))
+               (map #(cons `fn (hint (drop 1 %))) fs))]))
 
 (defn- emit-extend-type [c specs]
   (let [impls (parse-impls specs)]
