@@ -492,8 +492,9 @@
 ;; ISnapShotable
 
 ;; see `defmutable` below
-;; different namespace?
-;; this should probably be a multimethod, to match `mutable`
+;; This protocol should be considered an internal, unstable
+;; implementation detail of `snapshot` for now. Please refrain from
+;; extending it.
 (defprotocol ISnapshotable
   (snapshot [self]))
 
@@ -517,7 +518,7 @@
 
 (declare mutable)
 
-(defn maybe-mutable [x]
+(defn- maybe-mutable [x]
   (if (and (map? x)
            (contains? x ::mutable-type))
     (mutable x)
@@ -595,6 +596,15 @@
           (sequential? v)
           true)))))
 
+(defn role- [obj k]
+  (reduce-kv
+    (fn [_ ht _]
+      (hook- obj ht k))
+    nil
+    hook-types)
+  (remove-state! obj k)
+  obj)
+
 (s/fdef role+
   :args (s/cat :obj #(satisfies? ISceneGraph %)
                :k any?
@@ -604,6 +614,7 @@
         (= obj ret)))
 
 (defn role+ [obj k spec]
+  (role- obj k)
   (reduce-kv
     (fn [_ k2 v]
       (cond
@@ -615,15 +626,6 @@
         (set-state! obj k (maybe-mutable v))))
     nil
     spec)
-  obj)
-
-(defn role- [obj k]
-  (reduce-kv
-    (fn [_ ht _]
-      (hook- obj ht k))
-    nil
-    hook-types)
-  (remove-state! obj k)
   obj)
 
 ;; (defn role [obj k]
@@ -657,7 +659,7 @@
 ;; also instance vs satisfies, here
 ;; maybe this should be a definterface or something
 ;; yeah definitely should be a definterface, this is just here for `defmutable`
-(defn maybe-snapshot [x]
+(defn- maybe-snapshot [x]
   (if (instance? arcadia.core.ISnapshotable x)
     (snapshot x)
     x))
@@ -725,7 +727,10 @@
 (defn- parse-user-type-dispatch [[t]]
   (resolve t))
 
-(defmulti parse-user-type #'parse-user-type-dispatch)
+(defmulti parse-user-type
+  "This multimethod should be considered an internal, unstable
+  implementation detail for now. Please refrain from extending it."
+  parse-user-type-dispatch)
 
 ;; (defn parse-user-type [[type-sym & args :as input]]
 ;;   (Activator/CreateInstance (resolve type-sym) (into-array Object args)))
@@ -752,7 +757,14 @@
 
 ;; constructor (no instance), so this has to be a multimethod
 ;; if we're sticking to clojure stuff
-(defmulti mutable #'mutable-dispatch)
+(defmulti mutable
+  "Given a persistent representation of a mutable datatype defined via
+  `defmutable`, constructs and returns a matching instance of that
+  datatype. 
+
+Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via `defmutable`,
+(= (snapshot x) (snapshot (mutable (snapshot x))))"
+  #'mutable-dispatch)
 
 (defn- expand-type-sym [type-sym]
   (symbol
@@ -762,8 +774,39 @@
       "."
       (name type-sym))))
 
-;; maybe this doesn't need to be in core, could be off to the side
-(defmacro defmutable [& args]
+(defmacro defmutable
+  "Defines a new serializable, type-hinted, mutable datatype, intended
+  for particularly performance or allocation sensitive operations on a
+  single thread (such as Unity's main game thread). These datatypes
+  support snapshotting to persistent data via `snapshot`, and
+  reconstruction from snapshots via `mutable`; snapshotting and
+  reconstructing are also integrated into `role+`, `set-state!`,
+  `role`, and `roles`.
+
+Instances of these types may be converted into persistent
+  representations and back via `snapshot` and `mutable`. This
+  roundtrips, so if `x` is such an instance:
+
+(= (snapshot x) (snapshot (mutable (snapshot x))))
+
+If a persistent snapshot is specified as the state argument of
+  `set-state`, or as the `:state` value in the map argument of
+  `role+`, it will be automatically converted to an instance of the
+  corresponding mutable type. Conversely, `role` and `roles` will
+  automatically convert any mutable instances that would otherwise be
+  the values of `:state` in the returned map(s) to persistent
+  snapshots.
+
+Since they define new types, reevaluating `defmutable` forms will
+  require also reevaluating all forms that refer to them via type
+  hints (otherwise they'll fall back to dynamic
+  lookups). `defmutable-once` is like `defmutable`, but will not
+  redefine the type if it has already been defined (similar to
+  `defonce`).
+
+As low-level, potentially non-boxing constructs, instances of
+  `defmutable` types work particularly well with the `magic` library."
+  [& args]
   (let [parse (s/conform ::defmutable-args args)]
     (if (= ::s/invalid parse)
       (throw (Exception.
@@ -773,7 +816,8 @@
             type-name (expand-type-sym name)
             param-sym (-> (gensym (str name "_"))
                           (with-meta {:tag type-name}))
-            datavec (->> (map (fn [arg] `(. ~param-sym ~arg)) fields)
+            datavec (->> fields
+                         (map (fn [arg] `(. ~param-sym ~arg)))
                          (cons type-name)
                          vec)]
         `(let [t# (deftype ~name ~(->> fields (mapv #(vary-meta % assoc :unsynchronized-mutable true)))
@@ -795,6 +839,28 @@
                (str "#arcadia.core/mutable " (pr-str ~datavec))))
            t#)))))
 
-(defmacro defmutable-once [& [name :as args]]
-  `(when-not (resolve (quote ~name))
-     (defmutable ~@args)))
+(comment
+  (defmutable Mut [^float x, ^float y])
+
+  (def cube (create-primitive :cube))
+
+  (defn some-update [obj k]
+    (let [^Mut s (state obj k)]
+      (set! (.x s) (inc (.x s)))))
+
+  (role+ cube :some-role {:state (Mut. 1 2),
+                          :update #'some-update})
+
+  ;; then:
+
+  (role cube :some-role)
+  ;; => 
+  {:state {::mutable-type Mut, :x 1.0, :y 2.0}}
+
+)
+
+(defmacro defmutable-once
+  "Like `defmutable`, but will only evaluate if no type with the same name has been defined."
+  [& [name :as args]]
+  (when-not (resolve name)
+    `(defmutable ~@args)))
