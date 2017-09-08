@@ -515,6 +515,8 @@
   ([gobj k]
    (Arcadia.HookStateSystem/Lookup gobj k)))
 
+(declare mutable)
+
 (defn maybe-mutable [x]
   (if (and (map? x)
            (contains? x ::mutable-type))
@@ -764,8 +766,9 @@
 (defmacro defmutable [& args]
   (let [parse (s/conform ::defmutable-args args)]
     (if (= ::s/invalid parse)
-      (throw (Exception. "Invalid arguments to defmutable. Spec explanation: "
-               (with-out-str (clojure.spec/explain ::defmutable-args args))))
+      (throw (Exception.
+               (str "Invalid arguments to defmutable. Spec explanation: "
+                    (with-out-str (clojure.spec/explain ::defmutable-args args)))))
       (let [{:keys [name fields]} parse
             type-name (expand-type-sym name)
             param-sym (-> (gensym (str name "_"))
@@ -776,7 +779,7 @@
         `(let [t# (deftype ~name ~(->> fields (mapv #(vary-meta % assoc :unsynchronized-mutable true)))
                     System.ICloneable
                     (Clone [_#]
-                      ~(list* (symbol (str type-name ".")) fields))
+                      (new ~name ~@fields))
                     ISnapshotable
                     (snapshot [_#]
                       ;; if we try dropping the type itself in we get the stubclass instead
@@ -793,5 +796,5 @@
            t#)))))
 
 (defmacro defmutable-once [& [name :as args]]
-  (when-not (resolve name)
-    `(defmutable ~@args)))
+  `(when-not (resolve (quote ~name))
+     (defmutable ~@args)))
