@@ -159,6 +159,11 @@ namespace Arcadia
         {
             EnsureExportFolders();
 
+            var oldLoadPath = System.Environment.GetEnvironmentVariable("CLOJURE_LOAD_PATH");
+            var newLoadPath = oldLoadPath.Replace(Path.GetFullPath(CompiledFolder) + Path.PathSeparator, "");
+            UnityEngine.Debug.Log("newLoadPath: " + newLoadPath);
+            System.Environment.SetEnvironmentVariable("CLOJURE_LOAD_PATH", newLoadPath);
+
             var userNamespaces = ((IList)RT.var("arcadia.internal.editor-interop", "all-user-namespaces-symbols").invoke()).Cast<Symbol>();
 
             ResetProgress(userNamespaces.Count());
@@ -185,6 +190,8 @@ namespace Arcadia
             EditorUtility.ClearProgressBar();
             UnityEngine.Debug.Log("Ready to build!");
             AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+
+            System.Environment.SetEnvironmentVariable("CLOJURE_LOAD_PATH", oldLoadPath);
         }
 
         [PostProcessBuild(1)]
