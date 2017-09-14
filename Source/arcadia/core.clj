@@ -774,7 +774,11 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
       "."
       (name type-sym))))
 
+;; note: there are 2 serialization formats for defmutable currently,
+;; snapshot and what it prints as. one of those *could* preserve reference
+;; information, maybe? risk of contradictory data though
 (defmacro defmutable
+  ^{:arglists '([name [fields*]])}
   "Defines a new serializable, type-hinted, mutable datatype, intended
   for particularly performance or allocation sensitive operations on a
   single thread (such as Unity's main game thread). These datatypes
@@ -791,11 +795,17 @@ Instances of these types may be converted into persistent
 
 If a persistent snapshot is specified as the state argument of
   `set-state`, or as the `:state` value in the map argument of
-  `role+`, it will be automatically converted to an instance of the
-  corresponding mutable type. Conversely, `role` and `roles` will
-  automatically convert any mutable instances that would otherwise be
-  the values of `:state` in the returned map(s) to persistent
-  snapshots.
+  `role+`, the `ArcadiaState` component will be populated at the
+  appropriate key by the result of calling `mutable` on that
+  snapshot. Conversely, `role` and `roles` will automatically convert
+  any mutable instances that would otherwise be the values of `:state`
+  in the returned map(s) to persistent snapshots.
+
+`defmutable` serialization, via either `snapshot` or Unity scene-graph
+  serialization, does *not* currently preserve reference
+  identity. Calling `mutable` on the same snapshot twice will result
+  in two distinct instances. It is therefore important to store any
+  given `defmutable` instance in just one place in the scene graph.
 
 Since they define new types, reevaluating `defmutable` forms will
   require also reevaluating all forms that refer to them via type
@@ -820,10 +830,13 @@ As low-level, potentially non-boxing constructs, instances of
                          (map (fn [arg] `(. ~param-sym ~arg)))
                          (cons type-name)
                          vec)]
+        ;; check the bytecode
         `(let [t# (deftype ~name ~(->> fields (mapv #(vary-meta % assoc :unsynchronized-mutable true)))
                     System.ICloneable
                     (Clone [_#]
                       (new ~name ~@fields))
+                    ;; TODO: add clojure.lang.ILookup implementation backed by mutable dictionary
+                    ;; provide some interface for setting values on this -- mut! or something
                     ISnapshotable
                     (snapshot [_#]
                       ;; if we try dropping the type itself in we get the stubclass instead
