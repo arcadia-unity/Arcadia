@@ -777,8 +777,8 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
 ;; note: there are 2 serialization formats for defmutable currently,
 ;; snapshot and what it prints as. one of those *could* preserve reference
 ;; information, maybe? risk of contradictory data though
-(defmacro defmutable
-  ^{:arglists '([name [fields*]])}
+(defmacro  ^{:arglists '([name [fields*]])}
+  defmutable
   "Defines a new serializable, type-hinted, mutable datatype, intended
   for particularly performance or allocation sensitive operations on a
   single thread (such as Unity's main game thread). These datatypes
@@ -787,13 +787,13 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
   reconstructing are also integrated into `role+`, `set-state!`,
   `role`, and `roles`.
 
-Instances of these types may be converted into persistent
+  Instances of these types may be converted into persistent
   representations and back via `snapshot` and `mutable`. This
   roundtrips, so if `x` is such an instance:
 
-(= (snapshot x) (snapshot (mutable (snapshot x))))
+  (= (snapshot x) (snapshot (mutable (snapshot x))))
 
-If a persistent snapshot is specified as the state argument of
+  If a persistent snapshot is specified as the state argument of
   `set-state`, or as the `:state` value in the map argument of
   `role+`, the `ArcadiaState` component will be populated at the
   appropriate key by the result of calling `mutable` on that
@@ -801,20 +801,20 @@ If a persistent snapshot is specified as the state argument of
   any mutable instances that would otherwise be the values of `:state`
   in the returned map(s) to persistent snapshots.
 
-`defmutable` serialization, via either `snapshot` or Unity scene-graph
+  `defmutable` serialization, via either `snapshot` or Unity scene-graph
   serialization, does *not* currently preserve reference
   identity. Calling `mutable` on the same snapshot twice will result
   in two distinct instances. It is therefore important to store any
   given `defmutable` instance in just one place in the scene graph.
 
-Since they define new types, reevaluating `defmutable` forms will
+  Since they define new types, reevaluating `defmutable` forms will
   require also reevaluating all forms that refer to them via type
   hints (otherwise they'll fall back to dynamic
   lookups). `defmutable-once` is like `defmutable`, but will not
   redefine the type if it has already been defined (similar to
   `defonce`).
 
-As low-level, potentially non-boxing constructs, instances of
+  As low-level, potentially non-boxing constructs, instances of
   `defmutable` types work particularly well with the `magic` library."
   [& args]
   (let [parse (s/conform ::defmutable-args args)]
