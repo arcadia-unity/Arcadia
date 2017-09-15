@@ -12,6 +12,9 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 	[System.NonSerialized]
 	protected bool _fullyInitialized = false;
+	
+	[System.NonSerialized]
+	protected GameObject _go;
 
 	public bool fullyInitialized {
 		get {
@@ -258,6 +261,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 	public virtual void Awake ()
 	{
+		_go = gameObject;
 		FullInit();
 	}
 

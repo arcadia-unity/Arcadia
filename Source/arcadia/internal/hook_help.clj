@@ -3,6 +3,7 @@
             [clojure.spec :as s]
             [arcadia.internal.namespace :as ans])
   (:import [UnityEngine Debug]
+           clojure.lang.IFn
            ArcadiaBehaviour
            ArcadiaState
            ArcadiaBehaviour+IFnInfo
@@ -10,8 +11,6 @@
 
 (defn get-state-atom [^ArcadiaBehaviour ab]
   (.state ab))
-
-(s/def ::behaviour #(instance? ArcadiaBehaviour %))
 
 (defn deserialized-var-form? [v]
   (and (seq? v)

@@ -66,6 +66,21 @@ namespace Arcadia
 			}
 			
 		}
+		
+		public static bool IsUnityEditorLinux
+		{
+			get
+			{
+				#if UNITY_EDITOR_LINUX
+					return true;
+				
+				#else 
+					return false;
+				
+				#endif
+			}
+			
+		}
 
 		public static bool IsUnityStandaloneOsx
 		{

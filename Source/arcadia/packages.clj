@@ -2,6 +2,7 @@
   (:use clojure.pprint
         clojure.repl)
   (:require [arcadia.compiler :refer [dir-seperator-re]]
+            [arcadia.internal.mozroots :refer [import-sync-mozroots]]
             [arcadia.config :as config]
             [arcadia.internal.asset-watcher :as aw]
             [arcadia.internal.file-system :as fs]
@@ -43,7 +44,7 @@
       (cond (or (.EOF xml)
                 (= (.NodeType xml)
                    XmlNodeType/EndElement)) (seq (filter identity accumulator)) ;; remove nils?
-            (.IsEmptyElement xml) (recur accumulator)
+            (.IsEmptyElement xml) (recur (conj accumulator (xml-content xml)))
             :else (if (> (.Depth xml)
                          depth)
                     (recur (conj accumulator
@@ -143,14 +144,22 @@
          (string/join "-"))))
 
 (defn base-jar-url [group artifact version]
-  (string/replace (str (base-url group artifact version) ".jar")
-                  #"-SNAPSHOT.jar"
-                  (str "-" (snapshot-timestamp group artifact version) ".jar")))
+  (let [url (str (base-url group artifact version) ".jar")]
+    (if-not (.Contains url "-SNAPSHOT")
+      url
+      (string/replace
+        url
+        #"-SNAPSHOT.jar"
+        (str "-" (snapshot-timestamp group artifact version) ".jar")))))
 
 (defn base-pom-url [group artifact version]
-  (string/replace (str (base-url group artifact version) ".pom")
-                  #"-SNAPSHOT.pom"
-                  (str "-" (snapshot-timestamp group artifact version) ".pom")))
+  (let [url (str (base-url group artifact version) ".pom")]
+    (if-not (.Contains url "-SNAPSHOT")
+      url
+      (string/replace
+        url
+        #"-SNAPSHOT.pom"
+        (str "-" (snapshot-timestamp group artifact version) ".pom")))))
 
 (defn jar-urls [group artifact version]
   (->> (map #(str % (base-jar-url group artifact version)) url-prefixes)
@@ -175,8 +184,9 @@
          :project
          :dependencies
          (remove #(= (% :scope) "test"))
+         (remove #(= (% :optional) "true"))
          (remove #(= (% :artifactId) "clojure"))
-         (map (juxt :groupId :artifactId :version)))))
+         (mapv (juxt :groupId :artifactId :version)))))
 
 (defn all-dependencies [[group artifact version]]
   (into #{}
@@ -432,14 +442,18 @@
 (defonce install-errors (atom []))
 
 (defn install-all-deps []
+  (import-sync-mozroots)
   (thr/start-thread
     (fn []
       (try
         (install-1)
         (catch Exception e
           (swap! install-errors conj e)
-          (Debug/Log "Exception encountered when installing dependencies:")
-          (Debug/Log e))))))
+          (Debug/LogError "Exception encountered when installing dependencies:")
+          (Debug/LogError e))))))
+
+(defn dependency-count []
+  (count (:dependencies (config/config))))
 
 ;; ============================================================
 ;; listeners
