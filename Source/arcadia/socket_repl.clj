@@ -31,6 +31,7 @@
        (bound-fn []
          (deliver p
            (try
+             (Arcadia.Util/MarkScenesDirty)
              (let [v (eval expr)]
                {::success true
                 ::value v
