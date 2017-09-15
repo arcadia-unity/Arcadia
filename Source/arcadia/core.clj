@@ -724,23 +724,7 @@
 ;;   (reset! put-log input)
 ;;   (Activator/CreateInstance (resolve type-sym) (into-array Object args)))
 
-(defn- parse-user-type-dispatch [[t]]
-  (resolve t))
 
-(defmulti parse-user-type
-  "This multimethod should be considered an internal, unstable
-  implementation detail for now. Please refrain from extending it."
-  parse-user-type-dispatch)
-
-;; (defn parse-user-type [[type-sym & args :as input]]
-;;   (Activator/CreateInstance (resolve type-sym) (into-array Object args)))
-
-(alter-var-root #'*data-readers* assoc 'arcadia.core/mutable #'parse-user-type)
-
-;; and we also have to do this, for the repl:
-(when (.getThreadBinding ^clojure.lang.Var #'*data-readers*)
-  (set! *data-readers*
-    (assoc *data-readers* 'arcadia.core/mutable #'parse-user-type)))
 
 (s/def ::defmutable-args
   (s/cat
@@ -845,7 +829,7 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
                          (for [field fields] [(keyword (str field)) field]))))]
            (defmethod mutable ~type-name [{:keys [~@fields]}]
              ~(list* (symbol (str type-name ".")) fields))
-           (defmethod parse-user-type ~type-name [[_# ~@fields]]
+           (defmethod arcadia.literals/parse-user-type (quote ~type-name) [[_# ~@fields]]
              ~(list* (symbol (str type-name ".")) fields))
            (defmethod print-method ~type-name [~param-sym ^System.IO.TextWriter stream#]
              (.Write stream#

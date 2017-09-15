@@ -28,7 +28,8 @@
     ;; e.g. "/home/selfsame/unity-editor-2017.1.0xf3Linux/Editor/Unity"
     (Path/Combine
       (Path/GetDirectoryName EditorApplication/applicationPath)
-      "Data/MonoBleedingEdge/lib/mono/4.5/mozroots.exe")))
+      "Data/MonoBleedingEdge/lib/mono/4.5/mozroots.exe")
+    :else (throw (Exception. "oh nooo"))))
 
 (assembly-load-file path-to-mozroots)
 

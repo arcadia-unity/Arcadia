@@ -1,4 +1,5 @@
 (ns arcadia.literals
+  (:require [arcadia.internal.namespace])
   (:import [System.Reflection
             FieldInfo
             ConstructorInfo
@@ -243,8 +244,49 @@
 ;; (Debug/Log "At end of arcadia.literals. (.getRawRoot #'*data-readers*):")
 ;; (Debug/Log (.getRawRoot #'*data-readers*))
 
+;; ============================================================
+;; for defmutable:
+
+(defn- parse-user-type-dispatch [[t]]
+  ;; (resolve t) ; dunno about this
+  t)
+
+(defmulti parse-user-type
+  "This multimethod should be considered an internal, unstable
+  implementation detail for now. Please refrain from extending it."
+  parse-user-type-dispatch)
+
+;; ugh
+;; so maybe the type and its parser haven't been loaded yet because
+;; their namespace hasn't, yknow
+(def seen-user-type-names (atom #{}))
+
+(defmethod parse-user-type :default [[t :as spec]]
+  (if (contains? @seen-user-type-names t)
+    (throw (Exception. (str "Already seen type " t ", something's wrong.")))
+    (do (swap! seen-user-type-names conj t)
+        (let [ns-name (-> (clojure.string/join "."
+                            (butlast
+                              (clojure.string/split (name t) #"\." )))
+                          (clojure.string/replace "_" "-")
+                          symbol)]
+          (arcadia.internal.namespace/quickquire ns-name)
+          (parse-user-type spec)))))
+
+(alter-var-root #'*data-readers* assoc 'arcadia.core/mutable #'parse-user-type)
+
+;; and we also have to do this, for the repl:
+(when (.getThreadBinding ^clojure.lang.Var #'*data-readers*)
+  (set! *data-readers*
+    (assoc *data-readers* 'arcadia.core/mutable #'parse-user-type)))
+
+;; ============================================================
+
+;; this is stupid
+
 (def the-bucket (.getRawRoot #'*data-readers*))
 
 ;; (Debug/Log "At end of arcadia.literals. the-bucket:")
 ;; (Debug/Log the-bucket)
+
 
