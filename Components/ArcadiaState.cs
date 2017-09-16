@@ -99,8 +99,7 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 	public void OnBeforeSerialize ()
 	{
 		if (prStr == null) prStr = (IFn)RT.var("clojure.core", "pr-str");
-		if (requireFn == null) requireFn = (IFn)RT.var("clojure.core", "require");
-		requireFn.invoke(Symbol.intern("arcadia.literals"));
+		Arcadia.Util.require("arcadia.literals");
 		Namespace ArcadiaLiteralsNamespace = Namespace.findOrCreate(Symbol.intern("arcadia.literals"));
 		Var ObjectDbVar = Var.intern(ArcadiaLiteralsNamespace, Symbol.intern("*object-db*")).setDynamic();
 
