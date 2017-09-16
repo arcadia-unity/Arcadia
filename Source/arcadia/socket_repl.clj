@@ -84,7 +84,9 @@
 (defn server-reactive
   ([]
    (server-reactive (config/config)))
-  ([{:keys [socket-repl]}]
+  ([{:keys [socket-repl]
+     ;; socket repl on by default if we're in the editor
+     :or {socket-repl Arcadia.UnityStatusHelper/IsInEditor}}]
    (cond
      socket-repl
      (let [opts (when (map? socket-repl)
