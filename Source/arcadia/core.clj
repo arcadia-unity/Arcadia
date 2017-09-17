@@ -421,7 +421,7 @@
                          :keys (s/? (s/nilable sequential?))))))
 
 (defn hook+
-  "Attach hook a Clojure function to a Unity message on `obj`. The funciton `f`
+  "Attach a Clojure function to a Unity message on `obj`. The function `f`
   will be invoked every time the message identified by `hook` is sent by Unity. `f`
   must have the same arity as the expected Unity message. When called with a key `k`
   this key can be passed to `hook-` to remove the function."
@@ -433,10 +433,10 @@
                        (when (instance? clojure.lang.IMeta f)
                          (::keys (meta f))))]
      ;; need to actually do something here
-     (when-not (empty? fast-keys) (println "fast-keys: " fast-keys))
+     ;; (when-not (empty? fast-keys) (println "fast-keys: " fast-keys))
      (let [hook-type (ensure-hook-type hook)
            ^ArcadiaBehaviour hook-cmpt (ensure-cmpt obj hook-type)]
-       (.AddFunction hook-cmpt f k (into-array System.Object fast-keys))
+       (.AddFunction hook-cmpt f k (into-array System.Object (cons k fast-keys)))
        obj))))
 
 (defn hook-var [obj hook var]
