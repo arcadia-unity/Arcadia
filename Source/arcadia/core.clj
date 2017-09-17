@@ -897,20 +897,15 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
                         (Clone [_#]
                           (do ~ensure-internal-dictionary-form
                               (~ctr ~@fields (.Clone ~'defmutable-internal-dictionary))))
-                        ;;TODO: add clojure.lang.ILookup implementation backed by mutable dictionary
-                        ;; provide some interface for setting values on this -- mut! or something
                         ISnapshotable
                         (snapshot [this#]
-                          ;; if we try dropping the type itself in we get the stubclass instead
-                          ;; and this is a bit more robust anyway (redefs)
                           ~ensure-internal-dictionary-form
                           {::mutable-type (quote ~type-name)
                            ::dictionary (assoc (.ToPersistentMap ~'defmutable-internal-dictionary)
                                           ~@(interleave field-kws fields))})
                         IMutable
-                        ~@mut-impl
-                        )]
-               ;; add an arity to the generated constructor, like a boss
+                        ~@mut-impl)]
+               ;; add an arity to the generated constructor
                ~(let [naked-fields (map #(vary-meta % dissoc :tag) fields)]
                   `(let [prev-fn# (var-get (var ~ctr))]
                      (defn ~ctr
@@ -919,10 +914,10 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
                        ([~@naked-fields dict#]
                         (prev-fn# ~@naked-fields dict#)))))
                ;; like defrecord:
-               ;; ~(let [map-sym (gensym "data-map_")
-               ;;        field-vals (for [kw field-kws] `(get ~map-sym ~kw))]
-               ;;    `(defn ~(symbol (str "map->" name)) [~map-sym]
-               ;;       (~ctr ~@field-vals (new DefmutableDictionary (dissoc ~map-sym ~@field-kws)))))
+               ~(let [map-sym (gensym "data-map_")
+                      field-vals (for [kw field-kws] `(get ~map-sym ~kw))]
+                  `(defn ~(symbol (str "map->" name)) [~map-sym]
+                     (~ctr ~@field-vals (new DefmutableDictionary (dissoc ~map-sym ~@field-kws)))))
                ;; serialize as dictionary
                (defmethod mutable ~type-name [~data-param]
                  ~(let [dict-sym  (gensym "dict_")
@@ -941,28 +936,7 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
                                       ~field-map)]]
                       (.Write stream#
                         (str "#arcadia.core/mutable " (pr-str datavec#))))))
-               t#
-               ))))))
-
-(comment
-  (defmutable Mut [^float x, ^float y])
-
-  (def cube (create-primitive :cube))
-
-  (defn some-update [obj k]
-    (let [^Mut s (state obj k)]
-      (set! (.x s) (inc (.x s)))))
-
-  (role+ cube :some-role {:state (Mut. 1 2),
-                          :update #'some-update})
-
-  ;; then:
-
-  (role cube :some-role)
-  ;; => 
-  {:state {::mutable-type Mut, :x 1.0, :y 2.0}}
-
-)
+               t#))))))
 
 (defmacro defmutable-once
   "Like `defmutable`, but will only evaluate if no type with the same name has been defined."
