@@ -12,7 +12,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 	[System.NonSerialized]
 	protected bool _fullyInitialized = false;
-	
+
 	[System.NonSerialized]
 	protected GameObject _go;
 
@@ -229,6 +229,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		RealizeAll(arcadiaState.state);
 		requireVarNamespacesFn.invoke(this);
 		_fullyInitialized = true;
+		_go = gameObject;
 	}
 
 	public void RefreshPamvs ()
@@ -261,7 +262,6 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 	public virtual void Awake ()
 	{
-		_go = gameObject;
 		FullInit();
 	}
 
@@ -287,6 +287,15 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 	}
 
 	// ============================================================
+	// Errors
+
+	public void PrintContext (int infInx)
+	{
+		var inf = ifnInfos_[infInx];
+		Debug.LogError("Context: key: " + inf.key + "; fn: " + inf.fn + "; GameObject: " + _go, _go);
+	}
+
+	// ============================================================
 	// RunFunctions
 
 	public void RunFunctions ()
@@ -295,18 +304,23 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 			FullInit();
 		}
 
-		var _go = gameObject;
 		HookStateSystem.arcadiaState = arcadiaState;
 		HookStateSystem.hasState = true;
-		for (int i = 0; i < ifnInfos_.Length; i++) {
-			var inf = ifnInfos_[i];
-			HookStateSystem.pamv = inf.pamv;
-			var v = inf.fn as Var;
-			if (v != null) {
-				((IFn)v.getRawRoot()).invoke(_go, inf.key);
-			} else {
-				inf.fn.invoke(_go, inf.key);
+		int i = 0;
+		try {
+			for (; i < ifnInfos_.Length; i++) {
+				var inf = ifnInfos_[i];
+				HookStateSystem.pamv = inf.pamv;
+				var v = inf.fn as Var;
+				if (v != null) {
+					((IFn)v.getRawRoot()).invoke(_go, inf.key);
+				} else {
+					inf.fn.invoke(_go, inf.key);
+				}
 			}
+		} catch (System.Exception e) {
+			PrintContext(i);
+			throw e;
 		}
 	}
 
@@ -316,18 +330,23 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 			FullInit();
 		}
 
-		var _go = gameObject;
 		HookStateSystem.arcadiaState = arcadiaState;
 		HookStateSystem.hasState = true;
-		for (int i = 0; i < ifnInfos_.Length; i++) {
-			var inf = ifnInfos_[i];
-			HookStateSystem.pamv = inf.pamv;
-			var v = inf.fn as Var;
-			if (v != null) {
-				((IFn)v.getRawRoot()).invoke(_go, arg1, inf.key);
-			} else {
-				inf.fn.invoke(_go, arg1, inf.key);
+		int i = 0;
+		try {
+			for (; i < ifnInfos_.Length; i++) {
+				var inf = ifnInfos_[i];
+				HookStateSystem.pamv = inf.pamv;
+				var v = inf.fn as Var;
+				if (v != null) {
+					((IFn)v.getRawRoot()).invoke(_go, arg1, inf.key);
+				} else {
+					inf.fn.invoke(_go, arg1, inf.key);
+				}
 			}
+		} catch (System.Exception e) {
+			PrintContext(i);
+			throw e;
 		}
 	}
 
@@ -337,18 +356,23 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 			FullInit();
 		}
 
-		var _go = gameObject;
 		HookStateSystem.arcadiaState = arcadiaState;
 		HookStateSystem.hasState = true;
-		for (int i = 0; i < ifnInfos_.Length; i++) {
-			var inf = ifnInfos_[i];
-			HookStateSystem.pamv = inf.pamv;
-			var v = inf.fn as Var;
-			if (v != null) {
-				((IFn)v.getRawRoot()).invoke(_go, arg1, arg2, inf.key);
-			} else {
-				inf.fn.invoke(_go, arg1, arg2, inf.key);
+		int i = 0;
+		try {
+			for (; i < ifnInfos_.Length; i++) {
+				var inf = ifnInfos_[i];
+				HookStateSystem.pamv = inf.pamv;
+				var v = inf.fn as Var;
+				if (v != null) {
+					((IFn)v.getRawRoot()).invoke(_go, arg1, arg2, inf.key);
+				} else {
+					inf.fn.invoke(_go, arg1, arg2, inf.key);
+				}
 			}
+		} catch (System.Exception e) {
+			PrintContext(i);
+			throw e;
 		}
 	}
 
@@ -358,18 +382,23 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 			FullInit();
 		}
 
-		var _go = gameObject;
 		HookStateSystem.arcadiaState = arcadiaState;
 		HookStateSystem.hasState = true;
-		for (int i = 0; i < ifnInfos_.Length; i++) {
-			var inf = ifnInfos_[i];
-			HookStateSystem.pamv = inf.pamv;
-			var v = inf.fn as Var;
-			if (v != null) {
-				((IFn)v.getRawRoot()).invoke(_go, arg1, arg2, arg3, inf.key);
-			} else {
-				inf.fn.invoke(_go, arg1, arg2, arg3, inf.key);
+		int i = 0;
+		try {
+			for (; i < ifnInfos_.Length; i++) {
+				var inf = ifnInfos_[i];
+				HookStateSystem.pamv = inf.pamv;
+				var v = inf.fn as Var;
+				if (v != null) {
+					((IFn)v.getRawRoot()).invoke(_go, arg1, arg2, arg3, inf.key);
+				} else {
+					inf.fn.invoke(_go, arg1, arg2, arg3, inf.key);
+				}
 			}
+		} catch (System.Exception e) {
+			PrintContext(i);
+			throw e;
 		}
 	}
 }
