@@ -2,6 +2,7 @@
   (:require [clojure.string :as string]
             [clojure.spec :as s]
             [arcadia.internal.messages :refer [messages interface-messages]]
+            [arcadia.internal.macro :as mac]
             [arcadia.internal.name-utils :refer [camels-to-hyphens]]
             [arcadia.internal.state-help :as sh]
             arcadia.literals)
@@ -10,7 +11,8 @@
            ArcadiaState
            [Arcadia UnityStatusHelper
             HookStateSystem JumpMap
-            JumpMap+KeyVal JumpMap+PartialArrayMapView]
+            JumpMap+KeyVal JumpMap+PartialArrayMapView
+            DefmutableDictionary]
            [clojure.lang RT]
            [UnityEngine
             Vector3
@@ -385,8 +387,11 @@
 ;; ============================================================
 ;; hooks
 
-(defn- message-keyword [m]
+(defn- clojurized-keyword [m]
   (-> m str camels-to-hyphens string/lower-case keyword))
+
+(defn- message-keyword [m]
+  (clojurized-keyword m))
 
 (def hook-types
   "Map of keywords to hook component types"
@@ -750,6 +755,28 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
 (= (snapshot x) (snapshot (mutable (snapshot x))))"
   #'mutable-dispatch)
 
+(defprotocol IMutable
+  (mut!
+    [_]
+    [_ _]
+    [_ _ _]
+    [_ _ _ _]
+    [_ _ _ _ _]
+    [_ _ _ _ _ _]
+    [_ _ _ _ _ _ _]
+    [_ _ _ _ _ _ _ _]
+    [_ _ _ _ _ _ _ _ _]
+    [_ _ _ _ _ _ _ _ _ _]
+    [_ _ _ _ _ _ _ _ _ _ _]
+    [_ _ _ _ _ _ _ _ _ _ _ _]
+    [_ _ _ _ _ _ _ _ _ _ _ _ _]
+    [_ _ _ _ _ _ _ _ _ _ _ _ _ _]
+    [_ _ _ _ _ _ _ _ _ _ _ _ _ _ _]
+    [_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _]
+    [_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _]
+    [_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _]
+    [_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _]))
+
 (defn- expand-type-sym [type-sym]
   (symbol
     (str
@@ -810,31 +837,112 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
             type-name (expand-type-sym name)
             param-sym (-> (gensym (str name "_"))
                           (with-meta {:tag type-name}))
-            datavec (->> fields
-                         (map (fn [arg] `(. ~param-sym ~arg)))
-                         (cons type-name)
-                         vec)]
-        ;; check the bytecode
-        `(let [t# (deftype ~name ~(->> fields (mapv #(vary-meta % assoc :unsynchronized-mutable true)))
-                    System.ICloneable
-                    (Clone [_#]
-                      (new ~name ~@fields))
-                    ;; TODO: add clojure.lang.ILookup implementation backed by mutable dictionary
-                    ;; provide some interface for setting values on this -- mut! or something
-                    ISnapshotable
-                    (snapshot [_#]
-                      ;; if we try dropping the type itself in we get the stubclass instead
-                      ;; and this is a bit more robust anyway (redefs)
-                      ~(into {::mutable-type `(quote ~type-name)}
-                         (for [field fields] [(keyword (str field)) field]))))]
-           (defmethod mutable ~type-name [{:keys [~@fields]}]
-             ~(list* (symbol (str type-name ".")) fields))
-           (defmethod arcadia.literals/parse-user-type (quote ~type-name) [[_# ~@fields]]
-             ~(list* (symbol (str type-name ".")) fields))
-           (defmethod print-method ~type-name [~param-sym ^System.IO.TextWriter stream#]
-             (.Write stream#
-               (str "#arcadia.core/mutable " (pr-str ~datavec))))
-           t#)))))
+            field-kws (map clojurized-keyword fields)
+            datavec [type-name (zipmap field-kws fields)]
+            dict-param (gensym "dict_")
+            data-param (gensym "data_")
+            ensure-internal-dictionary-form `(when (nil? ~'defmutable-internal-dictionary)
+                                               (set! ~'defmutable-internal-dictionary
+                                                 (new DefmutableDictionary)))
+            
+            mut-cases-form-fn (fn [this-sym [k v]]
+                                `(case ~k
+                                   ~@(mapcat
+                                       (fn [field-kw, field]
+                                         `[~field-kw (set! (. ~this-sym ~field) ~v)])
+                                       field-kws
+                                       fields)
+                                   (do ~ensure-internal-dictionary-form
+                                       (.Add ~'defmutable-internal-dictionary ~k ~v))))
+            even-args-mut-impl (fn [[_ args]]
+                                `(mut! ~args (throw (Exception. "requires odd number of arguments"))))
+            mut-impl (mac/arities-forms
+                       (fn [[this-sym & kvs]]
+                         (let [val-sym (gensym "val_")
+                               pairs (partition 2 kvs)]
+                           `(mut! [~this-sym ~@kvs]
+                              ~(when-let [lp (last pairs)]
+                                 (mut-cases-form-fn this-sym (last pairs)))
+                              (mut! ~this-sym ~@(apply concat (butlast pairs))))))
+                       {::mac/arg-fn #(gensym (str "arg_" % "_"))
+                        ::mac/min-args 1
+                        ::mac/max-args 5
+                        ::mac/cases (merge
+                                      {1 (fn [& stuff]
+                                           `(mut! [this#] this#))
+                                       3 (fn [[_ [this-sym k v :as args]]]
+                                           `(mut! ~args
+                                              ~(mut-cases-form-fn this-sym [k v])
+                                              ~this-sym))}
+                                      (into {}
+                                        (for [n (range 0 20 2)]
+                                          [n even-args-mut-impl])))})
+            ctr (symbol (str  "->" name))
+            lookup-cases (mapcat list field-kws fields)
+            this-sym (gensym "this_")]
+        `(do (declare ~ctr)
+             (let [t# (deftype ~name ~(-> (->> fields (mapv #(vary-meta % assoc :unsynchronized-mutable true)))
+                                          (conj
+                                            (with-meta
+                                              'defmutable-internal-dictionary
+                                              {:unsynchronized-mutable true,
+                                               :tag 'DefmutableDictionary})))
+                        clojure.lang.ILookup
+                        (valAt [this#, key#]
+                          (case key#
+                            ~@lookup-cases
+                            (do ~ensure-internal-dictionary-form ;; macro
+                                (.GetValue ~'defmutable-internal-dictionary key#))))
+                        System.ICloneable
+                        (Clone [_#]
+                          (do ~ensure-internal-dictionary-form
+                              (~ctr ~@fields (.Clone ~'defmutable-internal-dictionary))))
+                        ;;TODO: add clojure.lang.ILookup implementation backed by mutable dictionary
+                        ;; provide some interface for setting values on this -- mut! or something
+                        ISnapshotable
+                        (snapshot [this#]
+                          ;; if we try dropping the type itself in we get the stubclass instead
+                          ;; and this is a bit more robust anyway (redefs)
+                          ~ensure-internal-dictionary-form
+                          {::mutable-type (quote ~type-name)
+                           ::dictionary (assoc (.ToPersistentMap ~'defmutable-internal-dictionary)
+                                          ~@(interleave field-kws fields))})
+                        IMutable
+                        ~@mut-impl
+                        )]
+               ;; add an arity to the generated constructor, like a boss
+               ~(let [naked-fields (map #(vary-meta % dissoc :tag) fields)]
+                  `(let [prev-fn# (var-get (var ~ctr))]
+                     (defn ~ctr
+                       ([~@naked-fields]
+                        (~ctr ~@naked-fields (new DefmutableDictionary)))
+                       ([~@naked-fields dict#]
+                        (prev-fn# ~@naked-fields dict#)))))
+               ;; like defrecord:
+               ;; ~(let [map-sym (gensym "data-map_")
+               ;;        field-vals (for [kw field-kws] `(get ~map-sym ~kw))]
+               ;;    `(defn ~(symbol (str "map->" name)) [~map-sym]
+               ;;       (~ctr ~@field-vals (new DefmutableDictionary (dissoc ~map-sym ~@field-kws)))))
+               ;; serialize as dictionary
+               (defmethod mutable ~type-name [~data-param]
+                 ~(let [dict-sym  (gensym "dict_")
+                        field-vals (for [kw field-kws] `(get ~dict-sym ~kw))]
+                    `(let [~dict-sym (get ~data-param ::dictionary)]
+                       (~ctr ~@field-vals (new DefmutableDictionary (dissoc ~dict-sym ~@field-kws))))))
+               (defmethod arcadia.literals/parse-user-type (quote ~type-name) [[_# ~dict-param]]
+                 ~(let [field-vals (for [kw field-kws] `(get ~dict-param ~kw))]
+                    `(~ctr ~@field-vals (new DefmutableDictionary (dissoc ~dict-param ~@field-kws)))))
+               ~(let [field-map (zipmap field-kws
+                                  (map (fn [field] `(. ~this-sym ~field)) fields))]
+                 `(defmethod print-method ~type-name [~this-sym ^System.IO.TextWriter stream#]
+                    (let [datavec# [(quote ~type-name)
+                                    (into
+                                      (.ToPersistentMap (. ~this-sym defmutable-internal-dictionary))
+                                      ~field-map)]]
+                      (.Write stream#
+                        (str "#arcadia.core/mutable " (pr-str datavec#))))))
+               t#
+               ))))))
 
 (comment
   (defmutable Mut [^float x, ^float y])
