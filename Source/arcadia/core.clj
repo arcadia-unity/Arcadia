@@ -427,65 +427,88 @@
 
 (defn hook+
   "Attach a Clojure function to a Unity message on `obj`. The function `f`
-  will be invoked every time the message identified by `hook` is sent by Unity. `f`
+  will be invoked every time the message identified by `message-kw` is sent by Unity. `f`
   must have the same arity as the expected Unity message. When called with a key `k`
-  this key can be passed to `hook-` to remove the function."
-  ([obj hook f] (hook+ obj hook hook f))
-  ([obj hook k f]
-   (hook+ obj hook k f nil))
-  ([obj hook k f {:keys [fast-keys]}]
+  this key can be passed to `message-kw-` to remove the function."
+  ([obj message-kw f] (hook+ obj message-kw :default f))
+  ([obj message-kw k f]
+   (hook+ obj message-kw k f nil))
+  ([obj message-kw k f {:keys [fast-keys]}]
    (let [fast-keys (or fast-keys
                        (when (instance? clojure.lang.IMeta f)
                          (::keys (meta f))))]
      ;; need to actually do something here
      ;; (when-not (empty? fast-keys) (println "fast-keys: " fast-keys))
-     (let [hook-type (ensure-hook-type hook)
+     (let [hook-type (ensure-hook-type message-kw)
            ^ArcadiaBehaviour hook-cmpt (ensure-cmpt obj hook-type)]
        (.AddFunction hook-cmpt f k (into-array System.Object (cons k fast-keys)))
        obj))))
 
-(defn hook-var [obj hook var]
+(defn hook-var [obj message-kw var]
   (if (var? var)
-    (hook+ obj hook var var)
+    (hook+ obj message-kw var var)
     (throw
       (clojure.lang.ExceptionInfo.
         (str "Expects var, instead got: " (class var))
         {:obj obj
-         :hook hook
+         :message-kw message-kw
          :var var}))))
 
 (defn hook-
-  "Remove all `hook` components attached to `obj`"
-  ([obj hook]
-   (hook- obj hook hook))
-  ([obj hook k]
-   (when-let [^ArcadiaBehaviour hook-cmpt (cmpt obj (ensure-hook-type hook))]
-     (.RemoveFunction hook-cmpt k))
+  "Removes callback from GameObject `obj` on the Unity message
+  corresponding to `message-kw` at `key`, if it exists. Reverse of
+
+(hook+ obj message-kw key)
+
+  If `key` is not supplied, `hook-` will use `:default` as the key.
+  This is the same as
+
+(hook- obj message-kw :default)."
+  ([obj message-kw]
+   (hook- obj message-kw :default))
+  ([obj message-kw key]
+   (when-let [^ArcadiaBehaviour hook-cmpt (cmpt obj (ensure-hook-type message-kw))]
+     (.RemoveFunction hook-cmpt key))
    nil))
 
-(defn hook-clear
-  "Remove all functions hooked to `hook` on `obj`"
-  [obj hook]
-  (when-let [^ArcadiaBehaviour hook-cmpt (cmpt obj (ensure-hook-type hook))]
+(defn clear-hook
+  "Removes all callbacks on the Unity message corresponding to
+  `message-kw`, regardless of their keys."
+  [obj message-kw]
+  (when-let [^ArcadiaBehaviour hook-cmpt (cmpt obj (ensure-hook-type message-kw))]
     (.RemoveAllFunctions hook-cmpt))
   nil)
 
 (defn hook
-  "Return the `hook` component attached to `obj`. If there is more one component,
-  then behavior is the same as `cmpt`."
-  [obj hook]
-  (let [hook-type (ensure-hook-type hook)]
-    (cmpt obj hook-type)))
+  "Retrieves a callback from a GameObject `obj`. `message-kw` is a
+  keyword specifying the Unity message of the callback, and `key` is
+  the key of the callback.
+  
+  In other words, retrieves any callback function attached via
 
-(defn hook-fns
-  "Return the functions associated with `hook` on `obj`."
-  [obj h]
-  (.fns (hook obj h)))
+(hook+ obj message-kw key callback)
 
-(defn hooks [obj hook]
-  "Return all components for `hook` attached to `obj`"
-  (let [hook-type (ensure-hook-type hook)]
-    (cmpts obj hook-type)))
+  or the equivalent.
+
+  If `key` is not supplied, `hook` uses `:default` as key. This is the same as
+
+(hook obj message-kw :default)"
+  [obj message-kw key]
+  (when-let [^ArcadiaBehaviour hook-cmpt (cmpt obj (ensure-hook-type message-kw))]
+    (get (.indexes hook-cmpt) key)))
+
+;; are these necessary?
+
+;; (defn hook-fns
+;;   "Return the functions associated with `hook` on `obj`."
+;;   [obj message-kw]
+;;   (.fns (hook obj message-kw)))
+
+;; (defn hooks 
+;;   "Return all components for `hook` attached to `obj`"
+;;   [obj hook]
+;;   (let [hook-type (ensure-hook-type hook)]
+;;     (cmpts obj hook-type)))
 
 (defn hook?
   ([t hook] (= (type t)
@@ -529,35 +552,52 @@
     (mutable x)
     x))
 
-(defn set-state!
-  "Sets the state of object `go` to value `v` at key `k`."
+(defn state+
+  "Sets the state of object `go` to value `v` at key `k`. If no key is provided, "
+  ([go v]
+   (state+ go :default v))
   ([go k v]
    (with-cmpt go [arcs ArcadiaState]
      (.Add arcs k (maybe-mutable v))
-     v)))
+     go)))
 
-(defn remove-state!
-  "Removes the state object `go` at key `k`. Returns `nil`."
+(defn state-
+  "Removes the state of object `go` at key `k`. If no key is provided,
+  removes state at key `default`."
+  ([go]
+   (state- go :default))
   ([go k]
    (with-cmpt go [arcs ArcadiaState]
-     (.Remove arcs k))))
+     (.Remove arcs k)
+     go)))
 
-(defn update-state!
+(defn clear-state
+  "Removes all state from the GameObject `go`."
+  [go]
+  (with-cmpt go [arcs ArcadiaState]
+    (.Clear arcs)
+    go))
+
+(defn update-state
   "Updates the state of object `go` with function `f` and additional
   arguments `args` at key `k`. Args are applied in the same order as
   `clojure.core/update`."
   ([go k f x]
    (with-cmpt go [arcs ArcadiaState]
-     (.Add arcs (f (.ValueAtKey arcs k) x))))
+     (.Add arcs (f (.ValueAtKey arcs k) x))
+     go))
   ([go k f x y]
    (with-cmpt go [arcs ArcadiaState]
-     (.Add arcs (f (.ValueAtKey arcs k) x y))))
+     (.Add arcs (f (.ValueAtKey arcs k) x y))
+     go))
   ([go k f x y z]
    (with-cmpt go [arcs ArcadiaState]
-     (.Add arcs (f (.ValueAtKey arcs k) x y z))))
+     (.Add arcs (f (.ValueAtKey arcs k) x y z))
+     go))
   ([go k f x y z & args]
    (with-cmpt go [arcs ArcadiaState]
-     (.Add arcs (apply f (.ValueAtKey arcs k) x y z args)))))
+     (.Add arcs (apply f (.ValueAtKey arcs k) x y z args))
+     go)))
 
 ;; ============================================================
 ;; roles 
@@ -607,7 +647,7 @@
       (hook- obj ht k))
     nil
     hook-types)
-  (remove-state! obj k)
+  (state- obj k)
   obj)
 
 (s/fdef role+
@@ -628,32 +668,10 @@
           (get spec (get hook-ks k2)))
         
         (= :state k2)
-        (set-state! obj k (maybe-mutable v))))
+        (state+ obj k (maybe-mutable v))))
     nil
     spec)
   obj)
-
-;; (defn role [obj k]
-;;   (into (if-let [s (state obj k)] {:state s} {})
-;;     cat
-;;     (for [^ArcadiaBehaviour ab (cmpts obj ArcadiaBehaviour)
-;;           ^ArcadiaBehaviour+IFnInfo inf (.ifnInfos ab)
-;;           :when (= (.key inf) k)
-;;           :let [htk (hook->hook-type-key ab)
-;;                 kv1 [htk (.fn inf)]
-;;                 fks (.fastKeys inf)]]
-;;       (if-not (empty? fks)
-;;         [kv1 [(hook-fastkeys-key hook-type-key) (vec kfs)]]
-;;         [kv1]))))
-
-;; (s/def ::role
-;;   (s/map-of ))
-
-
-;; (s/fdef role
-;;   :args (s/cat :obj #(satisfies? ISceneGraph %)
-;;                :k any?)
-;;   :ret ::role)
 
 (s/fdef role
   :args (s/cat :obj #(satisfies? ISceneGraph %)
@@ -729,13 +747,10 @@
 ;;   (reset! put-log input)
 ;;   (Activator/CreateInstance (resolve type-sym) (into-array Object args)))
 
-
-
 (s/def ::defmutable-args
   (s/cat
     :name symbol?
     :fields (s/coll-of symbol?, :kind vector?)))
-
 
 (defn mutable-dispatch [{t ::mutable-type}]
   (cond (instance? System.Type t) t
@@ -795,7 +810,7 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
   single thread (such as Unity's main game thread). These datatypes
   support snapshotting to persistent data via `snapshot`, and
   reconstruction from snapshots via `mutable`; snapshotting and
-  reconstructing are also integrated into `role+`, `set-state!`,
+  reconstructing are also integrated into `role+`, `state+`,
   `role`, and `roles`.
 
   Instances of these types may be converted into persistent
@@ -843,7 +858,7 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
             data-param (gensym "data_")
             ensure-internal-dictionary-form `(when (nil? ~'defmutable-internal-dictionary)
                                                (set! ~'defmutable-internal-dictionary
-                                                 (new DefmutableDictionary)))
+                                                 (new Arcadia.DefmutableDictionary)))
             
             mut-cases-form-fn (fn [this-sym [k v]]
                                 `(case ~k
@@ -886,7 +901,7 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
                                             (with-meta
                                               'defmutable-internal-dictionary
                                               {:unsynchronized-mutable true,
-                                               :tag 'DefmutableDictionary})))
+                                               :tag 'Arcadia.DefmutableDictionary})))
                         clojure.lang.ILookup
                         (valAt [this#, key#]
                           (case key#
@@ -910,23 +925,23 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
                   `(let [prev-fn# (var-get (var ~ctr))]
                      (defn ~ctr
                        ([~@naked-fields]
-                        (~ctr ~@naked-fields (new DefmutableDictionary)))
+                        (~ctr ~@naked-fields (new Arcadia.DefmutableDictionary)))
                        ([~@naked-fields dict#]
                         (prev-fn# ~@naked-fields dict#)))))
                ;; like defrecord:
                ~(let [map-sym (gensym "data-map_")
                       field-vals (for [kw field-kws] `(get ~map-sym ~kw))]
                   `(defn ~(symbol (str "map->" name)) [~map-sym]
-                     (~ctr ~@field-vals (new DefmutableDictionary (dissoc ~map-sym ~@field-kws)))))
+                     (~ctr ~@field-vals (new Arcadia.DefmutableDictionary (dissoc ~map-sym ~@field-kws)))))
                ;; serialize as dictionary
                (defmethod mutable ~type-name [~data-param]
                  ~(let [dict-sym  (gensym "dict_")
                         field-vals (for [kw field-kws] `(get ~dict-sym ~kw))]
                     `(let [~dict-sym (get ~data-param ::dictionary)]
-                       (~ctr ~@field-vals (new DefmutableDictionary (dissoc ~dict-sym ~@field-kws))))))
+                       (~ctr ~@field-vals (new Arcadia.DefmutableDictionary (dissoc ~dict-sym ~@field-kws))))))
                (defmethod arcadia.literals/parse-user-type (quote ~type-name) [[_# ~dict-param]]
                  ~(let [field-vals (for [kw field-kws] `(get ~dict-param ~kw))]
-                    `(~ctr ~@field-vals (new DefmutableDictionary (dissoc ~dict-param ~@field-kws)))))
+                    `(~ctr ~@field-vals (new Arcadia.DefmutableDictionary (dissoc ~dict-param ~@field-kws)))))
                ~(let [field-map (zipmap field-kws
                                   (map (fn [field] `(. ~this-sym ~field)) fields))]
                  `(defmethod print-method ~type-name [~this-sym ^System.IO.TextWriter stream#]

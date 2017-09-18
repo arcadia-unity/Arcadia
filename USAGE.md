@@ -131,7 +131,7 @@ Noteworthy configuration options include:
 - `:reactive`
 
   Specify whether Arcadia should automatically respond to changes in the file system.
-  
+
 - `:reload-on-change`
 
   Specify whether Arcadia should automatically reload Clojure files corresponding to already-loaded namespaces when they are saved, similar to Clojurescript's [Figwheel](https://github.com/bhauman/lein-figwheel) library.
@@ -224,6 +224,22 @@ As an example, we will make the main camera rotate over time or, more specifical
 Hook functions take the attached GameObject as a first argument, then any additional message-specific arguments after that. Update does not have any additional arguments.
 
 Any reference that implements IFn can be used as the function, which means anonymous functions and function short hand, as in
+
+| function                   | description                                                        |
+|----------------------------|--------------------------------------------------------------------|
+| (**hook** obj, key)            | Retrieves a message callback (hook) to GameObject obj on a key     |
+| (**hook+** obj, key, IFn)      | Sets a hook on a key                                               |
+| (**hook-** obj, key)           | Removes a message hook on a key                                    |
+| (**state** obj, key)           | Retrieves a piece of state from obj on a key                       |
+| (**state+** obj, key)          | Sets a piece of state on a key                                     |
+| (**state-** obj, key)          | Removes a piece of state on a key                                  |
+| (**role** obj, key)            | Retrieves a map containing all hooks and state on a key            |
+| (**role+** obj, key, role-map) | Sets state and multiple hooks on a key                             |
+| (**role-** obj, key)           | Removes state and all hooks on a key                               |
+| (**roles** obj)                | Retrieves map from all keys on obj to the role-map for a given key |
+| (**roles+** obj, roles-map)    | Sets multiple roles at once (may remove hooks or state)            |
+
+
 
 ```clojure
 (hook+

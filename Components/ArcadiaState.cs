@@ -161,6 +161,11 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 		// don't need to refresh anything
 	}
 
+	public void Clear ()
+	{
+		state.Clear();
+	}
+
 	public object ValueAtKey (object k)
 	{
 		return state.ValueAtKey(k);

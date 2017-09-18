@@ -38,6 +38,7 @@
     (vec
       (am/arities-forms #(list % (base-body %))
         {::am/max-args max-args
+         ::am/min-args 1
          ::am/arg-fn #(symbol (str "fn-" (inc %)))
          ::am/cases {0 (fn [_] `([] identity))
                      1 (fn [[[f]]] `([~f] ~f))                           
@@ -47,9 +48,12 @@
                                     (comp ~@(pop outer-args))
                                     ~'fn-more)))}}))))
 
-(am/defn-meval comp
-  "Faster version of comp than clojure.core/comp. Maybe should just swap out core comp for this."
-  (comp-impl))
+;; (am/defn-meval comp
+;;   "Faster version of comp than clojure.core/comp. Maybe should just swap out core comp for this."
+;;   (comp-impl))
+
+;; TODO: fix this again
+(def comp clojure.core/comp)
 
 ;; perf:
 
