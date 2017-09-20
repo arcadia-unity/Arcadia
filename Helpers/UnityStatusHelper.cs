@@ -588,13 +588,7 @@ namespace Arcadia
 			}
 		}
 
-		public static bool IsInEditor
-		{
-			get
-			{
-				return Application.isEditor;
-			}
-		}
+		public static bool IsInEditor = Application.isEditor;
 
 		public static bool IsInEditMode
 		{
