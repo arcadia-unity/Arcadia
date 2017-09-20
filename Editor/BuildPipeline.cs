@@ -19,7 +19,7 @@ namespace Arcadia
 
         public static string CompiledFolder = Path.Combine("Arcadia", "Compiled");
         public static string ExportFolder = Path.Combine("Arcadia", "Export");
-        public static string ExportAssetsFolder = Path.Combine("Assets", "Arcadia", "Export");
+		public static string ExportAssetsFolder = Path.Combine("Assets", Path.Combine("Arcadia", "Export"));
 
         static BuildPipeline()
         {
