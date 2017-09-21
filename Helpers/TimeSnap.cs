@@ -6,7 +6,7 @@ namespace Arcadia
 	{
 
 		//(->> Arcadia.TimeSnap/GlobalTimeSnaps
-		//	(map #(.time
+		//	(map #(.time %)
 		//	(partition 2)
 		//	(map (fn[[a b]]
 		//         (.TotalMilliseconds
