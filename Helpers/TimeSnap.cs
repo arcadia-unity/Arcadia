@@ -20,9 +20,9 @@ namespace Arcadia
 		// data
 
 		public readonly DateTime time;
-		public readonly string message;
+		public readonly object message;
 
-		public TimeSnap (DateTime time_, string message_)
+		public TimeSnap (DateTime time_, object message_)
 		{
 			time = time_;
 			message = message_;
@@ -31,7 +31,7 @@ namespace Arcadia
 		// ==========================================================
 		// logging equipment
 
-		public static void snap (string message)
+		public static void snap (object message)
 		{
 			if (GlobalTimeSnaps == null) {
 				GlobalTimeSnaps = new List<TimeSnap>();
