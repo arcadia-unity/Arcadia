@@ -6,10 +6,10 @@ namespace Arcadia
 	{
 
 		//(->> Arcadia.TimeSnap/GlobalTimeSnaps
-		//	(map #(.time %))
-        //  (partition 2)
-        //  (map (fn[[a b]]
-        //         (.Seconds
+		//	(map #(.time
+		//	(partition 2)
+		//	(map (fn[[a b]]
+		//         (.TotalMilliseconds
 		//	    	(System.DateTime/op_Subtraction b a)))))
 		// ==========================================================
 		// static state
