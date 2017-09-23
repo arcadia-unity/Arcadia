@@ -31,17 +31,6 @@ namespace Arcadia
 			}
 		}
 
-		public static void ensureCompiledFolder()
-		{
-			string maybeCompiled = Path.GetFullPath(VariadicPathCombine(GetClojureDllFolder(), "..", "Compiled", "Editor"));
-			if (!Directory.Exists(maybeCompiled))
-			{
-				Debug.Log("Creating Compiled/Editor");
-				Directory.CreateDirectory(maybeCompiled);
-			}
-		}
-
-
 		public static void StartWatching()
 		{
 			//AssetPostprocessor.StartWatchingFiles();
@@ -66,7 +55,7 @@ namespace Arcadia
 			LoadPackages();
 			LoadLiterals();
 			SetClojureLoadPath();
-			ensureCompiledFolder();
+            BuildPipeline.EnsureCompiledFolders();
 			StartEditorCallbacks();
 			StartWatching();
 			LoadSocketREPL();
@@ -101,14 +90,6 @@ namespace Arcadia
 			RT.load("arcadia/internal/nudge");
 		}
 		
-		[MenuItem("Arcadia/Compiler/AOT Compile Internal Namespaces")]
-		public static void AOTInternalNamespaces()
-		{
-			RT.load("arcadia/internal/editor_interop");
-			RT.var("arcadia.internal.editor-interop", "aot-internal-namespaces").invoke("Assets/Arcadia/Compiled/Editor");
-			AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
-		}
-
 		// need this to set things up so we can get rest of loadpath after loading arcadia.compiler
 		public static void SetInitialClojureLoadPath()
 		{
@@ -128,17 +109,7 @@ namespace Arcadia
 
 			Debug.Log("Load Path is " + Environment.GetEnvironmentVariable("CLOJURE_LOAD_PATH"));
 		}
-
-		// resets the load path without Compiled/Editor, where AOT'd internal namespaces are kept
-		public static void SetBuildClojureLoadPath()
-		{
-			Debug.Log("Setting Build Load Path...");
-			string clojureDllFolder = GetClojureDllFolder();
-			Environment.SetEnvironmentVariable("CLOJURE_LOAD_PATH",
-			  Path.GetFullPath(VariadicPathCombine(clojureDllFolder, "..", "Source")) + Path.PathSeparator +
-			  Path.GetFullPath(Application.dataPath));
-		}
-
+		
 		[MenuItem("Arcadia/Initialization/Update Clojure Load Path")]
 		public static void SetClojureLoadPath()
 		{
@@ -146,7 +117,7 @@ namespace Arcadia
 			string clojureDllFolder = GetClojureDllFolder();
 
 			Environment.SetEnvironmentVariable("CLOJURE_LOAD_PATH",
-				Path.GetFullPath(VariadicPathCombine(clojureDllFolder, "..", "Compiled", "Editor")) + Path.PathSeparator +
+				Path.GetFullPath(VariadicPathCombine(Application.dataPath, "..", "Arcadia", "Compiled")) + Path.PathSeparator +
 				Path.GetFullPath(VariadicPathCombine(clojureDllFolder, "..", "Source")) + Path.PathSeparator +
 				Path.GetFullPath(Application.dataPath) + Path.PathSeparator +
 				RT.var("arcadia.compiler", "loadpath-extension-string").invoke() + Path.PathSeparator +

@@ -292,7 +292,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 	public void PrintContext (int infInx)
 	{
 		var inf = ifnInfos_[infInx];
-		Debug.LogError("Context: key: " + inf.key + "; fn: " + inf.fn + "; GameObject: " + _go, _go);
+		Debug.LogError("Context: key: " + inf.key + "; fn: " + inf.fn + "; GameObject: " + _go.name + "; GameObject id: " + _go.GetInstanceID(), _go);
 	}
 
 	// ============================================================
