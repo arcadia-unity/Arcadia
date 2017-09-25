@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+using System;
 using System.Collections.Generic;
 using clojure.lang;
 using System.Linq;
@@ -224,10 +225,12 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 		//Init();
 		InitializeOwnVars();
+		// deserialization:
+		hookStateDeserializeFn.invoke(this);
 		arcadiaState = GetComponent<ArcadiaState>();
 		arcadiaState.Initialize();
-		RealizeAll(arcadiaState.state);
 		requireVarNamespacesFn.invoke(this);
+
 		_fullyInitialized = true;
 		_go = gameObject;
 	}
@@ -267,23 +270,16 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 	public void OnBeforeSerialize ()
 	{
-		if (arcadiaState == null)
-			arcadiaState = GetComponent<ArcadiaState>();
-		if (!varsInitialized)
-			InitializeOwnVars();
-		// will populate potentially larval ArcadiaBehaviours
-		// var arcs = GetComponent<ArcadiaState>();
-		//if (arcs != null)	
-		//	RealizeAll(arcs.state);
+		FullInit();
 		edn = (string)serializeBehaviourFn.invoke(this);
 	}
 
 	public void OnAfterDeserialize ()
 	{
-		Debug.Log("edn:\n" + edn);
-		if (!varsInitialized)
-			InitializeOwnVars();
-		hookStateDeserializeFn.invoke(this);
+		//Debug.Log("edn:\n" + edn);
+		//if (!varsInitialized)
+		//	InitializeOwnVars();
+		//hookStateDeserializeFn.invoke(this);
 	}
 
 	// ============================================================
