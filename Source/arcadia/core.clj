@@ -1,6 +1,7 @@
 (ns arcadia.core
   (:require [clojure.string :as string]
             [clojure.spec :as s]
+            clojure.set
             [arcadia.internal.messages :refer [messages interface-messages]]
             [arcadia.internal.macro :as mac]
             [arcadia.internal.name-utils :refer [camels-to-hyphens]]
