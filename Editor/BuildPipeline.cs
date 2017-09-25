@@ -189,7 +189,7 @@ namespace Arcadia
 
             EditorUtility.ClearProgressBar();
             UnityEngine.Debug.Log("Ready to build!");
-            AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+            // AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
 
             System.Environment.SetEnvironmentVariable("CLOJURE_LOAD_PATH", oldLoadPath);
         }
