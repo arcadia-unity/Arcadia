@@ -98,7 +98,9 @@ namespace Arcadia
 				Debug.Log("Setting Initial Load Path...");
 				string clojureDllFolder = GetClojureDllFolder();
 				Environment.SetEnvironmentVariable("CLOJURE_LOAD_PATH",
+				  Path.GetFullPath(VariadicPathCombine (Application.dataPath, "..", "Arcadia", "Compiled")) + Path.PathSeparator +				                                   
 				  Path.GetFullPath(VariadicPathCombine(clojureDllFolder, "..", "Compiled", "Editor")) + Path.PathSeparator +
+				  Path.GetFullPath(VariadicPathCombine (Application.dataPath, "Arcadia", "Export")) + Path.PathSeparator +	
 				  Path.GetFullPath(VariadicPathCombine(clojureDllFolder, "..", "Source")) + Path.PathSeparator +
 				  Path.GetFullPath(Application.dataPath));
 			}
@@ -118,6 +120,7 @@ namespace Arcadia
 
 			Environment.SetEnvironmentVariable("CLOJURE_LOAD_PATH",
 				Path.GetFullPath(VariadicPathCombine(Application.dataPath, "..", "Arcadia", "Compiled")) + Path.PathSeparator +
+				Path.GetFullPath(VariadicPathCombine (Application.dataPath, "Arcadia", "Export")) + Path.PathSeparator +			                                  
 				Path.GetFullPath(VariadicPathCombine(clojureDllFolder, "..", "Source")) + Path.PathSeparator +
 				Path.GetFullPath(Application.dataPath) + Path.PathSeparator +
 				RT.var("arcadia.compiler", "loadpath-extension-string").invoke() + Path.PathSeparator +
