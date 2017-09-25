@@ -229,10 +229,18 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		hookStateDeserializeFn.invoke(this);
 		arcadiaState = GetComponent<ArcadiaState>();
 		arcadiaState.Initialize();
+		RealizeAll(arcadiaState.state);
 		requireVarNamespacesFn.invoke(this);
 
 		_fullyInitialized = true;
 		_go = gameObject;
+
+		// for debugging
+		foreach (var inf in ifnInfos_) {
+			if (inf.IsLarval()) {
+				Debug.Log("Larval inf encountered! inf.key: " + inf.key + "; inf.fn: " + inf.fn);
+			}
+		}
 	}
 
 	public void RefreshPamvs ()
