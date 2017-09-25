@@ -1,8 +1,4 @@
-(ns arcadia.internal.namespace
-  (:require [clojure.spec :as s]))
-
-(s/fdef quickquire
-  :args (s/cat :ns-sym symbol?))
+(ns arcadia.internal.namespace)
 
 (defn quickquire
   "Bit like require, but fails with fewer allocations"
