@@ -3,6 +3,7 @@ using System.Collections;
 using clojure.lang;
 using Arcadia;
 
+[ExecuteInEditMode]
 public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 {
 	// TODO sorted maps?
@@ -87,6 +88,7 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 			return;
 
 		InitializeOwnVars();
+		deserializeVar.invoke(this);
 		RefreshAll();
 		fullyInitialized = true;
 	}
@@ -98,6 +100,9 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 
 	public void OnBeforeSerialize ()
 	{
+		// experimental:
+		Initialize();
+
 		if (prStr == null) prStr = (IFn)RT.var("clojure.core", "pr-str");
 		Arcadia.Util.require("arcadia.literals");
 		Namespace ArcadiaLiteralsNamespace = Namespace.findOrCreate(Symbol.intern("arcadia.literals"));
@@ -119,8 +124,7 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 
 	public void OnAfterDeserialize ()
 	{
-		InitializeOwnVars();
-		deserializeVar.invoke(this);
+
 	}
 
 	void OnDestroy ()
