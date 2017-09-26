@@ -137,7 +137,20 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 	// ============================================================
 	// retrieval
 
+	public object[] Keys ()
+	{
+		return state.Keys();
+	}
 
+	public object[] Vals ()
+	{
+		return state.Vals();
+	}
+
+	public clojure.lang.IPersistentMap ToPersistentMap ()
+	{
+		return Arcadia.Util.Zipmap(Keys(), Vals());
+	}
 
 	// ============================================================
 	// modification

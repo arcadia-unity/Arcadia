@@ -31,6 +31,16 @@ namespace Arcadia
 			return dict.Values.ToArray();
 		}
 
+		public object[] Keys ()
+		{
+			return dict.Keys.ToArray();
+		}
+
+		public object[] Vals ()
+		{
+			return dict.Values.Select(val => val.val).ToArray();
+		}
+
 		public object ValueAtKey (object k)
 		{
 			KeyVal val = null;
