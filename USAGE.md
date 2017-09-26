@@ -246,7 +246,7 @@ Unity will notify GameObjects when particular events occur, such as collisions w
 
 In C# Unity development, you specify how to respond to messages by implementing [Component](https://docs.unity3d.com/Manual/CreatingComponents.html) classes implementing message methods, and attaching instances of these classes to GameObjects.
 
-Arcadia provides a simple and consistent associative (key-based) interface into Unity's message system. Users can process the scene graph as data, transparently converting messages and state to Clojure persistent maps and back. Rather than defining static Component classes, Arcadia users associate callback functions (which we call _hooks_) with GameObjects and Unity message types.
+Arcadia provides a simple and consistent associative (key-based) interface into Unity's message system. Users can process the scene graph as data, transparently converting messages and state to Clojure persistent maps and back. Rather than defining static Component classes, Arcadia users associate callback functions (referred to as _hooks_) with GameObjects and Unity message types.
 
 This comprises a system of related functions:
 
