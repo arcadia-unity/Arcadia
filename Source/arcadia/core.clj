@@ -666,8 +666,9 @@
       (cond
         (hook-types k2)
         (hook+ obj k2 k v
-          (get spec (get hook-ks k2)))
-        
+          (when-let [ks (get spec (get hook-ks k2))]
+            {:fast-keys ks}))
+
         (= :state k2)
         (state+ obj k (maybe-mutable v))))
     nil
