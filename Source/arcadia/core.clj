@@ -689,57 +689,51 @@
     (snapshot x)
     x))
 
-(defn role [obj k]
-  (reduce
-    (fn [bldg ^ArcadiaBehaviour ab]
-      (reduce
-        (fn [bldg ^ArcadiaBehaviour+IFnInfo inf]
-          (if (= (.key inf) k)
-            (let [hook-type-key (hook->hook-type-key ab)]
-              (reduced
-                (as-> bldg bldg
-                      (assoc bldg hook-type-key (.fn inf))
-                      (if-not (empty? (.fastKeys inf))
-                        (assoc bldg (hook-type-key->fastkeys-key hook-type-key)
-                          (vec (.fastKeys inf)))
-                        bldg))))
-            bldg))
-        bldg
-        (.ifnInfos ab)))
-    (if-let [s (state obj k)]
-      {:state (maybe-snapshot s)}
-      {})
-    (cmpts obj ArcadiaBehaviour)))
+(defn- inner-role-step [bldg, ^ArcadiaBehaviour+IFnInfo inf, hook-type-key]
+  (as-> bldg bldg
+        (assoc bldg hook-type-key (.fn inf))
+        (let [fk (.fastKeys inf)]
+          (if (< 1 (count fk))
+            (assoc bldg (hook-type-key->fastkeys-key hook-type-key)
+              (vec (rest fk)))
+            bldg))))
 
-(defn- roles-step [bldg ^ArcadiaBehaviour hook]
-  (let [hook-type-key (hook->hook-type-key hook)]
+(defn role [obj k]
+  (let [step (fn [bldg ^ArcadiaBehaviour ab]
+               (let [hook-type-key (hook->hook-type-key ab)]
+                 (reduce
+                   (fn [bldg ^ArcadiaBehaviour+IFnInfo inf]
+                     (if (= (.key inf) k)
+                       (reduced
+                         (inner-role-step bldg, inf, hook-type-key))
+                       bldg))
+                   bldg
+                   (.ifnInfos ab))))
+        init (if-let [s (state obj k)]
+               {:state (maybe-snapshot s)}
+               {})]
+    (reduce step init (cmpts obj ArcadiaBehaviour))))
+
+(defn- roles-step [bldg ^ArcadiaBehaviour ab]
+  (let [hook-type-key (hook->hook-type-key ab)]
     (reduce
-      (fn [bldg ^ArcadiaBehaviour+IFnInfo info]
-        (update bldg (.key info)
+      (fn [bldg ^ArcadiaBehaviour+IFnInfo inf]
+        (update bldg (.key inf)
           (fn [m]
-            (as-> m m
-                  (assoc m hook-type-key (.fn info))
-                  (if-not (empty? (.fastKeys info))
-                    (assoc m (hook-type-key->fastkeys-key hook-type-key)
-                      (vec (.fastKeys info)))
-                    m)))))
+            (inner-role-step m, inf, hook-type-key))))
       bldg
-      (.ifnInfos hook))))
+      (.ifnInfos ab))))
 
 ;; map from hook, state keys to role specs
 (defn roles [obj]
-  (reduce
-    roles-step
-    (reduce-kv
-      (fn [bldg k v]
-        (assoc-in bldg [k :state] (maybe-snapshot v)))
-      {}
-      (or (state obj) {}))
-    (cmpts obj ArcadiaBehaviour)))
-
-;; so, (reduce-kv give-role obj2 (roles obj)) gives obj2 same Arcadia
-;; state and behavior as obj
-
+  (let [init (if-let [^ArcadiaState arcs (cmpt obj ArcadiaState)]
+               (reduce-kv
+                 (fn [bldg k v]
+                   (assoc-in bldg [k :state] (maybe-snapshot v)))
+                 {}
+                 (.ToPersistentMap arcs))
+               {})]
+    (reduce roles-step init (cmpts obj ArcadiaBehaviour))))
 
 ;; ============================================================
 ;; defmutable
