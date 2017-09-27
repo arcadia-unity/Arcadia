@@ -239,6 +239,9 @@
 (definline euler-angles ^UnityEngine.Vector3 [^UnityEngine.Quaternion q]
   `(.eulerAngles ~q))
 
+;; Consistently throws ArgumentException: Cannot get TypeToken for a ByRef type.
+;; on AOT. Commenting out until this is fixed in the compiler. 
+#_
 (definline to-angle-axis [^UnityEngine.Quaternion q]
   `(let [ang# (float 0)
          axis# UnityEngine.Vector3/zero]

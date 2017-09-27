@@ -141,6 +141,7 @@ namespace Arcadia
         [MenuItem("Arcadia/Build/Internal Namespaces")]
         static void BuildInternal()
         {
+            EnsureCompiledFolders();
             var internalNameSpaces = (IList)RT.var("arcadia.internal.editor-interop", "internal-namespaces").deref();
             ResetProgress(internalNameSpaces.Count);
             CompileNamespacesToFolder(internalNameSpaces, CompiledFolder);
@@ -149,6 +150,7 @@ namespace Arcadia
         [MenuItem("Arcadia/Build/User Namespaces")]
         static void BuildUser()
         {
+            EnsureCompiledFolders();
             var userNameSpaces = (IList)RT.var("arcadia.internal.editor-interop", "all-user-namespaces-symbols").invoke();
             ResetProgress(userNameSpaces.Count);
             CompileNamespacesToFolder(userNameSpaces, CompiledFolder);
@@ -193,14 +195,21 @@ namespace Arcadia
 
             System.Environment.SetEnvironmentVariable("CLOJURE_LOAD_PATH", oldLoadPath);
         }
+        
+        [MenuItem("Arcadia/Build/Clean Compiled", false, 30)]
+        static void CleanCompiled()
+        {
+             if (Directory.Exists(CompiledFolder))
+                 Directory.Delete(CompiledFolder, true);
+       }
 
         [PostProcessBuild(1)]
         public static void OnPostprocessBuild(BuildTarget target, string pathToBuiltProject)
         {
-             // if (Directory.Exists(ExportFolder))
-             //     Directory.Delete(ExportFolder, true);
-             // if (Directory.Exists(ExportAssetsFolder))
-             //     Directory.Delete(ExportAssetsFolder, true);
+             if (Directory.Exists(ExportFolder))
+                 Directory.Delete(ExportFolder, true);
+             if (Directory.Exists(ExportAssetsFolder))
+                 Directory.Delete(ExportAssetsFolder, true);
         }
     }
 }
