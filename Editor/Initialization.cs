@@ -10,6 +10,12 @@ namespace Arcadia
 	[InitializeOnLoad]
 	public class Initialization
 	{
+		// ============================================================
+		// Data
+		public static string PathToCompiled = Path.GetFullPath(VariadicPathCombine(Application.dataPath, "..", "Arcadia", "Compiled"));
+
+		public static string PathToCompiledForExport = Path.GetFullPath(VariadicPathCombine(Application.dataPath, "Arcadia", "Export"));
+
 		static Initialization()
 		{
 			Initialize();
@@ -89,20 +95,23 @@ namespace Arcadia
 		{
 			RT.load("arcadia/internal/nudge");
 		}
-		
+
+		public static string InitialClojureLoadPath ()
+		{
+			var path = PathToCompiled + Path.PathSeparator +
+					Path.GetFullPath(VariadicPathCombine(GetClojureDllFolder(), "..", "Source")) + Path.PathSeparator +
+				  Path.GetFullPath(Application.dataPath);
+			return path;
+		}
+
 		// need this to set things up so we can get rest of loadpath after loading arcadia.compiler
 		public static void SetInitialClojureLoadPath()
 		{
 			try
 			{
 				Debug.Log("Setting Initial Load Path...");
-				string clojureDllFolder = GetClojureDllFolder();
-				Environment.SetEnvironmentVariable("CLOJURE_LOAD_PATH",
-				  Path.GetFullPath(VariadicPathCombine (Application.dataPath, "..", "Arcadia", "Compiled")) + Path.PathSeparator +				                                   
-				  Path.GetFullPath(VariadicPathCombine(clojureDllFolder, "..", "Compiled", "Editor")) + Path.PathSeparator +
-				  Path.GetFullPath(VariadicPathCombine (Application.dataPath, "Arcadia", "Export")) + Path.PathSeparator +	
-				  Path.GetFullPath(VariadicPathCombine(clojureDllFolder, "..", "Source")) + Path.PathSeparator +
-				  Path.GetFullPath(Application.dataPath));
+				Environment.SetEnvironmentVariable("CLOJURE_LOAD_PATH", InitialClojureLoadPath());
+
 			}
 			catch (InvalidOperationException e)
 			{
@@ -113,16 +122,13 @@ namespace Arcadia
 		}
 		
 		[MenuItem("Arcadia/Initialization/Update Clojure Load Path")]
-		public static void SetClojureLoadPath()
+		public static void SetClojureLoadPath ()
 		{
 			Debug.Log("Setting Load Path...");
 			string clojureDllFolder = GetClojureDllFolder();
 
 			Environment.SetEnvironmentVariable("CLOJURE_LOAD_PATH",
-				Path.GetFullPath(VariadicPathCombine(Application.dataPath, "..", "Arcadia", "Compiled")) + Path.PathSeparator +
-				Path.GetFullPath(VariadicPathCombine (Application.dataPath, "Arcadia", "Export")) + Path.PathSeparator +			                                  
-				Path.GetFullPath(VariadicPathCombine(clojureDllFolder, "..", "Source")) + Path.PathSeparator +
-				Path.GetFullPath(Application.dataPath) + Path.PathSeparator +
+				InitialClojureLoadPath() + Path.PathSeparator +
 				RT.var("arcadia.compiler", "loadpath-extension-string").invoke() + Path.PathSeparator +
 				Path.GetFullPath(VariadicPathCombine(clojureDllFolder, "..", "Libraries")));
 
@@ -154,6 +160,35 @@ namespace Arcadia
 		public static void StartEditorCallbacks(){
 			RT.load("arcadia/internal/editor_callbacks");
 			EditorCallbacks.Initialize();
+		}
+
+		// dunno where else to put this
+		public static void PurgeAllCompiled ()
+		{
+			var compiledDir = new DirectoryInfo(PathToCompiled);
+			if (compiledDir.Exists) {
+				foreach (var file in compiledDir.GetFiles()) {
+					file.Delete();
+				}
+			}
+			var outerCompiledForExportDir = new DirectoryInfo(VariadicPathCombine(PathToCompiled, "..", "Export"));
+			if (outerCompiledForExportDir.Exists) {
+				foreach (var file in outerCompiledForExportDir.GetFiles()) {
+					file.Delete();
+				}
+			}
+			var exportDir = new DirectoryInfo(PathToCompiledForExport);
+			if (exportDir.Exists) {
+				foreach (var file in exportDir.GetFiles()) {
+					file.Delete();
+				}
+			}
+		}
+
+		[MenuItem("Arcadia/Clean")]
+		public static void Clean ()
+		{
+			PurgeAllCompiled();
 		}
 	}
 }
