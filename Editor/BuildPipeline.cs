@@ -197,10 +197,10 @@ namespace Arcadia
         [PostProcessBuild(1)]
         public static void OnPostprocessBuild(BuildTarget target, string pathToBuiltProject)
         {
-             // if (Directory.Exists(ExportFolder))
-             //     Directory.Delete(ExportFolder, true);
-             // if (Directory.Exists(ExportAssetsFolder))
-             //     Directory.Delete(ExportAssetsFolder, true);
+             if (Directory.Exists(ExportFolder))
+                 Directory.Delete(ExportFolder, true);
+             if (Directory.Exists(ExportAssetsFolder))
+                 Directory.Delete(ExportAssetsFolder, true);
         }
     }
 }
