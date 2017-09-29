@@ -195,7 +195,7 @@
   "Returns reducible collection of keys in m. Fast."
   [m]
   (reify
-    CollReduce
+    clojure.core.protocols.CollReduce
     (coll-reduce [this f]
       (clojure.core.protocols/coll-reduce this f (f)))
     (coll-reduce [_ f init]
@@ -210,7 +210,7 @@
   "Returns reducible collection of vals in m. Fast."
   [m]
   (reify
-    CollReduce
+    clojure.core.protocols.CollReduce
     (coll-reduce [this f]
       (clojure.core.protocols/coll-reduce this f (f)))
     (coll-reduce [_ f init]
