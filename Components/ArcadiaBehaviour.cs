@@ -155,6 +155,8 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 	public void AddFunction (IFn f, object key, object[] fastKeys)
 	{
+		FullInit();
+		
 		for (int i = 0; i < ifnInfos_.Length; i++) {
 			var inf = ifnInfos_[i];
 			if (inf.key == key) {
@@ -166,10 +168,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 				return;
 			}
 		}
-
-		if (arcadiaState == null)
-			arcadiaState = GetComponent<ArcadiaState>();
-
+		
 		ifnInfos = Arcadia.Util.ArrayAppend(
 			ifnInfos_,
 			new IFnInfo(key, f, arcadiaState.pamv(fastKeys)));
