@@ -49,7 +49,7 @@ namespace Arcadia
 		{
 			// this has to happen here becasue the repl
 			// binds a thread local *data-readers*
-			RT.load("arcadia/literals");
+            Util.require("arcadia.literals");
 		}
 
 		[MenuItem("Arcadia/Initialization/Rerun")]
@@ -76,7 +76,7 @@ namespace Arcadia
 		// on the other hand, packages pulls in almost everything else
 		public static void LoadPackages(){
 			Debug.Log("Loading packages...");
-			RT.load("arcadia/packages");
+            Util.require("arcadia.packages");
 			if(((int)RT.var("arcadia.packages", "dependency-count").invoke()) > 0) {
 				// may want to make this conditional on some config thing
 				RT.var("arcadia.packages", "install-all-deps").invoke();
@@ -87,13 +87,13 @@ namespace Arcadia
 		public static void LoadConfig()
 		{
 			Debug.Log("Loading configuration...");
-			RT.load("arcadia/config");
+            Util.require("arcadia.config");
 			RT.var("arcadia.config", "update!").invoke();
 		}
 
 		public static void StartNudge()
 		{
-			RT.load("arcadia/internal/nudge");
+            Util.require("arcadia.internal.nudge");
 		}
 
 		public static string InitialClojureLoadPath ()
@@ -137,7 +137,7 @@ namespace Arcadia
 		
 		static void LoadSocketREPL ()
 		{
-			RT.load("arcadia/socket_repl");
+            Util.require("arcadia.socket-repl");
 			RT.var("arcadia.socket-repl", "server-reactive").invoke();
 		}
 
@@ -158,7 +158,7 @@ namespace Arcadia
 		}
 
 		public static void StartEditorCallbacks(){
-			RT.load("arcadia/internal/editor_callbacks");
+            Util.require("arcadia.internal.editor-callbacks");
 			EditorCallbacks.Initialize();
 		}
 

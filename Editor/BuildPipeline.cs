@@ -23,7 +23,7 @@ namespace Arcadia
 
 		static BuildPipeline ()
 		{
-			RT.load("arcadia/internal/editor_interop");
+            Util.require("arcadia.internal.editor-interop");
 			EditorUtility.ClearProgressBar();
 		}
 

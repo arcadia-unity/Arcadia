@@ -136,7 +136,7 @@ public class ArcadiaStateEditor : Editor
 {
 	static ArcadiaStateEditor()
 	{
-		RT.load("arcadia/core");
+        Arcadia.Util.require("arcadia.core");
 	}
 
 	public static Var OnInspectorGUIVar;
