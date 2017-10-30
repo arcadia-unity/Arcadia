@@ -159,6 +159,16 @@
   ([path nss]
    (aot-namespaces path nss nil))
   ([path nss {:keys [file-callback] :as opts}]
+   ;; We want to ensure that namespaces are neither double-aot'd, nor
+   ;; _not_ aot'd if already in memory.
+   ;; In other words, we want to walk the forest of all the provided
+   ;; namespaces and their dependency namespaces, aot-ing each
+   ;; namespace we encounter in this walk exactly once. `:reload-all`
+   ;; will re-aot encountered namespaces redundantly, potentially
+   ;; invalidating old type references (I think). Normal `require`
+   ;; will not do a deep walk over already-loaded namespaces. So
+   ;; instead we rebind the *loaded-libs* var to a ref with an empty
+   ;; set and call normal `require`, which gives the desired behavior.
    (let [loaded-libs' (binding [*compiler-options* (get (arcadia.config/config) :compiler/options {})
                                 *compile-path* path
                                 *compile-files* true
