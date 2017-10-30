@@ -3,11 +3,17 @@
            repl proxy server that copies bytes between editors and arcadia in
            normal usage and does not crash the editor when Unity resets the VM."}
   arcadia.internal.repl-proxy
+  (:require [clojure.string :as string])
   (:import Arcadia.UnityStatusHelper
            UnityEditor.EditorApplication
            System.IO.Path
            [System.Diagnostics
             Process ProcessStartInfo]))
+
+(defn correct-slashes [s]
+  (if UnityStatusHelper/IsUnityEditorWin
+    (string/replace s #"/" "\\")
+    s))
 
 (def path-to-mono
   (cond
@@ -20,7 +26,7 @@
     ;; e.g. "D:/Programs/Unity-Win/Editor/Unity.exe"
     (Path/Combine
       (Path/GetDirectoryName EditorApplication/applicationPath) 
-      "Data/MonoBleedingEdge/bin/mono")
+      "Data/MonoBleedingEdge/bin/mono.exe")
     UnityStatusHelper/IsUnityEditorLinux
     ;; e.g. "/home/selfsame/unity-editor-2017.1.0xf3Linux/Editor/Unity"
     (Path/Combine
@@ -33,13 +39,13 @@
 (defn launch [internal-port external-port]
   (let [psi (ProcessStartInfo.)
         proc (Process.)]
-    (set! (.FileName psi) path-to-mono)
+    (set! (.FileName psi) (correct-slashes path-to-mono))
     (set! (.RedirectStandardOutput psi) true)
     (set! (.RedirectStandardError psi) true)
     (set! (.UseShellExecute psi) false)
-    (set! (.WorkingDirectory psi) UnityEngine.Application/dataPath)
+    (set! (.WorkingDirectory psi) (correct-slashes UnityEngine.Application/dataPath))
     (set! (.CreateNoWindow psi) true)
-    (set! (.Arguments psi) (str path-to-proxy-exe
+    (set! (.Arguments psi) (str (correct-slashes path-to-proxy-exe)
                                 " localhost " internal-port
                                 " localhost " external-port))
     (set! (.StartInfo proc) psi)
