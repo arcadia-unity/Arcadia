@@ -2,9 +2,12 @@
 #  Clojure Unity  #
 # =============== #
 *.mdb*
+**/Compiled.meta
 **/Compiled/*.exe*
 **/Compiled/*.dll*
 **/Compiled/Editor*.dll*
+**/Export.meta
+**/Export/*.dll*
 
 # =============== #
 # Unity generated #
@@ -42,3 +45,4 @@ Thumbs.db
 
 /Libraries.meta
 /Libraries/
+/Helpers/TimeSnap.cs.meta

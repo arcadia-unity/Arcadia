@@ -28,23 +28,27 @@
     ;; e.g. "/home/selfsame/unity-editor-2017.1.0xf3Linux/Editor/Unity"
     (Path/Combine
       (Path/GetDirectoryName EditorApplication/applicationPath)
-      "Data/MonoBleedingEdge/lib/mono/4.5/mozroots.exe")))
+      "Data/MonoBleedingEdge/lib/mono/4.5/mozroots.exe")
+    :else
+    (throw (Exception. "Path to mozroots could not be determined for this platform"))))
 
 (assembly-load-file path-to-mozroots)
 
-(import Mono.Tools.MozRoots)
+(import 'Mono.Tools.MozRoots)
 
-(def parse-options-method
-  (.GetMethod MozRoots "ParseOptions"
-              (enum-or BindingFlags/NonPublic BindingFlags/Static)))
+(let [MozRoots (resolve 'MozRoots)]
 
-(def parse-opts
-  (.GetMethod MozRoots "ParseOptions"
-              (enum-or BindingFlags/NonPublic BindingFlags/Static)))
+  (def parse-options-method
+    (.GetMethod MozRoots "ParseOptions"
+      (enum-or BindingFlags/NonPublic BindingFlags/Static)))
 
-(def process
-  (.GetMethod MozRoots "Process"
-              (enum-or BindingFlags/NonPublic BindingFlags/Static)))
+  (def parse-opts
+    (.GetMethod MozRoots "ParseOptions"
+      (enum-or BindingFlags/NonPublic BindingFlags/Static)))
+
+  (def process
+    (.GetMethod MozRoots "Process"
+      (enum-or BindingFlags/NonPublic BindingFlags/Static))))
 
 (def cert-data-file
   "Assets/Arcadia/Infrastructure/certdata.txt")

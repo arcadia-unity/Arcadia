@@ -15,7 +15,7 @@ namespace Arcadia
 
 		static AssetPostprocessor()
 		{
-			RT.load("arcadia/compiler");
+            Util.require("arcadia.compiler");
 			// kill repl when exiting unity
 			AppDomain.CurrentDomain.ProcessExit += (object sender, EventArgs e) => { StopWatchingFiles(); };
 

@@ -44,7 +44,7 @@
       (cond (or (.EOF xml)
                 (= (.NodeType xml)
                    XmlNodeType/EndElement)) (seq (filter identity accumulator)) ;; remove nils?
-            (.IsEmptyElement xml) (recur accumulator)
+            (.IsEmptyElement xml) (recur (conj accumulator (xml-content xml)))
             :else (if (> (.Depth xml)
                          depth)
                     (recur (conj accumulator
@@ -186,7 +186,7 @@
          (remove #(= (% :scope) "test"))
          (remove #(= (% :optional) "true"))
          (remove #(= (% :artifactId) "clojure"))
-         (map (juxt :groupId :artifactId :version)))))
+         (mapv (juxt :groupId :artifactId :version)))))
 
 (defn all-dependencies [[group artifact version]]
   (into #{}
@@ -449,8 +449,8 @@
         (install-1)
         (catch Exception e
           (swap! install-errors conj e)
-          (Debug/Log "Exception encountered when installing dependencies:")
-          (Debug/Log e))))))
+          (Debug/LogError "Exception encountered when installing dependencies:")
+          (Debug/LogError e))))))
 
 (defn dependency-count []
   (count (:dependencies (config/config))))

@@ -3,7 +3,8 @@
             [arcadia.internal.editor-callbacks :as cb]
             [arcadia.config :as config]
             [clojure.main :as m]
-            [arcadia.internal.state :as state]))
+            [arcadia.internal.state :as state]
+            arcadia.literals))
 
 ;; Think this sleaziness has to be a macro, for `set!`
 ;; Getting these from clojure.main
@@ -19,37 +20,42 @@
        ~@settings
        nil)))
 
-(defn game-thread-eval [expr]
-  (let [old-read-eval *read-eval*
-        p (promise)]
-    (cb/add-callback
-      (bound-fn []
-        (deliver p
-          (try
-            (let [v (eval expr)]
-              {::success true
-               ::value v
-               ::bindings (get-thread-bindings)
-               ::printed  (binding [*read-eval* old-read-eval]
-                            (with-out-str
-                              (prn v)))})
-            (catch Exception e
-              {::success false
-               ::value e
-               ::bindings (get-thread-bindings)}))))) 
-    (let [{:keys [::success ::value ::bindings ::printed]} @p]
-      (set-tracked-bindings bindings)
-      (if success
-        (do
-          ;; Simulating `print` part of `clojure.main/repl` here, because
-          ;; unity prevents even printing things in the scene graph
-          ;; off the main thread.
+(defn game-thread-eval
+  ([expr] (game-thread-eval expr nil))
+  ([expr {:keys [callback-driver]
+          :or {callback-driver cb/add-callback}
+          :as opts}]
+   (let [old-read-eval *read-eval*
+         p (promise)]
+     (callback-driver
+       (bound-fn []
+         (deliver p
+           (try
+             (Arcadia.Util/MarkScenesDirty)
+             (let [v (eval expr)]
+               {::success true
+                ::value v
+                ::bindings (get-thread-bindings)
+                ::printed  (binding [*read-eval* old-read-eval]
+                             (with-out-str
+                               (prn v)))})
+             (catch Exception e
+               {::success false
+                ::value e
+                ::bindings (get-thread-bindings)}))))) 
+     (let [{:keys [::success ::value ::bindings ::printed]} @p]
+       (set-tracked-bindings bindings)
+       (if success
+         (do
+           ;; Simulating `print` part of `clojure.main/repl` here, because
+           ;; unity prevents even printing things in the scene graph
+           ;; off the main thread.
 
-          ;; NOTE! this removes ability to customize `print` option in
-          ;; repl. Suggestions for cleaner implementation welcome.
-          (print printed)
-          value)
-        (throw value)))))
+           ;; NOTE! this removes ability to customize `print` option in
+           ;; repl. Suggestions for cleaner implementation welcome.
+           (print printed)
+           value)
+         (throw value))))))
 
 (defn repl []
   (m/repl
@@ -78,7 +84,9 @@
 (defn server-reactive
   ([]
    (server-reactive (config/config)))
-  ([{:keys [socket-repl]}]
+  ([{:keys [socket-repl]
+     ;; socket repl on by default if we're in the editor
+     :or {socket-repl Arcadia.UnityStatusHelper/IsInEditor}}]
    (cond
      socket-repl
      (let [opts (when (map? socket-repl)

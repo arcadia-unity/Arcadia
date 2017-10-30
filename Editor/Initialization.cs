@@ -10,6 +10,12 @@ namespace Arcadia
 	[InitializeOnLoad]
 	public class Initialization
 	{
+		// ============================================================
+		// Data
+		public static string PathToCompiled = Path.GetFullPath(VariadicPathCombine(Application.dataPath, "..", "Arcadia", "Compiled"));
+
+		public static string PathToCompiledForExport = Path.GetFullPath(VariadicPathCombine(Application.dataPath, "Arcadia", "Export"));
+
 		static Initialization()
 		{
 			Initialize();
@@ -31,17 +37,6 @@ namespace Arcadia
 			}
 		}
 
-		public static void ensureCompiledFolder()
-		{
-			string maybeCompiled = Path.GetFullPath(VariadicPathCombine(GetClojureDllFolder(), "..", "Compiled", "Editor"));
-			if (!Directory.Exists(maybeCompiled))
-			{
-				Debug.Log("Creating Compiled/Editor");
-				Directory.CreateDirectory(maybeCompiled);
-			}
-		}
-
-
 		public static void StartWatching()
 		{
 			//AssetPostprocessor.StartWatchingFiles();
@@ -54,7 +49,7 @@ namespace Arcadia
 		{
 			// this has to happen here becasue the repl
 			// binds a thread local *data-readers*
-			RT.load("arcadia/literals");
+            Util.require("arcadia.literals");
 		}
 
 		[MenuItem("Arcadia/Initialization/Rerun")]
@@ -66,7 +61,7 @@ namespace Arcadia
 			LoadPackages();
 			LoadLiterals();
 			SetClojureLoadPath();
-			ensureCompiledFolder();
+            BuildPipeline.EnsureCompiledFolders();
 			StartEditorCallbacks();
 			StartWatching();
 			LoadSocketREPL();
@@ -82,7 +77,7 @@ namespace Arcadia
 		// on the other hand, packages pulls in almost everything else
 		public static void LoadPackages(){
 			Debug.Log("Loading packages...");
-			RT.load("arcadia/packages");
+            Util.require("arcadia.packages");
 			if(((int)RT.var("arcadia.packages", "dependency-count").invoke()) > 0) {
 				// may want to make this conditional on some config thing
 				RT.var("arcadia.packages", "install-all-deps").invoke();
@@ -93,21 +88,21 @@ namespace Arcadia
 		public static void LoadConfig()
 		{
 			Debug.Log("Loading configuration...");
-			RT.load("arcadia/config");
+            Util.require("arcadia.config");
 			RT.var("arcadia.config", "update!").invoke();
 		}
 
 		public static void StartNudge()
 		{
-			RT.load("arcadia/internal/nudge");
+            Util.require("arcadia.internal.nudge");
 		}
-		
-		[MenuItem("Arcadia/Compiler/AOT Compile Internal Namespaces")]
-		public static void AOTInternalNamespaces()
+
+		public static string InitialClojureLoadPath ()
 		{
-			RT.load("arcadia/internal/editor_interop");
-			RT.var("arcadia.internal.editor-interop", "aot-internal-namespaces").invoke("Assets/Arcadia/Compiled/Editor");
-			AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
+			var path = PathToCompiled + Path.PathSeparator +
+					Path.GetFullPath(VariadicPathCombine(GetClojureDllFolder(), "..", "Source")) + Path.PathSeparator +
+				  Path.GetFullPath(Application.dataPath);
+			return path;
 		}
 
 		// need this to set things up so we can get rest of loadpath after loading arcadia.compiler
@@ -116,11 +111,8 @@ namespace Arcadia
 			try
 			{
 				Debug.Log("Setting Initial Load Path...");
-				string clojureDllFolder = GetClojureDllFolder();
-				Environment.SetEnvironmentVariable("CLOJURE_LOAD_PATH",
-				  Path.GetFullPath(VariadicPathCombine(clojureDllFolder, "..", "Compiled", "Editor")) + Path.PathSeparator +
-				  Path.GetFullPath(VariadicPathCombine(clojureDllFolder, "..", "Source")) + Path.PathSeparator +
-				  Path.GetFullPath(Application.dataPath));
+				Environment.SetEnvironmentVariable("CLOJURE_LOAD_PATH", InitialClojureLoadPath());
+
 			}
 			catch (InvalidOperationException e)
 			{
@@ -129,27 +121,15 @@ namespace Arcadia
 
 			Debug.Log("Load Path is " + Environment.GetEnvironmentVariable("CLOJURE_LOAD_PATH"));
 		}
-
-		// resets the load path without Compiled/Editor, where AOT'd internal namespaces are kept
-		public static void SetBuildClojureLoadPath()
-		{
-			Debug.Log("Setting Build Load Path...");
-			string clojureDllFolder = GetClojureDllFolder();
-			Environment.SetEnvironmentVariable("CLOJURE_LOAD_PATH",
-			  Path.GetFullPath(VariadicPathCombine(clojureDllFolder, "..", "Source")) + Path.PathSeparator +
-			  Path.GetFullPath(Application.dataPath));
-		}
-
+		
 		[MenuItem("Arcadia/Initialization/Update Clojure Load Path")]
-		public static void SetClojureLoadPath()
+		public static void SetClojureLoadPath ()
 		{
 			Debug.Log("Setting Load Path...");
 			string clojureDllFolder = GetClojureDllFolder();
 
 			Environment.SetEnvironmentVariable("CLOJURE_LOAD_PATH",
-				Path.GetFullPath(VariadicPathCombine(clojureDllFolder, "..", "Compiled", "Editor")) + Path.PathSeparator +
-				Path.GetFullPath(VariadicPathCombine(clojureDllFolder, "..", "Source")) + Path.PathSeparator +
-				Path.GetFullPath(Application.dataPath) + Path.PathSeparator +
+				InitialClojureLoadPath() + Path.PathSeparator +
 				RT.var("arcadia.compiler", "loadpath-extension-string").invoke() + Path.PathSeparator +
 				Path.GetFullPath(VariadicPathCombine(clojureDllFolder, "..", "Libraries")));
 
@@ -158,7 +138,7 @@ namespace Arcadia
 		
 		static void LoadSocketREPL ()
 		{
-			RT.load("arcadia/socket_repl");
+            Util.require("arcadia.socket-repl");
 			RT.var("arcadia.socket-repl", "server-reactive").invoke();
 		}
 
@@ -185,8 +165,37 @@ namespace Arcadia
 		}
 
 		public static void StartEditorCallbacks(){
-			RT.load("arcadia/internal/editor_callbacks");
+            Util.require("arcadia.internal.editor-callbacks");
 			EditorCallbacks.Initialize();
+		}
+
+		// dunno where else to put this
+		public static void PurgeAllCompiled ()
+		{
+			var compiledDir = new DirectoryInfo(PathToCompiled);
+			if (compiledDir.Exists) {
+				foreach (var file in compiledDir.GetFiles()) {
+					file.Delete();
+				}
+			}
+			var outerCompiledForExportDir = new DirectoryInfo(VariadicPathCombine(PathToCompiled, "..", "Export"));
+			if (outerCompiledForExportDir.Exists) {
+				foreach (var file in outerCompiledForExportDir.GetFiles()) {
+					file.Delete();
+				}
+			}
+			var exportDir = new DirectoryInfo(PathToCompiledForExport);
+			if (exportDir.Exists) {
+				foreach (var file in exportDir.GetFiles()) {
+					file.Delete();
+				}
+			}
+		}
+
+		[MenuItem("Arcadia/Clean")]
+		public static void Clean ()
+		{
+			PurgeAllCompiled();
 		}
 	}
 }

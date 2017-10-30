@@ -1,10 +1,10 @@
 (ns arcadia.internal.editor-callbacks
   (:require [arcadia.internal.map-utils :as mu]
-            [arcadia.internal.editor-callbacks.types :as ect])
+           ;; [arcadia.internal.editor-callbacks.types :as ect]
+            )
   (:import [UnityEngine Debug]
            [System.Collections Queue]
-           [Arcadia EditorCallbacks EditorCallbacks+IntervalData]
-           [arcadia.internal.editor_callbacks.types RepeatingCallbacks]))
+           [Arcadia EditorCallbacks EditorCallbacks+IntervalData]))
 
 ;; ============================================================
 ;; normal callbacks
@@ -27,23 +27,30 @@
 ;; ============================================================
 ;; repeating callbacks
 
+(defn- build-repeating-callbacks [m]
+  {::map m, ::arr (into-array (vals m))})
+
 (defonce repeating-callbacks
-  (atom (ect/build-repeating-callbacks {})))
+  (atom (build-repeating-callbacks {})))
 
 (defn add-repeating-callback [k f interval]
   (swap! repeating-callbacks
-    ect/add-repeating-callback k f interval))
+    (fn [rcs]
+      (build-repeating-callbacks
+        (assoc (::map rcs) k
+          (EditorCallbacks+IntervalData. f interval k))))))
 
 (defn remove-repeating-callback [k]
-  (swap! repeating-callbacks ect/remove-repeating-callback k))
+  (swap! repeating-callbacks
+    (fn [rcs] (build-repeating-callbacks (dissoc (::map rcs) k)))))
 
 (defn handle-repeating-callback-error [^System.Exception e, ^EditorCallbacks+IntervalData ecd]
   (Debug/LogError e)
   (Debug/Log "Removing callback at key " (.key ecd))
   (swap! repeating-callbacks remove-repeating-callback (.key ecd)))
 
-(defn run-repeating-callbacks [^RepeatingCallbacks rcs]
-  (EditorCallbacks/RunIntervalCallbacks (.arr rcs), handle-repeating-callback-error))
+(defn run-repeating-callbacks [rcs]
+  (EditorCallbacks/RunIntervalCallbacks (::arr rcs), handle-repeating-callback-error))
 
 ;; ============================================================
 ;; run all

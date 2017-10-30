@@ -155,25 +155,28 @@
 
 (def ^:dynamic *exporting?* false)
 
-(defn aot-namespace
-  "Compile a namespace `ns` and all namespaces it depends on
-  to disk, placing resulting assemblies in `path`"
-  [path ns]
-  (binding [*compiler-options* (get (config/config) :compiler/options {})
-            *compile-path* path
-            *compile-files* true
-            *exporting?* true]
-    (require ns :reload-all)))
-
-(defn aot-namespaces [path nss]
-  (doseq [ns nss]
-    (Debug/Log (str "Compiling " ns " to " path))
-    (aot-namespace path ns)))
+(defn aot-namespaces
+  ([path nss]
+   (aot-namespaces path nss nil))
+  ([path nss {:keys [file-callback] :as opts}]
+   (let [loaded-libs' (binding [*compiler-options* (get (arcadia.config/config) :compiler/options {})
+                                *compile-path* path
+                                *compile-files* true
+                                arcadia.compiler/*exporting?* true
+                                *loaded-libs* (ref #{})]
+                        (doseq [ns nss]
+                          (require ns)
+                          (when file-callback
+                            (file-callback ns)))
+                        *loaded-libs*)]
+     (dosync
+       (alter *loaded-libs* into @loaded-libs'))
+     nil)))
 
 (defn aot-asset [path asset]
   (when (should-compile? asset)
     (Debug/Log (str "Compiling " asset " to " path))
-    (aot-namespace path (asset->ns asset))))
+    (aot-namespaces path (asset->ns asset))))
 
 (defn aot-assets [path assets]
   (doseq [asset assets]

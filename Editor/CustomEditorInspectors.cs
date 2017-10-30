@@ -29,15 +29,15 @@ public class ArcadiaBehaviourEditor : Editor
 	void OnEnable()
 	{
 		ArcadiaBehaviour ab = (ArcadiaBehaviour)target;
-		if (rl == null)
-		{
-			rl = new ReorderableList(ab.fns, typeof(IFn), true, false, true, true);
-			rl.headerHeight = 4;
-			rl.onAddDropdownCallback = (buttonRect, list) =>
-			{
-				EditorGUI.Popup(buttonRect, 0, ((IList<object>)allUserFns.invoke()).Select(x => x.ToString().Substring(2)).ToArray());
-			};
-		}
+		//if (rl == null)
+		//{
+		//	rl = new ReorderableList(ab.fns, typeof(IFn), true, false, true, true);
+		//	rl.headerHeight = 4;
+		//	rl.onAddDropdownCallback = (buttonRect, list) =>
+		//	{
+		//		EditorGUI.Popup(buttonRect, 0, ((IList<object>)allUserFns.invoke()).Select(x => x.ToString().Substring(2)).ToArray());
+		//	};
+		//}
 	}
 
 	void PopupInspector()
@@ -86,26 +86,30 @@ public class ArcadiaBehaviourEditor : Editor
 	public override void OnInspectorGUI()
 	{
 		// var inspectorConfig = ClojureConfiguration.Get("editor", "hooks-inspector");
-		
+
 		// EditorGUILayout.LabelField("Disabled For Now, use the REPL");
+
 		ArcadiaBehaviour ab = (ArcadiaBehaviour)target;
-		if(ab.fns.Length == 0)
+		//var fns = ab.fns;
+		//var keys = ab.keys;
+		var ifns = ab.ifnInfos;
+		if(ifns.Length == 0)
 		{
 			EditorGUILayout.LabelField("No functions");
 		}
 		else
 		{
-			for (int i = 0; i < ab.fns.Length; i++)
+			for (int i = 0; i < ifns.Length; i++)
 			{
-				var fn = ab.fns[i];
-				Var v = fn as Var;
+				var ifn = ifns[i];				
+				Var v = ifn.fn as Var;
 				if (v != null && v.isBound)
 				{
-					EditorGUILayout.LabelField(fn.ToString());
+					EditorGUILayout.LabelField(ifn.key.ToString() + ": " + v.ToString());
 				} else {
 					GUIStyle style = new GUIStyle(GUI.skin.label);
 					style.normal.textColor = Color.red;
-					EditorGUILayout.LabelField(fn.ToString(), style);
+					EditorGUILayout.LabelField(ifn.key.ToString() + ": " + ifn.fn.ToString(), style);
 				}
 				
 			}
@@ -132,14 +136,25 @@ public class ArcadiaStateEditor : Editor
 {
 	static ArcadiaStateEditor()
 	{
-		RT.load("arcadia/core");
+        Arcadia.Util.require("arcadia.core");
 	}
 
+	public static Var OnInspectorGUIVar;
+	public static bool ownVarsInitialized = false;
+
+	public static void RequireOwnVars ()
+	{
+		if (ownVarsInitialized)
+			return;
+		string ns = "arcadia.internal.editor-interop";
+		Arcadia.Util.require(ns);
+		Arcadia.Util.getVar(ref OnInspectorGUIVar, ns, "state-inspector!");
+		ownVarsInitialized = true;
+	}
+	
 	public override void OnInspectorGUI()
 	{
-
-		ArcadiaBehaviourEditor.requireFn.invoke(Symbol.intern("arcadia.internal.editor-interop"));
-		ArcadiaState stateComponent = (ArcadiaState)target;
-		RT.var("arcadia.internal.editor-interop", "state-inspector!").invoke(stateComponent.state);
+		RequireOwnVars();
+		Arcadia.Util.Invoke(OnInspectorGUIVar, target);
 	}
 }

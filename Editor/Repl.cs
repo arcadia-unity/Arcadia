@@ -17,7 +17,7 @@ namespace Arcadia
 
 		static Repl()
 		{
-			RT.load("arcadia/repl");
+            Util.require("arcadia.repl");
 		}
 
 		[MenuItem("Arcadia/REPL/Window...")]

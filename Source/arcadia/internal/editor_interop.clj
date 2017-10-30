@@ -1,7 +1,9 @@
 (ns arcadia.internal.editor-interop
+  (:use clojure.pprint)
   (:require [clojure.string :as string]
             [arcadia.compiler :refer [aot-namespaces asset->ns]]
             [arcadia.internal.name-utils :refer [title-case]]
+            [arcadia.internal.state-help :as sh]
             [arcadia.config :as config])
   (:import [System.IO Directory File]
            [Arcadia AssetPostprocessor]
@@ -102,13 +104,42 @@
            []
            (grouped-state-map state))))
 
-(defn state-inspector! [atm]
-  (let [state @atm]
+;; freezing this while integrating jumpmap stuff
+;; (defn state-inspector! [atm]
+;;   (let [state @atm]
+;;     (if (empty? state)
+;;       (EditorGUILayout/HelpBox "Empty" MessageType/Info)
+;;       (let [state* (state-inspector state)]
+;;         (when-not (= state state*)
+;;           (reset! atm state*))))))
+
+(defn trim-str ^String [^String s max]
+  (. s (Substring 0 (min max (count s)))))
+
+(defn state-inspector! [^ArcadiaState arcs]
+  (let [state (sh/jumpmap-to-map (.state arcs))]
     (if (empty? state)
       (EditorGUILayout/HelpBox "Empty" MessageType/Info)
-      (let [state* (state-inspector state)]
-        (when-not (= state state*)
-          (reset! atm state*))))))
+      (let [s (binding [*print-level* 15
+                        *print-length* 10]
+                (try
+                  (with-out-str
+                    (pprint
+                      (sh/jumpmap-to-map (.state arcs))))
+                  (catch Exception e
+                    (str e))))]
+        (EditorGUILayout/HelpBox
+          (if (< 3e3 (count s))
+            (str (trim-str s 3e3) "...")
+            s)
+          MessageType/Info))))
+  ;; (let [state @atm]
+  ;;   (if (empty? state)
+  ;;     (EditorGUILayout/HelpBox "Empty" MessageType/Info)
+  ;;     (let [state* (state-inspector state)]
+  ;;       (when-not (= state state*)
+  ;;         (reset! atm state*)))))
+  )
 
 (defmethod value-widget String [v]
   (EditorGUILayout/TextField (str v) nil))
@@ -229,23 +260,19 @@
         (GetField field-name)
         (SetValue obj field-value))))
 
-(defn aot-internal-namespaces [directory]
-  (aot-namespaces
-    directory
-    '[clojure.core clojure.core.protocols clojure.core.server
-      clojure.core.reducers clojure.main clojure.set clojure.zip
-      clojure.walk clojure.stacktrace clojure.template clojure.test
-      clojure.test.tap clojure.test.junit clojure.pprint clojure.clr.io
-      clojure.repl clojure.clr.shell clojure.string clojure.data
-      clojure.reflect clojure.edn])
-  (aot-namespaces
-    directory
-    '[arcadia.core arcadia.repl arcadia.packages arcadia.linear
-      arcadia.literals arcadia.config arcadia.compiler
-      arcadia.internal.tracker arcadia.internal.thread arcadia.internal.test
-      arcadia.internal.state arcadia.internal.spec
-      arcadia.internal.name-utils arcadia.internal.messages arcadia.internal.map-utils
-      arcadia.internal.macro arcadia.internal.leiningen arcadia.internal.functions
-      arcadia.internal.filewatcher-dummy arcadia.internal.file-system arcadia.internal.editor-interop
-      arcadia.internal.components arcadia.internal.benchmarking arcadia.internal.asset-watcher
-      arcadia.internal.array-utils arcadia.packages.data]))
+(def internal-namespaces
+  '[clojure.core clojure.core.protocols clojure.core.server
+    clojure.core.reducers clojure.main clojure.set clojure.zip
+    clojure.walk clojure.stacktrace clojure.template clojure.test
+    clojure.test.tap clojure.test.junit clojure.pprint clojure.clr.io
+    clojure.repl clojure.clr.shell clojure.string clojure.data
+    clojure.reflect clojure.edn
+    arcadia.core arcadia.repl arcadia.packages arcadia.linear
+    arcadia.literals arcadia.config arcadia.compiler
+    arcadia.internal.tracker arcadia.internal.thread arcadia.internal.test
+    arcadia.internal.state arcadia.internal.spec
+    arcadia.internal.name-utils arcadia.internal.messages arcadia.internal.map-utils
+    arcadia.internal.macro arcadia.internal.leiningen arcadia.internal.functions
+    arcadia.internal.filewatcher-dummy arcadia.internal.file-system arcadia.internal.editor-interop
+    arcadia.internal.components arcadia.internal.benchmarking arcadia.internal.asset-watcher
+    arcadia.internal.array-utils arcadia.packages.data])

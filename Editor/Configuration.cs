@@ -25,7 +25,7 @@ namespace Arcadia
 		[MenuItem("Arcadia/Configuration...")]
 		public static void Init()
 		{
-			RT.load("arcadia/config");
+            Util.require("arcadia.config");
 			RT.var("arcadia.config", "update!").invoke();
 
 			if (_clojureConfigurationObject == null)

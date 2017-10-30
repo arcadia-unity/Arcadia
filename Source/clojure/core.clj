@@ -5701,7 +5701,7 @@ Note that read can execute code (controlled by *read-eval*),
 ;;;;;;;;;;; require/use/load, contributed by Stephen C. Gilardi ;;;;;;;;;;;;;;;;;;
 
 (defonce ^:dynamic 
-  ^{:private true
+  ^{;;:private true
      :doc "A ref to a sorted set of symbols representing loaded libs"}
   *loaded-libs* (ref (sorted-set)))
 

@@ -161,7 +161,7 @@
 (def-vop-lower v2-
   {:op UnityEngine.Vector2/op_Subtraction
    :return-type UnityEngine.Vector2/op_Subtraction
-   :unary-op UnityEngine.Vector3/op_UnaryNegation})
+   :unary-op UnityEngine.Vector2/op_UnaryNegation})
 
 (def-vop-lower v3-
   {:op UnityEngine.Vector3/op_Subtraction
@@ -171,7 +171,7 @@
 (def-vop-lower v4- 
   {:op UnityEngine.Vector4/op_Subtraction
    :return-type UnityEngine.Vector4/op_Subtraction
-   :unary-op UnityEngine.Vector3/op_UnaryNegation})
+   :unary-op UnityEngine.Vector4/op_UnaryNegation})
 
 ;; undecided whether to support variadic versions of these
 ;; non-associative multiply and divide ops (eg force associativity, at
@@ -239,6 +239,9 @@
 (definline euler-angles ^UnityEngine.Vector3 [^UnityEngine.Quaternion q]
   `(.eulerAngles ~q))
 
+;; Consistently throws ArgumentException: Cannot get TypeToken for a ByRef type.
+;; on AOT. Commenting out until this is fixed in the compiler. 
+#_
 (definline to-angle-axis [^UnityEngine.Quaternion q]
   `(let [ang# (float 0)
          axis# UnityEngine.Vector3/zero]

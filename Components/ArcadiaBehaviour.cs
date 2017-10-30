@@ -1,162 +1,301 @@
 ﻿using UnityEngine;
-//using System.Collections.Generic;
+using System;
+using System.Collections.Generic;
 using clojure.lang;
+using System.Linq;
+using Arcadia;
 
+[RequireComponent(typeof(ArcadiaState))]
 public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 {
 	[SerializeField]
-	public string edn = "{}";
+	public string edn = "[]";
 
 	[System.NonSerialized]
 	protected bool _fullyInitialized = false;
 
-	public bool fullyInitialized 
-	{
+	[System.NonSerialized]
+	protected GameObject _go;
+
+	public bool fullyInitialized {
 		get {
 			return _fullyInitialized;
 		}
 	}
-		
-	// so we can avoid the whole question of defrecord, contravariance, etc for now
-	public class StateContainer
-	{
-		public readonly IPersistentMap indexes;
-		public readonly IFn[] fns;
 
-		public StateContainer ()
+	public class IFnInfo
+	{
+		public object key;
+		public IFn fn;
+		public JumpMap.PartialArrayMapView pamv;
+
+		// for the awkward pause between deserialization and connection to the scene graph
+		public object[] fastKeys = new object[0];
+
+		public IFnInfo (object key, IFn fn, JumpMap.PartialArrayMapView pamv)
 		{
-			indexes = PersistentHashMap.EMPTY;
-			fns = new IFn[0];
+
+			this.key = key;
+			this.fn = fn;
+			this.pamv = pamv;
+			if (pamv != null)
+				this.fastKeys = pamv.keys;
 		}
 
-		public StateContainer (IPersistentMap _indexes, System.Object[] _fns)
+		public static IFnInfo LarvalIFnInfo (object key, IFn fn)
 		{
-			indexes = _indexes;
-			fns = new IFn[_fns.Length];
-			for (var i = 0; i < fns.Length; i++) {
-				fns[i] = (IFn)_fns[i];
+			return LarvalIFnInfo(key, fn, new object[0]);
+		}
+
+		public static IFnInfo LarvalIFnInfo (object key, IFn fn, object[] fastKeys)
+		{
+			var inf = new IFnInfo(key, fn, null);
+			inf.fastKeys = fastKeys;
+			return inf;
+		}
+
+		public bool IsLarval ()
+		{
+			return pamv == null;
+		}
+
+		public void Realize (JumpMap jm)
+		{
+			if (pamv == null)
+				pamv = jm.pamv(fastKeys);
+		}
+	}
+
+	// ============================================================
+	// data
+
+	private IFnInfo[] ifnInfos_ = new IFnInfo[0];
+
+	// maybe this should be NonSerialized
+	// [System.NonSerialized]
+	public ArcadiaState arcadiaState;
+
+	// compute indexes lazily
+	private IPersistentMap indexes_;
+
+	public IFnInfo[] ifnInfos {
+		get {
+			return ifnInfos_;
+		}
+		set {
+			ifnInfos_ = value;
+			InvalidateIndexes();
+		}
+	}
+
+	public object[] keys {
+		get {
+			var arr = new object[ifnInfos_.Length];
+			for (int i = 0; i < ifnInfos_.Length; i++) {
+				arr[i] = ifnInfos_[i].key;
 			}
+			return arr;
 		}
 	}
 
-	public Atom state = new Atom(new StateContainer());
-
-	private static IFn requireFn = null;
-
-	private static IFn hookStateDeserializeFn = null;
-
-	private static IFn hookStateSerializedEdnFn = null;
-
-	private static IFn addFnFn = null;
-
-	private static IFn removeFnFn = null;
-
-	private static IFn removeAllFnsFn = null;
-
-	private static IFn buildHookStateFn = null;
-
-	public static IFn requireVarNamespacesFn = null;
-
-	public IPersistentMap indexes 
-	{
+	public IFn[] fns {
 		get {
-			return ((StateContainer)state.deref()).indexes;
+			var arr = new IFn[ifnInfos_.Length];
+			for (int i = 0; i < ifnInfos_.Length; i++) {
+				arr[i] = ifnInfos_[i].fn;
+			}
+			return arr;
 		}
 	}
 
-	public IFn[] fns
-	{		
+	public IPersistentMap indexes {
 		get {
-			return ((StateContainer)state.deref()).fns;
+			if (indexes_ == null)
+				indexes_ = Arcadia.Util.Zipmap(keys, fns);
+			return indexes_;
 		}
 	}
 
-	private static void require (string s)
-	{
-		if (requireFn == null) {
-			requireFn = RT.var("clojure.core", "require");
-		}
-		requireFn.invoke(Symbol.intern(s));
-	}
+	// ============================================================
+	// vars etc
 
-	private static void initializeVars ()
+	private static Var requireFn;
+
+	private static Var hookStateDeserializeFn;
+
+	private static Var serializeBehaviourFn;
+
+	public static Var requireVarNamespacesFn;
+
+	[System.NonSerialized]
+	public static bool varsInitialized = false;
+
+	private static void InitializeOwnVars ()
 	{
 		string nsStr = "arcadia.internal.hook-help";
-		require(nsStr);
-		if (hookStateDeserializeFn == null)
-			hookStateDeserializeFn = RT.var(nsStr, "hook-state-deserialize");
-		if (hookStateSerializedEdnFn == null)
-			hookStateSerializedEdnFn = RT.var(nsStr, "hook-state-serialized-edn");
-		if (addFnFn == null)
-			addFnFn = RT.var(nsStr, "add-fn");
-		if (removeFnFn == null)
-			removeFnFn = RT.var(nsStr, "remove-fn");
-		if (removeAllFnsFn == null)
-			removeAllFnsFn = RT.var(nsStr, "remove-all-fns");
-		if (buildHookStateFn == null)
-			buildHookStateFn = RT.var(nsStr, "build-hook-state");
-		if (requireVarNamespacesFn == null)
-			requireVarNamespacesFn = RT.var(nsStr, "require-var-namespaces");
+		Arcadia.Util.require(nsStr);
+		Arcadia.Util.getVar(ref hookStateDeserializeFn, nsStr, "hook-state-deserialize");
+		Arcadia.Util.getVar(ref serializeBehaviourFn, nsStr, "serialize-behaviour");
+		Arcadia.Util.getVar(ref requireVarNamespacesFn, nsStr, "require-var-namespaces");
+
+		varsInitialized = true;
 	}
 
-	public void OnBeforeSerialize()
-	{
-		edn = (string)hookStateSerializedEdnFn.invoke(this);
-	}
+	// ============================================================
 
-	public void AddFunction (IFn f)
+	public void InvalidateIndexes ()
 	{
-		if (!fullyInitialized) {
-			Init();
-		}
-		AddFunction(f, f);
+		indexes_ = null;
 	}
 
 	public void AddFunction (IFn f, object key)
 	{
-		if (!fullyInitialized) {
-			Init();
+		AddFunction(f, key, new object[0]);
+	}
+
+	public void AddFunction (IFn f, object key, object[] fastKeys)
+	{
+		FullInit();
+		
+		for (int i = 0; i < ifnInfos_.Length; i++) {
+			var inf = ifnInfos_[i];
+			if (inf.key == key) {
+				InvalidateIndexes();
+				// shift over
+				if (i < ifnInfos_.Length - 1)
+					Arcadia.Util.WindowShift(ifnInfos_, i + 1, ifnInfos_.Length - 1, i);
+				ifnInfos_[ifnInfos_.Length - 1] = new IFnInfo(key, f, arcadiaState.pamv(fastKeys));
+				return;
+			}
 		}
-		addFnFn.invoke(this, key, f);
+		
+		ifnInfos = Arcadia.Util.ArrayAppend(
+			ifnInfos_,
+			new IFnInfo(key, f, arcadiaState.pamv(fastKeys)));
+	}
+
+	public void AddFunctions (IFnInfo[] newIfnInfos)
+	{
+		var ixs = indexes;
+		var newKeys = new HashSet<System.Object>(newIfnInfos.Select(inf => inf.key));
+
+		ifnInfos = ifnInfos
+			.Where(inf => !newKeys.Contains(inf.key))
+			.Concat(newIfnInfos)
+			.ToArray();
 	}
 
 	public void RemoveAllFunctions ()
 	{
-		if (!fullyInitialized) {
-			Init();
-		}
-		removeAllFnsFn.invoke(this);
+		ifnInfos = new IFnInfo[0];
 	}
 
 	public void RemoveFunction (object key)
 	{
-		if (!fullyInitialized) {
-			Init();
+		int inx = -1;
+		for (int i = 0; i < ifnInfos_.Length; i++) {
+			if (ifnInfos_[i].key == key) {
+				inx = i;
+				break;
+			}
 		}
-		removeFnFn.invoke(this, key);
+		if (inx != -1) {
+			ifnInfos = Arcadia.Util.ArrayRemove(ifnInfos_, inx);
+		}
 	}
 
-	public void OnAfterDeserialize()
+
+	// ============================================================
+	// setup
+
+	public void RealizeAll (JumpMap jm)
 	{
-#if UNITY_EDITOR
-		Init();
-#endif
+		foreach (var inf in ifnInfos) {
+			if (inf.IsLarval()) {
+				inf.Realize(jm);
+			}
+		}
 	}
 
-	public virtual void Awake()
+	public void FullInit ()
+	{
+		if (_fullyInitialized)
+			return;
+
+		//Init();
+		InitializeOwnVars();
+		// deserialization:
+		hookStateDeserializeFn.invoke(this);
+		arcadiaState = GetComponent<ArcadiaState>();
+		arcadiaState.Initialize();
+		RealizeAll(arcadiaState.state);
+		requireVarNamespacesFn.invoke(this);
+
+		_fullyInitialized = true;
+		_go = gameObject;
+
+		// for debugging
+		foreach (var inf in ifnInfos_) {
+			if (inf.IsLarval()) {
+				Debug.Log("Larval inf encountered! inf.key: " + inf.key + "; inf.fn: " + inf.fn);
+			}
+		}
+	}
+
+	public void RefreshPamvs ()
+	{
+		for (int i = 0; i < ifnInfos_.Length; i++) {
+			var inf = ifnInfos_[i];
+			if (!inf.IsLarval()) {
+				ifnInfos_[i].pamv.Refresh();
+			}
+		}
+	}
+
+	public bool HasEvacuatedKV ()
+	{
+		for (int i = 0; i < ifnInfos_.Length; i++) {
+			var pamv = ifnInfos_[i].pamv;
+			if (pamv != null) {
+				var kvs = pamv.kvs;
+				for (int j = 0; j < kvs.Length; j++) {
+					if (!kvs[j].isInhabited)
+						return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	// ============================================================
+	// messages
+
+	public virtual void Awake ()
 	{
 		FullInit();
 	}
 
-	public void Init() {
-		initializeVars();
-		hookStateDeserializeFn.invoke(this);		
+	public void OnBeforeSerialize ()
+	{
+		FullInit();
+		edn = (string)serializeBehaviourFn.invoke(this);
 	}
 
-	public void FullInit() {
-		Init();
-		requireVarNamespacesFn.invoke(this);
-		_fullyInitialized = true;
+	public void OnAfterDeserialize ()
+	{
+		//Debug.Log("edn:\n" + edn);
+		//if (!varsInitialized)
+		//	InitializeOwnVars();
+		//hookStateDeserializeFn.invoke(this);
+	}
+
+	// ============================================================
+	// Errors
+
+	public void PrintContext (int infInx)
+	{
+		var inf = ifnInfos_[infInx];
+		Debug.LogError("Context: key: " + inf.key + "; fn: " + inf.fn + "; GameObject: " + _go.name + "; GameObject id: " + _go.GetInstanceID(), _go);
 	}
 
 	// ============================================================
@@ -168,11 +307,24 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 			FullInit();
 		}
 
-		var _go = gameObject;
-		var _fns = fns;
-		for (int i = 0; i < _fns.Length; i++) {
-			_fns[i].invoke(_go);
-		}		
+		HookStateSystem.arcadiaState = arcadiaState;
+		HookStateSystem.hasState = true;
+		int i = 0;
+		try {
+			for (; i < ifnInfos_.Length; i++) {
+				var inf = ifnInfos_[i];
+				HookStateSystem.pamv = inf.pamv;
+				var v = inf.fn as Var;
+				if (v != null) {
+					((IFn)v.getRawRoot()).invoke(_go, inf.key);
+				} else {
+					inf.fn.invoke(_go, inf.key);
+				}
+			}
+		} catch (System.Exception e) {
+			PrintContext(i);
+			throw e;
+		}
 	}
 
 	public void RunFunctions (object arg1)
@@ -181,10 +333,23 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 			FullInit();
 		}
 
-		var _go = gameObject;
-		var _fns = fns;
-		for (int i = 0; i < _fns.Length; i++) {
-			_fns[i].invoke(_go, arg1);
+		HookStateSystem.arcadiaState = arcadiaState;
+		HookStateSystem.hasState = true;
+		int i = 0;
+		try {
+			for (; i < ifnInfos_.Length; i++) {
+				var inf = ifnInfos_[i];
+				HookStateSystem.pamv = inf.pamv;
+				var v = inf.fn as Var;
+				if (v != null) {
+					((IFn)v.getRawRoot()).invoke(_go, arg1, inf.key);
+				} else {
+					inf.fn.invoke(_go, arg1, inf.key);
+				}
+			}
+		} catch (System.Exception e) {
+			PrintContext(i);
+			throw e;
 		}
 	}
 
@@ -194,10 +359,23 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 			FullInit();
 		}
 
-		var _go = gameObject;
-		var _fns = fns;
-		for (int i = 0; i < _fns.Length; i++) {
-			_fns[i].invoke(_go, arg1, arg2);
+		HookStateSystem.arcadiaState = arcadiaState;
+		HookStateSystem.hasState = true;
+		int i = 0;
+		try {
+			for (; i < ifnInfos_.Length; i++) {
+				var inf = ifnInfos_[i];
+				HookStateSystem.pamv = inf.pamv;
+				var v = inf.fn as Var;
+				if (v != null) {
+					((IFn)v.getRawRoot()).invoke(_go, arg1, arg2, inf.key);
+				} else {
+					inf.fn.invoke(_go, arg1, arg2, inf.key);
+				}
+			}
+		} catch (System.Exception e) {
+			PrintContext(i);
+			throw e;
 		}
 	}
 
@@ -207,10 +385,23 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 			FullInit();
 		}
 
-		var _go = gameObject;
-		var _fns = fns;
-		for (int i = 0; i < _fns.Length; i++) {
-			_fns[i].invoke(_go, arg1, arg2, arg3);
+		HookStateSystem.arcadiaState = arcadiaState;
+		HookStateSystem.hasState = true;
+		int i = 0;
+		try {
+			for (; i < ifnInfos_.Length; i++) {
+				var inf = ifnInfos_[i];
+				HookStateSystem.pamv = inf.pamv;
+				var v = inf.fn as Var;
+				if (v != null) {
+					((IFn)v.getRawRoot()).invoke(_go, arg1, arg2, arg3, inf.key);
+				} else {
+					inf.fn.invoke(_go, arg1, arg2, arg3, inf.key);
+				}
+			}
+		} catch (System.Exception e) {
+			PrintContext(i);
+			throw e;
 		}
 	}
 }
