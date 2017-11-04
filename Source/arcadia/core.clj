@@ -583,21 +583,25 @@
   "Updates the state of object `go` with function `f` and additional
   arguments `args` at key `k`. Args are applied in the same order as
   `clojure.core/update`."
+  ([go k f]
+   (with-cmpt go [arcs ArcadiaState]
+     (.Add arcs k (f (.ValueAtKey arcs k)))
+     go))
   ([go k f x]
    (with-cmpt go [arcs ArcadiaState]
-     (.Add arcs (f (.ValueAtKey arcs k) x))
+     (.Add arcs k (f (.ValueAtKey arcs k) x))
      go))
   ([go k f x y]
    (with-cmpt go [arcs ArcadiaState]
-     (.Add arcs (f (.ValueAtKey arcs k) x y))
+     (.Add arcs k (f (.ValueAtKey arcs k) x y))
      go))
   ([go k f x y z]
    (with-cmpt go [arcs ArcadiaState]
-     (.Add arcs (f (.ValueAtKey arcs k) x y z))
+     (.Add arcs k (f (.ValueAtKey arcs k) x y z))
      go))
   ([go k f x y z & args]
    (with-cmpt go [arcs ArcadiaState]
-     (.Add arcs (apply f (.ValueAtKey arcs k) x y z args))
+     (.Add arcs k (apply f (.ValueAtKey arcs k) x y z args))
      go)))
 
 ;; ============================================================
