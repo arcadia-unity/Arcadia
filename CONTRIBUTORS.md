@@ -3,3 +3,4 @@
 * Jeaye - [jeaye](https://github.com/jeaye)
 * Maxim - [2048terrabit](https://github.com/2048terrabit)
 * Douglas P. Fields, Jr. [LispEngineer](https://github.com/LispEngineer)
+* Joshua Suskalo - [IGJoshua](https://github.com/IGJoshua)
