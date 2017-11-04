@@ -37,7 +37,11 @@ namespace Arcadia
 		public override void OnInspectorGUI()
 		{
 			userConfigFilePath = EditorGUILayout.TextField("Configuration File", userConfigFilePath);
-			RT.var("arcadia.config", "render-gui").invoke();
+			// Protect against no arcadia.config/render-gui
+			Var acrg = RT.var("arcadia.config", "render-gui");
+			if (acrg != null) {
+				acrg.invoke();
+			}
 		}
 	}
 }
