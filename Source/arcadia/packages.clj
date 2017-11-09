@@ -104,17 +104,12 @@
 
 (defn download-file [url file]
   (with-open [wc (WebClient.)]
-    (try (.. wc (DownloadFile url file))
-      file
-      (catch System.Net.WebException e
-        nil))))
+    (.. wc (DownloadFile url file)))
+  file)
 
 (defn download-string [url]
   (with-open [wc (WebClient.)]
-    (try
-      (.. wc (DownloadString url))
-      (catch System.Net.WebException e
-        nil))))
+    (.. wc (DownloadString url))))
 
 (defn base-url [group artifact version]
   (str (short-base-url group artifact version)
@@ -334,6 +329,8 @@
         (contains? installed
           (pd/normalize-coordinates coord)))))
 
+;; Returns either nil, if the coordinate is blocked,
+;; or a vector of extraction data (maps, see `extract`).
 (defn install
   ([group-artifact-version]
    (install group-artifact-version nil))
@@ -392,12 +389,25 @@
 ;; ============================================================
 ;; do everything
 
+;; As it stands, the return of `install` will be either nil if the
+;; coordinate is blocked, or a vector of extraction data. The extraction data
+;; may contain reports of errors during the downloading and extraction phase,
+;; it is cooked up in `extract`. 
 (defn- install-step [dep]
   (let [manifest (library-manifest)]
     (when-let [install-data (install dep {::manifest manifest})]
-      (write-library-manifest
-        (update manifest ::installed
-          (fnil into #{}) (map ::coord) install-data))
+      (reduce
+        (fn [manifest', {:keys [::succeeded ::coord ::error]}]
+          (if succeeded
+            (let [manifest'' (update manifest' ::installed
+                               (fnil into #{}) (map ::coord) install-data)]
+              (write-library-manifest manifest'')
+              manifest'')
+            (do (Debug/Log (str "Installation for coordinate " coord " failed. Error: "))
+                (Debug/Log error)
+                manifest')))
+        manifest
+        install-data)
       install-data)))
 
 (defonce ^:private install-queue
