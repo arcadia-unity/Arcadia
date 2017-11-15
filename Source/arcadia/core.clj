@@ -4,6 +4,7 @@
             clojure.set
             [arcadia.internal.messages :refer [messages interface-messages]]
             [arcadia.internal.macro :as mac]
+            [arcadia.internal.map-utils :as mu]
             [arcadia.internal.name-utils :refer [camels-to-hyphens]]
             [arcadia.internal.state-help :as sh]
             arcadia.literals)
@@ -588,6 +589,69 @@
      (.Add arcs k (f (.ValueAtKey arcs k)))
      go))
   ([go k f x]
+   (with-cmpt go [arcs ArcadiaState])))
+
+;; ============================================================
+;; state
+
+(defn- ensure-state ^ArcadiaState [go]
+  (ensure-cmpt go ArcadiaState))
+
+(defn state
+  "Returns the state of object `go` at key `k`."
+  ([gobj]
+   (with-cmpt gobj [s ArcadiaState]
+     (persistent!
+       (reduce (fn [m, ^Arcadia.JumpMap+KeyVal kv]
+                 (assoc! m (.key kv) (.val kv)))
+         (transient {})
+         (.. s state KeyVals)))))
+  ([gobj k]
+   (Arcadia.HookStateSystem/Lookup gobj k)))
+
+(declare mutable)
+
+(defn- maybe-mutable [x]
+  (if (and (map? x)
+           (contains? x ::mutable-type))
+    (mutable x)
+    x))
+
+(defn state+
+  "Sets the state of object `go` to value `v` at key `k`. If no key is provided, "
+  ([go v]
+   (state+ go :default v))
+  ([go k v]
+   (with-cmpt go [arcs ArcadiaState]
+     (.Add arcs k (maybe-mutable v))
+     go)))
+
+(defn state-
+  "Removes the state of object `go` at key `k`. If no key is provided,
+  removes state at key `default`."
+  ([go]
+   (state- go :default))
+  ([go k]
+   (with-cmpt go [arcs ArcadiaState]
+     (.Remove arcs k)
+     go)))
+
+(defn clear-state
+  "Removes all state from the GameObject `go`."
+  [go]
+  (with-cmpt go [arcs ArcadiaState]
+    (.Clear arcs)
+    go))
+
+(defn update-state
+  "Updates the state of object `go` with function `f` and additional
+  arguments `args` at key `k`. Args are applied in the same order as
+  `clojure.core/update`."
+  ([go k f]
+   (with-cmpt go [arcs ArcadiaState]
+     (.Add arcs k (f (.ValueAtKey arcs k)))
+     go))
+  ([go k f x]
    (with-cmpt go [arcs ArcadiaState]
      (.Add arcs k (f (.ValueAtKey arcs k) x))
      go))
@@ -602,6 +666,8 @@
   ([go k f x y z & args]
    (with-cmpt go [arcs ArcadiaState]
      (.Add arcs k (apply f (.ValueAtKey arcs k) x y z args))
+
+     (.Add arcs k (f (.ValueAtKey arcs k) x))
      go)))
 
 ;; ============================================================
@@ -742,19 +808,53 @@
 ;; ============================================================
 ;; defmutable
 
-;; defn using Activator/CreateInstance sort of screws up
-;; (defn parse-user-type [[type-sym & args :as input]]
-;;   (reset! put-log input)
-;;   (Activator/CreateInstance (resolve type-sym) (into-array Object args)))
+(s/def ::protocol-impl
+  (s/cat
+    :protocol-name symbol?
+    :method-impls (s/*
+                    (s/spec
+                      (s/cat
+                        :name symbol?
+                        :args vector?
+                        :body (s/* any?))))))
+
+(s/def ::element-snapshots-impl
+  (s/cat
+    :args (s/and vector? #(= 2 (count %)))
+    :body (s/* any?)))
+
+(s/def ::element-snapshots-map
+  (s/map-of
+    #(or (symbol? %) (keyword? %))
+    ::element-snapshots-impl))
+
+(s/def ::default-element-snapshots-impl
+  (s/spec
+    (s/cat
+      :args (s/and vector? #(= 3 (count %)))
+      :body (s/* any?))))
+
+(s/def ::more-opts
+  (s/*
+    (s/alt
+      :element-snapshots-map (s/cat
+                               :key #{:element-snapshots}
+                               :element-snapshots ::element-snapshots-map)
+      :default-element-snapshots (s/cat
+                                   :key #{:default-element-snapshots}
+                                   :default-element-snapshots-impl ::default-element-snapshots-impl))))
 
 (s/def ::defmutable-args
   (s/cat
     :name symbol?
-    :fields (s/coll-of symbol?, :kind vector?)))
+    :fields (s/coll-of symbol?, :kind vector?)
+    :protocol-impls (s/* ::protocol-impl)
+    :more-opts ::more-opts))
 
+;; the symbol
 (defn mutable-dispatch [{t ::mutable-type}]
-  (cond (instance? System.Type t) t
-        (symbol? t) (resolve t)
+  (cond (instance? System.Type t) (symbol (pr-str t))
+        (symbol? t) t
         :else (throw
                 (Exception.
                   (str "Expects type or symbol, instead got instance of " (class t))))))
@@ -799,6 +899,56 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
           (clojure.string/replace "-" "_"))
       "."
       (name type-sym))))
+
+(defn- snapshot-dictionary-form [this-sym fields element-snapshots-map default-element-snapshots]
+  (println "element-snapshots-map" element-snapshots-map)
+  (println "default-element-snapshots" default-element-snapshots)
+  (let [dict-sym (gensym "dictionary_")
+        key-sym (gensym "key_")
+        val-sym (gensym "val_")
+        this-sym-2 (gensym "this_")
+        process-element-sym (gensym "process-element_")
+        processed-field-kvs (apply concat
+                              (for [field fields
+                                    :let [cljf (clojurized-keyword field)]]
+                                [cljf `(~process-element-sym
+                                        ~this-sym
+                                        ~cljf
+                                        ~field)]))]
+    `(let [~process-element-sym  (fn [~this-sym-2 ~key-sym ~val-sym] ; this function will be handed off to 
+                                   (case ~key-sym ; .ToPersistentMap on the internal dictionary
+                                     ~@(apply concat
+                                         (for [[k, {[this-sym-3 val-sym-2] :args,
+                                                    body :body}] element-snapshots-map]
+                                           (let [rform `(let [~this-sym-3 ~this-sym-2
+                                                              ~val-sym-2 ~val-sym]
+                                                          ~@body)
+                                                 k2 (if (keyword? k) k (clojurized-keyword k))]
+                                             [k2 rform])))
+                                     ~(if default-element-snapshots
+                                        (let [{[this-sym-3 key-sym-2 val-sym-2] :args
+                                               body :body} default-element-snapshots]
+                                          `(let [~this-sym-3 ~this-sym-2
+                                                 ~key-sym-2 ~key-sym
+                                                 ~val-sym-2 ~val-sym]
+                                             ~@body))
+                                        val-sym)))
+           ~dict-sym (.ToPersistentMap ~'defmutable-internal-dictionary ~this-sym ~process-element-sym)]       
+       ~(if (seq fields)
+          `(assoc ~dict-sym
+             ~@processed-field-kvs)
+          dict-sym))))
+
+;; (defn field-snapshot-forms [this-sym fields element-snapshots-map default-element-snapshots]
+;;   (for [field fields]
+;;     (if-let [[_ {[arg-sym] :args
+;;                  body :body}] (find element-snapshots-map field)]
+;;       `(let [~arg-sym (cond
+;;                         (symbol? field) field
+;;                         (keyword? field) `(valAt ~this-sym field)
+;;                         :else (throw (Exception. "Field must be keyword or symbol")))]
+;;          ~@body)
+;;       (if-let [[[this-sym-2 ]] default-element-snapshots]))))
 
 ;; note: there are 2 serialization formats for defmutable currently,
 ;; snapshot and what it prints as. one of those *could* preserve reference
@@ -848,7 +998,9 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
       (throw (Exception.
                (str "Invalid arguments to defmutable. Spec explanation: "
                     (with-out-str (clojure.spec/explain ::defmutable-args args)))))
-      (let [{:keys [name fields]} parse
+      (let [{:keys [name fields protocol-impls more-opts]} parse
+            {{element-snapshots-map :element-snapshots} :element-snapshots-map
+             default-element-snapshots :default-element-snapshots} (into {} more-opts)
             type-name (expand-type-sym name)
             param-sym (-> (gensym (str name "_"))
                           (with-meta {:tag type-name}))
@@ -894,7 +1046,12 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
                                           [n even-args-mut-impl])))})
             ctr (symbol (str  "->" name))
             lookup-cases (mapcat list field-kws fields)
-            this-sym (gensym "this_")]
+            this-sym (gensym "this_")
+            protocol-impl-forms (apply concat
+                                  (for [{:keys [protocol-name method-impls]} protocol-impls]
+                                    (cons protocol-name
+                                      (for [{:keys [name args body]} method-impls]
+                                        (list* name args body)))))]
         `(do (declare ~ctr)
              (let [t# (deftype ~name ~(-> (->> fields (mapv #(vary-meta % assoc :unsynchronized-mutable true)))
                                           (conj
@@ -913,13 +1070,21 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
                           (do ~ensure-internal-dictionary-form
                               (~ctr ~@fields (.Clone ~'defmutable-internal-dictionary))))
                         ISnapshotable
-                        (snapshot [this#]
+                        (snapshot [~this-sym]
                           ~ensure-internal-dictionary-form
                           {::mutable-type (quote ~type-name)
-                           ::dictionary (assoc (.ToPersistentMap ~'defmutable-internal-dictionary)
-                                          ~@(interleave field-kws fields))})
+                           ::dictionary ~(snapshot-dictionary-form this-sym fields
+                                           element-snapshots-map default-element-snapshots)
+                           ;; (snapshot-dictionary-form 
+                                        ;;   ~(if (seq fields)
+                                        ;;      `(assoc (.ToPersistentMap ~'defmutable-internal-dictionary)
+                                        ;;         )
+                                        ;;      `(.ToPersistentMap ~'defmutable-internal-dictionary)))
+                           })
                         IMutable
-                        ~@mut-impl)]
+                        ~@mut-impl
+                        ;; splice in any other protocol implementations, including overwrites for these defaults
+                        ~@protocol-impl-forms)]
                ;; add an arity to the generated constructor
                ~(let [naked-fields (map #(vary-meta % dissoc :tag) fields)]
                   `(let [prev-fn# (var-get (var ~ctr))]
@@ -934,7 +1099,7 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
                   `(defn ~(symbol (str "map->" name)) [~map-sym]
                      (~ctr ~@field-vals (new Arcadia.DefmutableDictionary (dissoc ~map-sym ~@field-kws)))))
                ;; serialize as dictionary
-               (defmethod mutable ~type-name [~data-param]
+               (defmethod mutable (quote ~type-name) [~data-param]
                  ~(let [dict-sym  (gensym "dict_")
                         field-vals (for [kw field-kws] `(get ~dict-sym ~kw))]
                     `(let [~dict-sym (get ~data-param ::dictionary)]
