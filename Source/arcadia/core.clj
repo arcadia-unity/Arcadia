@@ -876,6 +876,18 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
              ~@processed-field-kvs)
           dict-sym))))
 
+;; takes a symbol representing a type
+(defmulti concrete-fields identity)
+
+(defmulti concrete-field-kws identity)
+
+(defn dynamic-element-map [type-symbol element-map]
+  (apply dissoc element-map (concrete-field-kws type-symbol)))
+
+(defn dynamic-element-dict [type-symbol element-map]
+  (new Arcadia.DefmutableDictionary
+    (dynamic-element-map type-symbol element-map)))
+
 ;; (defn field-snapshot-forms [this-sym fields element-snapshots-map default-element-snapshots]
 ;;   (for [field fields]
 ;;     (if-let [[_ {[arg-sym] :args
@@ -1011,13 +1023,7 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
                           ~ensure-internal-dictionary-form
                           {::mutable-type (quote ~type-name)
                            ::dictionary ~(snapshot-dictionary-form this-sym fields
-                                           element-snapshots-map default-element-snapshots)
-                           ;; (snapshot-dictionary-form 
-                                        ;;   ~(if (seq fields)
-                                        ;;      `(assoc (.ToPersistentMap ~'defmutable-internal-dictionary)
-                                        ;;         )
-                                        ;;      `(.ToPersistentMap ~'defmutable-internal-dictionary)))
-                           })
+                                           element-snapshots-map default-element-snapshots)})
                         IMutable
                         ~@mut-impl
                         ;; splice in any other protocol implementations, including overwrites for these defaults
@@ -1041,18 +1047,17 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
                         field-vals (for [kw field-kws] `(get ~dict-sym ~kw))]
                     `(let [~dict-sym (get ~data-param ::dictionary)]
                        (~ctr ~@field-vals (new Arcadia.DefmutableDictionary (dissoc ~dict-sym ~@field-kws))))))
-               (defmethod arcadia.literals/parse-user-type (quote ~type-name) [[_# ~dict-param]]
-                 ~(let [field-vals (for [kw field-kws] `(get ~dict-param ~kw))]
-                    `(~ctr ~@field-vals (new Arcadia.DefmutableDictionary (dissoc ~dict-param ~@field-kws)))))
+               (defmethod concrete-fields (quote ~type-name) [_#]
+                 (quote ~fields))
+               (defmethod concrete-field-kws (quote ~type-name) [_#]
+                 ~(mapv clojurized-keyword fields))
+               (defmethod arcadia.literals/parse-user-type (quote ~type-name) [~dict-param]
+                 (mutable ~dict-param))
                ~(let [field-map (zipmap field-kws
                                   (map (fn [field] `(. ~this-sym ~field)) fields))]
                  `(defmethod print-method ~type-name [~this-sym ^System.IO.TextWriter stream#]
-                    (let [datavec# [(quote ~type-name)
-                                    (into
-                                      (.ToPersistentMap (. ~this-sym defmutable-internal-dictionary))
-                                      ~field-map)]]
-                      (.Write stream#
-                        (str "#arcadia.core/mutable " (pr-str datavec#))))))
+                    (.Write stream#
+                      (str "#arcadia.core/mutable " (pr-str (snapshot ~this-sym))))))
                t#))))))
 
 (defmacro defmutable-once
