@@ -589,69 +589,6 @@
      (.Add arcs k (f (.ValueAtKey arcs k)))
      go))
   ([go k f x]
-   (with-cmpt go [arcs ArcadiaState])))
-
-;; ============================================================
-;; state
-
-(defn- ensure-state ^ArcadiaState [go]
-  (ensure-cmpt go ArcadiaState))
-
-(defn state
-  "Returns the state of object `go` at key `k`."
-  ([gobj]
-   (with-cmpt gobj [s ArcadiaState]
-     (persistent!
-       (reduce (fn [m, ^Arcadia.JumpMap+KeyVal kv]
-                 (assoc! m (.key kv) (.val kv)))
-         (transient {})
-         (.. s state KeyVals)))))
-  ([gobj k]
-   (Arcadia.HookStateSystem/Lookup gobj k)))
-
-(declare mutable)
-
-(defn- maybe-mutable [x]
-  (if (and (map? x)
-           (contains? x ::mutable-type))
-    (mutable x)
-    x))
-
-(defn state+
-  "Sets the state of object `go` to value `v` at key `k`. If no key is provided, "
-  ([go v]
-   (state+ go :default v))
-  ([go k v]
-   (with-cmpt go [arcs ArcadiaState]
-     (.Add arcs k (maybe-mutable v))
-     go)))
-
-(defn state-
-  "Removes the state of object `go` at key `k`. If no key is provided,
-  removes state at key `default`."
-  ([go]
-   (state- go :default))
-  ([go k]
-   (with-cmpt go [arcs ArcadiaState]
-     (.Remove arcs k)
-     go)))
-
-(defn clear-state
-  "Removes all state from the GameObject `go`."
-  [go]
-  (with-cmpt go [arcs ArcadiaState]
-    (.Clear arcs)
-    go))
-
-(defn update-state
-  "Updates the state of object `go` with function `f` and additional
-  arguments `args` at key `k`. Args are applied in the same order as
-  `clojure.core/update`."
-  ([go k f]
-   (with-cmpt go [arcs ArcadiaState]
-     (.Add arcs k (f (.ValueAtKey arcs k)))
-     go))
-  ([go k f x]
    (with-cmpt go [arcs ArcadiaState]
      (.Add arcs k (f (.ValueAtKey arcs k) x))
      go))
