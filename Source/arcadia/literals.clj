@@ -278,7 +278,11 @@
 ;; and we also have to do this, for the repl:
 (when (.getThreadBinding ^clojure.lang.Var #'*data-readers*)
   (set! *data-readers*
-    (assoc *data-readers* 'arcadia.core/mutable #'parse-user-type)))
+    (merge *data-readers*
+      ;; I guess. so weird
+      (.getRawRoot #'*data-readers*)
+      ;;'arcadia.core/mutable #'parse-user-type
+      )))
 
 ;; ============================================================
 
