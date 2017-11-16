@@ -378,27 +378,25 @@
 ;; ============================================================
 ;; do everything
 
-              (write-library-manifest manifest'')
-
 ;; As it stands, the return of `install` will be either nil if the
 ;; coordinate is blocked, or a vector of extraction data. The extraction data
 ;; may contain reports of errors during the downloading and extraction phase,
 ;; it is cooked up in `extract`. 
 (defn- install-step [dep]
   (let [manifest (library-manifest)]
-    (when-let [install-data (install dep {::manifest manifest})
-               manifest2 (reduce
-                           (fn [manifest', {:keys [::succeeded ::coord ::error]}]
-                             (if succeeded
-                               (update manifest' ::installed
-                                 (fnil into #{}) (map ::coord) install-data)
-                               (do (Debug/Log (str "Installation for coordinate " coord " failed. Error: "))
-                                   (Debug/Log error)
-                                   manifest')))
-                           manifest
-                           install-data)]
-      (write-library-manifest manifest2)
-      install-data)))
+    (when-let [install-data (install dep {::manifest manifest})]
+      (let [manifest2 (reduce
+                        (fn [manifest', {:keys [::succeeded ::coord ::error]}]
+                          (if succeeded
+                            (update manifest' ::installed
+                              (fnil into #{}) (map ::coord) install-data)
+                            (do (Debug/Log (str "Installation for coordinate " coord " failed. Error: "))
+                                (Debug/Log error)
+                                manifest')))
+                        manifest
+                        install-data)]
+        (write-library-manifest manifest2)
+        install-data))))
 
 (defonce ^:private install-queue
   (Queue/Synchronized (Queue.)))
