@@ -48,11 +48,11 @@ namespace Arcadia
 		{
 			var len = dict.Count * 2;
 			var kvs = new object[len];
-			var dictKvs = dict.GetEnumerator();
-			for (int i = 0; i < len; i++) {
-				var kv = dictKvs.Current;
+			int i = 0;
+			foreach (var kv in dict) {
 				kvs[i] = kv.Key;
 				kvs[i + 1] = kv.Value;
+				i+=2;
 			}
 			return PersistentHashMap.create(kvs);
 		}
@@ -61,11 +61,11 @@ namespace Arcadia
 		{
 			var len = dict.Count * 2;
 			var kvs = new object[len];
-			var dictKvs = dict.GetEnumerator();
-			for (int i = 0; i < len; i++) {
-				var kv = dictKvs.Current;
+			int i = 0;
+			foreach (var kv in dict) {
 				kvs[i] = kv.Key;
 				kvs[i + 1] = processElement.invoke(mutInst, kv.Key, kv.Value);
+				i+=2;
 			}
 			return PersistentHashMap.create(kvs);
 		}
