@@ -682,6 +682,12 @@
     spec)
   obj)
 
+(defn roles+ [obj spec]
+  (reduce-kv role+ obj spec))
+
+(defn roles- [obj ks]
+  (reduce role- obj ks))
+
 (s/fdef role
   :args (s/cat :obj #(satisfies? ISceneGraph %)
                :k any?)
