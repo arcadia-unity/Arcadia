@@ -277,10 +277,10 @@
 
 ;; and we also have to do this, for the repl:
 (when (.getThreadBinding ^clojure.lang.Var #'*data-readers*)
-  (set! *data-readers*
-    (merge *data-readers*
+  (set! clojure.core/*data-readers*
+    (merge clojure.core/*data-readers*
       ;; I guess. so weird
-      (.getRawRoot #'*data-readers*)
+      (.getRawRoot #'clojure.core/*data-readers*)
       ;;'arcadia.core/mutable #'parse-user-type
       )))
 
@@ -288,7 +288,7 @@
 
 ;; this is stupid
 
-(def the-bucket (.getRawRoot #'*data-readers*))
+(def the-bucket (.getRawRoot #'clojure.core/*data-readers*))
 
 ;; (Debug/Log "At end of arcadia.literals. the-bucket:")
 ;; (Debug/Log the-bucket)
