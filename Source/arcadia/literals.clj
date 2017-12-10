@@ -246,3 +246,9 @@
 (when (.getThreadBinding ^clojure.lang.Var #'*data-readers*)
   (set! *data-readers*
     (assoc *data-readers* 'arcadia.core/mutable #'parse-user-type)))
+
+;; ============================================================
+
+;; this is stupid
+
+(def the-bucket (.getRawRoot #'*data-readers*))
