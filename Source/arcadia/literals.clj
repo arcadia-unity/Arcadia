@@ -6,12 +6,7 @@
             BindingFlags
             ParameterInfo]
            [System TimeSpan]
-           [UnityEngine Debug]
-           [System.Reflection Assembly]
-           [System.Diagnostics Stopwatch]))
-
-(def ^Stopwatch sw3 (Stopwatch.))
-(.Start sw3)
+           [System.Reflection Assembly]))
 
 ;; ============================================================
 ;; object database 
@@ -134,19 +129,11 @@
         (parser-for-value-type t)
         (install-parser-for-value-type t)))))
 
-(def ^Stopwatch sw (Stopwatch.))
-(.Start sw)
-
 (value-type-stuff)
 
 (doseq [t value-types]
   (install-value-type-print-method t)
   (install-value-type-print-dup t))
-
-(.Stop sw)
-(Debug/Log
-  (str "Milliseconds to value type parser eval stuff: "
-       (.TotalMilliseconds (.Elapsed sw))))
 
 ;; ============================================================
 ;; object types
@@ -187,16 +174,8 @@
 
 
 
-(def ^Stopwatch sw2 (Stopwatch.))
-(.Start sw2)
 
 (object-type-stuff)
-
-(.Stop sw2)
-(Debug/Log
-  (str "Milliseconds to object type parser eval stuff: "
-       (.TotalMilliseconds (.Elapsed sw2))))
-
 
 ;; AnimationCurves are different
 ;; finish
@@ -231,18 +210,6 @@
     assoc
     'unity/AnimationCurve
     #'arcadia.literals/parse-AnimationCurve))
-
-
-(.Stop sw3)
-;; (Debug/Log
-;;   (str "Milliseconds to namespace eval stuff: "
-;;        (.TotalMilliseconds (.Elapsed sw3))))
-
-;; (Debug/Log "At end of arcadia.literals. *data-readers*:")
-;; (Debug/Log *data-readers*)
-
-;; (Debug/Log "At end of arcadia.literals. (.getRawRoot #'*data-readers*):")
-;; (Debug/Log (.getRawRoot #'*data-readers*))
 
 ;; ============================================================
 ;; for defmutable:
@@ -279,14 +246,3 @@
 (when (.getThreadBinding ^clojure.lang.Var #'*data-readers*)
   (set! *data-readers*
     (assoc *data-readers* 'arcadia.core/mutable #'parse-user-type)))
-
-;; ============================================================
-
-;; this is stupid
-
-(def the-bucket (.getRawRoot #'*data-readers*))
-
-;; (Debug/Log "At end of arcadia.literals. the-bucket:")
-;; (Debug/Log the-bucket)
-
-
