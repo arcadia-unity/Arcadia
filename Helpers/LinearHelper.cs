@@ -1,8 +1,17 @@
 using UnityEngine;
+using clojure.lang;
 
 namespace Arcadia {
 
 	public static class LinearHelper{
+
+        public static IPersistentVector toAngleAxis(Quaternion q)
+        {
+            float ang;
+            Vector3 axis;
+            q.ToAngleAxis(out ang, out axis);
+            return PersistentVector.create(ang, axis);
+        }
 
 		public static Matrix4x4 matrix (
 			float a, float b, float c, float d,

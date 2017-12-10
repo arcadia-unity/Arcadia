@@ -239,18 +239,8 @@
 (definline euler-angles ^UnityEngine.Vector3 [^UnityEngine.Quaternion q]
   `(.eulerAngles ~q))
 
-;; Consistently throws ArgumentException: Cannot get TypeToken for a ByRef type.
-;; on AOT. Commenting out until this is fixed in the compiler. 
-#_
 (definline to-angle-axis [^UnityEngine.Quaternion q]
-  `(let [ang# (float 0)
-         axis# UnityEngine.Vector3/zero]
-     (.ToAngleAxis ~q (by-ref ang#) (by-ref axis#))
-     [ang# axis#]))
-
-;; this gives some weird SIGILL problem
-;; (defn angle-axis [^Double angle, ^Vector3 axis]
-;;   (Quaternion/AngleAxis angle, axis))
+  `(Arcadia.LinearHelper/toAngleAxis ~q))
 
 (definline angle-axis ^UnityEngine.Quaternion [angle, axis]
   `(UnityEngine.Quaternion/AngleAxis ~angle, ~axis))
