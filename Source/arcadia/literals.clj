@@ -77,7 +77,8 @@
   (some #(instance? ObsoleteAttribute %) (.GetCustomAttributes t false)))
 
 (def value-types
-  (->> (Assembly/Load "UnityEngine")
+  (->> UnityEngine.Vector3
+       .Assembly
        .GetTypes
        (filter #(.IsValueType ^Type %))
        (filter #(.IsVisible ^Type %))
@@ -140,7 +141,8 @@
 ;; ============================================================
 
 (def object-types
-  (->> (Assembly/Load "UnityEngine")
+  (->> UnityEngine.GameObject
+       .Assembly
        .GetTypes
        (filter #(isa? % UnityEngine.Object))))
 
