@@ -12,6 +12,7 @@
            ArcadiaBehaviour+IFnInfo
            ArcadiaState
            [Arcadia UnityStatusHelper
+            Util
             HookStateSystem JumpMap
             JumpMap+KeyVal JumpMap+PartialArrayMapView
             DefmutableDictionary]
@@ -72,12 +73,10 @@
   `(UnityEngine.Object/op_Equality ~x nil))
 
 
-;; TODO better name
-(definline obj-nil
-  "Inlined version of null-obj? Could be merged in the future."
+(defn obj-nil
+  "Same as `identity`, except if x is a null UnityEngine.Object, will return nil."
   [x]
-  `(let [x# ~x]
-     (when-not (null-obj? x#) x#)))
+  (Util/TrueNil x))
 
 ;; ============================================================
 ;; wrappers

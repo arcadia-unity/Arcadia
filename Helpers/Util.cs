@@ -138,5 +138,16 @@ namespace Arcadia
 			return PersistentHashMap.create(kvs);
 		}
 
+		// ==================================================================
+		// nil
+
+		public static object TrueNil (object obj)
+		{
+			UnityEngine.Object obj2 = obj as UnityEngine.Object;
+			if (obj2 == null) {
+				return null;
+			}
+			return obj;
+		}
 	}
 }
