@@ -138,7 +138,7 @@ To confirm Arcadia's installation, check your Unity console. If it is not open, 
 
 ### Arcadia Configuration
 
-Configuration for Arcadia itself is done via a user-supplied `configuration.edn` file that should be placed under `Assets` in your Unity project. Options to `configuration.edn` are given in the format of a Clojure map literal, and are documented in [`Arcadia/configuration.edn`](Arcadia/configuration.edn), which is also the default configuration file.
+Configuration for Arcadia itself is done via a user-supplied `configuration.edn` file that should be placed under `Assets` in your Unity project. Options to `configuration.edn` are given in the format of a Clojure map literal, and are documented in [`Arcadia/configuration.edn`](configuration.edn), which is also the default configuration file.
 
 To determine the final set of configuration settings, Arcadia merges the user-supplied `configuration.edn` under `Assets` with the built-in `Arcadia/configuration.edn`; in other words, user settings overwrite those specified in `Arcadia/configuration.edn`. Please do not modify the default configuration file itself, as it provides the default behavior of Arcadia!
 
