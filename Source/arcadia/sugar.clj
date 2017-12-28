@@ -1,6 +1,9 @@
 (ns arcadia.sugar
-  (:refer-clojure :rename {let clet} :exclude [pmap])
-  (:require [clojure.spec :as s]))
+  (:refer-clojure :rename {let clet,
+                           when-let cwhen-let,
+                           if-let cif-let} :exclude [pmap])
+  (:require arcadia.core
+            [clojure.spec :as s]))
 
 (declare process-binding)
 
@@ -113,7 +116,7 @@
   (with-meta x (assoc (or (meta x) {}) :tag t)))
 
 (defn- expand-alias [sym]
-  (if-let [ns (get (ns-aliases *ns*) (symbol (.Namespace sym)))]
+  (cif-let [ns (get (ns-aliases *ns*) (symbol (.Namespace sym)))]
     (symbol (name (.Name ns)) (name sym))
     sym))
 
@@ -142,7 +145,7 @@
                           v)
                  :as (conj bvec v gsym)
                  :with-cmpt (reduce (fn [bvec [lhs rhs]]
-                                      (clet [form (-> `(ensure-cmpt ~gsym [cmpt# ~rhs]
+                                      (clet [form (-> `(arcadia.core/with-cmpt ~gsym [cmpt# ~rhs]
                                                          cmpt#)
                                                       (tagged rhs))]
                                         (process-binding bvec lhs form)))
@@ -159,6 +162,32 @@
     (reduce rfn
       bvec
       kkvs)))
+
+(defmethod destructuring-form 'arcadia.sugar/with-cmpt [bvec b v]
+  (clet [gsym (gensym "obj__")]
+    (reduce (fn [bvec [lhs rhs]]
+              (clet [form (-> `(arcadia.core/with-cmpt ~gsym [cmpt# ~rhs]
+                                 cmpt#)
+                              (tagged rhs))]
+                (process-binding bvec lhs form)))
+      (conj bvec gsym v)
+      (partition 2 (rest b)))))
+
+(defmethod destructuring-form 'arcadia.sugar/props [bvec b v]
+  (clet [gsym (gensym "obj__")]
+    (reduce (fn [bvec prop]
+              (conj bvec prop (list '. gsym prop)))
+      (conj bvec gsym v)
+      (rest b))))
+
+(defmethod destructuring-form 'arcadia.sugar/keys [bvec [_ & b] v]
+  (conj bvec {:keys (vec b)} v))
+
+(defmethod destructuring-form 'arcadia.sugar/syms [bvec [_ & b] v]
+  (conj bvec {:syms (vec b)} v))
+
+(defmethod destructuring-form 'arcadia.sugar/strs [bvec [_ & b] v]
+  (conj bvec {:strs (vec b)} v))
 
 (defn- process-binding [bvec b v]
   (cond
@@ -181,3 +210,37 @@
 (defmacro let [bindings & body]
   `(clojure.core/let [~@(destructure2 bindings)]
      ~@body))
+
+(defmacro when-let [bindings & body]
+  (assert
+    (vector? bindings)
+    (== 2 (count bindings)))
+  (let [form (bindings 0)
+        test (bindings 1)]
+    `(let [temp# ~test]
+       (when temp#
+         (let [~form temp#]
+           ~@body)))))
+
+(defmacro when-lets [bindings & body]
+  (assert
+    (vector? bindings)
+    (even? (count bindings)))
+  (let [[[x y] & rbindings] bindings]
+    (if (seq rbindings)
+      `(when-let [~x ~y]
+         (when-lets [~@rbindings]
+           ~@body))
+      `(when-let [~x ~y]
+         ~@body))))
+
+;; ============================================================
+;; imperative niceties
+
+(defmacro sets! [o & assignments]
+  (let [osym (gensym "obj__")
+        asgns (->> (partition 2 assignments)
+                   (map (fn [[lhs rhs]]
+                          `(set! (. ~osym ~lhs) ~rhs))))]
+    `(let [~osym ~o]
+       ~@asgns)))
