@@ -189,6 +189,9 @@
 
 ;; much of this might be condensed into a single alternate destructuring dsl for maps
 
+(defn ensure-set [x]
+  (if (set? x) x (set x)))
+
 ;; ==================================================
 
 (defn keysr
