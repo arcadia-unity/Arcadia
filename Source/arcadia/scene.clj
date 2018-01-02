@@ -156,16 +156,21 @@
   ([obj label]
    (-> @label-registry (get ::label->objects) (get label) (contains? obj))))
 
-(defn retire [k]
-  (locking label-registry ;; not repeatable
-    (let [hr @label-registry]
-      (if-let [xs (objects hr k)]
-        (reset! label-registry
-          (reduce #(do (unregister-object %1 %2)
-                       (ac/retire %2))
-            hr
-            xs))
-        hr))))
+(declare retire)
+
+(defn retire* [labels]
+  (reduce #(retire %2) nil labels)
+  nil)
+
+(defn retire
+  ([label]
+   (let [objs (objects label)]
+     (doseq [obj objs]
+       (ac/retire obj))
+     (unregister-label label)
+     nil))
+  ([label & labels]
+   (retire* (cons label labels))))
 
 (ac/defrole label-role
   :state {::labels nil}
