@@ -134,10 +134,10 @@
 (defn arities-forms
   ([base-fn] (arities-forms base-fn nil))
   ([base-fn, {:keys [::max-args, ::min-args, ::cases, ::arg-fn]
-              :or {::max-args 20,
-                   ::min-args 0,
-                   ::cases {},
-                   ::arg-fn #(gensym (str "arg-" (inc %) "_"))}}]
+              :or {max-args 20,
+                   min-args 0,
+                   cases {},
+                   arg-fn #(gensym (str "arg-" (inc %) "_"))}}]
    (let [args-n (range min-args (inc max-args))
          args (map arg-fn args-n)
          arity-args (vec (rest (reductions conj [] args)))

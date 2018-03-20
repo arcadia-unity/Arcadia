@@ -26,7 +26,7 @@
 (defn print-trace-element
   "Prints a Clojure-oriented view of one element in a stack trace."
   {:added "1.1"} 
-  [^System.Diagnostics.StackFrame e]                   ;;; in CLR, e will be a StackFrame
+  [e]                   ;;; in CLR, e will be a StackFrame
   (let [class   (if-let [t (.. e  (GetMethod) ReflectedType)] (.FullName t) "")         ;;;  (.getClassName e)
 	method      (.. e (GetMethod)  Name)]                             ;;;  (.getMethodName e)] 
     (let [match (re-matches #"^([A-Za-z0-9_.-]+)\$(\w+)__\d+$" (str class))]

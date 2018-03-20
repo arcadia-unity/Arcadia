@@ -1,4 +1,4 @@
-;   Copyright (c) Rich Hickey. All rights reserved.
+﻿;   Copyright (c) Rich Hickey. All rights reserved.
 ;   The use and distribution terms for this software are covered by the
 ;   Eclipse Public License 1.0 (http://opensource.org/licenses/eclipse-1.0.php)
 ;   which can be found in the file epl-v10.html at the root of this distribution.
@@ -20,7 +20,7 @@
 
 (defn- throwable?
   [x]
-  (instance? Exception x))
+  (instance? Exception x))                   ;;; Throwable
 
 (defn ->sym
   [x]
@@ -33,7 +33,7 @@
     (let [v (and (symbol? s-or-v) (resolve s-or-v))]
       (if (var? v)
         v
-        (throw (ArgumentException. (str (pr-str s-or-v) " does not name a var")))))))
+        (throw (ArgumentException. (str (pr-str s-or-v) " does not name a var")))))))            ;;; IllegalArgumentException.
 
 (defn- collectionize
   [x]
@@ -54,7 +54,7 @@ returns the set of all symbols naming vars in those nses."
               (keys (ns-interns ns-sym)))))
    (collectionize ns-sym-or-syms)))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; instrument ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+ ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; instrument ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (def ^:private ^:dynamic *instrument-enabled*
   "if false, instrumented fns call straight through"
@@ -84,19 +84,13 @@ guessing the original Clojure names. Returns a map with
   :local-fn      optional local Clojure symbol scoping fn def
 
 For non-Clojure fns, :scope and :local-fn will be absent."
-  [{:keys [method file line]
-    cls :class}]
+  [[cls method file line]]
   (let [clojure? (contains? '#{invoke invokeStatic} method)
         demunge #(clojure.lang.Compiler/demunge %)
         degensym #(str/replace % #"--.*" "")
         [ns-sym name-sym local] (when clojure?
-                                  (-> (->> (str/split (str cls) #"\$" 3)
-                                           (mapv demunge))
-                                      (update 0 #(str/replace % #"/" "."))))
-        ;; (when clojure?
-        ;;   (->> (str/split (str cls) #"\$" 3)
-        ;;        (map demunge)))
-        ]
+                                  (->> (str/split (str cls) #"\$" 3)
+                                       (map demunge)))]
     (merge {:file file
             :line line
             :method method
@@ -106,49 +100,19 @@ For non-Clojure fns, :scope and :local-fn will be absent."
            (when local
              {:local-fn (symbol (degensym local))}))))
 
-(def ^:private stack-frame-regex
-  (re-pattern
-    (clojure.string/join
-      (flatten
-        ["^\\s*at"
-         "\\s+(\\S+)\\.(\\S+)" ;; class & method
-         ".*(\\(.*\\))"        ;; params
-         "(?:\\s+(\\[.*\\]))?" ;; weirdness
-         "(?:\\s+in\\s+)?"
-         ["(?:"
-          "(\\S+?)"            ;; file
-          "\\:"
-          "(?:line\\D+)?"      ;; line
-          "(\\d+)"             ;; line number
-          ")?"]
-         ".*$"]))))
-
-(defn- parse-stack-trace [stack-trace]
-  (for [frame (clojure.string/split-lines stack-trace)]
-    (when-let [[_ class method args _ file line] (first
-                                                   (re-seq stack-frame-regex
-                                                     frame))]
-      {:class (symbol class)
-       :method (symbol method)
-       :args args
-       :file file
-       :line line})))
-
 (defn- stacktrace-relevant-to-instrument
   "Takes a coll of stack trace elements (as returned by
 StackTraceElement->vec) and returns a coll of maps as per
 interpret-stack-trace-element that are relevant to a
 failure in instrument."
-  [stack-trace]
+  [elems]
   (let [plumbing? (fn [{:keys [var-scope]}]
                     (contains? '#{clojure.spec.test/spec-checking-fn} var-scope))]
-    (sequence (comp ;;(map StackTraceElement->vec)
+    (sequence (comp (map StackTraceElement->vec)
                     (map interpret-stack-trace-element)
                     (filter :var-scope)
                     (drop-while plumbing?))
-      (parse-stack-trace stack-trace))))
-
-;; wish we had System.Diagnostics
+              elems)))
 
 (defn- spec-checking-fn
   [v f fn-spec]
@@ -156,7 +120,7 @@ failure in instrument."
         conform! (fn [v role spec data args]
                    (let [conformed (s/conform spec data)]
                      (if (= ::s/invalid conformed)
-                       (let [caller (->> Environment/StackTrace ;;(.StackTrace (Thread/currentThread))
+                       (let [caller (->> (System.Diagnostics.StackTrace. true)                               ;;; (.getStackTrace (Thread/currentThread))
                                          stacktrace-relevant-to-instrument
                                          first)
                              ed (merge (assoc (s/explain-data* spec [role] [] [] data)
@@ -165,29 +129,17 @@ failure in instrument."
                                        (when caller
                                          {::caller (dissoc caller :class :method)}))]
                          (throw (ex-info
-                                  (str "Call to " v " did not conform to spec:\n"
-                                       (with-out-str (s/explain-out ed)))
+                                 (str "Call to " v " did not conform to spec:\n" (with-out-str (s/explain-out ed)))
                                  ed)))
                        conformed)))]
     (fn
      [& args]
-      (if *instrument-enabled*
-        ;; Restoring checking for args. This is pretty directly from mainline
-        ;; clojure at 92df7b2a72dad83a901f86c1a9ec8fbc5dc1d1c7
-        (with-instrument-disabled
-          (let [specs fn-spec]
-            (let [cargs (when (:args specs) (conform! v :args (:args specs) args args))
-                  ret (binding [*instrument-enabled* true]
-                        (.applyTo ^clojure.lang.IFn f args))
-                  cret (when (:ret specs) (conform! v :ret (:ret specs) ret args))]
-              (when (and (:args specs) (:ret specs) (:fn specs))
-                (conform! v :fn (:fn specs) {:args cargs :ret cret} args))
-              ret)))
-        ;; (with-instrument-disabled
-        ;;   (when (:args fn-spec) (conform! v :args (:args fn-spec) args args))
-        ;;   (binding [*instrument-enabled* true]
-        ;;     (.applyTo ^clojure.lang.IFn f args)))
-        (.applyTo ^clojure.lang.IFn f args)))))
+     (if *instrument-enabled*
+       (with-instrument-disabled
+         (when (:args fn-spec) (conform! v :args (:args fn-spec) args args))
+         (binding [*instrument-enabled* true]
+           (.applyTo ^clojure.lang.IFn f args)))
+       (.applyTo ^clojure.lang.IFn f args)))))
 
 (defn- no-fspec
   [v spec]
@@ -208,12 +160,8 @@ failure in instrument."
   [spec sym {overrides :spec}]
   (get overrides sym spec))
 
-(def instrument-1-log (atom []))
-
 (defn- instrument-1
   [s opts]
-  (swap! instrument-1-log conj
-    {:s s :opts opts})
   (when-let [v (resolve s)]
     (when-not (-> v meta :macro)
       (let [spec (s/get-spec v)
@@ -245,8 +193,9 @@ failure in instrument."
 
 (defn- fn-spec-name?
   [s]
-  (symbol? s))
-
+  (and (symbol? s)
+       (not (some-> (resolve s) meta :macro))))
+ 
 (defn instrumentable-syms
   "Given an opts map as per instrument, returns the set of syms
 that can be instrumented."
@@ -345,7 +294,7 @@ with explain-data + ::s/failure."
         (if (= cret ::s/invalid)
           (explain-check args (:ret specs) ret :ret)
           (if (and (:args specs) (:ret specs) (:fn specs))
-            (if (s/valid? (:fn specs) {:args cargs :ret cret})
+             (if (s/valid? (:fn specs) {:args cargs :ret cret})
               true
               (explain-check args (:fn specs) {:args cargs :ret cret} :fn))
             true))))))
@@ -353,7 +302,7 @@ with explain-data + ::s/failure."
 (defn- quick-check
   [f specs {gen :gen opts ::stc/opts}]
   (let [{:keys [num-tests] :or {num-tests 1000}} opts
-        g (try (s/gen (:args specs) gen) (catch Exception t t))]
+        g (try (s/gen (:args specs) gen) (catch Exception t t))]                 ;;; Throwable
     (if (throwable? g)
       {:result g}
       (let [prop (gen/for-all* [g] #(check-call f specs %))]
@@ -374,15 +323,16 @@ with explain-data + ::s/failure."
 (defn- check-1
   [{:keys [s f v spec]} opts]
   (let [re-inst? (and v (seq (unstrument s)) true)
-        f (or f (when v @v))]
+        f (or f (when v @v))
+        specd (s/spec spec)]
     (try
      (cond
-      (nil? f)
+      (or (nil? f) (some-> v meta :macro))
       {:failure (ex-info "No fn to spec" {::s/failure :no-fn})
        :sym s :spec spec}
     
-      (:args spec)
-      (let [tcret (quick-check f spec opts)]
+      (:args specd)
+      (let [tcret (quick-check f specd opts)]
         (make-check-result s spec tcret))
     
       :default

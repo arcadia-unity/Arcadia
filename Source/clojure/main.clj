@@ -93,12 +93,14 @@
              *print-meta* *print-meta*
              *print-length* *print-length*
              *print-level* *print-level*
+             *print-namespace-maps* true
 			 *data-readers* *data-readers*
 			 *default-data-reader-fn* *default-data-reader-fn*
              *compile-path* (or (Environment/GetEnvironmentVariable "CLOJURE_COMPILE_PATH") ".")  ;;;(System/getProperty "clojure.compile.path" "classes")
              *command-line-args* *command-line-args*
 			 *unchecked-math* *unchecked-math*
              *assert* *assert*
+             clojure.spec/*explain-out* clojure.spec/*explain-out*
              *1 nil
              *2 nil
              *3 nil

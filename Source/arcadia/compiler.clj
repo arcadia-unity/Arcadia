@@ -173,14 +173,14 @@
                                 *compile-path* path
                                 *compile-files* true
                                 arcadia.compiler/*exporting?* true
-                                *loaded-libs* (ref #{})]
+                                clojure.core/*loaded-libs* (ref #{})]
                         (doseq [ns nss]
                           (require ns)
                           (when file-callback
                             (file-callback ns)))
-                        *loaded-libs*)]
+                        @#'clojure.core/*loaded-libs*)]
      (dosync
-       (alter *loaded-libs* into @loaded-libs'))
+       (alter @#'clojure.core/*loaded-libs* into @loaded-libs'))
      nil)))
 
 (defn aot-asset [path asset]

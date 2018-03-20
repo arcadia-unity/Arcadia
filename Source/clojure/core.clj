@@ -244,9 +244,10 @@
                           (if (instance? clojure.lang.Symbol tag)
                             (if (clojure.lang.Util/equiv (.IndexOf (.Name tag) ".") -1)                                              ;;; .indexOf  .getName
                               (if (clojure.lang.Util/equals nil (clojure.lang.CljCompiler.Ast.HostExpr/maybeSpecialTag tag))         ;;; clojure.lang.Compiler$HostExpr
-                                (let [t (.Name (clojure.lang.CljCompiler.Ast.HostExpr/MaybeType tag false))                         ;;; .getName  clojure.lang.Compiler$HostExpr  maybeClass
-                                      resolvedtag (clojure.lang.Symbol/intern t)]
-                                  (with-meta argvec (assoc m :tag resolvedtag)))
+                                (let [c (clojure.lang.CljCompiler.Ast.HostExpr/MaybeType tag false)]                                 ;;; clojure.lang.Compiler$HostExpr  maybeClass
+                                  (if c
+                                    (with-meta argvec (assoc m :tag (clojure.lang.Symbol/intern (.Name c))))                         ;;; .getName
+                                    argvec))
                                 argvec)
                               argvec)
                             argvec)))]
@@ -515,7 +516,12 @@
    :static true}
   [x] (clojure.lang.Util/identical x true))
 
-(defn not
+(defn boolean?
+  "Return true if x is a Boolean"
+  {:added "1.9"}
+  [x] (instance? Boolean x))
+
+ (defn not
   "Returns true if x is logical false, false otherwise."
   {:tag Boolean
    :added "1.0"
@@ -528,11 +534,6 @@
    :added "1.6"
    :static true}
   [x] (not (nil? x)))
-
-(defn boolean?
-  "Return true if x is a Boolean"
-  {:added "1.9"}
-  [x] (instance? Boolean x))
 
 (defn any?
   "Returns true given any argument."
@@ -1389,32 +1390,40 @@
   [n] (not (even? n)))
 
 (defn int?
-  "bad version of clojure jvm int?"
-  [x] (integer? x))
-
+  "Return true if x is a fixed precision integer"          ;;; DM: TODO: determine how or whether to handle unsigned types
+  {:added "1.9"}
+ [x] (or (instance? Int64 x)                               ;;; Long
+         (instance? Int32 x)                               ;;; Integer
+         (instance? Int16 x)                               ;;;	Short
+         (instance? Byte x)))
+ 
 (defn pos-int?
   "Return true if x is a positive fixed precision integer"
   {:added "1.9"}
   [x] (and (int? x)
            (pos? x)))
-
+ 
 (defn neg-int?
   "Return true if x is a negative fixed precision integer"
   {:added "1.9"}
   [x] (and (int? x)
            (neg? x)))
-
+ 
 (defn nat-int?
   "Return true if x is a non-negative fixed precision integer"
   {:added "1.9"}
   [x] (and (int? x)
            (not (neg? x))))
-
+ 
 (defn double?
   "Return true if x is a Double"
   {:added "1.9"}
   [x] (instance? Double x))
-
+ 
+(defn bigdec?
+  "Return true if x is a BigDecimal"
+  {:added "1.9"}
+  [x] (instance? clojure.lang.BigDecimal x))         ;;; java.math.BigDecimal
 
 ;;
 
@@ -1467,10 +1476,7 @@
   "Return true if x is a map entry"                              ;;; Given the way it is used, adding KeyValuePair<Object,Object> and DictionaryEntry doesn't seem right
   {:added "1.8"}
   [x]
-  (and (instance? clojure.lang.IMapEntry x)                    ;;;  (instance? java.util.Map$Entry x)
-    (if (instance? clojure.lang.IPersistentVector x)
-      (= 2 (count x))
-      true)))
+  (instance? clojure.lang.IMapEntry x))                          ;;;  (instance? java.util.Map$Entry x)
 
 (defn contains?
   "Returns true if key is present in the given collection, otherwise
@@ -1627,8 +1633,8 @@
   "Return true if x is a keyword with a namespace"
   {:added "1.9"}
   [x] (and (keyword? x) (namespace x) true))
-  
-(defmacro locking
+
+ (defmacro locking
   "Executes exprs in an implicit do, while holding the monitor of x.
   Will release the monitor of x in all circumstances."
   {:added "1.0"}
@@ -1751,7 +1757,8 @@
                       m)
         m           (if (meta mm-name)
                       (conj (meta mm-name) m)
-                      m)]
+                      m)
+        mm-name (with-meta mm-name m)]
     (when (= (count options) 1)
       (throw (Exception. "The syntax for defmulti has changed. Example: (defmulti name dispatch-fn :default dispatch-value)")))
     (let [options   (apply hash-map options)
@@ -1760,7 +1767,7 @@
 	 (check-valid-options options :default :hierarchy)
      `(let [v# (def ~mm-name)]
          (when-not (and (.hasRoot v#) (instance? clojure.lang.MultiFn (deref v#)))
-           (def ~(with-meta mm-name m)
+           (def ~mm-name
                 (new clojure.lang.MultiFn ~(name mm-name) ~dispatch-fn ~default ~hierarchy)))))))
 
 (defmacro defmethod
@@ -4330,68 +4337,94 @@ Note that read can execute code (controlled by *read-eval*),
   ([& keyvals] 
      (clojure.lang.PersistentArrayMap/createAsIfByAssoc (to-array keyvals))))
 
-;redefine let and loop  with destructuring
+;;redefine let and loop  with destructuring
 (defn destructure [bindings]
   (let [bents (partition 2 bindings)
         pb (fn pb [bvec b v]
-               (let [pvec
-                     (fn [bvec b val]
-                       (let [gvec (gensym "vec__")]
-                         (loop [ret (-> bvec (conj gvec) (conj val))
-                                n 0
-                                bs b
-                                seen-rest? false]
-                           (if (seq bs)
-                             (let [firstb (first bs)]
-                               (cond
-                                (= firstb '&) (recur (pb ret (second bs) (list `nthnext gvec n))
-                                                     n
-                                                     (nnext bs)
-                                                     true)
-                                (= firstb :as) (pb ret (second bs) gvec)
-                                :else (if seen-rest?
-                                        (throw (new Exception "Unsupported binding form, only :as can follow & parameter"))
-                                        (recur (pb ret firstb  (list `nth gvec n nil))
-                                               (inc n)
-                                               (next bs)
-                                               seen-rest?))))
-                             ret))))
-                     pmap
-                     (fn [bvec b v]
-                       (let [gmap (gensym "map__")
-					         gmapseq (with-meta gmap {:tag 'clojure.lang.ISeq})
-                             defaults (:or b)]
-                         (loop [ret (-> bvec (conj gmap) (conj v)
-                                        (conj gmap) (conj `(if (seq? ~gmap) (clojure.lang.PersistentHashMap/create (seq ~gmapseq)) ~gmap))
-                                        ((fn [ret]
-                                           (if (:as b)
-                                             (conj ret (:as b) gmap)
-                                             ret))))
-                                bes (reduce1
-                                     (fn [bes entry]
-                                       (reduce1 #(assoc %1 %2 ((val entry) %2))
-                                               (dissoc bes (key entry))
-                                               ((key entry) bes)))
-                                     (dissoc b :as :or)
-                                     {:keys #(if (keyword? %) % (keyword (str %))),
-                                      :strs str, :syms #(list `quote %)})]
-                           (if (seq bes)
-                             (let [bb (key (first bes))
-                                   bk (val (first bes))
-                                   bv (if (contains? defaults bb)
-                                        (list `get gmap bk (defaults bb))
-                                        (list `get gmap bk))]
-                               (recur (cond
-                                        (symbol? bb) (-> ret (conj (if (namespace bb) (symbol (name bb)) bb)) (conj bv))
-                                        (keyword? bb) (-> ret (conj (symbol (name bb)) bv))
-                                        :else (pb ret bb bv))
-                                     (next bes)))
-                             ret))))]
-                 (cond
-                  (symbol? b) (-> bvec (conj b) (conj v))
-                   (vector? b) (pvec bvec b v)
-                   (map? b) (pmap bvec b v)
-                   :else (throw (new Exception (str "Unsupported binding form: " b))))))
+             (let [pvec
+                   (fn [bvec b val]
+                     (let [gvec (gensym "vec__")
+                           gseq (gensym "seq__")
+                           gfirst (gensym "first__")
+                           has-rest (some #{'&} b)]
+                       (loop [ret (let [ret (conj bvec gvec val)]
+                                    (if has-rest
+                                      (conj ret gseq (list `seq gvec))
+                                      ret))
+                              n 0
+                              bs b
+                              seen-rest? false]
+                         (if (seq bs)
+                           (let [firstb (first bs)]
+                             (cond
+                              (= firstb '&) (recur (pb ret (second bs) gseq)
+                                                   n
+                                                   (nnext bs)
+                                                   true)
+                              (= firstb :as) (pb ret (second bs) gvec)
+                              :else (if seen-rest?
+                                      (throw (new Exception "Unsupported binding form, only :as can follow & parameter"))
+                                      (recur (pb (if has-rest
+                                                   (conj ret
+                                                         gfirst `(first ~gseq)
+                                                         gseq `(next ~gseq))
+                                                   ret)
+                                                 firstb
+                                                 (if has-rest
+                                                   gfirst
+                                                   (list `nth gvec n nil)))
+                                             (inc n)
+                                             (next bs)
+                                             seen-rest?))))
+                           ret))))
+                   pmap
+                   (fn [bvec b v]
+                     (let [gmap (gensym "map__")
+                           gmapseq (with-meta gmap {:tag 'clojure.lang.ISeq})
+                           defaults (:or b)]
+                       (loop [ret (-> bvec (conj gmap) (conj v)
+                                      (conj gmap) (conj `(if (seq? ~gmap) (clojure.lang.PersistentHashMap/create (seq ~gmapseq)) ~gmap))
+                                      ((fn [ret]
+                                         (if (:as b)
+                                           (conj ret (:as b) gmap)
+                                           ret))))
+                              bes (let [transforms
+                                          (reduce1
+                                            (fn [transforms mk]
+                                              (if (keyword? mk)
+                                                (let [mkns (namespace mk)
+                                                      mkn (name mk)]
+                                                  (cond (= mkn "keys") (assoc transforms mk #(keyword (or mkns (namespace %)) (name %)))
+                                                        (= mkn "syms") (assoc transforms mk #(list `quote (symbol (or mkns (namespace %)) (name %))))
+                                                        (= mkn "strs") (assoc transforms mk str)
+                                                        :else transforms))
+                                                transforms))
+                                            {}
+                                            (keys b))]
+                                    (reduce1
+                                        (fn [bes entry]
+                                          (reduce1 #(assoc %1 %2 ((val entry) %2))
+                                                   (dissoc bes (key entry))
+                                                   ((key entry) bes)))
+                                        (dissoc b :as :or)
+                                        transforms))]
+                         (if (seq bes)
+                           (let [bb (key (first bes))
+                                 bk (val (first bes))
+                                 local (if (instance? clojure.lang.Named bb) (with-meta (symbol nil (name bb)) (meta bb)) bb)
+                                 bv (if (contains? defaults local)
+                                      (list `get gmap bk (defaults local))
+                                      (list `get gmap bk))]
+                             (recur (if (ident? bb)
+                                      (-> ret (conj local bv))
+                                      (pb ret bb bv))
+                                    (next bes)))
+                           ret))))]
+               (cond
+                (symbol? b) (-> bvec (conj b) (conj v))
+                (vector? b) (pvec bvec b v)
+                (map? b) (pmap bvec b v)
+                :else (throw (new Exception (str "Unsupported binding form: " b))))))
         process-entry (fn [bvec b] (pb bvec (first b) (second b)))]
     (if (every? symbol? (map first bents))
       bindings
@@ -5256,6 +5289,13 @@ Note that read can execute code (controlled by *read-eval*),
   {:added "1.0"}
   [xs] `(. clojure.lang.Numbers longs ~xs))
 
+(defn bytes?
+  "Return true if x is a byte array"
+  {:added "1.9"}
+  [x] (if (nil? x)
+        false
+        (let [t (class x)] (and (.IsArray t) (= (.GetElementType t) Byte)))))                      ;;; (-> x class .getComponentType (= Byte/TYPE))
+
 ;(import '(java.util.concurrent BlockingQueue LinkedBlockingQueue))
 ;;;NOT WORTH THE EFFORT AT THE MOMENT
 ;(defn seque
@@ -5701,7 +5741,7 @@ Note that read can execute code (controlled by *read-eval*),
 ;;;;;;;;;;; require/use/load, contributed by Stephen C. Gilardi ;;;;;;;;;;;;;;;;;;
 
 (defonce ^:dynamic 
-  ^{;;:private true
+  ^{:private true
      :doc "A ref to a sorted set of symbols representing loaded libs"}
   *loaded-libs* (ref (sorted-set)))
 
@@ -6019,10 +6059,13 @@ Note that read can execute code (controlled by *read-eval*),
   created."
   {:added "1.0"
    :static true}
-  ([m [k & ks] f & args]
-   (if ks
-     (assoc m k (apply update-in (get m k) ks f args))
-     (assoc m k (apply f (get m k) args)))))
+  ([m ks f & args]
+     (let [up (fn up [m ks f args]
+                (let [[k & ks] ks]
+                  (if ks
+                    (assoc m k (up (get m k) ks f args))
+                    (assoc m k (apply f (get m k) args)))))]
+       (up m ks f args))))
 
 (defn update
   "'Updates' a value in an associative structure, where k is a
@@ -6061,7 +6104,12 @@ Note that read can execute code (controlled by *read-eval*),
    :static true}
   [x] (instance? clojure.lang.IPersistentList x))
 
-(defn ifn?
+(defn seqable?
+  "Return true if the seq function is supported for x"
+  {:added "1.9"}
+  [x] (clojure.lang.RT/canSeq x))
+ 
+ (defn ifn?
   "Returns true if x implements IFn. Note that many data structures
   (e.g. sets and maps) implement IFn"
   {:added "1.0"
@@ -6109,7 +6157,7 @@ Note that read can execute code (controlled by *read-eval*),
   "Return true if coll implements Indexed, indicating efficient lookup by index"
   {:added "1.9"}
   [coll] (instance? clojure.lang.Indexed coll))
-
+ 
 (def ^:dynamic 
  ^{:doc "bound in a repl thread to the most recent value printed"
    :added "1.0"}
@@ -6595,18 +6643,6 @@ Note that read can execute code (controlled by *read-eval*),
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; helper files ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (alter-meta! (find-ns 'clojure.core) assoc :doc "Fundamental library of the Clojure language") (load "core_clr")  ;;; Added
-
-(defn seqable? [x]
-  "Based on RT.cs, clojure.core/cast, clojure.core/instance. Uncertain whether it works in all cases"
-  (or
-    (nil? x)
-    (instance? clojure.lang.ASeq x)
-    (instance? clojure.lang.LazySeq x)
-    (instance? clojure.lang.Seqable x)
-    (array? x)
-    (string? x)
-    (instance? System.Collections.IEnumerable x)))
-
 (load "core_proxy")
 (load "core_print")
 (load "genclass")
@@ -6619,18 +6655,14 @@ Note that read can execute code (controlled by *read-eval*),
   (inst-ms* [inst]))
 
 (extend-protocol Inst
-  ;;java.util.Date
-  System.DateTime
-  ;;(inst-ms* [inst] (.getTime ^java.util.Date inst))
-  (inst-ms* [inst]
-    ;; from https://blogs.msdn.microsoft.com/brada/2004/03/20/seconds-since-the-unix-epoch-in-c/
-    (let [^System.TimeSpan t (System.DateTime/op_Subtraction
-                               System.DateTime/UtcNow
-                               (System.DateTime. 1970, 1, 1))]
-      (. t TotalMilliseconds))
-    ;;(.getTime ^System.DateTime inst)
-    )
-  )
+  DateTime                                                                                                     ;;; java.util.Date
+  (inst-ms* [inst] (long (.TotalMilliseconds (.Subtract ^DateTime inst (DateTime. 1970 1 1))))))               ;;; (.getTime ^java.util.Date inst)
+
+;; conditionally extend to Instant on Java 8+
+;;;(try
+;;;  (Class/forName "java.time.Instant")
+;;;  (load "core_instant18")
+;;;  (catch ClassNotFoundException cnfe))
 
 (defn inst-ms
   "Return the number of milliseconds since January 1, 1970, 00:00:00 GMT"
@@ -6646,6 +6678,11 @@ Note that read can execute code (controlled by *read-eval*),
 
 (load "uuid")
 
+(defn uuid?
+  "Return true if x is a java.util.UUID"
+  {:added "1.9"}
+  [x] (instance? System.Guid x))                                                               ;;; java.util.UUID
+  
 (defn reduce
   "f should be a function of 2 arguments. If val is not supplied,
   returns the result of applying f to the first 2 items in coll, then
@@ -6728,6 +6765,8 @@ clojure.lang.IKVReduce
   from-coll conjoined. A transducer may be supplied."
   {:added "1.0"
    :static true}
+  ([] [])
+  ([to] to)
   ([to from]
      (if (instance? clojure.lang.IEditableCollection to)
        (with-meta (persistent! (reduce conj! (transient to) from)) (meta to))
@@ -7464,6 +7503,30 @@ clojure.lang.IKVReduce
       ([result input]
          (reduce rrf result input)))))
 
+(defn halt-when
+  "Returns a transducer that ends transduction when pred returns true
+  for an input. When retf is supplied it must be a fn of 2 arguments -
+  it will be passed the (completed) result so far and the input that
+  triggered the predicate, and its return value (if it does not throw
+  an exception) will be the return value of the transducer. If retf
+  is not supplied, the input that triggered the predicate will be
+  returned. If the predicate never returns true the transduction is
+  unaffected."
+  {:added "1.9"}
+  ([pred] (halt-when pred nil))
+  ([pred retf]
+     (fn [rf]
+       (fn
+         ([] (rf))
+         ([result]
+            (if (and (map? result) (contains? result ::halt))
+              (::halt result)
+              (rf result)))
+         ([result input]
+            (if (pred input)
+              (reduced {::halt (if retf (retf (rf result) input) input)})
+              (rf result input)))))))
+
 (defn dedupe
   "Returns a lazy sequence removing consecutive duplicates in coll.
   Returns a transducer when no collection is provided."
@@ -7652,3 +7715,8 @@ clojure.lang.IKVReduce
  (catch Exception t                                                                 ;;; Throwable
    (System.Console/WriteLine (.StackTrace t))                                       ;;; .printStackTrace
    (throw t)))
+
+(defn uri?
+  "Return true if x is a java.net.URI"
+  {:added "1.9"}
+  [x] (instance? System.Uri x))                                                    ;;; java.net.URI
