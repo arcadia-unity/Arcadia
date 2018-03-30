@@ -368,15 +368,14 @@
 
 (defmacro if-cmpt
   "Execute body of code if `gob` has a component of type `cmpt-type`"
-  ([gob [cmpt-name cmpt-type] then]
-   `(with-cmpt ~gob [~cmpt-name ~cmpt-type]
-      (when ~cmpt-name
-        ~then)))
-  ([gob [cmpt-name cmpt-type] then else]
-   `(with-cmpt ~gob [~cmpt-name ~cmpt-type]
-      (if ~cmpt-name
-        ~then
-        ~else))))
+  [gob [cmpt-name cmpt-type] then & [else]]
+  (let [gobsym (gentagged "gob__" 'UnityEngine.GameObject)]
+    `(if (obj-nil ~gob)
+       (with-gobj [~gobsym ~gob]
+         (if-let [~(meta-tag cmpt-name cmpt-type) (cmpt ~gobsym ~cmpt-type)]
+           ~then
+           ~else))
+       ~else)))
 
 ;; ============================================================
 ;; traversal
