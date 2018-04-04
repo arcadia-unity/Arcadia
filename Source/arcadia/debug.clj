@@ -41,20 +41,27 @@
                (keys *env-store*))]
        ~expr)))
 
+(def ^:dynamic *reenable-breaks*)
+
 (defn- readr [prompt exit-code]
   (let [input (clojure.main/repl-read prompt exit-code)]
-    (if (#{:tl :resume} input)
-      exit-code
-      input)))
+    (cond
+      (#{:tl :resume} input) exit-code
+      (= :quit input) (do (disable-breaks)
+                          exit-code)
+      :else input)))
 
 (defn break-repl [label]
   (let [prompt (str "debug"
                     (when label (str ":" label))
                     "=> ")]
-    (clojure.main/repl
-      :prompt #(print prompt)
-      :read readr
-      :eval contextual-eval)))
+    (binding [*reenable-breaks* false]
+      (clojure.main/repl
+        :prompt #(print prompt)
+        :read readr
+        :eval contextual-eval)
+      (when *reenable-breaks*
+        (enable-breaks)))))
 
 (defmacro break
   "Inserts a breakpoint, suspending other evalution and entering a
