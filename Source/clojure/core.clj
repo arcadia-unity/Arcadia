@@ -859,9 +859,9 @@
 (defn zero?
   "Returns true if num is zero, else false"
   {
-   :inline (fn [x] `(. clojure.lang.Numbers (isZero ~x)))
+   :inline (fn [num] `(. clojure.lang.Numbers (isZero ~num)))
    :added "1.0"}
-  [x] (. clojure.lang.Numbers (isZero x)))
+  [num] (. clojure.lang.Numbers (isZero num)))
   
 (defn count
   "Returns the number of items in the collection. (count nil) returns
@@ -1239,16 +1239,16 @@
 (defn pos?
   "Returns true if num is greater than zero, else false"
   {:tag Boolean
-   :inline (fn [x] `(. clojure.lang.Numbers (isPos ~x)))
+   :inline (fn [num] `(. clojure.lang.Numbers (isPos ~num)))
    :added "1.0"}
-  [x] (. clojure.lang.Numbers (isPos x)))
+  [num] (. clojure.lang.Numbers (isPos num)))
 
 (defn neg?
   "Returns true if num is less than zero, else false"
   {
-   :inline (fn [x] `(. clojure.lang.Numbers (isNeg ~x)))
+   :inline (fn [num] `(. clojure.lang.Numbers (isNeg ~num)))
    :added "1.0"}
-  [x] (. clojure.lang.Numbers (isNeg x)))
+  [num] (. clojure.lang.Numbers (isNeg num)))
 
 (defn quot
   "quot[ient] of dividing numerator by denominator."
@@ -1599,7 +1599,14 @@
   [^clojure.lang.Named x]
     (. x (getNamespace)))
   
-(defn ident?
+(defn boolean
+  "Coerce to boolean"
+  {
+   :inline (fn  [x] `(. clojure.lang.RT (booleanCast ~x)))
+   :added "1.0"}
+  [x] (clojure.lang.RT/booleanCast x))
+
+ (defn ident?
   "Return true if x is a symbol or keyword"
   {:added "1.9"}
   [x] (or (keyword? x) (symbol? x)))
@@ -1612,7 +1619,7 @@
 (defn qualified-ident?
   "Return true if x is a symbol or keyword with a namespace"
   {:added "1.9"}
-  [x] (and (ident? x) (namespace x) true))
+  [x] (boolean (and (ident? x) (namespace x) true)))
 
 (defn simple-symbol?
   "Return true if x is a symbol without a namespace"
@@ -1622,7 +1629,7 @@
 (defn qualified-symbol?
   "Return true if x is a symbol with a namespace"
   {:added "1.9"}
-  [x] (and (symbol? x) (namespace x) true))
+  [x] (boolean (and (symbol? x) (namespace x) true)))
 
 (defn simple-keyword?
   "Return true if x is a keyword without a namespace"
@@ -1632,7 +1639,7 @@
 (defn qualified-keyword?
   "Return true if x is a keyword with a namespace"
   {:added "1.9"}
-  [x] (and (keyword? x) (namespace x) true))
+  [x] (boolean (and (keyword? x) (namespace x) true)))
 
  (defmacro locking
   "Executes exprs in an implicit do, while holding the monitor of x.
@@ -2343,7 +2350,18 @@
   ([^clojure.lang.IAtom atom f x] (.swap atom f x))
   ([^clojure.lang.IAtom atom f x y] (.swap atom f x y))
   ([^clojure.lang.IAtom atom f x y & args] (.swap atom f x y args)))
-  
+
+(defn swap-vals!
+  "Atomically swaps the value of atom to be:
+  (apply f current-value-of-atom args). Note that f may be called
+  multiple times, and thus should be free of side effects.
+  Returns [old new], the value of the atom before and after the swap."
+  {:added "1.9"}
+  (^clojure.lang.IPersistentVector [^clojure.lang.IAtom2 atom f] (.swapVals atom f))
+  (^clojure.lang.IPersistentVector [^clojure.lang.IAtom2 atom f x] (.swapVals atom f x))
+  (^clojure.lang.IPersistentVector [^clojure.lang.IAtom2 atom f x y] (.swapVals atom f x y))
+  (^clojure.lang.IPersistentVector [^clojure.lang.IAtom2 atom f x y & args] (.swapVals atom f x y args)))
+
 (defn compare-and-set!
   "Atomically sets the value of atom to newval if and only if the
   current value of the atom is identical to oldval. Returns true if
@@ -2358,6 +2376,12 @@
   {:added "1.0"
    :static true}
   [^clojure.lang.IAtom atom newval] (.reset atom newval))
+
+(defn reset-vals!
+  "Sets the value of atom to newval. Returns [old new], the value of the
+   atom before and after the reset."
+  {:added "1.9"}
+  ^clojure.lang.IPersistentVector [^clojure.lang.IAtom2 atom newval] (.resetVals atom newval))
 
 (defn set-validator
   "Sets the validator-fn for a var/ref/agent/atom. validator-fn must be nil or a
@@ -2765,7 +2789,7 @@
  
 (defn filter
   "Returns a lazy sequence of the items in coll for which
-  (pred item) returns true. pred must be free of side-effects.
+  (pred item) returns logical true. pred must be free of side-effects.
   Returns a transducer when no collection is provided."
   {:added "1.0"
    :static true}
@@ -2798,7 +2822,7 @@
     
 (defn remove
   "Returns a lazy sequence of the items in coll for which
-  (pred item) returns false. pred must be free of side-effects.
+  (pred item) returns logical false. pred must be free of side-effects.
   Returns a transducer when no collection is provided."
   {:added "1.0"
    :static true}
@@ -2860,7 +2884,7 @@
 
 (defn take-while
   "Returns a lazy sequence of successive items from coll while
-  (pred item) returns true. pred must be free of side-effects.
+  (pred item) returns logical true. pred must be free of side-effects.
   Returns a transducer when no collection is provided."
   {:added "1.0"
    :static true}
@@ -2908,8 +2932,8 @@
   "Return a lazy sequence of all but the last n (default 1) items in coll"
   {:added "1.0"
    :static true}
-  ([s] (drop-last 1 s))
-  ([n s] (map (fn [x _] x) s (drop n s))))
+  ([coll] (drop-last 1 coll))
+  ([n coll] (map (fn [x _] x) coll (drop n coll))))
 
 (defn take-last
   "Returns a seq of the last n items in coll.  Depending on the type
@@ -3248,7 +3272,7 @@
   "Blocks the current thread (indefinitely!) until all actions
   dispatched thus far, from this thread or agent, to the agent(s) have
   occurred.  Will block on failed agents.  Will never return if
-  a failed agent is restarted with :clear-actions true."
+  a failed agent is restarted with :clear-actions true or shutdown-agents was called."
   {:added "1.0"
    :static true}
   [& agents]
@@ -3485,13 +3509,6 @@
   {:inline (fn  [x] `(. clojure.lang.RT (~(if *unchecked-math* 'uncheckedCharCast 'charCast) ~x)))
    :added "1.1"}
   [x] (. clojure.lang.RT (charCast x)))  
-
-(defn boolean
-  "Coerce to boolean"
-  {
-   :inline (fn  [x] `(. clojure.lang.RT (booleanCast ~x)))
-   :added "1.0"}
-  [x] (clojure.lang.RT/booleanCast x))
 
 (defn unchecked-byte
   "Coerce to byte. Subject to rounding or truncation."
@@ -3814,9 +3831,11 @@ Note that read can execute code (controlled by *read-eval*),
     (let [gx (gensym)]
       `(let [~gx ~x]
          ~@(map (fn [f]
-                  (if (seq? f)
-                    `(~(first f) ~gx ~@(next f))
-                    `(~f ~gx)))
+                  (with-meta
+                    (if (seq? f)
+                      `(~(first f) ~gx ~@(next f))
+                      `(~f ~gx))
+                    (meta f)))
                 forms)
          ~gx)))
 
@@ -4913,22 +4932,44 @@ Note that read can execute code (controlled by *read-eval*),
   (^String [^String s start end] (. s (Substring start (- end start)))))    ;;; was (substring start end) -- different interpretation of second arg
 
 (defn max-key
-  "Returns the x for which (k x), a number, is greatest."
+  "Returns the x for which (k x), a number, is greatest.
+
+  If there are multiple such xs, the last one is returned."
   {:added "1.0"
    :static true}
   ([k x] x)
   ([k x y] (if (> (k x) (k y)) x y))
   ([k x y & more]
-   (reduce1 #(max-key k %1 %2) (max-key k x y) more)))
+   (let [kx (k x) ky (k y)
+         [v kv] (if (> kx ky) [x kx] [y ky])]
+     (loop [v v kv kv more more]
+       (if more
+         (let [w (first more)
+               kw (k w)]
+           (if (>= kw kv)
+             (recur w kw (next more))
+             (recur v kv (next more))))
+         v)))))
 
 (defn min-key
-  "Returns the x for which (k x), a number, is least."
+  "Returns the x for which (k x), a number, is least.
+
+  If there are multiple such xs, the last one is returned."
   {:added "1.0"
    :static true}
   ([k x] x)
   ([k x y] (if (< (k x) (k y)) x y))
   ([k x y & more]
-   (reduce1 #(min-key k %1 %2) (min-key k x y) more)))
+   (let [kx (k x) ky (k y)
+         [v kv] (if (< kx ky) [x kx] [y ky])]
+     (loop [v v kv kv more more]
+       (if more
+         (let [w (first more)
+               kw (k w)]
+           (if (<= kw kv)
+             (recur w kw (next more))
+             (recur v kv (next more))))
+         v)))))
 
 (defn distinct
   "Returns a lazy sequence of the elements of coll with duplicates removed.
@@ -5157,10 +5198,10 @@ Note that read can execute code (controlled by *read-eval*),
   array ret."
   {:added "1.0"}
   [a idx ret expr]
-  `(let [a# ~a
+  `(let [a# ~a l# (alength a#)
          ~ret (aclone a#)]
      (loop  [~idx 0]
-       (if (< ~idx  (alength a#))
+       (if (< ~idx  l#)
          (do
            (aset ~ret ~idx ~expr)
            (recur (unchecked-inc ~idx)))
@@ -5763,7 +5804,7 @@ Note that read can execute code (controlled by *read-eval*),
           exception (Exception. message)     
           ;; can't set the stacktrace ---- raw-trace (.getStackTrace exception)   
           ;;                          ---- boring? #(not= (.getMethodName ^StackTraceElement %) "doInvoke")
-         ];;                          ---- trace (into-array (drop 2 (drop-while boring? raw-trace)))]
+         ];;                          ---- trace (into-array StackTraceElement (drop 2 (drop-while boring? raw-trace)))]
       ;;;                           ---- (.setStackTrace exception trace)
       (throw (clojure.lang.Compiler+CompilerException.                   ;;; Compiler$CompilerException
               *file*
@@ -5928,9 +5969,11 @@ Note that read can execute code (controlled by *read-eval*),
   'require loads a lib by loading its root resource. The root resource path
   is derived from the lib name in the following manner:
   Consider a lib named by the symbol 'x.y.z; it has the root directory
-  <classpath>/x/y/, and its root resource is <classpath>/x/y/z.clj. The root
-  resource should contain code to create the lib's namespace (usually by using
-  the ns macro) and load any additional lib resources. 
+  <classpath>/x/y/, and its root resource is <classpath>/x/y/z.clj, or
+  <classpath>/x/y/z.cljc if <classpath>/x/y/z.clj does not exist. The
+  root resource should contain code to create the lib's
+  namespace (usually by using the ns macro) and load any additional
+  lib resources.
 
   Libspecs
 
@@ -6649,7 +6692,15 @@ Note that read can execute code (controlled by *read-eval*),
 (load "core_deftype")
 (load "core/protocols")
 (load "gvec")
-(load "instant")
+
+(defmacro ^:private when-class [class-name & body]
+  `(try
+     (clojure.lang.RT/classForNameE ^String ~class-name)                          ;;; Class/forName   -- not sure what else to replace this with
+     ~@body
+     (catch clojure.lang.TypeNotFoundException _#)))                              ;;; ClassNotFoundException
+
+(when-class "System.DateTime"                                                     ;;; "java.sql.Timestamp"
+  (load "instant"))
 
 (defprotocol Inst
   (inst-ms* [inst]))
@@ -6659,10 +6710,8 @@ Note that read can execute code (controlled by *read-eval*),
   (inst-ms* [inst] (long (.TotalMilliseconds (.Subtract ^DateTime inst (DateTime. 1970 1 1))))))               ;;; (.getTime ^java.util.Date inst)
 
 ;; conditionally extend to Instant on Java 8+
-;;;(try
-;;;  (Class/forName "java.time.Instant")
-;;;  (load "core_instant18")
-;;;  (catch ClassNotFoundException cnfe))
+;;;(when-class "java.time.Instant"
+;;;  (load "core_instant18"))
 
 (defn inst-ms
   "Return the number of milliseconds since January 1, 1970, 00:00:00 GMT"
@@ -6796,7 +6845,7 @@ clojure.lang.IKVReduce
 
 (defn filterv
   "Returns a vector of the items in coll for which
-  (pred item) returns true. pred must be free of side-effects."
+  (pred item) returns logical true. pred must be free of side-effects."
   {:added "1.4"
    :static true}
   [pred coll]
@@ -6818,7 +6867,8 @@ clojure.lang.IKVReduce
 (defn slurp
   "Opens a reader on f and reads all its contents, returning a string.
   See clojure.java.io/reader for a complete list of supported arguments."
-  {:added "1.0"}
+  {:added "1.0"
+   :tag String}
   ([f & opts]
      (let [opts (normalize-slurp-opts opts)
            sw (System.IO.StringWriter.)]                                                    ;;; java.io.StringWriter
@@ -7625,15 +7675,17 @@ clojure.lang.IKVReduce
 (def ^{:added "1.4"} default-data-readers
   "Default map of data reader functions provided by Clojure. May be
   overridden by binding *data-readers*."
-  {'inst #'clojure.instant/read-instant-datetime                          ;;; read-instant-date
-   'uuid #'clojure.uuid/default-uuid-reader})                
+  (merge
+    {'uuid #'clojure.uuid/default-uuid-reader}
+    (when-class "System.DateTime"                          ;;; "java.sql.Timestamp"
+      {'inst #'clojure.instant/read-instant-datetime})))   ;;; read-instant-date
 
 (def ^{:added "1.4" :dynamic true} *data-readers*
   "Map from reader tag symbols to data reader Vars.
 
   When Clojure starts, it searches for files named 'data_readers.clj'
-  at the root of the classpath. Each such file must contain a literal
-  map of symbols, like this:
+  and 'data_readers.cljc' at the root of the classpath. Each such file
+  must contain a literal map of symbols, like this:
 
       {foo/bar my.project.foo/bar
        foo/baz my.project/baz}
@@ -7654,7 +7706,7 @@ clojure.lang.IKVReduce
   Reader tags without namespace qualifiers are reserved for
   Clojure. Default reader tags are defined in
   clojure.core/default-data-readers but may be overridden in
-  data_readers.clj or by rebinding this Var."
+  data_readers.clj, data_readers.cljc, or by rebinding this Var."
   {})
 
 (def ^{:added "1.5" :dynamic true} *default-data-reader-fn* 

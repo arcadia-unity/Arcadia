@@ -1,6 +1,6 @@
 (ns arcadia.internal.spec
   (:refer-clojure :exclude [def])
-  (:require [clojure.spec :as s]
+  (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [clojure.pprint :as pprint])
   (:import [UnityEngine Debug]))
@@ -131,7 +131,7 @@
       (println "Success!"))))
 
 (defmacro legible [& body]
-  `(with-redefs [clojure.spec/explain-out explain-out]
+  `(with-redefs [clojure.spec.alpha/explain-out explain-out]
      ~@body))
 ;; ============================================================
 

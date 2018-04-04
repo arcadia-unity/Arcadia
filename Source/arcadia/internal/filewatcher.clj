@@ -9,7 +9,7 @@
             [clojure.repl :as repl]
             [clojure.set :as set])
   ;; prod
-  (:require [clojure.spec :as s]
+  (:require [clojure.spec.alpha :as s]
             [clojure.core.reducers :as r]
             [arcadia.internal.functions :as af]
             [arcadia.internal.file-system :as fs]

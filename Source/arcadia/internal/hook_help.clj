@@ -1,6 +1,6 @@
 (ns arcadia.internal.hook-help
   (:require arcadia.literals
-            [clojure.spec :as s]
+            [clojure.spec.alpha :as s]
             [arcadia.internal.namespace :as ans])
   (:import [UnityEngine Debug]
            clojure.lang.IFn

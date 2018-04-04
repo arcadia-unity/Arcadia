@@ -3,7 +3,7 @@
                            when-let cwhen-let,
                            if-let cif-let} :exclude [pmap])
   (:require arcadia.core
-            [clojure.spec :as s]))
+            [clojure.spec.alpha :as s]))
 
 (declare process-binding)
 
