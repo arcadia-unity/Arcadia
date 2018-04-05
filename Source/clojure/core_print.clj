@@ -132,15 +132,24 @@
 
 (defn fp-str [x]
    (let [s (str x)]
-     (if (or (.Contains s ".") (.Contains s "E") (.Contains s "NaN") (.Contains s "Infi"))
+     (if (or (.Contains s ".") (.Contains s "E"))
        s
        (str s ".0"))))
-       
-(defmethod print-method Double [o, ^System.IO.TextWriter w]
-  (.Write w (fp-str o)))
+;;; Whelp, now they have added in print-method for Double and Single, in order to handle infinities and NaN
+
+(defmethod print-method Double [o, ^System.IO.TextWriter w]+  
+  (cond
+    (= Double/PositiveInfinity o) (.Write w "##Inf")                            ;;; POSITIVE_INFINITY
+    (= Double/NegativeInfinity o) (.Write w "##-Inf")                           ;;; NEGATIVE_INFINITY
+    (Double/IsNaN ^Double o) (.Write w "##NaN")                                       ;;; (.IsNaN ^Double o)
+    :else (.Write w (fp-str o))))
 
 (defmethod print-method Single [o, ^System.IO.TextWriter w]
-  (.Write w (fp-str o)))
+  (cond
+    (= Single/PositiveInfinity o) (.Write w "##Inf")                             ;;; Float/POSITIVE_INFINITY
+    (= Single/NegativeInfinity o) (.Write w "##-Inf")                            ;;; Float/NEGATIVE_INFINITY
+    (Single/IsNaN ^Float o) (.Write w "##NaN")                                   ;;; (.IsNaN ^Float o)
+    :else (.Write w (fp-str o))))       
 
 ;;;We need to cover all the numerics, or we are hosed on print-dup.
 (defmethod print-method Int16 [o, ^System.IO.TextWriter w] (.Write w (str o)))

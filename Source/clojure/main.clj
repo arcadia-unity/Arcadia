@@ -12,6 +12,7 @@
        :author "Stephen C. Gilardi and Rich Hickey"}
   clojure.main
   (:refer-clojure :exclude [with-bindings])
+  (:require [clojure.spec.alpha])
   (:import (clojure.lang Compiler Compiler+CompilerException             ;;;Compiler$CompilerException
                          LineNumberingTextReader RT))                   ;;; LineNumberingPushbackReader
   ;;(:use [clojure.repl :only (demunge root-cause stack-element-str get-stack-trace)])
@@ -100,8 +101,8 @@
              *command-line-args* *command-line-args*
 			 *unchecked-math* *unchecked-math*
              *assert* *assert*
-             clojure.spec/*explain-out* clojure.spec/*explain-out*
-             *1 nil
+             clojure.spec.alpha/*explain-out* clojure.spec.alpha/*explain-out*
+			 *1 nil
              *2 nil
              *3 nil
              *e nil]

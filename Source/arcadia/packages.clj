@@ -14,7 +14,7 @@
             [arcadia.internal.thread :as thr]
             [arcadia.packages.data :as pd]
             [clojure.clr.io :as io]
-            [clojure.spec :as s]
+            [clojure.spec.alpha :as s]
             [clojure.string :as string])
   (:import [System.Xml XmlReader XmlNodeType]
            [UnityEngine Debug]

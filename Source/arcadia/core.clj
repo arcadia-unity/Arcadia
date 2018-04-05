@@ -1,6 +1,6 @@
 (ns arcadia.core
   (:require [clojure.string :as string]
-            [clojure.spec :as s]
+            [clojure.spec.alpha :as s]
             clojure.set
             [arcadia.internal.messages :refer [messages interface-messages]]
             [arcadia.internal.macro :as mac]
@@ -850,7 +850,7 @@ Note that generating vars is usually a bad idea because it messes with
     (if (= ::s/invalid parse)
       (throw (Exception.
                (str "Invalid arguments to defrole. Spec explanation: "
-                    (with-out-str (clojure.spec/explain ::defrole-args defrole-args)))))
+                    (with-out-str (clojure.spec.alpha/explain ::defrole-args defrole-args)))))
       (let [{nm :name,
              body :body} parse
             entries (defrole-map-entries nm body)
@@ -1066,7 +1066,7 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
     (if (= ::s/invalid parse)
       (throw (Exception.
                (str "Invalid arguments to defmutable. Spec explanation: "
-                    (with-out-str (clojure.spec/explain ::defmutable-args args)))))
+                    (with-out-str (clojure.spec.alpha/explain ::defmutable-args args)))))
       (let [{:keys [name fields protocol-impls more-opts]} parse
             {{element-snapshots-map :element-snapshots} :element-snapshots-map
              default-element-snapshots :default-element-snapshots} (into {} more-opts)

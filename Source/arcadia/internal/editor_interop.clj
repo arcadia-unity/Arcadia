@@ -261,13 +261,7 @@
         (SetValue obj field-value))))
 
 (def internal-namespaces
-  '[clojure.core clojure.core.protocols clojure.core.server
-    clojure.core.reducers clojure.main clojure.set clojure.zip
-    clojure.walk clojure.stacktrace clojure.template clojure.test
-    clojure.test.tap clojure.test.junit clojure.pprint clojure.clr.io
-    clojure.repl clojure.clr.shell clojure.string clojure.data
-    clojure.reflect clojure.edn
-    arcadia.core arcadia.repl arcadia.packages arcadia.linear
+  '[arcadia.core arcadia.repl arcadia.packages arcadia.linear
     arcadia.literals arcadia.config arcadia.compiler
     arcadia.internal.tracker arcadia.internal.thread arcadia.internal.test
     arcadia.internal.state arcadia.internal.spec

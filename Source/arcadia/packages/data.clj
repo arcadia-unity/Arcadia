@@ -1,5 +1,5 @@
 (ns arcadia.packages.data
-  (:require [clojure.spec :as s]
+  (:require [clojure.spec.alpha :as s]
             [arcadia.internal.spec :as as]))
 
 (s/def ::artifact string?)

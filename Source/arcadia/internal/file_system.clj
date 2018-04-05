@@ -1,7 +1,7 @@
 (ns arcadia.internal.file-system
   (:refer-clojure :exclude [file-seq])
   (:require [arcadia.internal.array-utils :as au]
-            [clojure.spec :as s]
+            [clojure.spec.alpha :as s]
             [arcadia.internal.spec :as as]
             [arcadia.internal.macro :as am])
   (:import [System.IO FileSystemInfo DirectoryInfo FileInfo Path File]))

@@ -1,5 +1,5 @@
 (ns arcadia.internal.state
-  (:require [clojure.spec :as s]
+  (:require [clojure.spec.alpha :as s]
             [arcadia.internal.map-utils :as mu])
   (:import [UnityEngine Debug]))
 

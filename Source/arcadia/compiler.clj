@@ -4,7 +4,7 @@
       :author "Tims Gardner and Ramsey Nasser"}
     arcadia.compiler
   (:require [arcadia.config :as config]
-            [clojure.spec :as s]
+            [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [arcadia.internal.state :as state]
             [arcadia.internal.spec :as as]

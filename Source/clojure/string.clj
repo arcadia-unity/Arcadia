@@ -327,7 +327,7 @@ Design notes for clojure.string:
 	
 (defn index-of
   "Return index of value (string or char) in s, optionally searching
-  forward from from-index or nil if not found."
+  forward from from-index. Return nil if value not found."
   {:added "1.8"}
   ([^String s value]                                                                    ;;; ^CharSequence
   (let [result ^long
@@ -348,7 +348,7 @@ Design notes for clojure.string:
 
 (defn last-index-of
   "Return last index of value (string or char) in s, optionally
-  searching backward from from-index or nil if not found."
+  searching backward from from-index. Return nil if value not found."
   {:added "1.8"}
   ([^String s value]                                                                    ;;; ^CharSequence
   (let [result ^long
