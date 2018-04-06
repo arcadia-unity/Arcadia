@@ -13,16 +13,6 @@
       (transient {})
       (.. jm KeyVals))))
 
-(defn convert-vars
-  "converts (quote (var xyz)) to #xyz"
-  [x]
-  (clojure.walk/prewalk
-    (fn [x]
-      (if (hh/deserialized-var-form? x)
-        (hh/var-form->var x)
-        x))
-    x))
-
 (defn deserialize [^ArcadiaState as]
   (.BuildDatabaseAtom as true)
   (let [objdb (.objectDatabase as)]
@@ -34,8 +24,7 @@
         (let [^JumpMap jm (.state as)]
           (.Clear jm)
           (.AddAll jm
-            (convert-vars
-              (read-string (.edn as)))))
+            (read-string (.edn as))))
         (catch Exception e
           (Debug/Log "Exception encountered in arcadia.internal.state-help/deserialize:")
           (Debug/Log e)
