@@ -57,7 +57,7 @@ namespace Arcadia
 		public static void Initialize()
 		{
 			Debug.Log("Starting Arcadia...");
-            CopySpecDLLsToRoot();
+            DisableSpecChecking();
 			SetInitialClojureLoadPath();
 			LoadConfig();
 			LoadPackages();
@@ -72,29 +72,11 @@ namespace Arcadia
 			Debug.Log("Arcadia Started!");
 		}
 
-        // workaround for spec loading issues
-        static void CopySpecDLLsToRoot()
+        // workaround for spec issues
+        static void DisableSpecChecking()
         {
-            Debug.Log("Checking for spec dlls...");
-            var specAlphaFile = "clojure.spec.alpha.dll";
-            var coreSpecsAlphaFile = "clojure.core.specs.alpha.dll";
-            var unityProjectRoot = Application.dataPath;
-            var specAlphaLocation = Path.Combine(unityProjectRoot, "..", specAlphaFile);
-            var coreSpecsAlphaLocation = Path.Combine(unityProjectRoot, "..", coreSpecsAlphaFile);
-
-            if (!File.Exists(specAlphaLocation))
-            {
-                var internalSpecAlphaLocation = Path.Combine(GetClojureDllFolder(), specAlphaFile);
-                Debug.LogFormat("Copying {0} to {0}", internalSpecAlphaLocation, specAlphaLocation);
-                File.Copy(internalSpecAlphaLocation, specAlphaLocation);
-            }
-
-            if (!File.Exists(coreSpecsAlphaLocation))
-            {
-                var internalCoreSpecsAlphaLocation = Path.Combine(GetClojureDllFolder(), coreSpecsAlphaFile);
-                Debug.LogFormat("Copying {0} to {0}", internalCoreSpecsAlphaLocation, coreSpecsAlphaLocation);
-                File.Copy(internalCoreSpecsAlphaLocation, coreSpecsAlphaLocation);
-            }
+        	Environment.SetEnvironmentVariable("clojure.spec.check-asserts", "false");
+        	Environment.SetEnvironmentVariable("clojure.spec.skip-macros", "true");
         }
 
 		// code is so durn orthogonal we have to explicitly call this
