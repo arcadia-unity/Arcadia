@@ -125,9 +125,14 @@
 (defn breakpoint-on-this-thread? [state]
   true)
 
+(defmacro capture-env []
+  (let [ks (keys &env)]
+    (zipmap (for [k ks] `(quote ~k)) ks)))
+
 (defmacro break []
-  `(let [ure?# (under-repl-evaluation?)
-         initial-state# {}]
+  `(let [env# (capture-env)
+         ure?# (under-repl-evaluation?)
+         initial-state# {:env env#}]
      (loop [state# initial-state#
             bail# 0]
        (if (< 20 bail#)
@@ -158,6 +163,9 @@
     
     :else state))
 
+;; bit sketchy
+(def ^:dynamic *env-store*)
+
 (defn run-breakpoint-on-this-thread [state]
   (let [completion-signal-ref (atom :initial)
         read (fn read [request-prompt request-exit]
@@ -168,10 +176,18 @@
                    (do (reset! completion-signal-ref {:exit true})
                        request-exit)
 
-                   :else input)))]
-    (m/repl
-      :read read
-      :prompt #(print "debug=> "))
+                   :else input)))
+        eval (fn eval [input]
+               (clojure.core/eval
+                 `(let [~@(mapcat
+                            (fn [k] [k `(get *env-store* (quote ~k))])
+                            (keys (:env state)))]
+                    ~input)))]
+    (binding [*env-store* (:env state)]
+      (m/repl
+        :read read
+        :eval eval
+        :prompt #(print "debug=> ")))
     (process-completion-signal state @completion-signal-ref)))
 
 (defn connect-to-off-thread-breakpoint [state]
