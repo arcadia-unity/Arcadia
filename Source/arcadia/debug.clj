@@ -301,10 +301,29 @@
 ;; bit sketchy
 (def ^:dynamic *env-store*)
 
+(defn trunc [s n]
+  (if (< n (count s))
+    (subs s 0 n)
+    s))
+
+(defn print-available-breakpoints []
+  ;; print as a nice table eventually
+  (println
+    (clojure.string/join
+      "\n"
+      (->> (available-breakpoints)
+           (map-indexed (fn [i {:keys [thread]}]
+                          (String/Format "[{0,-3}] {1}" i (.GetHashCode thread))))
+           (cons (String/Format "{0,-5} {1}" "Inx" "Thread"))))))
+
 (defn repl-read-fn [completion-signal-ref]
   (fn repl-read [request-prompt request-exit]
     (let [input (m/repl-read request-prompt request-exit)]
       (cond
+        (#{:a :available} input)
+        (do (print-available-breakpoints)
+            request-prompt)
+        
         (or (= :tl input)
             (identical? request-exit input))
         (do (repl-println "in repl-read, exit case. thread:" (current-thread)
