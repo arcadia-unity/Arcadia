@@ -124,13 +124,19 @@
 ;; ------------------------------------------------------------
 ;; the store!
 ;; let's see how far we can get with a lockless atom
-(def breakpoint-registry
+(defonce breakpoint-registry
   (atom []
     :validator (fn [bpr]
-                 (if-not (vector? bpr)
+                 (cond
+                   (not (vector? bpr))
                    (throw (Exception.
                             (str "breakpoint registry must be vector, instead is " bpr)))
-                   true))))
+
+                   (not= (count (set (map :id bpr)))
+                         (count bpr))
+                   (throw (Exception. "duplicate ids in breakpoint-registry!"))
+
+                   :else true))))
 
 (defn index-by [v pred]
   (loop [i 0]
@@ -142,6 +148,7 @@
 (defn thread-selector [thread]
   #(= (:thread %) thread))
 
+;; this is stupid
 (defn update-by-thread [bpr thread f & args]
   (let [i (index-by bpr (thread-selector thread))]
     ;; (repl-println
@@ -150,8 +157,31 @@
     ;;   "\nthread:" thread)
     (apply update bpr i f args)))
 
+;; this one's stupid
 (defn find-by-thread [bpr thread]
   (get bpr (index-by bpr (thread-selector thread))))
+
+;; this one isn't stupid
+(defn find-by-id [bpr id]
+  (first (filter #(= (:id %) id) bpr)))
+
+(defn update-by-id [bpr id f & args]
+  (if-let [i (index-by bpr #(= (:id %) id))]
+    (apply update bpr i f args)
+    (throw (Exception. "No breakpoint found with id " id))))
+
+(defn available-breakpoints []
+  (->> @breakpoint-registry
+       (remove :connecting)
+       ;; this seems janky:
+       (remove #(realized? (:begin-connection-promise %)))
+       vec))
+
+(defn thread-for-available-breakpoint [i]
+  (let [abs (available-breakpoints)]
+    (if (< i (count abs))
+      (:thread (get abs i))
+      (throw (Exception. (str "index of breakpoint out of range (max range " (count abs) ""))))))
 
 (defn register-breakpoint [state]
   (peek
@@ -160,26 +190,33 @@
         (let [begin-connection-promise (promise)]
           (conj breg
             {:thread (:thread state)
+             :id (:id state)
              :begin-connection-promise begin-connection-promise}))))))
 
-(defn unregister-breakpoint [state]
+(defn unregister-breakpoint [{:keys [id thread] :as state}]
   (swap! breakpoint-registry
     (fn [breg]
-      (let [selector #(= (:thread %) (:thread state))]
-        (when-let [{:keys [begin-connection-promise]} (first (filter selector breg))]
-          (when-not (realized? begin-connection-promise)
-            (deliver begin-connection-promise
-              {:exit true}))
-          (vec (remove selector breg)))))))
+      (if-let [{:keys [begin-connection-promise]} (find-by-id breg id)]
+        (do (when-not (realized? begin-connection-promise)
+              (deliver begin-connection-promise
+                {:exit true}))
+            (vec (remove #(= (:id %) id) breg)))
+        breg))))
 
 (defn kill-all-breakpoints []
   (locking breakpoint-registry
-    (let [breg @breakpoint-registry]
-      (loop [i 0]
-        (when (< i (count breg))
-          (let [{:keys [begin-connection-promise]} (get breg i)]
-            (deliver begin-connection-promise {:exit true}))))
-      (reset! breakpoint-registry []))))
+    (doseq [{:keys [begin-connection-promise]} @breakpoint-registry]
+      (deliver begin-connection-promise {:exit true}))      
+    (reset! breakpoint-registry [])))
+
+(defn renew-begin-connection-promise [{:keys [id] :as state}]
+  (let [begin-connection-promise (promise)]
+    (swap! breakpoint-registry update-by-id id
+      (fn [bp]
+        (-> bp
+            (dissoc :connecting) ;; :connecting might not be needed at all
+            (assoc :begin-connection-promise begin-connection-promise))))
+    (assoc state :begin-connection-promise begin-connection-promise)))
 
 ;; ------------------------------------------------------------
 
@@ -219,13 +256,16 @@
 (defmacro break []
   `(let [env# (capture-env)
          ure?# (under-repl-evaluation?)
+         ns# (find-ns (quote ~(ns-name *ns*)))
+         sentinel# (System.Object.)
          initial-state# {:env env#
-                         :thread (current-thread)}
-         {begin-connection-promise# :begin-connection-promise} (register-breakpoint initial-state#)]
+                         :ns ns#
+                         :id sentinel#
+                         :thread (current-thread)}]
+     (register-breakpoint initial-state#)
      (repl-println "entering loop")
      (try
-       (loop [state# (assoc initial-state#
-                       :begin-connection-promise begin-connection-promise#)
+       (loop [state# initial-state#
               bail# 0]
          (repl-println "looping. state#:\n" (with-out-str (pprint/pprint state#)))
          ;; this stuff could all be tucked away into a function rather than a macro body
@@ -284,14 +324,13 @@
             request-exit)
 
         (and (vector? input)
-             (#{:c :connect} (first input)))
+             (#{:c :connect} (first input))
+             (= 2 (count input)))
         ;; CHANGE THIS, should have some handle for the other breakpoint
-        (do (reset! completion-signal-ref
-              {:should-connect-to (->> @breakpoint-registry
-                                       (map :thread)
-                                       (filter #(not= % (current-thread)))
-                                       first)})
-            request-exit)
+        (let [[_ i] input]
+          (reset! completion-signal-ref
+            {:should-connect-to (thread-for-available-breakpoint i)})
+          request-exit)
 
         :else input))))
 
@@ -352,9 +391,10 @@
     (throw (Exception. "no connection promise found"))))
 
 (defn run-breakpoint-receiving-from-off-thread [state]
-  (repl-println "in run-breakpoint-receiving-from-off-thread. state:\n"
-    (with-out-str
-      (pprint/pprint state)))
+  (repl-println "in run-breakpoint-receiving-from-off-thread."
+    "\nstate:" (with-out-str
+                 (pprint/pprint state))
+    "\n*ns*:" *ns*)
   (let [connection-signal (await-connection-signal)]
     (repl-println "in run-breakpoint-receiving-from-off-thread. connection-signal:" connection-signal)
     (if (should-exit-signal? connection-signal)
@@ -366,6 +406,7 @@
         (when (not (and in out))
           (throw (Exception. "in or out missing, whole system probably borked")))
         (binding [*env-store* (:env state)
+                  *ns* (:ns state)
                   *in* in
                   *out* out]
           (m/repl
@@ -375,4 +416,8 @@
         ;; release d
         (repl-println "in run-breakpoint-receiving-from-off-thread. @completion-signal-ref:" @completion-signal-ref)
         (deliver end-connection-promise @completion-signal-ref) ;; I guessssss
-        (process-completion-signal state @completion-signal-ref)))))
+        (as-> state state
+              (process-completion-signal state @completion-signal-ref)
+              (if (should-connect-signal? @completion-signal-ref)
+                (renew-begin-connection-promise state)
+                state))))))
