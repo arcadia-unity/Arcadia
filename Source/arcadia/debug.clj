@@ -213,13 +213,17 @@
 ;; for building, debugging
 (def repl-thread)
 (def repl-out)
-;; --------------------------------------------------
+
+(def verbose (atom false))
 
 (defn repl-println [& args]
-  (locking repl-out
-    (binding [*out* repl-out]
-      (println "------------------------------")
-      (apply println args))))
+  (when @verbose
+    (locking repl-out
+      (binding [*out* repl-out]
+        (println "------------------------------")
+        (apply println args)))))
+
+;; --------------------------------------------------
 
 ;; for now
 (defn under-repl-evaluation? []
@@ -326,6 +330,8 @@
        ~input)))
 
 (defn run-breakpoint-on-this-thread [state]
+  (repl-println "in run-breakpoint-on-this-thread. state:"
+    (with-out-str (pprint/pprint state)))
   (let [completion-signal-ref (atom :initial)]
     (binding [*env-store* (:env state)]
       (m/repl
@@ -365,7 +371,15 @@
   (let [completion-signal-ref (atom :initial)]
     (obtain-connection state completion-signal-ref) ;; blocking
     (repl-println "made it past obtain-connection in connect-to-off-thread-breakpoint")
-    (process-completion-signal state @completion-signal-ref)))
+    (let [completion-signal @completion-signal-ref]
+      (as-> state state
+            (process-completion-signal state completion-signal)
+            (if (should-exit-signal? completion-signal)
+              ;; if lower breakpoint exits, should snap to own breakpoint rather than exiting
+              (-> state
+                  (dissoc :exit)
+                  (assoc :should-connect-to (:id state)))
+              state)))))
 
 (defn await-connection-signal [{:keys [id] :as state}]
   (if-let [connp (:begin-connection-promise
