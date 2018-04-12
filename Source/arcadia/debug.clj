@@ -156,7 +156,7 @@
 
 (defn available-breakpoints []
   (->> @breakpoint-registry
-       (remove :connecting)
+       (remove :connecting) ;; do need this, for now. see run-own-breakpoint
        ;; this seems janky:
        (remove #(realized? (:begin-connection-promise %)))
        vec))
@@ -232,11 +232,11 @@
   ;; currently unsound, of course
   (identical? (current-thread) repl-thread))
 
-(defn breakpoint-on-this-thread? [state]
+(defn own-breakpoint? [state]
   ;; here is a crux
   (or (not (:should-connect-to state))
-      (let [{:keys [thread]} (find-by-id @breakpoint-registry (:should-connect-to state))]
-        (= thread (current-thread)))))
+      (= (:should-connect-to state)
+         (:id state))))
 
 (defmacro capture-env []
   (let [ks (keys &env)]
@@ -263,13 +263,13 @@
                state#)
            (if-not (should-exit-signal? state#)
              (if ure?#
-               (if (breakpoint-on-this-thread? state#)
-                 (recur (run-breakpoint-on-this-thread state#) (inc bail#))
+               (if (own-breakpoint? state#)
+                 (recur (run-own-breakpoint state#) (inc bail#))
                  (recur (connect-to-off-thread-breakpoint state#) (inc bail#)))
                (recur (run-breakpoint-receiving-from-off-thread state#) (inc bail#)))
              state#)))
        (catch Exception e#
-         (repl-println (class e#) "encountered! message:" (.Message e#))
+         (repl-println (class e#) "encountered on thread " (current-thread) "! message:" (.Message e#))
          (reset! exception-log e#))
        (finally
          (repl-println "exiting loop")
@@ -329,15 +329,19 @@
                (keys *env-store*))]
        ~input)))
 
-(defn run-breakpoint-on-this-thread [state]
-  (repl-println "in run-breakpoint-on-this-thread. state:"
+(defn run-own-breakpoint [state]
+  (repl-println "in run-own-breakpoint. state:"
     (with-out-str (pprint/pprint state)))
+  (swap! breakpoint-registry update-by-id (:id state)
+    assoc :connecting true)  
   (let [completion-signal-ref (atom :initial)]
     (binding [*env-store* (:env state)]
       (m/repl
         :read (repl-read-fn completion-signal-ref)
         :eval env-eval
         :prompt #(print "debug=> ")))
+    (swap! breakpoint-registry update-by-id (:id state)
+      dissoc :connecting)
     (process-completion-signal state @completion-signal-ref)))
 
 ;; doesn't actually need to be a completion-signal ref for this one
