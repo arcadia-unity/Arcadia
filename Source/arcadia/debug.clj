@@ -145,22 +145,6 @@
         i
         (recur (inc i))))))
 
-(defn thread-selector [thread]
-  #(= (:thread %) thread))
-
-;; this is stupid
-(defn update-by-thread [bpr thread f & args]
-  (let [i (index-by bpr (thread-selector thread))]
-    ;; (repl-println
-    ;;   "in update-by-thread, i:" i
-    ;;   "\nbpr:" (with-out-str (pprint/pprint bpr))
-    ;;   "\nthread:" thread)
-    (apply update bpr i f args)))
-
-;; this one's stupid
-(defn find-by-thread [bpr thread]
-  (get bpr (index-by bpr (thread-selector thread))))
-
 ;; this one isn't stupid
 (defn find-by-id [bpr id]
   (first (filter #(= (:id %) id) bpr)))
@@ -177,10 +161,10 @@
        (remove #(realized? (:begin-connection-promise %)))
        vec))
 
-(defn thread-for-available-breakpoint [i]
+(defn id-for-available-breakpoint [i]
   (let [abs (available-breakpoints)]
     (if (< i (count abs))
-      (:thread (get abs i))
+      (:id (get abs i))
       (throw (Exception. (str "index of breakpoint out of range (max range " (count abs) ""))))))
 
 (defn register-breakpoint [state]
@@ -247,7 +231,8 @@
 (defn breakpoint-on-this-thread? [state]
   ;; here is a crux
   (or (not (:should-connect-to state))
-      (= (:should-connect-to state) (current-thread))))
+      (let [{:keys [thread]} (find-by-id @breakpoint-registry (:should-connect-to state))]
+        (= thread (current-thread)))))
 
 (defmacro capture-env []
   (let [ks (keys &env)]
@@ -326,10 +311,9 @@
         (and (vector? input)
              (#{:c :connect} (first input))
              (= 2 (count input)))
-        ;; CHANGE THIS, should have some handle for the other breakpoint
         (let [[_ i] input]
           (reset! completion-signal-ref
-            {:should-connect-to (thread-for-available-breakpoint i)})
+            {:should-connect-to (id-for-available-breakpoint i)})
           request-exit)
 
         :else input))))
@@ -358,12 +342,12 @@
     (let [bpr (swap! breakpoint-registry
                 (fn [bpr]
                   ;; TODO: accommodate possibility breakpoint has been terminated in meantime
-                  (update-by-thread bpr should-connect-to
+                  (update-by-id bpr should-connect-to
                     (fn [bp]
                       (if (:connecting bp)
                         (throw (Exception. "breakpoint already connected")) ; come up with something more graceful
                         (assoc bp :connecting (:thread state)))))))
-          {:keys [begin-connection-promise] :as bp} (find-by-thread bpr should-connect-to)]
+          {:keys [begin-connection-promise] :as bp} (find-by-id bpr should-connect-to)]
       (if (realized? begin-connection-promise)
         (repl-println "connection-promise already realized, whole system is probably in a bad state")
         (let [end-connection-promise (promise)]
@@ -380,11 +364,12 @@
       (pprint/pprint state)))
   (let [completion-signal-ref (atom :initial)]
     (obtain-connection state completion-signal-ref) ;; blocking
+    (repl-println "made it past obtain-connection in connect-to-off-thread-breakpoint")
     (process-completion-signal state @completion-signal-ref)))
 
-(defn await-connection-signal []
+(defn await-connection-signal [{:keys [id] :as state}]
   (if-let [connp (:begin-connection-promise
-                  (find-by-thread @breakpoint-registry (current-thread)))]
+                  (find-by-id @breakpoint-registry id))]
     (if (realized? connp)
       (throw (Exception. "connection promise already realized"))
       @connp)
@@ -395,7 +380,7 @@
     "\nstate:" (with-out-str
                  (pprint/pprint state))
     "\n*ns*:" *ns*)
-  (let [connection-signal (await-connection-signal)]
+  (let [connection-signal (await-connection-signal state)]
     (repl-println "in run-breakpoint-receiving-from-off-thread. connection-signal:" connection-signal)
     (if (should-exit-signal? connection-signal)
       (assoc state :exit true)
@@ -420,4 +405,6 @@
               (process-completion-signal state @completion-signal-ref)
               (if (should-connect-signal? @completion-signal-ref)
                 (renew-begin-connection-promise state)
-                state))))))
+                state)
+              ;; kind of kludgey
+              (dissoc state :should-connect-to))))))
