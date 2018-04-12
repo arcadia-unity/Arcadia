@@ -1,7 +1,8 @@
 (ns arcadia.debug
   (:require [clojure.pprint :as pprint]
             [clojure.main :as m]
-            [clojure.spec.alpha :as s]))
+            [clojure.spec.alpha :as s]
+            [arcadia.internal.thread :as thread]))
 
 ;; ;; TODO: figure out difference between environment and context and
 ;; ;; stick to it
@@ -117,13 +118,99 @@
 
 ;; going to start with same-thread breakpoints and build toward multithread
 
+(defn current-thread []
+  System.Threading.Thread/CurrentThread)
+
+;; ------------------------------------------------------------
+;; the store!
+;; let's see how far we can get with a lockless atom
+(def breakpoint-registry
+  (atom []
+    :validator (fn [bpr]
+                 (if-not (vector? bpr)
+                   (throw (Exception.
+                            (str "breakpoint registry must be vector, instead is " bpr)))
+                   true))))
+
+(defn index-by [v pred]
+  (loop [i 0]
+    (when (< i (count v))
+      (if (pred (get v i))
+        i
+        (recur (inc i))))))
+
+(defn thread-selector [thread]
+  #(= (:thread %) thread))
+
+(defn update-by-thread [bpr thread f & args]
+  (let [i (index-by bpr (thread-selector thread))]
+    ;; (repl-println
+    ;;   "in update-by-thread, i:" i
+    ;;   "\nbpr:" (with-out-str (pprint/pprint bpr))
+    ;;   "\nthread:" thread)
+    (apply update bpr i f args)))
+
+(defn find-by-thread [bpr thread]
+  (get bpr (index-by bpr (thread-selector thread))))
+
+(defn register-breakpoint [state]
+  (peek
+    (swap! breakpoint-registry
+      (fn [breg]
+        (let [begin-connection-promise (promise)]
+          (conj breg
+            {:thread (:thread state)
+             :begin-connection-promise begin-connection-promise}))))))
+
+(defn unregister-breakpoint [state]
+  (swap! breakpoint-registry
+    (fn [breg]
+      (let [selector #(= (:thread %) (:thread state))]
+        (when-let [{:keys [begin-connection-promise]} (first (filter selector breg))]
+          (when-not (realized? begin-connection-promise)
+            (deliver begin-connection-promise
+              {:exit true}))
+          (vec (remove selector breg)))))))
+
+(defn kill-all-breakpoints []
+  (locking breakpoint-registry
+    (let [breg @breakpoint-registry]
+      (loop [i 0]
+        (when (< i (count breg))
+          (let [{:keys [begin-connection-promise]} (get breg i)]
+            (deliver begin-connection-promise {:exit true}))))
+      (reset! breakpoint-registry []))))
+
+;; ------------------------------------------------------------
+
+(def breaklog
+  (atom :initial))
+
+(def exception-log (atom :initial))
+
+;; --------------------------------------------------
+;; for building, debugging
+(def repl-thread)
+(def repl-out)
+;; --------------------------------------------------
+
+(defn repl-println [& args]
+  (locking repl-out
+    (binding [*out* repl-out]
+      (println "------------------------------")
+      (apply println args))))
 
 ;; for now
 (defn under-repl-evaluation? []
-  true)
+  (when-not (bound? #'repl-thread)
+    (throw (Exception. "remember to bind #'repl-thread!")))
+  ;; currently unsound, of course
+  (identical? (current-thread) repl-thread))
 
 (defn breakpoint-on-this-thread? [state]
-  true)
+  ;; here is a crux
+  (or (not (:should-connect-to state))
+      (= (:should-connect-to state) (current-thread))))
 
 (defmacro capture-env []
   (let [ks (keys &env)]
@@ -132,18 +219,32 @@
 (defmacro break []
   `(let [env# (capture-env)
          ure?# (under-repl-evaluation?)
-         initial-state# {:env env#}]
-     (loop [state# initial-state#
-            bail# 0]
-       (if (< 20 bail#)
-         (do (println "bailing")
-             state#)
-         (when-not (should-exit-signal? state#)
-           (if ure?#
-             (if (breakpoint-on-this-thread? state#)
-               (recur (run-breakpoint-on-this-thread state#) (inc bail#))
-               (recur (connect-to-off-thread-breakpoint state#) (inc bail#)))
-             (recur (run-breakpoint-receiving-from-off-thread state#) (inc bail#))))))))
+         initial-state# {:env env#
+                         :thread (current-thread)}
+         {begin-connection-promise# :begin-connection-promise} (register-breakpoint initial-state#)]
+     (repl-println "entering loop")
+     (try
+       (loop [state# (assoc initial-state#
+                       :begin-connection-promise begin-connection-promise#)
+              bail# 0]
+         (repl-println "looping. state#:\n" (with-out-str (pprint/pprint state#)))
+         ;; this stuff could all be tucked away into a function rather than a macro body
+         (if (< 20 bail#)
+           (do (repl-println "bailing")
+               state#)
+           (if-not (should-exit-signal? state#)
+             (if ure?#
+               (if (breakpoint-on-this-thread? state#)
+                 (recur (run-breakpoint-on-this-thread state#) (inc bail#))
+                 (recur (connect-to-off-thread-breakpoint state#) (inc bail#)))
+               (recur (run-breakpoint-receiving-from-off-thread state#) (inc bail#)))
+             state#)))
+       (catch Exception e#
+         (repl-println (class e#) "encountered! message:" (.Message e#))
+         (reset! exception-log e#))
+       (finally
+         (repl-println "exiting loop")
+         (unregister-breakpoint initial-state#)))))
 
 (defn should-exit-signal? [signal]
   (and (map? signal)
@@ -151,65 +252,127 @@
 
 (defn should-connect-signal? [signal]
   (and (map? signal)
-       (= true (get signal :connect))))
+       (:should-connect-to signal)))
 
 (defn process-completion-signal [state signal]
-  (cond
-    (should-exit-signal? signal)
-    (assoc state :exit true)
+  (let [state' (cond
+                 (should-exit-signal? signal)
+                 (assoc state :exit true)
 
-    ;; (should-connect-signal? signal)
-    ;; (assoc state :connection (the-connection signal))
-    
-    :else state))
+                 (should-connect-signal? signal)
+                 (assoc state :should-connect-to (:should-connect-to signal))
+                 
+                 :else state) ]
+    (repl-println "in process-completion-signal on thread " (current-thread)
+      "\nsignal:" signal
+      "\nstate:" (with-out-str (pprint/pprint state))
+      "\nstate':" (with-out-str (pprint/pprint state')))
+    state'))
 
 ;; bit sketchy
 (def ^:dynamic *env-store*)
 
-(defn run-breakpoint-on-this-thread [state]
-  (let [completion-signal-ref (atom :initial)
-        read (fn read [request-prompt request-exit]
-               (let [input (m/repl-read request-prompt request-exit)]
-                 (cond
-                   (or (= :tl input)
-                       (identical? request-exit input))
-                   (do (reset! completion-signal-ref {:exit true})
-                       request-exit)
+(defn repl-read-fn [completion-signal-ref]
+  (fn repl-read [request-prompt request-exit]
+    (let [input (m/repl-read request-prompt request-exit)]
+      (cond
+        (or (= :tl input)
+            (identical? request-exit input))
+        (do (repl-println "in repl-read, exit case. thread:" (current-thread)
+              "\ninput:" input)
+            (reset! completion-signal-ref {:exit true})
+            request-exit)
 
-                   :else input)))
-        eval (fn eval [input]
-               (clojure.core/eval
-                 `(let [~@(mapcat
-                            (fn [k] [k `(get *env-store* (quote ~k))])
-                            (keys (:env state)))]
-                    ~input)))]
+        (and (vector? input)
+             (#{:c :connect} (first input)))
+        ;; CHANGE THIS, should have some handle for the other breakpoint
+        (do (reset! completion-signal-ref
+              {:should-connect-to (->> @breakpoint-registry
+                                       (map :thread)
+                                       (filter #(not= % (current-thread)))
+                                       first)})
+            request-exit)
+
+        :else input))))
+
+(defn env-eval [input]
+  (clojure.core/eval
+    `(let [~@(mapcat
+               (fn [k] [k `(get *env-store* (quote ~k))])
+               (keys *env-store*))]
+       ~input)))
+
+(defn run-breakpoint-on-this-thread [state]
+  (let [completion-signal-ref (atom :initial)]
     (binding [*env-store* (:env state)]
       (m/repl
-        :read read
-        :eval eval
+        :read (repl-read-fn completion-signal-ref)
+        :eval env-eval
         :prompt #(print "debug=> ")))
     (process-completion-signal state @completion-signal-ref)))
 
+;; doesn't actually need to be a completion-signal ref for this one
+(defn obtain-connection [state completion-signal-ref]
+  (let [{:keys [should-connect-to]} state]
+    (when-not should-connect-to
+      (throw (Exception. "missing should-connect-to")))
+    (let [bpr (swap! breakpoint-registry
+                (fn [bpr]
+                  ;; TODO: accommodate possibility breakpoint has been terminated in meantime
+                  (update-by-thread bpr should-connect-to
+                    (fn [bp]
+                      (if (:connecting bp)
+                        (throw (Exception. "breakpoint already connected")) ; come up with something more graceful
+                        (assoc bp :connecting (:thread state)))))))
+          {:keys [begin-connection-promise] :as bp} (find-by-thread bpr should-connect-to)]
+      (if (realized? begin-connection-promise)
+        (repl-println "connection-promise already realized, whole system is probably in a bad state")
+        (let [end-connection-promise (promise)]
+          (deliver begin-connection-promise ; here's where we make the connection
+            {:end-connection-promise end-connection-promise
+             :in *in*
+             :out *out*})
+          ;; wait for disconnect, or whatever
+          (reset! completion-signal-ref @end-connection-promise))))))
+
 (defn connect-to-off-thread-breakpoint [state]
-  (throw (Exception. "not implemented"))
-  (comment
-    (let [completion-signal-ref (atom :initial)]
-      (obtain-connection state completion-signal-ref)
-      (process-completion-signal state @completion-signal-ref))))
+  (repl-println "in connect-to-off-thread-breakpoint. state:\n"
+    (with-out-str
+      (pprint/pprint state)))
+  (let [completion-signal-ref (atom :initial)]
+    (obtain-connection state completion-signal-ref) ;; blocking
+    (process-completion-signal state @completion-signal-ref)))
+
+(defn await-connection-signal []
+  (if-let [connp (:begin-connection-promise
+                  (find-by-thread @breakpoint-registry (current-thread)))]
+    (if (realized? connp)
+      (throw (Exception. "connection promise already realized"))
+      @connp)
+    (throw (Exception. "no connection promise found"))))
 
 (defn run-breakpoint-receiving-from-off-thread [state]
-  (throw (Exception. "not implemented"))
-  (comment
-    (let [connection-signal (await-connection-signal state)]
-      (if (should-exit-signal? connection-signal)
-        (assoc state :exit true)
-        (let [completion-signal-ref (atom :initial)
-              read (fn read [prompt exit]
-                     (let [input (...)]
-                       ...))
-              eval (fn eval [input])]
-          (binding [*in* (:in-channel connection-signal)]
-            (m/repl
-              :read read
-              :eval eval))
-          (process-completion-signal state @completion-signal-ref))))))
+  (repl-println "in run-breakpoint-receiving-from-off-thread. state:\n"
+    (with-out-str
+      (pprint/pprint state)))
+  (let [connection-signal (await-connection-signal)]
+    (repl-println "in run-breakpoint-receiving-from-off-thread. connection-signal:" connection-signal)
+    (if (should-exit-signal? connection-signal)
+      (assoc state :exit true)
+      (let [completion-signal-ref (atom :initial)
+            {:keys [end-connection-promise in out]} connection-signal]
+        (when (or (not end-connection-promise) (realized? end-connection-promise))
+          (throw (Exception. "end-connection-promise absent or realized, whole system probably borked")))
+        (when (not (and in out))
+          (throw (Exception. "in or out missing, whole system probably borked")))
+        (binding [*env-store* (:env state)
+                  *in* in
+                  *out* out]
+          (m/repl
+            :read (repl-read-fn completion-signal-ref)
+            :eval env-eval
+            :prompt #(print "debug-off-thread=> ")))
+        ;; release d
+        (repl-println "in run-breakpoint-receiving-from-off-thread. @completion-signal-ref:" @completion-signal-ref)
+        (deliver end-connection-promise @completion-signal-ref) ;; I guessssss
+        (process-completion-signal state @completion-signal-ref)))))
