@@ -1,122 +1,31 @@
 (ns arcadia.debug
   (:require [clojure.pprint :as pprint]
+            [arcadia.internal.state :as state]
             [clojure.main :as m]
             [clojure.spec.alpha :as s]
-            [arcadia.internal.thread :as thread]))
+            [arcadia.socket-repl :as socket-repl]
+            [arcadia.internal.thread :as thread])
+  (:import [System.Diagnostics StackFrame StackTrace]))
 
-;; ;; TODO: figure out difference between environment and context and
-;; ;; stick to it
+;; Differs from some other implementations in that it:
+;; - actually runs repl for off-thread breakpoints on their own threads,
+;;   which is important in Unity.
+;; - does not expose connection to off-thread breakpoints in a stack-like way:
+;;   if at breakpoint A you connect to breakpoint B, then C, then disconnect
+;;   from C, you return to A, not B. This prevents accumulating weird
+;;   implicit paths, there's no administrative cost to jumping around between
+;;   breakpoints.
+;; - special breakpoint commands (connect, show available breakpoints, etc)
+;;   are all expressed as top-level repl inputs with no evaluation semantics,
+;;   such as `:a` and `[:c 0]`. These are only meaningful from within a breakpoint.
+;; - supports interrupts for contingency that a breakpoint is hit on the
+;;   main repl's eval thread, but not during a main repl eval. Breakpoints
+;;   encountered during execution of Unity messages are examples of this.
 
-;; ;; ============================================================
-;; ;; env
-
-;; (defmacro with-context [ctx-name & body]
-;;   (let [symbols (keys &env)]
-;;     `(let [~ctx-name ~(zipmap
-;;                         (map (fn [sym] `(quote ~sym)) symbols)
-;;                         symbols)]
-;;        ~@body)))
-
-;; ;; ============================================================
-;; ;; Breakpoints
-;; ;; Inspired by Michael Fogus's breakpoint macro
-
-
-;; ;; rather than just *can-break*, consider a way of cancelling
-;; ;; all breakpoints, but all enabling or disabling all breakpoints
-;; ;; by their labels, or by whether their labels match a predicate
-;; (def ^:dynamic *can-break* true)
-
-;; (defn disable-breaks []
-;;   (alter-var-root #'*can-break* (constantly false)))
-
-;; (defn enable-breaks []
-;;   (alter-var-root #'*can-break* (constantly true)))
-
-;; (def ^:dynamic *breaking* false)
-
-;; (def ^:dynamic *env-store*)
-
-;; (defn- contextual-eval [expr]
-;;   (eval
-;;     `(let [~@(mapcat
-;;                (fn [k] [k `(get *env-store* (quote ~k))])
-;;                (keys *env-store*))]
-;;        ~expr)))
-
-;; (def ^:dynamic *reenable-breaks*)
-
-;; (defn- readr [prompt exit-code]
-;;   (let [input (clojure.main/repl-read prompt exit-code)]
-;;     (cond
-;;       (#{:tl :resume} input) exit-code
-;;       (= :quit input) (do (disable-breaks)
-;;                           exit-code)
-;;       :else input)))
-
-;; (defn break-repl [label]
-;;   (let [prompt (str "debug"
-;;                     (when label (str ":" label))
-;;                     "=> ")]
-;;     (binding [*reenable-breaks* false]
-;;       (clojure.main/repl
-;;         :prompt #(print prompt)
-;;         :read readr
-;;         :eval contextual-eval)
-;;       (when *reenable-breaks*
-;;         (enable-breaks)))))
-
-;; (defmacro break
-;;   "Inserts a breakpoint, suspending other evalution and entering a
-;;   subrepl with access to local environment. Exit by typing `:tl` or
-;;   `:resume` in the repl prompt. If provided, `label` will
-;;   show in the breakpoint repl prompt. Note that `label` is evaluated
-;;   at runtime."
-;;   ([] `(break nil))
-;;   ([label]
-;;    (let [symbols (keys &env)
-;;          ns-name (ns-name *ns*)]
-;;      `(when *can-break*
-;;         (with-context ctx#
-;;           (binding [*env-store* ctx#
-;;                     *breaking* true
-;;                     *ns* (find-ns (quote ~ns-name))]
-;;             (break-repl ~label)))))))
-
-;; ;; ============================================================
-;; ;; Breakpoint niceties
-
-;; (defn pareditable-print-table
-;;   ([rows]
-;;    (pareditable-print-table (keys (first rows)) rows))
-;;   ([ks rows]
-;;    (let [t (with-out-str (pprint/print-table ks rows))]
-;;      (print
-;;        (if (odd? (count (re-seq #"\|" t)))
-;;          (str t "|")
-;;          t)))))
-
-;; (defn penv-func [env]
-;;   (let [maxlen 40
-;;         shorten (fn [s]
-;;                   (if (< maxlen (count s))
-;;                     (str (subs s 0 maxlen) "...")
-;;                     s))
-;;         lvs (->> (for [[k v] env
-;;                        :when (not (re-matches #"fn__\d+" (str k)))] ;; perhaps filter out weird functions
-;;                    {:local k
-;;                     :value (shorten (pr-str v))
-;;                     :class (shorten (pr-str (class v)))})
-;;                  (sort-by :local))]
-;;     (pareditable-print-table
-;;       lvs)))
-
-;; ;; print env (context?)
-;; (defmacro penv []
-;;   `(with-context env# ;; ENV OR CTX???
-;;      (penv-func env#)))
-
-;; going to start with same-thread breakpoints and build toward multithread
+;; Caveats
+;; - The main repl thread is currently hard-coded to be Unity's main thread.
+;; - Currently no support for multiple repls, attempting to use with multiple
+;;   repls could lead to deadlock or other weird behavior.
 
 (defn current-thread []
   System.Threading.Thread/CurrentThread)
@@ -156,8 +65,8 @@
 
 (defn available-breakpoints []
   (->> @breakpoint-registry
-       (remove :connecting) ;; do need this, for now. see run-own-breakpoint
-       ;; this seems janky:
+       (remove :connecting) ; do need this, for now. see run-own-breakpoint
+       (remove :interrupt)  ; don't want to consider the true upper connected bp of an interrupt available
        (remove #(realized? (:begin-connection-promise %)))
        vec))
 
@@ -175,6 +84,7 @@
           (conj breg
             {:thread (:thread state)
              :id (:id state)
+             :interrupt (:interrupt state)
              :begin-connection-promise begin-connection-promise}))))))
 
 (defn unregister-breakpoint [{:keys [id thread] :as state}]
@@ -227,31 +137,59 @@
 
 ;; for now
 (defn under-repl-evaluation? []
-  (when-not (bound? #'repl-thread)
-    (throw (Exception. "remember to bind #'repl-thread!")))
-  ;; currently unsound, of course
-  (identical? (current-thread) repl-thread))
+  ;; (when-not (bound? #'repl-thread)
+  ;;   (throw (Exception. "remember to bind #'repl-thread!")))
+  ;; ;; currently unsound, of course
+  ;; (identical? (current-thread) repl-thread)
+  (let [st (System.Diagnostics.StackTrace.)
+        eval-fn-types (set (get @arcadia.internal.state/state :eval-fn-types))]
+    (->> (.GetFrames st)
+         (map #(.. % GetMethod DeclaringType))
+         (some eval-fn-types)
+         boolean)))
 
 (defn own-breakpoint? [state]
   ;; here is a crux
-  (or (not (:should-connect-to state))
-      (= (:should-connect-to state)
-         (:id state))))
+  (and (not (:interrupt state))
+       (or (not (:should-connect-to state))
+           (= (:should-connect-to state)
+              (:id state)))))
 
 (defmacro capture-env []
   (let [ks (keys &env)]
     (zipmap (for [k ks] `(quote ~k)) ks)))
 
-(defmacro break []
+(defn on-main-repl-thread? []
+  ;; yep
+  (= 1 (.ManagedThreadId (current-thread))))
+
+(def ^:dynamic *interrupt* nil)
+
+(declare interrupt-break-fn
+  should-exit-signal?
+  run-own-breakpoint
+  connect-to-off-thread-breakpoint
+  run-breakpoint-receiving-from-off-thread)
+
+;; Using dynamic var *interrupt* _and_ macro param
+;; to minimize chance of somehow capturing *interrupt*
+;; mistakenly (ie with bound-fn). maybe a bit paranoid
+(defmacro break [& {:keys [interrupt]}]
   `(let [env# (capture-env)
          ure?# (under-repl-evaluation?)
          ns# (find-ns (quote ~(ns-name *ns*)))
          sentinel# (System.Object.)
          initial-state# {:env env#
                          :ns ns#
+                         :interrupt ~(when interrupt `*interrupt*)
                          :id sentinel#
                          :thread (current-thread)}]
      (register-breakpoint initial-state#)
+     ;; Emit and register an interrupt if we need to
+     (when (and (on-main-repl-thread?)
+                (not (under-repl-evaluation?)))
+       (socket-repl/send-interrupt
+         (interrupt-break-fn sentinel#)))
      (repl-println "entering loop")
      (try
        (loop [state# initial-state#
@@ -262,18 +200,24 @@
            (do (repl-println "bailing")
                state#)
            (if-not (should-exit-signal? state#)
-             (if ure?#
+             (if (or ure?# (:interrupt state#))
                (if (own-breakpoint? state#)
                  (recur (run-own-breakpoint state#) (inc bail#))
                  (recur (connect-to-off-thread-breakpoint state#) (inc bail#)))
                (recur (run-breakpoint-receiving-from-off-thread state#) (inc bail#)))
              state#)))
        (catch Exception e#
-         (repl-println (class e#) "encountered on thread " (current-thread) "! message:" (.Message e#))
+         (repl-println (class e#) "encountered on thread " (current-thread) "! message:" (.Message e#)
+           "\n" (.StackTrace e#))
          (reset! exception-log e#))
        (finally
          (repl-println "exiting loop")
          (unregister-breakpoint initial-state#)))))
+
+(defn interrupt-break-fn [sentinel]
+  (fn interrupt-break []
+    (binding [*interrupt* sentinel]
+      (break :interrupt true))))
 
 (defn should-exit-signal? [signal]
   (and (map? signal)
@@ -348,6 +292,8 @@
                (keys *env-store*))]
        ~input)))
 
+(swap! state/state update :eval-fn-types (fnil conj #{}) (class env-eval))
+
 (defn run-own-breakpoint [state]
   (repl-println "in run-own-breakpoint. state:"
     (with-out-str (pprint/pprint state)))
@@ -365,7 +311,7 @@
 
 ;; doesn't actually need to be a completion-signal ref for this one
 (defn obtain-connection [state completion-signal-ref]
-  (let [{:keys [should-connect-to]} state]
+  (let [should-connect-to (or (:should-connect-to state) (:interrupt state))]
     (when-not should-connect-to
       (throw (Exception. "missing should-connect-to")))
     (let [bpr (swap! breakpoint-registry
@@ -398,18 +344,32 @@
       (as-> state state
             (process-completion-signal state completion-signal)
             (if (should-exit-signal? completion-signal)
-              ;; if lower breakpoint exits, should snap to own breakpoint rather than exiting
-              (-> state
-                  (dissoc :exit)
-                  (assoc :should-connect-to (:id state)))
+              (if-let [interrupt (:interrupt state)]
+                ;; If we are connected to the interrupt bp, we should behave as if
+                ;; we are connected to our own bp. If there *is* an interrupt bp and
+                ;; we are not connected to it, we should snap to that.
+                (if (or (not (:should-connect-to state))
+                        (= (:should-connect-to state) interrupt))
+                  (do
+                    (repl-println "down this branch. state:"
+                      "\n" (with-out-str (pprint/pprint state)))
+                    state) ; default behavior is just to exit, so we're good
+                  (-> state ; otherwise connect to the interrupt
+                      (dissoc :exit)
+                      (assoc :should-connect-to interrupt)))
+                ;; Otherwise, if lower breakpoint exits, should snap to own breakpoint rather than exiting
+                (-> state
+                    (dissoc :exit)
+                    (assoc :should-connect-to (:id state))))
               state)))))
 
 (defn await-connection-signal [{:keys [id] :as state}]
   (if-let [connp (:begin-connection-promise
                   (find-by-id @breakpoint-registry id))]
-    (if (realized? connp)
-      (throw (Exception. "connection promise already realized"))
-      @connp)
+    ;; (if (realized? connp)
+    ;;   (throw (Exception. "connection promise already realized"))
+    ;;   @connp)
+    @connp
     (throw (Exception. "no connection promise found"))))
 
 (defn run-breakpoint-receiving-from-off-thread [state]
@@ -440,8 +400,8 @@
         (deliver end-connection-promise @completion-signal-ref) ;; I guessssss
         (as-> state state
               (process-completion-signal state @completion-signal-ref)
-              (if (should-connect-signal? @completion-signal-ref)
+              (if (should-connect-signal? @completion-signal-ref) ; ie, we're just shifting over
                 (renew-begin-connection-promise state)
                 state)
-              ;; kind of kludgey
+              ;; a receiving bp *never* connects directly to another
               (dissoc state :should-connect-to))))))
