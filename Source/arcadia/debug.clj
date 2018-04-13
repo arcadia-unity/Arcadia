@@ -63,15 +63,22 @@
     (apply update bpr i f args)
     (throw (Exception. "No breakpoint found with id " id))))
 
-(defn available-breakpoints []
-  (->> @breakpoint-registry
-       (remove :connecting) ; do need this, for now. see run-own-breakpoint
-       (remove :interrupt)  ; don't want to consider the true upper connected bp of an interrupt available
-       (remove #(realized? (:begin-connection-promise %)))
-       vec))
+(defn available-breakpoints [state]
+  (let [bpr @breakpoint-registry
+        own-info (find-by-id bpr (:id state))]
+    (->> bpr
+         (remove :connected)
+         ;; do need this, for now. see run-own-breakpoint
+         (remove
+           (fn [{:keys [connecting id]}]
+             (and connecting
+                  (not= id (:connected own-info))))) 
+         (remove :interrupt)  ; don't want to consider the true upper connected bp of an interrupt available
+         (remove #(realized? (:begin-connection-promise %)))
+         vec)))
 
-(defn id-for-available-breakpoint [i]
-  (let [abs (available-breakpoints)]
+(defn id-for-available-breakpoint [state i]
+  (let [abs (available-breakpoints state)]
     (if (< i (count abs))
       (:id (get abs i))
       (throw (Exception. (str "index of breakpoint out of range (max range " (count abs) ""))))))
@@ -108,7 +115,7 @@
     (swap! breakpoint-registry update-by-id id
       (fn [bp]
         (-> bp
-            (dissoc :connecting) ;; :connecting might not be needed at all
+            (dissoc :connected) ;; :connecting might not be needed at all
             (assoc :begin-connection-promise begin-connection-promise))))
     (assoc state :begin-connection-promise begin-connection-promise)))
 
@@ -250,22 +257,26 @@
     (subs s 0 n)
     s))
 
-(defn print-available-breakpoints []
+(defn print-available-breakpoints [state]
   ;; print as a nice table eventually
   (println
     (clojure.string/join
       "\n"
-      (->> (available-breakpoints)
+      (->> (available-breakpoints state)
            (map-indexed (fn [i {:keys [thread]}]
                           (String/Format "[{0,-3}] {1}" i (.GetHashCode thread))))
            (cons (String/Format "{0,-5} {1}" "Inx" "Thread"))))))
 
-(defn repl-read-fn [completion-signal-ref]
+(defn repl-read-fn [state completion-signal-ref]
   (fn repl-read [request-prompt request-exit]
     (let [input (m/repl-read request-prompt request-exit)]
       (cond
+        (= :state input)
+        (do (pprint/pprint state)
+            request-prompt)
+        
         (#{:a :available} input)
-        (do (print-available-breakpoints)
+        (do (print-available-breakpoints state)
             request-prompt)
         
         (or (= :tl input)
@@ -280,7 +291,7 @@
              (= 2 (count input)))
         (let [[_ i] input]
           (reset! completion-signal-ref
-            {:should-connect-to (id-for-available-breakpoint i)})
+            {:should-connect-to (id-for-available-breakpoint state i)})
           request-exit)
 
         :else input))))
@@ -298,11 +309,11 @@
   (repl-println "in run-own-breakpoint. state:"
     (with-out-str (pprint/pprint state)))
   (swap! breakpoint-registry update-by-id (:id state)
-    assoc :connecting true)  
+    assoc :connecting (:id state))  
   (let [completion-signal-ref (atom :initial)]
     (binding [*env-store* (:env state)]
       (m/repl
-        :read (repl-read-fn completion-signal-ref)
+        :read (repl-read-fn state completion-signal-ref)
         :eval env-eval
         :prompt #(print "debug=> ")))
     (swap! breakpoint-registry update-by-id (:id state)
@@ -314,6 +325,8 @@
   (let [should-connect-to (or (:should-connect-to state) (:interrupt state))]
     (when-not should-connect-to
       (throw (Exception. "missing should-connect-to")))
+    (swap! breakpoint-registry update-by-id (:id state)
+      assoc :connecting should-connect-to)    
     (let [bpr (swap! breakpoint-registry
                 (fn [bpr]
                   ;; TODO: accommodate possibility breakpoint has been terminated in meantime
@@ -321,7 +334,7 @@
                     (fn [bp]
                       (if (:connecting bp)
                         (throw (Exception. "breakpoint already connected")) ; come up with something more graceful
-                        (assoc bp :connecting (:thread state)))))))
+                        (assoc bp :connected (:id state)))))))
           {:keys [begin-connection-promise] :as bp} (find-by-id bpr should-connect-to)]
       (if (realized? begin-connection-promise)
         (repl-println "connection-promise already realized, whole system is probably in a bad state")
@@ -329,6 +342,7 @@
           (deliver begin-connection-promise ; here's where we make the connection
             {:end-connection-promise end-connection-promise
              :in *in*
+             :err *err*
              :out *out*})
           ;; wait for disconnect, or whatever
           (reset! completion-signal-ref @end-connection-promise))))))
@@ -382,7 +396,7 @@
     (if (should-exit-signal? connection-signal)
       (assoc state :exit true)
       (let [completion-signal-ref (atom :initial)
-            {:keys [end-connection-promise in out]} connection-signal]
+            {:keys [end-connection-promise in out err]} connection-signal]
         (when (or (not end-connection-promise) (realized? end-connection-promise))
           (throw (Exception. "end-connection-promise absent or realized, whole system probably borked")))
         (when (not (and in out))
@@ -390,9 +404,10 @@
         (binding [*env-store* (:env state)
                   *ns* (:ns state)
                   *in* in
+                  *err* err
                   *out* out]
           (m/repl
-            :read (repl-read-fn completion-signal-ref)
+            :read (repl-read-fn state completion-signal-ref)
             :eval env-eval
             :prompt #(print "debug-off-thread=> ")))
         ;; release d
