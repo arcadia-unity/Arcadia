@@ -435,6 +435,7 @@
   (println
     (clojure.string/join "\n"
       [":h, :help      - print help"
+       ":k, :kill      - kill this breakpoint site"
        ":state         - print breakpoint state"
        ":a, :available - print breakpoints available for connection by inx"
        ":q, :quit      - exit this breakpoint"
