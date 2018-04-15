@@ -75,8 +75,11 @@
                        (recur))))
                  (catch Exception e
                    (println "something dreadful happened")
+                   (println (.Message e))
+                   (println (.StackTrace e))
                    (UnityEngine.Debug/Log "something dreadful happened")
-                   (UnityEngine.Debug/Log e)))]
+                   (UnityEngine.Debug/Log e)
+                   (throw (Exception. "wrapper" e))))]
     (UnityEngine.Debug/Log
       (str "leaving repl-read, result:\n"
            (cond
