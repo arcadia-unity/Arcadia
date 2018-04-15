@@ -420,12 +420,19 @@
 (defn current-thread []
   System.Threading.Thread/CurrentThread)
 
+;; from https://github.com/razum2um/clj-debugger
+(defn- sanitize-env
+  [env]
+  (into {} (for [[sym bind] env
+                 :when (instance? clojure.lang.CljCompiler.Ast.LocalBinding bind)]
+             [`(quote ~sym) (.Symbol bind)])))
+
 ;; --------------------------------------------------
 ;; for building, debugging
 (def repl-thread (current-thread))
 (def repl-out *out*)
 
-(def verbose (atom true))
+(def verbose (atom false))
 
 (defn repl-println [& args]
   (when @verbose
@@ -589,6 +596,8 @@
          (remove #(and (self-connecting? bpr id)
                        (= id (::id %))))
          (remove #(= connecting (::id %)))
+         (remove #(and (connecting? bpr id)
+                       (not= id (::id %))))
          (remove ::connected)
          (remove ::interrupt)
          (map ::id)
@@ -596,7 +605,6 @@
 
 (defn print-available-breakpoints [id]
   ;; print as a nice table eventually
-  (repl-println "trying this")
   (let [bpr @breakpoint-registry]
     (repl-println "(available-breakpoints id):"
       (with-out-str
@@ -606,9 +614,46 @@
         "\n"
         (->> (available-breakpoints id)
              (map #(find-by-id bpr %))
-             (map-indexed (fn [i {:keys [::thread]}]
-                            (String/Format "[{0,-3}] {1}" i (.GetHashCode thread))))
-             (cons (String/Format "{0,-5} {1}" "Inx" "Thread")))))))
+             (map-indexed (fn [i {:keys [::thread ::id]}]
+                            (String/Format "{0,-3} {1, -6} {2}" i (.GetHashCode thread) id)))
+             (cons (String/Format "{0,-3} {1} {2}" "Inx" "Thread" "Break-ID")))))))
+
+;; won't work for n < 3
+(defn trunc [s n]
+  (if (< n (count s))
+    (str (subs s 0 (- n 3)) "...")
+    s))
+
+(defn print-env [id]
+  (let [bpr @breakpoint-registry
+        {:keys [::env]} (find-by-id bpr id)
+        max-len 30
+        compr (comparator
+                (fn [a b]
+                  (let [ak (str (key a))
+                        bk (str (key b))]
+                    (< (count ak) (count bk))))) ; just sorts by length for now
+        sorted-env (sort compr env)
+        rows (for [[k bind] sorted-env]
+               (let [base-bind (binding [*print-level* 14
+                                         *print-length* 4]
+                                 (with-out-str
+                                   (pprint/pprint bind)))]
+                 (map #(trunc (clojure.string/trim %) max-len)
+                   [(str k) (str (class bind)) base-bind])))
+        lengths (map
+                  #(apply max (map count %))
+                  (apply map list rows))
+        format (apply str
+                 (clojure.string/join " "
+                   (map-indexed
+                     (fn [i len]
+                       (str "{" i ",-" len  "}"))
+                     lengths)))]
+    ;;sorted-env
+    (doseq [[a b c] rows]
+      (println (String/Format format a b c)))
+    ))
 
 ;; ------------------------------------------------------------
 
@@ -755,34 +800,51 @@
 ;; ------------------------------------------------------------
 ;; read, eval, etc
 
-(defn repl-read-fn [id]
-  (fn repl-read [request-prompt request-exit]
-    (let [input (m/repl-read request-prompt request-exit)]
-      ;; todo: :help, :h
+(defn print-help []
+  (println
+    (clojure.string/join "\n"
+      [":h, :help      - print help"
+       ":state         - print breakpoint state"
+       ":a, :available - print breakpoints available for connection by inx"
+       ":q, :quit      - exit this breakpoint"
+       "[:c <inx>]     - (as vector literal) connect to breakpoint at index <inx>"]))
 
-      ;; todo: disable all breakpoints that are instances of
-      ;; this code-site. need code-site specific ids
-      (cond
-        (= :state input)
-        (do (pprint/pprint (find-by-id @breakpoint-registry id))
-            request-prompt)
+  (defn repl-read-fn [id]
+    (fn repl-read [request-prompt request-exit]
+      (let [input (m/repl-read request-prompt request-exit)]
+        ;; todo: :help, :h
 
-        (#{:a :available} input)
-        (do (print-available-breakpoints id)
-            request-prompt)
+        ;; todo: disable all breakpoints that are instances of
+        ;; this code-site. need code-site specific ids
+        (cond
+          (= :h input)
+          (do (print-help)
+              request-prompt)
+          
+          (= :env input)
+          (do (print-env id)
+              request-prompt)
+          
+          (= :state input)
+          (do (pprint/pprint (find-by-id @breakpoint-registry id))
+              request-prompt)
 
-        (#{:q :quit request-exit} input)
-        (do (quit id)
+          (#{:a :available} input)
+          (do (print-available-breakpoints id)
+              request-prompt)
+
+          (#{:q :quit request-exit} input)
+          (do (quit id)
+              request-exit)
+
+          (and (vector? input)
+               (#{:c :connect} (first input))
+               (= 2 (count input)))
+          (let [[_ i] input]
+            (connect-by-id id (get (available-breakpoints id) i))
             request-exit)
 
-        (and (vector? input)
-             (#{:c :connect} (first input))
-             (= 2 (count input)))
-        (let [[_ i] input]
-          (connect-by-id id (get (available-breakpoints id) i))
-          request-exit)
-
-        :else input))))
+          :else input)))))
 
 (def ^:dynamic *env-store* {})
 
@@ -874,8 +936,7 @@
   (breakpoint-repl id))
 
 (defmacro capture-env []
-  (let [ks (keys &env)]
-    (zipmap (for [k ks] `(quote ~k)) ks)))
+  (sanitize-env &env))
 
 (def ^:dynamic *interrupt* nil)
 
