@@ -612,13 +612,16 @@
 
 ;; ------------------------------------------------------------
 
+(declare manage-interrupt)
+
 (defn register-breakpoint [{:keys [::id ::thread] :as info}]
   (bpr-sync
     (fn [bpr]
       (-> bpr
           (update ::breakpoint-index assoc id
             (assoc info ::begin-connection-promise (promise)))
-          (update ::stacks update thread (fnil conj []) id)))))
+          (update ::stacks update thread (fnil conj []) id)
+          (manage-interrupt id)))))
 
 (defn reset-by-id
   ([bpr id]
@@ -675,6 +678,8 @@
         (to-outbox begin-connection-promise true))))
 
 (defn manage-interrupt [bpr id]
+  (repl-println "in manage-interrupt. id:" id "\n"
+    (with-out-str (pprint/pprint @breakpoint-registry)))
   (let [{:keys [::interrupt
                 ::connected
                 ::connecting]} (find-by-id bpr id)]
@@ -686,22 +691,20 @@
       bpr)))
 
 (defn connect-by-id [id-1 id-2]
+  (repl-println "in connect-by-id. id-1:" id-1 "; id-2:" id-2)
   (bpr-sync
     (fn [bpr]
-      (let [{:keys [::connected]} (find-by-id bpr id-1)]
-        (if connected
-          (if (= connected id-2)
-            (reset-by-id bpr id-1)
-            (-> bpr
-                (reset-by-id connected) ; will also reset id-1
-                ;;(manage-interrupt id-1)
-                (base-connect connected id-2)))
-          (if (= id-1 id-2)
-            (-> bpr
-                (reset-by-id id-1)
-                ;;(manage-interrupt id-1)
-                )
-            (base-connect bpr id-1 id-2)))))))
+      (let [{:keys [::connected]} (find-by-id bpr id-1)
+            a (or connected id-1)]
+        (if (= a id-2)
+          (-> bpr
+              (reset-by-id a) ; will also reset id-1 if connected
+              (manage-interrupt a)
+              )
+          (-> bpr
+              (reset-by-id a)
+              (base-connect a id-2)
+              (manage-interrupt a)))))))
 
 ;; from below
 ;; disconnect but keep spinning
@@ -726,7 +729,7 @@
             (-> bpr
                 (reset-by-id connected)
                 (remove-by-id id)
-                ;;(manage-interrupt connected)
+                (manage-interrupt connected)
                 (to-outbox end-connection-promise true)))
 
           (connecting? bpr id) ; this shouldn't usually happen
@@ -805,7 +808,8 @@
       (::ure bp))))
 
 (defn receiving? [id]
-  (not (::ure (find-by-id @breakpoint-registry id))))
+  (let [{:keys [::ure ::interrupt]} (find-by-id @breakpoint-registry id)]
+    (not (or ure interrupt))))
 
 (defn under-repl-evaluation? []
   (let [st (System.Diagnostics.StackTrace.)
@@ -894,7 +898,6 @@
         ::ure ure#
         ::interrupt *interrupt*
         ::ns (find-ns (quote ~(ns-name *ns*)))})
-     ;; need an interrupt?
      (when lower-interrupt?#
        (socket-repl/send-interrupt
          (interrupt-break-fn id#)))
