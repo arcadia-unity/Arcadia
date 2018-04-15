@@ -128,17 +128,34 @@
                ;; repl. Suggestions for cleaner implementation welcome.
                (print printed)
                value)
-             (throw value)))
+             (throw (Exception. "carrier" value))))
          (do 
            (run-interrupts)
            (Thread/Sleep 100) ; yeah it's a spinlock
            (recur)))))))
+
+(def stuff (atom 0))
+
+;; Our seemingly less broken variant of clojure.main/repl-caught,
+;; which oddly throws away the trace
+(defn repl-caught [e]
+  (swap! stuff inc)
+  (let [ex (clojure.main/repl-exception e)
+        tr (clojure.main/get-stack-trace ex)]
+    (binding [*out* *err*]
+      (println (str (-> ex class .Name)
+                    " " (.Message ex) "\n"
+                    (->> tr
+                         ;; (drop-last 6) ; trim off redundant stuff at end of stack trace. maybe bad idea
+                         (map clojure.main/stack-element-str)                         
+                         (clojure.string/join "\n")))))))
 
 (defn repl []
   (m/repl
     :init s/repl-init
     :read #'repl-read
     :print identity
+    :caught #'repl-caught
     :eval #'game-thread-eval))
 
 (def server-defaults
