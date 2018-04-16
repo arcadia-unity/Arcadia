@@ -254,7 +254,7 @@
                (let [base-bind (binding [*print-level* 14
                                          *print-length* 4]
                                  (with-out-str
-                                   (pprint/pprint bind)))]
+                                   (print bind)))]
                  (map #(trunc (clojure.string/trim %) max-len)
                    [(str k) (str (class bind)) base-bind])))
         lengths (map
