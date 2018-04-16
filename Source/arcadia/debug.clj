@@ -203,7 +203,7 @@
 
 (defn available-breakpoints [id]
   (let [bpr @breakpoint-registry
-        {::keys [::stacks]} bpr
+        {:keys [::stacks]} bpr
         {:keys [::connecting]} (find-by-id bpr id)]
     (->> (vals stacks)
          (filter #(= 1 (count %)))
