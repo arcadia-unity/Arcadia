@@ -433,10 +433,6 @@
 (defn repl-read-fn [id]
   (fn repl-read [request-prompt request-exit]
     (let [input (m/repl-read request-prompt request-exit)]
-      ;; todo: :help, :h
-
-      ;; todo: disable all breakpoints that are instances of
-      ;; this code-site. need code-site specific ids
       (cond
         (= :h input)
         (do (print-help)
