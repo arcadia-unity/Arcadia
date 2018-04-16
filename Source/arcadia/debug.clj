@@ -572,7 +572,7 @@
 (defmacro break []
   (let [site-id (swap! site-id-counter inc)]
     `(let [id# (swap! id-counter inc)
-          site-id# ~site-id
+           site-id# ~site-id
            ure# (under-repl-evaluation?)
            lower-interrupt?# (and (on-main-repl-thread?)
                                   (not (under-repl-evaluation?)))]
@@ -593,16 +593,14 @@
              (interrupt-break-fn id#)))
          (repl-println "starting loop. id:" id#)
          (try
-           (loop [bail# 0]
-             (if (< bail# 10)
-               (when-not (should-exit? id#)
-                 (cond
-                   (or lower-interrupt?#
-                       (receiving? id#)) (run-breakpoint-receiving-from-off-thread id#)
-                   (own-breakpoint? id#) (run-own-breakpoint id#)
-                   :else (connect-to-off-thread-breakpoint id#))
-                 (recur (inc bail#)))
-               (repl-println "bailing.")))
+           (loop []
+             (when-not (should-exit? id#)
+               (cond
+                 (or lower-interrupt?#
+                     (receiving? id#)) (run-breakpoint-receiving-from-off-thread id#)
+                 (own-breakpoint? id#) (run-own-breakpoint id#)
+                 :else (connect-to-off-thread-breakpoint id#))
+               (recur)))
            (finally
              (repl-println "in finally quit. id:" id#)
              (quit id#)))))))
