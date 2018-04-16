@@ -530,6 +530,7 @@
         (m/repl
           :read (repl-read-fn id)
           :eval #'env-eval
+          :caught #'socket-repl/repl-caught ; preserves errors
           :prompt #(print (str "debug:" id  "=> ")))
         (catch Exception e
           (reset! bpr-log e)
