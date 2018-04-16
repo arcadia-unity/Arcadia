@@ -366,17 +366,6 @@
               (base-connect a id-2)
               (manage-interrupt a)))))))
 
-;; from below
-;; disconnect but keep spinning
-(defn disconnect [id]
-  (bpr-sync
-    (fn [bpr]
-      (let [{:keys [::connected]} (find-by-id bpr id)
-            {:keys [::end-connection-promise]} (find-by-id bpr connected)]
-        (-> bpr
-            (reset-by-id id connected)
-            (to-outbox end-connection-promise true))))))
-
 (defn quit [id]
   (repl-println "in quit. id:" id)
   (bpr-sync
