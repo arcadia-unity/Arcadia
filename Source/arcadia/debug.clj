@@ -464,7 +464,7 @@
              (#{:c :connect} (first input))
              (= 2 (count input)))
         (let [[_ i] input]
-          (connect-by-id id (get (available-breakpoints id) i))
+          (connect-by-id id (nth (available-breakpoints id) i))
           request-exit)
 
         :else input))))
