@@ -326,7 +326,7 @@
      a a a a
      a a a a))
   (^Matrix4x4 [r0 r1 r2 r3]
-   (Matrix4x4/matrixByRows r0 r1 r2 r3))
+   (LinearHelper/matrixByRows r0 r1 r2 r3))
   (^Matrix4x4 [a b c d
                e f g h
                i j k l
@@ -378,7 +378,7 @@
 (definline inverse [^Matrix4x4 m]
   `(Matrix4x4/Inverse ~m))
 
-(defn trs [^UnityEngine.Vector3 t, ^UnityEngine.Quaternion r, ^UnityEngine.Vector3 s]
+(definline trs [^UnityEngine.Vector3 t, ^UnityEngine.Quaternion r, ^UnityEngine.Vector3 s]
   `(Matrix4x4/TRS ~t ~r ~s))
 
 ;; ============================================================
