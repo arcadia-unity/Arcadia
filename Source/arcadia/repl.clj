@@ -250,7 +250,7 @@
                                         (catch SocketException ex
                                           (if (not= (.ErrorCode ex) SocketError/TimedOut)
                                             (throw (Exception. "Unexpected Socket error" ex))))))
-                                     ;; TODO why does this line not execute?
+                                     (.Close socket)
                                      (if ((config/config) :verbose)
                                        (Debug/Log "REPL Stopped")))))
       socket)))
@@ -260,5 +260,4 @@
     (Debug/Log "Stopping REPL..."))
   (locking server-running
     (when @server-running
-      (reset! server-running false)
-      (.Close socket))))
+      (reset! server-running false))))
