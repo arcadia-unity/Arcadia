@@ -5,3 +5,4 @@
 * Douglas P. Fields, Jr. [LispEngineer](https://github.com/LispEngineer)
 * Joshua Suskalo - [IGJoshua](https://github.com/IGJoshua)
 * Pedro Martins - [pjago](https://github.com/pjago)
+* Vincent Cantin - [green-coder](https://github.com/green-coder)
