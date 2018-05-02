@@ -12,6 +12,12 @@
 (defonce asset-watcher-state
   (atom {}))
 
+(defn watch-cancelled? []
+  ((::fw/cancelled? (::watch @asset-watcher-state))))
+
+(defn watch-errors []
+  ((::fw/errors (::watch @asset-watcher-state))))
+
 (defn update-watch []
   (thr/start-thread
     (fn []

@@ -46,7 +46,28 @@ namespace Arcadia
 
 		public clojure.lang.IPersistentMap ToPersistentMap ()
 		{
-			return Arcadia.Util.Zipmap(dict.Keys.ToArray(), dict.Values.ToArray());
+			var len = dict.Count * 2;
+			var kvs = new object[len];
+			int i = 0;
+			foreach (var kv in dict) {
+				kvs[i] = kv.Key;
+				kvs[i + 1] = kv.Value;
+				i+=2;
+			}
+			return PersistentHashMap.create(kvs);
+		}
+
+		public clojure.lang.IPersistentMap ToPersistentMap (object mutInst, IFn processElement)
+		{
+			var len = dict.Count * 2;
+			var kvs = new object[len];
+			int i = 0;
+			foreach (var kv in dict) {
+				kvs[i] = kv.Key;
+				kvs[i + 1] = processElement.invoke(mutInst, kv.Key, kv.Value);
+				i+=2;
+			}
+			return PersistentHashMap.create(kvs);
 		}
 	}
 }

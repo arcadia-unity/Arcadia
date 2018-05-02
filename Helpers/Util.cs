@@ -132,11 +132,22 @@ namespace Arcadia
 			var len = Mathf.Min(ks.Length, vs.Length) * 2;
 			object[] kvs = new object[len];
 			for (int i = 0; i < len; i += 2) {
-				kvs[i] = ks[i];
-				kvs[i + 1] = vs[i];
+				kvs[i] = ks[i / 2];
+				kvs[i + 1] = vs[i / 2];
 			}
 			return PersistentHashMap.create(kvs);
 		}
 
+		// ==================================================================
+		// nil
+
+		public static object TrueNil (object obj)
+		{
+			UnityEngine.Object obj2 = obj as UnityEngine.Object;
+			if (obj2 == null) {
+				return null;
+			}
+			return obj;
+		}
 	}
 }

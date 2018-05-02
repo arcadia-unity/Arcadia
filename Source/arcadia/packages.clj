@@ -196,11 +196,6 @@
                      (sort-by last)
                      last)))))
 
-(defn all-unique-dependencies [group-artifact-version]
-  (-> group-artifact-version
-      all-dependencies
-      most-recent-versions))
-
 (defn download-jar
   [[group artifact version]]
   (let [temp (fs/directory-info (fs/path-combine temp-dir "Jars"))]
@@ -210,12 +205,6 @@
         (jar-url group artifact version)
         (fs/path-combine (.FullName temp)
           (str (gensym (str group "-" artifact "-" version "-")) ".jar"))))))
-
-(defn download-jars
-  [group-artifact-version]
-  (doall (->> (all-unique-dependencies group-artifact-version)
-              (concat [group-artifact-version])
-              (map download-jar))))
 
 (defn should-extract? [^ZipEntry e]
   (not (or (re-find #"^META-INF" (.FileName e))
@@ -396,19 +385,18 @@
 (defn- install-step [dep]
   (let [manifest (library-manifest)]
     (when-let [install-data (install dep {::manifest manifest})]
-      (reduce
-        (fn [manifest', {:keys [::succeeded ::coord ::error]}]
-          (if succeeded
-            (let [manifest'' (update manifest' ::installed
-                               (fnil into #{}) (map ::coord) install-data)]
-              (write-library-manifest manifest'')
-              manifest'')
-            (do (Debug/Log (str "Installation for coordinate " coord " failed. Error: "))
-                (Debug/Log error)
-                manifest')))
-        manifest
-        install-data)
-      install-data)))
+      (let [manifest2 (reduce
+                        (fn [manifest', {:keys [::succeeded ::coord ::error]}]
+                          (if succeeded
+                            (update manifest' ::installed
+                              (fnil into #{}) (map ::coord) install-data)
+                            (do (Debug/Log (str "Installation for coordinate " coord " failed. Error: "))
+                                (Debug/Log error)
+                                manifest')))
+                        manifest
+                        install-data)]
+        (write-library-manifest manifest2)
+        install-data))))
 
 (defonce ^:private install-queue
   (Queue/Synchronized (Queue.)))

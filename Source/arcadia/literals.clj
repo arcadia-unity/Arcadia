@@ -216,9 +216,8 @@
 ;; ============================================================
 ;; for defmutable:
 
-(defn- parse-user-type-dispatch [[t]]
-  ;; (resolve t) ; dunno about this
-  t)
+(defn- parse-user-type-dispatch [{:keys [:arcadia.core/mutable-type]}]
+  mutable-type)
 
 (defmulti parse-user-type
   "This multimethod should be considered an internal, unstable
@@ -230,7 +229,8 @@
 ;; their namespace hasn't, yknow
 (def seen-user-type-names (atom #{}))
 
-(defmethod parse-user-type :default [[t :as spec]]
+(defmethod parse-user-type :default [{t :arcadia.core/mutable-type
+                                      :as spec}]
   (if (contains? @seen-user-type-names t)
     (throw (Exception. (str "Already seen type " t ", something's wrong.")))
     (do (swap! seen-user-type-names conj t)
@@ -246,8 +246,12 @@
 
 ;; and we also have to do this, for the repl:
 (when (.getThreadBinding ^clojure.lang.Var #'*data-readers*)
-  (set! *data-readers*
-    (assoc *data-readers* 'arcadia.core/mutable #'parse-user-type)))
+  (set! clojure.core/*data-readers*
+    (merge clojure.core/*data-readers*
+      ;; I guess. so weird
+      (.getRawRoot #'clojure.core/*data-readers*)
+      ;;'arcadia.core/mutable #'parse-user-type
+      )))
 
 ;; ============================================================
 

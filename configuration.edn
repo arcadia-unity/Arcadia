@@ -30,6 +30,7 @@
  ;; the default Assets/kittens/core.clj, you could use the following.
  ;; :arcadia.compiler/loadpaths ["Assets/src"]
 
+ :nudge true
 
  ;; Partially controls the socket-repl.
  ;;

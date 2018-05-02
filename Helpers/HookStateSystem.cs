@@ -20,13 +20,20 @@ namespace Arcadia
 		{
 			ArcadiaState arcs;
 
-			if (obj is GameObject) {
-				arcs = (ArcadiaState)((GameObject)obj).GetComponent(typeof(ArcadiaState));
-			} else if (obj is Component) {
-				arcs = (ArcadiaState)((Component)obj).GetComponent(typeof(ArcadiaState));
+			var gobj = obj as GameObject;
+			if (gobj != null) {
+				arcs = gobj.GetComponent<ArcadiaState>();
 			} else {
-				return null;
+				var cmpt = obj as Component;
+				if (cmpt != null) {
+					arcs = cmpt.GetComponent<ArcadiaState>();
+				} else {
+					return null;
+				}
 			}
+
+			if (arcs == null)
+				return null;
 
 			var jm = arcs.state;
 			Arcadia.JumpMap.KeyVal kv;
@@ -38,18 +45,7 @@ namespace Arcadia
 
 		public static object Lookup (object gobj, object key)
 		{
-
-			//if (arcadiaState != null && gobj == arcadiaState.gameObject) {
-			//	if (pamv != null) {
-			//		return pamv.ValueAtKey(key);
-			//	}
-			//	return arcadiaState.state.ValueAtKey(key);
-			//}
-			//return FullLookup(gobj, key)
-
-			// fully inlined lookup:
-
-			if (hasState && ReferenceEquals(gobj, arcadiaState.gameObject)) {
+			if (hasState && gobj == arcadiaState.gameObject) {
 				var kvs = pamv.kvs;
 				for (int i = 0; i < kvs.Length; i++) {
 					var kv = kvs[i];
