@@ -6,3 +6,4 @@
 * Joshua Suskalo - [IGJoshua](https://github.com/IGJoshua)
 * Pedro Martins - [pjago](https://github.com/pjago)
 * Vincent Cantin - [green-coder](https://github.com/green-coder)
+* Artur Dębkowski - [ekhart](https://github.com/ekhart)
