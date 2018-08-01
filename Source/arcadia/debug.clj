@@ -28,9 +28,6 @@
 ;; - Currently no support for multiple repls, attempting to use with multiple
 ;;   repls could lead to deadlock or other weird behavior.
 
-;; (defn current-thread []
-;;   System.Threading.Thread/CurrentThread)
-
 (defn current-thread []
   System.Threading.Thread/CurrentThread)
 
@@ -586,7 +583,72 @@
   (-> (into {} (s/conform ::break-args break-args))
       (mu/map-vals :body)))
 
-(defmacro break [& break-args]
+(defmacro break  
+  "Multithreaded breakpoint macro.
+
+When a `(break)` form is encountered on any thread, that thread's
+  execution will 'hang' as if it were running a REPL and awaiting
+  further input. To connect to a breakpoint on an off-REPL thread,
+  open a breakpoint in the REPL by evaluating a `(break)` form, then
+  use the special syntax `[:c <index of breakpoint to connect to>]` at
+  the top level of the new REPL context. For example:
+
+```
+my.namespace=> (future (let [x (+ 1 2)] (break)))
+
+my.namespace=> (break)
+
+;; print available breakpoints:
+debug:6=> :a 
+Inx Thread Break-ID
+0   30     7
+
+;; connect to the breakpoint at `Inx` 0:
+debug:6=> [:c 0]
+;; evaluate some code from that context:
+debug:7=> x
+3
+
+;; quit this breakpoint, popping up to the previous breakpoint level:
+debug:7=> :q
+debug:8=>
+
+;; pop up to top REPL level:
+debug:8=> :q
+my.namespace=>
+```
+
+For a summary of the in-breakpoint DSL, evaluate `:h` from within a
+  breakpoint.
+
+At the moment the `break` macro takes a single keyword-arguments
+  option, `:when`. When the breakpoint is encountered, the `:when`
+  expression will be evaluated if present. If the result is truthy,
+  the breakpoint will be entered as normal, otherwise it will be
+  skipped.
+
+```
+my.namespace=> (defn some-func [x]
+                  (break :when (< x 5))
+                  x)
+#'arcadia.debug/some-func
+my.namespace=> (some-func 7)
+7
+my.namespace=> (some-func 3)
+debug:13=> x
+3
+```
+
+`break` always returns `nil`.
+
+This macro is intended for use with Arcadia's socket REPL. It may work
+  with other REPLs in some circumstances, but probably won't for
+  breakpoints triggered by Unity events that run on Unity's main
+  thread. In fact, if the REPL is also evaluating on the main thread,
+  such a breakpoint will almost certainly crash that REPL (since its
+  thread is blocked), and effectively crash Unity itself.
+"
+  [& break-args]
   (let [site-id (swap! site-id-counter inc)
         opts (parse-break-args break-args)]
     `(~@(if-let [w (:when opts)]
