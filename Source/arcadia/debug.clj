@@ -4,7 +4,8 @@
             [clojure.main :as m]
             [clojure.spec.alpha :as s]
             [arcadia.socket-repl :as socket-repl]
-            [arcadia.internal.thread :as thread])
+            [arcadia.internal.thread :as thread]
+            [arcadia.internal.map-utils :as mu])
   (:import [System.Diagnostics StackFrame StackTrace]))
 
 ;; Differs from some other implementations in that it:
@@ -26,9 +27,6 @@
 ;; - The main repl thread is currently hard-coded to be Unity's main thread.
 ;; - Currently no support for multiple repls, attempting to use with multiple
 ;;   repls could lead to deadlock or other weird behavior.
-
-;; (defn current-thread []
-;;   System.Threading.Thread/CurrentThread)
 
 (defn current-thread []
   System.Threading.Thread/CurrentThread)
@@ -570,41 +568,126 @@
 (defonce id-counter (atom 0))
 (defonce site-id-counter (atom 0))
 
-(defmacro break []
-  (let [site-id (swap! site-id-counter inc)]
-    `(let [id# (swap! id-counter inc)
-           site-id# ~site-id
-           ure# (under-repl-evaluation?)
-           lower-interrupt?# (and (on-main-repl-thread?)
-                                  (not (under-repl-evaluation?)))]
-       (when-not (site-disabled? site-id#)
-         (register-breakpoint
-           {::id id#
-            ::site-id site-id#
-            ::env (capture-env)
-            ::thread System.Threading.Thread/CurrentThread
-            ::in *in*
-            ::out *out*
-            ::err *err*
-            ::ure ure#
-            ::interrupt *interrupt*
-            ::ns (find-ns (quote ~(ns-name *ns*)))})
-         (when lower-interrupt?#
-           (socket-repl/send-interrupt
-             (interrupt-break-fn id#)))
-         (repl-println "starting loop. id:" id#)
-         (try
-           (loop []
-             (when-not (should-exit? id#)
-               (cond
-                 (or lower-interrupt?#
-                     (receiving? id#)) (run-breakpoint-receiving-from-off-thread id#)
-                 (own-breakpoint? id#) (run-own-breakpoint id#)
-                 :else (connect-to-off-thread-breakpoint id#))
-               (recur)))
-           (finally
-             (repl-println "in finally quit. id:" id#)
-             (quit id#)))))))
+;; ------------------------------------------------------------
+;; dsl for break macro
+
+(s/def ::break-arg-clause
+  (s/alt
+    :when (s/cat :label #{:when}, :body any?)))
+
+(s/def ::break-args
+  (s/* ::break-arg-clause))
+
+;; note to self: feel free to make this fancier for more elaborate args
+(defn parse-break-args [break-args]
+  (-> (into {} (s/conform ::break-args break-args))
+      (mu/map-vals :body)))
+
+(defmacro break  
+  "Multithreaded breakpoint macro.
+
+When a `(break)` form is encountered on any thread, that thread's
+  execution will 'hang' as if it were running a REPL and awaiting
+  further input. To connect to a breakpoint on an off-REPL thread,
+  open a breakpoint in the REPL by evaluating a `(break)` form, then
+  use the special syntax `[:c <index of breakpoint to connect to>]` at
+  the top level of the new REPL context. For example:
+
+```
+my.namespace=> (future (let [x (+ 1 2)] (break)))
+
+my.namespace=> (break)
+
+;; print available breakpoints:
+debug:6=> :a 
+Inx Thread Break-ID
+0   30     7
+
+;; connect to the breakpoint at `Inx` 0:
+debug:6=> [:c 0]
+;; evaluate some code from that context:
+debug:7=> x
+3
+
+;; quit this breakpoint, popping up to the previous breakpoint level:
+debug:7=> :q
+debug:8=>
+
+;; pop up to top REPL level:
+debug:8=> :q
+my.namespace=>
+```
+
+For a summary of the in-breakpoint DSL, evaluate `:h` from within a
+  breakpoint.
+
+At the moment the `break` macro takes a single keyword-arguments
+  option, `:when`. When the breakpoint is encountered, the `:when`
+  expression will be evaluated if present. If the result is truthy,
+  the breakpoint will be entered as normal, otherwise it will be
+  skipped.
+
+```
+my.namespace=> (defn some-func [x]
+                  (break :when (< x 5))
+                  x)
+#'arcadia.debug/some-func
+my.namespace=> (some-func 7)
+7
+my.namespace=> (some-func 3)
+debug:13=> x
+3
+```
+
+`break` always returns `nil`.
+
+This macro is intended for use with Arcadia's socket REPL. It may work
+  with other REPLs in some circumstances, but probably won't for
+  breakpoints triggered by Unity events that run on Unity's main
+  thread. In fact, if the REPL is also evaluating on the main thread,
+  such a breakpoint will almost certainly crash that REPL (since its
+  thread is blocked), and effectively crash Unity itself.
+"
+  [& break-args]
+  (let [site-id (swap! site-id-counter inc)
+        opts (parse-break-args break-args)]
+    `(~@(if-let [w (:when opts)]
+          `[when ~w]
+          `[do])
+      (let [id# (swap! id-counter inc)
+            site-id# ~site-id
+            ure# (under-repl-evaluation?)
+            lower-interrupt?# (and (on-main-repl-thread?)
+                                   (not (under-repl-evaluation?)))]
+        (when-not (site-disabled? site-id#)
+          (register-breakpoint
+            {::id id#
+             ::site-id site-id#
+             ::env (capture-env)
+             ::thread System.Threading.Thread/CurrentThread
+             ::in *in*
+             ::out *out*
+             ::err *err*
+             ::ure ure#
+             ::interrupt *interrupt*
+             ::ns (find-ns (quote ~(ns-name *ns*)))})
+          (when lower-interrupt?#
+            (socket-repl/send-interrupt
+              (interrupt-break-fn id#)))
+          (repl-println "starting loop. id:" id#)
+          (try
+            (loop []
+              (when-not (should-exit? id#)
+                (cond
+                  (or lower-interrupt?#
+                      (receiving? id#)) (run-breakpoint-receiving-from-off-thread id#)
+                  (own-breakpoint? id#) (run-own-breakpoint id#)
+                  :else (connect-to-off-thread-breakpoint id#))
+                (recur)))
+            (finally
+              (repl-println "in finally quit. id:" id#)
+              (quit id#)))))
+      nil)))
 
 (defn interrupt-break-fn [id]
   (fn interrupt-break []
