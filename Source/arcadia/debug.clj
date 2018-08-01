@@ -4,7 +4,8 @@
             [clojure.main :as m]
             [clojure.spec.alpha :as s]
             [arcadia.socket-repl :as socket-repl]
-            [arcadia.internal.thread :as thread])
+            [arcadia.internal.thread :as thread]
+            [arcadia.internal.map-utils :as mu])
   (:import [System.Diagnostics StackFrame StackTrace]))
 
 ;; Differs from some other implementations in that it:
@@ -570,41 +571,61 @@
 (defonce id-counter (atom 0))
 (defonce site-id-counter (atom 0))
 
-(defmacro break []
-  (let [site-id (swap! site-id-counter inc)]
-    `(let [id# (swap! id-counter inc)
-           site-id# ~site-id
-           ure# (under-repl-evaluation?)
-           lower-interrupt?# (and (on-main-repl-thread?)
-                                  (not (under-repl-evaluation?)))]
-       (when-not (site-disabled? site-id#)
-         (register-breakpoint
-           {::id id#
-            ::site-id site-id#
-            ::env (capture-env)
-            ::thread System.Threading.Thread/CurrentThread
-            ::in *in*
-            ::out *out*
-            ::err *err*
-            ::ure ure#
-            ::interrupt *interrupt*
-            ::ns (find-ns (quote ~(ns-name *ns*)))})
-         (when lower-interrupt?#
-           (socket-repl/send-interrupt
-             (interrupt-break-fn id#)))
-         (repl-println "starting loop. id:" id#)
-         (try
-           (loop []
-             (when-not (should-exit? id#)
-               (cond
-                 (or lower-interrupt?#
-                     (receiving? id#)) (run-breakpoint-receiving-from-off-thread id#)
-                 (own-breakpoint? id#) (run-own-breakpoint id#)
-                 :else (connect-to-off-thread-breakpoint id#))
-               (recur)))
-           (finally
-             (repl-println "in finally quit. id:" id#)
-             (quit id#)))))))
+;; ------------------------------------------------------------
+;; dsl for break macro
+
+(s/def ::break-arg-clause
+  (s/alt
+    :when (s/cat :label #{:when}, :body any?)))
+
+(s/def ::break-args
+  (s/* ::break-arg-clause))
+
+;; note to self: feel free to make this fancier for more elaborate args
+(defn parse-break-args [break-args]
+  (-> (into {} (s/conform ::break-args break-args))
+      (mu/map-vals :body)))
+
+(defmacro break [& break-args]
+  (let [site-id (swap! site-id-counter inc)
+        opts (parse-break-args break-args)]
+    `(~@(if-let [w (:when opts)]
+          `[when ~w]
+          `[do])
+      (let [id# (swap! id-counter inc)
+            site-id# ~site-id
+            ure# (under-repl-evaluation?)
+            lower-interrupt?# (and (on-main-repl-thread?)
+                                   (not (under-repl-evaluation?)))]
+        (when-not (site-disabled? site-id#)
+          (register-breakpoint
+            {::id id#
+             ::site-id site-id#
+             ::env (capture-env)
+             ::thread System.Threading.Thread/CurrentThread
+             ::in *in*
+             ::out *out*
+             ::err *err*
+             ::ure ure#
+             ::interrupt *interrupt*
+             ::ns (find-ns (quote ~(ns-name *ns*)))})
+          (when lower-interrupt?#
+            (socket-repl/send-interrupt
+              (interrupt-break-fn id#)))
+          (repl-println "starting loop. id:" id#)
+          (try
+            (loop []
+              (when-not (should-exit? id#)
+                (cond
+                  (or lower-interrupt?#
+                      (receiving? id#)) (run-breakpoint-receiving-from-off-thread id#)
+                  (own-breakpoint? id#) (run-own-breakpoint id#)
+                  :else (connect-to-off-thread-breakpoint id#))
+                (recur)))
+            (finally
+              (repl-println "in finally quit. id:" id#)
+              (quit id#)))))
+      nil)))
 
 (defn interrupt-break-fn [id]
   (fn interrupt-break []
