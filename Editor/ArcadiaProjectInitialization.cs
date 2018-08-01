@@ -16,6 +16,11 @@ namespace Arcadia
         public static void CheckSettings()
         {
 			Debug.Log("Checking Unity Settings...");
+            if (!Application.unityVersion.StartsWith("2018")) // gross string comparison, not sure we can avoid
+            {
+                Debug.LogWarningFormat("Expected Unity version 2018.x, got {0}. This might cause issues.", Application.unityVersion);
+            }
+            
 			if (PlayerSettings.GetApiCompatibilityLevel(BuildTargetGroup.Standalone) != ApiCompatibilityLevel.NET_4_6)
 			 {
 			     Debug.Log("Updating API Compatibility Level to .NET 4.6");
