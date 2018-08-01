@@ -1,4 +1,5 @@
-﻿using System;
+﻿#if NET_4_6
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using clojure.lang;
@@ -71,3 +72,4 @@ namespace Arcadia
 		}
 	}
 }
+#endif

@@ -1,3 +1,4 @@
+#if NET_4_6
 using System;
 using System.Linq;
 using System.Collections;
@@ -158,3 +159,4 @@ public class ArcadiaStateEditor : Editor
 		Arcadia.Util.Invoke(OnInspectorGUIVar, target);
 	}
 }
+#endif

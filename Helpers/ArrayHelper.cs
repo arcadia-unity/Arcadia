@@ -1,4 +1,5 @@
-﻿using System;
+﻿#if NET_4_6
+using System;
 using clojure.lang;
 
 namespace Arcadia
@@ -18,4 +19,4 @@ namespace Arcadia
 			
 	}
 }
-
+#endif

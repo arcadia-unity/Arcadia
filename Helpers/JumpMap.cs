@@ -1,3 +1,4 @@
+#if NET_4_6
 using UnityEngine;
 using System.Collections.Generic;
 using clojure.lang;
@@ -212,3 +213,4 @@ namespace Arcadia
 
 	}
 }
+#endif
