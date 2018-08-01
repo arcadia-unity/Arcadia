@@ -31,24 +31,24 @@
   ([message args interface]
   (let [arg-names (take (count args) alphabet)]
     (str
-"using UnityEngine;
+"#if NET_4_6
+using UnityEngine;
 " (if interface
     (str "using " (.Namespace (RT/classForName interface)) ";\n"))
 "using clojure.lang;
 
 public class " (component-name message) " : ArcadiaBehaviour" (if interface (str ", " interface))
-"   
+"
 {
   " (string/join " " (filter some? ['public (overrides message) 'void])) " "
       message "(" (string/join ", " (map #(str %1 " " %2) args arg-names)) ")
   {
 " (if (call-base message)
     (str "      base." message "(" (string/join ", " arg-names) ");\n"))
-"      var _go = gameObject;
-      foreach (var fn in fns)
-        fn.invoke(" (string/join ", " (concat ['_go] arg-names)) ");
+"      RunFunctions(" (string/join ", " arg-names) ");
   }
-}"))))
+}
+#endif"))))
 
 (defn write-component!
   ([message args] (write-component! message args nil))
@@ -61,7 +61,7 @@ public class " (component-name message) " : ArcadiaBehaviour" (if interface (str
 (defn write-components! []
   (doseq [[message args] messages/messages]
     (write-component! message args))
-  
+
   (doseq [[message args] messages/interface-messages]
     (let [interface (namespace message)
           message (name message)]

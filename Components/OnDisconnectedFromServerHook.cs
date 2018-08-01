@@ -1,12 +1,12 @@
+#if NET_4_6
 using UnityEngine;
 using clojure.lang;
 
-public class OnDisconnectedFromServerHook : ArcadiaBehaviour   
+public class OnDisconnectedFromServerHook : ArcadiaBehaviour
 {
   public void OnDisconnectedFromServer(UnityEngine.NetworkDisconnection a)
   {
-
-  	RunFunctions(a);
-
+      RunFunctions(a);
   }
 }
+#endif
