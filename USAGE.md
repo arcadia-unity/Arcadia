@@ -72,7 +72,7 @@ The basic Arcadia workflow is:
 
 _These steps are not Arcadia specific._
 
-Arcadia is installed on a per-project basis. It is developed and tested Unity 5.2.x and 5.3.x.
+Arcadia is installed on a per-project basis. It is developed and tested Unity 2017.1.0f3
 
 Launch Unity and select _NEW_ to start a new project
 
