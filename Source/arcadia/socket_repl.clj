@@ -58,7 +58,6 @@
     (.DataAvailable (.BaseStream base-reader))))
 
 (defn repl-read [request-prompt request-exit]
-  (UnityEngine.Debug/Log "starting repl-read")
   (let [result (try
                  (loop []
                    (if (data-available? *in*)
@@ -80,12 +79,6 @@
                    (UnityEngine.Debug/Log "something dreadful happened")
                    (UnityEngine.Debug/Log e)
                    (throw (Exception. "wrapper" e))))]
-    (UnityEngine.Debug/Log
-      (str "leaving repl-read, result:\n"
-           (cond
-             (= result request-prompt) "<request-prompt>"
-             (= result request-exit) "<request-exit>"
-             :else (pr-str result))))
     result))
 
 (defn register-eval-type [x]
@@ -97,7 +90,6 @@
   ([expr {:keys [callback-driver]
           :or {callback-driver cb/add-callback}
           :as opts}]
-   (UnityEngine.Debug/Log "starting game-thread-eval")
    (let [old-read-eval *read-eval*
          p (promise)]
      (callback-driver
