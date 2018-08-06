@@ -217,6 +217,17 @@
          (map ::id)
          vec)))
 
+(defn- fmt [fmt & args]
+  (let [^String fmt fmt
+        ^|System.Object[]| args (into-array System.Object args)]
+    (String/Format fmt args)))
+
+(defn frame-descriptions [^System.Diagnostics.StackTrace st]
+  (for [f (.GetFrames st)]
+    (if-let [m (.GetMethod f)]
+      (str (.ReflectedType m) "." (.Name m))
+      "NO_CLASS.NO_METHOD")))
+
 (defn print-available-breakpoints [id]
   ;; print as a nice table eventually
   (let [bpr @breakpoint-registry]
@@ -228,9 +239,10 @@
         "\n"
         (->> (available-breakpoints id)
              (map #(find-by-id bpr %))
-             (map-indexed (fn [i {:keys [::thread ::id]}]
-                            (String/Format "{0,-3} {1, -6} {2}" i (.GetHashCode thread) id)))
-             (cons (String/Format "{0,-3} {1} {2}" "Inx" "Thread" "Break-ID")))))))
+             (map-indexed (fn [i {:keys [::thread ::id ::stack]}]
+                            (fmt "{0,-3} {1,-6} {2,-8} {3}"
+                              i (.GetHashCode thread) id (first (frame-descriptions stack)))))
+             (cons (fmt "{0,-3} {1} {2} {3}" "Inx" "Thread" "Break-ID" "Frame")))))))
 
 ;; won't work for n < 3
 (defn trunc [s n]
@@ -664,6 +676,7 @@ This macro is intended for use with Arcadia's socket REPL. It may work
             {::id id#
              ::site-id site-id#
              ::env (capture-env)
+             ::stack (System.Diagnostics.StackTrace.)
              ::thread System.Threading.Thread/CurrentThread
              ::in *in*
              ::out *out*
