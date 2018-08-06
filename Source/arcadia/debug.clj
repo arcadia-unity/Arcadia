@@ -215,11 +215,12 @@
          (remove ::connected)
          (remove ::interrupt)
          (map ::id)
+         (sort-by ::name)
          vec)))
 
 (defn- fmt [fmt & args]
   (let [^String fmt fmt
-        ^|System.Object[]| args (into-array System.Object args)]
+        ^|System.Object[]| args (into-array System.Object (map str args))]
     (String/Format fmt args)))
 
 (defn frame-descriptions [^System.Diagnostics.StackTrace st]
@@ -228,21 +229,28 @@
       (str (.ReflectedType m) "." (.Name m))
       "NO_CLASS.NO_METHOD")))
 
+(defn table [rows]
+  (let [rows (map #(map str %) rows)
+        col-max (->> rows
+                     (apply map list)
+                     (map #(apply max (map count %))))
+        format (->> col-max
+                    (map-indexed (fn [i max] (str "{" i ",-" max "}")))
+                    (clojure.string/join " "))]
+    (->> rows
+         (map #(apply fmt format %))
+         (clojure.string/join "\n"))))
+
 (defn print-available-breakpoints [id]
   ;; print as a nice table eventually
   (let [bpr @breakpoint-registry]
-    (repl-println "(available-breakpoints id):"
-      (with-out-str
-        (pprint/pprint (available-breakpoints id))))
-    (println
-      (clojure.string/join
-        "\n"
-        (->> (available-breakpoints id)
-             (map #(find-by-id bpr %))
-             (map-indexed (fn [i {:keys [::thread ::id ::stack]}]
-                            (fmt "{0,-3} {1,-6} {2,-8} {3}"
-                              i (.GetHashCode thread) id (first (frame-descriptions stack)))))
-             (cons (fmt "{0,-3} {1} {2} {3}" "Inx" "Thread" "Break-ID" "Frame")))))))
+    (->> (available-breakpoints id)
+         (map #(find-by-id bpr %))
+         (map-indexed (fn [i {:keys [::thread ::id ::stack ::name]}]
+                        [i name (.GetHashCode thread) id (first (frame-descriptions stack))]))
+         (cons ["Inx" "Name" "Thread" "Break-ID" "Frame"])
+         table
+         println)))
 
 ;; won't work for n < 3
 (defn trunc [s n]
@@ -583,17 +591,22 @@
 ;; ------------------------------------------------------------
 ;; dsl for break macro
 
-(s/def ::break-arg-clause
-  (s/alt
-    :when (s/cat :label #{:when}, :body any?)))
+(s/def ::when any?)
 
 (s/def ::break-args
-  (s/* ::break-arg-clause))
+  (s/cat
+    :name (s/? symbol?)
+    :args (s/keys* :opt-un [::when])))
 
-;; note to self: feel free to make this fancier for more elaborate args
 (defn parse-break-args [break-args]
-  (-> (into {} (s/conform ::break-args break-args))
-      (mu/map-vals :body)))
+  (let [prs (s/conform ::break-args break-args)]
+    (if (= ::s/invalid prs)
+      (throw
+        (Exception.
+          (str "Invalid arguments to arcadia.debug/break. Spec explanation:\n"
+               (with-out-str (s/explain ::break-args break-args)))))
+      (let [{:keys [name args]} prs]
+        (assoc args :name name)))))
 
 (defmacro break  
   "Multithreaded breakpoint macro.
@@ -662,8 +675,9 @@ This macro is intended for use with Arcadia's socket REPL. It may work
 "
   [& break-args]
   (let [site-id (swap! site-id-counter inc)
-        opts (parse-break-args break-args)]
-    `(~@(if-let [w (:when opts)]
+        {:keys [name]
+         :as opts} (parse-break-args break-args)]
+    `(~@(if-let [[_ w] (find opts :when)]
           `[when ~w]
           `[do])
       (let [id# (swap! id-counter inc)
@@ -676,6 +690,7 @@ This macro is intended for use with Arcadia's socket REPL. It may work
             {::id id#
              ::site-id site-id#
              ::env (capture-env)
+             ::name (quote ~name)
              ::stack (System.Diagnostics.StackTrace.)
              ::thread System.Threading.Thread/CurrentThread
              ::in *in*
