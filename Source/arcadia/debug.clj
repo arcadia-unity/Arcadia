@@ -456,7 +456,7 @@
         (do (print-help)
             request-prompt)
 
-        ({:k :kill} input)
+        (#{:k :kill} input)
         (let [{:keys [::site-id]} (find-by-id @breakpoint-registry id)]
           (disable-site site-id)
           (quit id)
