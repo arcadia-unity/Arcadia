@@ -258,36 +258,27 @@
     (str (subs s 0 (- n 3)) "...")
     s))
 
-(defn print-env [id]
-  (let [bpr @breakpoint-registry
-        {:keys [::env]} (find-by-id bpr id)
-        max-len 30
-        compr (comparator
-                (fn [a b]
-                  (let [ak (str (key a))
-                        bk (str (key b))]
-                    (< (count ak) (count bk))))) ; just sorts by length for now
-        sorted-env (sort compr env)
-        rows (for [[k bind] sorted-env]
-               (let [base-bind (binding [*print-level* 14
-                                         *print-length* 4]
-                                 (with-out-str
-                                   (print bind)))]
-                 (map #(trunc (clojure.string/trim %) max-len)
-                   [(str k) (str (class bind)) base-bind])))
-        lengths (map
-                  #(apply max (map count %))
-                  (apply map list rows))
-        format (apply str
-                 (clojure.string/join " "
-                   (map-indexed
-                     (fn [i len]
-                       (str "{" i ",-" len  "}"))
-                     lengths)))]
-    ;;sorted-env
-    (doseq [[a b c] rows]
-      (println (String/Format format a b c)))
-    ))
+(defn print-env
+  ([id]
+   (print-env id nil))
+  ([id {:keys [short]}]
+   (let [bpr @breakpoint-registry
+         {:keys [::env]} (find-by-id bpr id)
+         max-len 30
+         rows (for [[k bind] (sort env)
+                    :when (if short
+                            (not (re-matches #".*__\d+.*" (str k)))
+                            true)]
+                (let [base-bind (binding [*print-level* 14
+                                          *print-length* 4]
+                                  (with-out-str
+                                    (print bind)))]
+                  (map #(trunc (clojure.string/trim %) max-len)
+                    [(str k) (str (class bind)) base-bind])))]
+     (->> rows
+          (cons ["Name" "Type" "Value"])
+          table
+          println))))
 
 ;; ------------------------------------------------------------
 
@@ -439,14 +430,19 @@
 ;; read, eval, etc
 
 (defn print-help []
-  (println
-    (clojure.string/join "\n"
-      [":h, :help      - print help"
-       ":k, :kill      - kill this breakpoint site"
-       ":state         - print breakpoint state"
-       ":a, :available - print breakpoints available for connection by inx"
-       ":q, :quit      - exit this breakpoint"
-       "[:c <inx>]     - (as vector literal) connect to breakpoint at index <inx>"])))
+  (->>
+    [[":h, :help", "print help"]
+     [":k, :kill", "kill this breakpoint site"]
+     [":state", "print breakpoint state"]
+     [":a, :available", "print breakpoints available for connection by inx"]
+     [":e, :env", "print environment with gensym'd locals removed"]
+     [":e+, :env+", "print full environment"]
+     [":q, :quit", "exit this breakpoint"]
+     ["[:c <inx>]", "(as vector literal) connect to breakpoint at index <inx>"]]
+    (map (fn [[a b]] [a " - " b]))
+    (cons ["Command" "" "Description"])
+    table
+    println))
 
 (defn repl-read-fn [id]
   (fn repl-read [request-prompt request-exit]
@@ -461,8 +457,12 @@
           (disable-site site-id)
           (quit id)
           request-exit)
+
+        (#{:e :env} input)
+        (do (print-env id {:short true})
+            request-prompt)
         
-        (= :env input)
+        (#{:e+ :env+} input)
         (do (print-env id)
             request-prompt)
         
@@ -680,16 +680,16 @@ This macro is intended for use with Arcadia's socket REPL. It may work
     `(~@(if-let [[_ w] (find opts :when)]
           `[when ~w]
           `[do])
-      (let [id# (swap! id-counter inc)
-            site-id# ~site-id
-            ure# (under-repl-evaluation?)
-            lower-interrupt?# (and (on-main-repl-thread?)
-                                   (not (under-repl-evaluation?)))]
-        (when-not (site-disabled? site-id#)
+      (when-not (site-disabled? ~site-id)
+        (let [env# (capture-env)
+              id# (swap! id-counter inc)
+              ure# (under-repl-evaluation?)
+              lower-interrupt?# (and (on-main-repl-thread?)
+                                     (not (under-repl-evaluation?)))]
           (register-breakpoint
             {::id id#
-             ::site-id site-id#
-             ::env (capture-env)
+             ::site-id ~site-id
+             ::env env#
              ::name (quote ~name)
              ::stack (System.Diagnostics.StackTrace.)
              ::thread System.Threading.Thread/CurrentThread
