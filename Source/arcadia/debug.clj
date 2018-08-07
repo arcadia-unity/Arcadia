@@ -443,7 +443,7 @@
     [[":h, :help", "print help"]
      [":k, :kill", "kill this breakpoint site"]
      [":state", "print breakpoint state"]
-     [":this", "break summary of this breakpoint"]
+     [":this", "print summary of this breakpoint"]
      [":a, :available", "print breakpoints available for connection by inx"]
      [":e, :env", "print environment with gensym'd locals removed"]
      [":e+, :env+", "print full environment"]
