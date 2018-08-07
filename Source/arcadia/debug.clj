@@ -241,14 +241,23 @@
          (map #(apply fmt format %))
          (clojure.string/join "\n"))))
 
+(defn breakpoint-summary-vec [bpr id]
+  (let [{:keys [::thread ::id ::stack ::name]} (find-by-id bpr id)]
+    [name (.GetHashCode thread) id (first (frame-descriptions stack))]))
+
 (defn print-available-breakpoints [id]
   ;; print as a nice table eventually
   (let [bpr @breakpoint-registry]
     (->> (available-breakpoints id)
-         (map #(find-by-id bpr %))
-         (map-indexed (fn [i {:keys [::thread ::id ::stack ::name]}]
-                        [i name (.GetHashCode thread) id (first (frame-descriptions stack))]))
+         (map-indexed (fn [i id] (cons i (breakpoint-summary-vec id))))
          (cons ["Inx" "Name" "Thread" "Break-ID" "Frame"])
+         table
+         println)))
+
+(defn print-this [id]
+  (let [bpr @breakpoint-registry]
+    (->> [["Name" "Thread" "Break-ID" "Frame"]
+          (breakpoint-summary-vec bpr id)]
          table
          println)))
 
@@ -434,6 +443,7 @@
     [[":h, :help", "print help"]
      [":k, :kill", "kill this breakpoint site"]
      [":state", "print breakpoint state"]
+     [":this", "break summary of this breakpoint"]
      [":a, :available", "print breakpoints available for connection by inx"]
      [":e, :env", "print environment with gensym'd locals removed"]
      [":e+, :env+", "print full environment"]
@@ -457,6 +467,10 @@
           (disable-site site-id)
           (quit id)
           request-exit)
+
+        (= :this input)
+        (do (print-this id)
+            request-prompt)
 
         (#{:e :env} input)
         (do (print-env id {:short true})
@@ -549,7 +563,9 @@
           :read (repl-read-fn id)
           :eval #'env-eval
           :caught #'socket-repl/repl-caught ; preserves errors
-          :prompt #(print (str "debug:" id  "=> ")))
+          :prompt (if-let [[_ n] (find bp ::name)]
+                    #(print (str "debug:" id ":" n "=> "))
+                    #(print (str "debug:" id  "=> "))))
         (catch Exception e
           (reset! bpr-log e)
           (repl-println (str "something terrible on " id ":\n")
