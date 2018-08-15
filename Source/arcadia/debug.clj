@@ -55,9 +55,10 @@
 (declare breakpoint-registry)
 
 (defn pbpr []
-  (repl-println
-    (with-out-str
-      (pprint/pprint @breakpoint-registry))))
+  ;; (repl-println
+  ;;   (with-out-str
+  ;;     (pprint/pprint @breakpoint-registry)))
+  )
 
 ;; ------------------------------------------------------------
 
@@ -146,6 +147,12 @@
     {::promise p
      ::payload v}))
 
+(defn exceptions [^Exception e]
+  (when e (lazy-seq (cons e (exceptions (.InnerException e))))))
+
+(defn full-exception-string [e]
+  (clojure.string/join "\n--------------------\n" (exceptions e)))
+
 (defn bpr-sync [f]
   (let [p (promise)]
     (send breakpoint-registry
@@ -158,7 +165,13 @@
             bpr))))
     (let [result (deref p)]
       (if (instance? Exception result)
-        (throw (Exception. "Exception Encountered" result))
+        (do
+          (spit "bpr-sync-exception.txt"
+            (full-exception-string result))
+          (throw
+            (Exception.
+              (str "Exception encountered in arcadia.debug/bpr-sync with message: " (.Message result))
+              result)))
         result))))
 
 ;; ------------------------------------------------------------
@@ -357,8 +370,6 @@
         (to-outbox begin-connection-promise true))))
 
 (defn manage-interrupt [bpr id]
-  (repl-println "in manage-interrupt. id:" id "\n"
-    (with-out-str (pprint/pprint @breakpoint-registry)))
   (let [{:keys [::interrupt
                 ::connected
                 ::connecting]} (find-by-id bpr id)]
@@ -475,7 +486,7 @@
         (#{:e :env} input)
         (do (print-env id {:short true})
             request-prompt)
-        
+
         (#{:e+ :env+} input)
         (do (print-env id)
             request-prompt)
@@ -576,16 +587,12 @@
           (repl-println "ending repl. id:" id))))))
 
 (defn run-breakpoint-receiving-from-off-thread [id]
-  (repl-println "in run-breakpoint-receiving-from-off-thread. id:" id)
-  (pbpr)
   (let [{:keys [::begin-connection-promise]} (find-by-id @breakpoint-registry id)]
     (deref begin-connection-promise)
     (repl-println "derefed begin-connection-promise. id:" id)
     (breakpoint-repl id)))
 
 (defn connect-to-off-thread-breakpoint [id]
-  (repl-println "in connect-to-off-thread-breakpoint. id:" id)
-  (pbpr)
   (let [{:keys [::end-connection-promise] :as bp} (find-by-id @breakpoint-registry id)]
     (deref end-connection-promise)
     (repl-println "derefed end-connection-promise. id:" id)))
