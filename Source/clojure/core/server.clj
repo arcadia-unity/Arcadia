@@ -95,7 +95,7 @@
          :or {bind-err true
               server-daemon true
               client-daemon true}} opts
-         address (aget (.AddressList (let [^String a (or address "localhost")] (Dns/GetHostEntry a))) 0)                          ;;; (InetAddress/getByName address)  ;; nil returns loopback  Added let to get type info
+         address (if (instance? System.Net.IPAddress address) address (aget (.AddressList (let [^String a (or address "localhost")] (Dns/GetHostEntry a))) 0))                          ;;; Add IPAddress check,  also: (InetAddress/getByName address)  ;; nil returns loopback  Added let to get type info
          socket (TcpListener. address port)]                                                                         ;;; ( ServerSocket. port 0 address)
     (with-lock lock
       (alter-var-root #'servers assoc name {:name name, :socket socket, :sessions {}}))

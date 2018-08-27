@@ -8,7 +8,17 @@
 
 (ns clojure.test-clojure.delays
   (:use clojure.test)
-  (:import [System.Threading Barrier Thread ThreadStart]))                       ;;; [java.util.concurrent CyclicBarrier]
+  );;;(:import [System.Threading Barrier Thread ThreadStart])                      ;;; [java.util.concurrent CyclicBarrier]
+
+
+
+;; DM: Added
+;; Copied from reducers.clj, modified compile-if to compile-when
+(defmacro ^:private compile-when
+  [exp & body]
+  (when (try (eval exp)
+           (catch Exception _ false))                      ;;; Throwable
+    `(do ~@body)))
 
 (deftest calls-once
   (let [a (atom 0)
@@ -18,7 +28,13 @@
     (is (= 1 @d))
     (is (= 1 @a))))
 
+(compile-when
+ (Type/GetType "System.Threading.Barrier")
+
+ ;; DM: Need to conditionally import these names
+(import '[System.Threading Barrier Thread ThreadStart])
 (deftest calls-once-in-parallel
+
   (let [a (atom 0)
         d (delay (swap! a inc))
         threads 100
@@ -38,6 +54,7 @@
     (is (= 1 @d))
     (is (= 1 @d))
     (is (= 1 @a))))
+)
 
 (deftest saves-exceptions
   (let [f #(do (throw (Exception. "broken"))

@@ -517,10 +517,15 @@
 (defn StackTraceElement->vec
   "Constructs a data representation for a StackTraceElement"
   {:added "1.9"}
-  [^System.Diagnostics.StackFrame o]                                                                                                 ;;; ^StackTraceElement
-  (if (nil? o)                                                                                                                       ;;; DM: added -- we don't get a stack trace unless actually thrown
-    nil                                                                                                                              ;;; DM: added
-   [(symbol (.FullName (.GetType o))) (symbol (.Name (.GetMethod o))) (.GetFileName o) (.GetFileLineNumber o)]))                     ;;; (.getClassName o)  (.getMethodName o) .getFileName .getLineNumber
+  [^System.Diagnostics.StackFrame o]
+  (if (nil? o)
+    nil
+    [(symbol (.FullName (.GetType o)))
+     (if-let [m (.GetMethod o)]
+       (symbol (.Name m))
+       "NO_METHOD")
+     (or (.GetFileName o) "NO_FILE")
+     (.GetFileLineNumber o)]))
 
 (defn Throwable->map
   "Constructs a data representation for a Throwable."

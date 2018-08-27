@@ -27,13 +27,18 @@
   "Prints a Clojure-oriented view of one element in a stack trace."
   {:added "1.1"} 
   [e]                   ;;; in CLR, e will be a StackFrame
-  (let [class   (if-let [t (.. e  (GetMethod) ReflectedType)] (.FullName t) "")         ;;;  (.getClassName e)
-	method      (.. e (GetMethod)  Name)]                             ;;;  (.getMethodName e)] 
+  (let [class (or (when-let [m (.. e  (GetMethod))]
+                    (when-let [t (.ReflectedType m)]
+                      (.FullName t)))
+                  "")
+	method (or (when-let [m (.GetMethod e)]
+                     (.Name m))
+                   "")]
     (let [match (re-matches #"^([A-Za-z0-9_.-]+)\$(\w+)__\d+$" (str class))]
       (if (and match (= "invoke" method))
-	(print (str (nth match 1) "/" (nth match 2)))                       ;;;  use when we have printf:  (apply printf "%s/%s" (rest match))
-	(print (str class "." method)))))                                   ;;;  use when we have printf:  (printf "%s.%s" class method))))
-  (print (str " (" (.GetFileName e) ":" (.GetFileLineNumber e) ")")))   ;;;  use when we have printf:  (printf " (%s:%d)" (or (.getFileName e) "") (.getLineNumber e)))
+	(apply printf "%s/%s" (rest match))
+	(printf "%s.%s" class method))))
+  (printf " (%s:%d)" (or (.GetFileName e) "") (.GetFileLineNumber e)))
 
 (defn print-throwable1
   "Prints the class and message of a Throwable."
