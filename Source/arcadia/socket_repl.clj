@@ -85,13 +85,25 @@
   (swap! state/state update :eval-fn-types (fnil conj #{}) (class x))
   x)
 
+;; without this, symbols to lose a level of quotation,
+;; such that a configuration.edn with
+;; {:repl/injections (when true
+;;                    (println 'sassafras))}
+;; will yield an injection that tries to evaluate 'sassafras.
+;; This is because we currently use edn/read-string to ingest
+;; configuration.edn, rather than read-string.
+(defn clean-quotes [expr]
+  (read-string (pr-str expr)))
+
 (defn game-thread-eval
   ([expr] (game-thread-eval expr nil))
   ([expr {:keys [callback-driver]
           :or {callback-driver cb/add-callback}
           :as opts}]
    (let [old-read-eval *read-eval*
-         p (promise)]
+         p (promise)
+         injection (clean-quotes ((config/config) :repl/injections))
+         expr `(do ~injection ~expr)]
      (callback-driver
        (register-eval-type
          (bound-fn []
