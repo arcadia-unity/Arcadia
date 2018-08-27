@@ -8,6 +8,7 @@
 **/Compiled/Editor*.dll*
 **/Export.meta
 **/Export/*.dll*
+Source/clojure/**/*.meta
 
 # =============== #
 # Unity generated #
