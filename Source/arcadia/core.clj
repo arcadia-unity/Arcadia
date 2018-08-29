@@ -958,8 +958,6 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
       (name type-sym))))
 
 (defn- snapshot-dictionary-form [this-sym fields element-snapshots-map default-element-snapshots]
-  (println "element-snapshots-map" element-snapshots-map)
-  (println "default-element-snapshots" default-element-snapshots)
   (let [dict-sym (gensym "dictionary_")
         key-sym (gensym "key_")
         val-sym (gensym "val_")
