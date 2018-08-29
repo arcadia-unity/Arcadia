@@ -62,20 +62,23 @@
 
 ;; http://docs.unity3d.com/ScriptReference/EventSystems.EventTrigger.html
 (def interface-messages
-  '{IBeginDragHandler/OnBeginDrag [PointerEventData] 
-    ICancelHandler/OnCancel [BaseEventData]
-    IDeselectHandler/OnDeselect [BaseEventData]
-    IDragHandler/OnDrag [PointerEventData]
-    IDropHandler/OnDrop [PointerEventData]
-    IEndDragHandler/OnEndDrag [PointerEventData] 
-    IInitializePotentialDragHandler/OnInitializePotentialDrag [PointerEventData]
-    IMoveHandler/OnMove [AxisEventData]
-    IPointerClickHandler/OnPointerClick [PointerEventData]
-    IPointerDownHandler/OnPointerDown [PointerEventData]
-    IPointerEnterHandler/OnPointerEnter [PointerEventData]
-    IPointerExitHandler/OnPointerExit [PointerEventData]
-    IPointerUpHandler/OnPointerUp [PointerEventData]
-    IScrollHandler/OnScroll [PointerEventData]
-    ISelectHandler/OnSelect [BaseEventData]
-    ISubmitHandler/OnSubmit [BaseEventData]
-    IUpdateSelectedHandler/OnUpdateSelected [BaseEventData]})
+  '{OnBeginDrag [PointerEventData] 
+    OnCancel [BaseEventData]
+    OnDeselect [BaseEventData]
+    OnDrag [PointerEventData]
+    OnDrop [PointerEventData]
+    OnEndDrag [PointerEventData] 
+    OnInitializePotentialDrag [PointerEventData]
+    OnMove [AxisEventData]
+    OnPointerClick [PointerEventData]
+    OnPointerDown [PointerEventData]
+    OnPointerEnter [PointerEventData]
+    OnPointerExit [PointerEventData]
+    OnPointerUp [PointerEventData]
+    OnScroll [PointerEventData]
+    OnSelect [BaseEventData]
+    OnSubmit [BaseEventData]
+    OnUpdateSelected [BaseEventData]})
+
+(def all-messages
+  (merge messages interface-messages))

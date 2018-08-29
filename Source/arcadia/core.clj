@@ -2,7 +2,7 @@
   (:require [clojure.string :as string]
             [clojure.spec.alpha :as s]
             clojure.set
-            [arcadia.internal.messages :refer [messages interface-messages]]
+            [arcadia.internal.messages :as messages]
             [arcadia.internal.macro :as mac]
             [arcadia.internal.map-utils :as mu]
             [arcadia.internal.name-utils :refer [camels-to-hyphens]]
@@ -396,8 +396,7 @@
 
 (def hook-types
   "Map of keywords to hook component types"
-  (->> (merge messages
-              interface-messages)
+  (->> messages/all-messages
        keys
        (map name)
        (mapcat #(vector (message-keyword %)
@@ -751,7 +750,8 @@
 ;; defrole
 
 (def ^:private hook->args
-  (mu/map-keys messages clojurized-keyword))
+  (-> messages/all-messages
+      (mu/map-keys clojurized-keyword)))
 
 (s/def ::defrole-impl
   (s/and
