@@ -137,7 +137,6 @@
   :args (s/cat :behaviour #(instance? ArcadiaBehaviour %)))
 
 (defn hook-state-deserialize [^ArcadiaBehaviour behaviour]
-  (UnityEngine.Debug/Log "in hook-state-deserialize")
   (let [raw (read-string (.edn behaviour))]
     (let []
       (set! (.ifnInfos behaviour)
