@@ -174,40 +174,47 @@
    :return-type UnityEngine.Vector4
    :unary-op UnityEngine.Vector4/op_UnaryNegation})
 
-;; undecided whether to support variadic versions of these
-;; non-associative multiply and divide ops (eg force associativity, at
-;; the expense of commutativity in the case of multiply). Probably should, later
 ;; ------------------------------------------------------------
 ;; *
 
-;; this nonsense should be changed as soon as we get better support for primitive arguments
+(def-vop-lower v2*
+  {:op UnityEngine.Vector2/op_Multiply
+   :return-type UnityEngine.Vector2
+   :nullary-expr UnityEngine.Vector2/one
+   :unary-expr a})
 
-(definline v2* [^UnityEngine.Vector2 a b]
-  `(let [b# (float ~b)]
-     (UnityEngine.Vector2/op_Multiply ~a b#)))
+(def-vop-lower v3*
+  {:op UnityEngine.Vector3/op_Multiply
+   :return-type UnityEngine.Vector3
+   :nullary-expr UnityEngine.Vector3/one
+   :unary-expr a})
 
-(definline v3* [^UnityEngine.Vector3 a b]
-  `(let [b# (float ~b)]
-     (UnityEngine.Vector3/op_Multiply ~a b#)))
-
-(definline v4* [^UnityEngine.Vector4 a b]
-  `(let [b# (float ~b)]
-     (UnityEngine.Vector4/op_Multiply ~a b#)))
+(def-vop-lower v4*
+  {:op UnityEngine.Vector4/op_Multiply
+   :return-type UnityEngine.Vector4
+   :nullary-expr UnityEngine.Vector4/one
+   :unary-expr a})
 
 ;; ------------------------------------------------------------
 ;; div
 
-(definline v2div [a b]
-  `(let [b# (float ~b)]
-     (UnityEngine.Vector2/op_Division ~a b#)))
+(def-vop-lower v2div
+  {:op UnityEngine.Vector2/op_Division
+   :return-type UnityEngine.Vector2
+   :nullary-expr UnityEngine.Vector2/one
+   :unary-expr (Arcadia.LinearHelper/invertV2 a)})
 
-(definline v3div [a b]
-  `(let [b# (float ~b)]
-     (UnityEngine.Vector3/op_Division ~a b#)))
+(def-vop-lower v3div
+  {:op UnityEngine.Vector3/op_Division
+   :return-type UnityEngine.Vector3
+   :nullary-expr UnityEngine.Vector3/one
+   :unary-expr (Arcadia.LinearHelper/invertV3 a)})
 
-(definline v4div [a b]
-  `(let [b# (float ~b)]
-     (UnityEngine.Vector4/op_Division ~a b#)))
+(def-vop-lower v4div
+  {:op UnityEngine.Vector4/op_Division
+   :return-type UnityEngine.Vector4
+   :nullary-expr UnityEngine.Vector4/one
+   :unary-expr (Arcadia.LinearHelper/invertV4 a)})
 
 ;; ------------------------------------------------------------
 ;; dist
