@@ -30,31 +30,62 @@
     (first args) (list op (first args))
     :else (list op)))
 
+;; remove this when we fix #298
+(defn- casting [sym type]
+  (if (= type 'System.Single)
+    `[~sym (float ~sym)]
+    `[~(mtag sym type) ~sym]))
+
 (defmacro ^:private def-vop-lower [name opts]
   (mu/checked-keys [[op] opts]
-    (let [{:keys [doc return-type param-type unary-op unary-expr nullary-expr]} opts
-          return-type (:or return-type param-type)
-          args (map #(mtag % param-type)
-                 (im/classy-args))
-          f (fn [op n]
-              (list (mtag (vec (take n args)) return-type)
-                (nestl op (take n args))))
-          optspec {:inline-arities (if unary-op
-                                     `#(< 0 %)
-                                     `#(< 1 %))
-                   :arglists `(quote ~(list '[args*]))
-                   :inline (remove nil?
-                             ['fn
-                              (when nullary-expr
-                                (list [] nullary-expr))
-                              (cond
-                                unary-expr (list [(first args)] unary-expr)
-                                unary-op `([~(first args)]
-                                           (list (quote ~unary-op)
-                                             ~(first args))))
-                              `([x# & xs#]
-                                (nestl (quote ~op)
-                                  (cons x# xs#)))])}
+    (let [{:keys [doc return-type param-type unary-op unary-expr nullary-expr doc]} opts
+          param-type (cond
+                       (sequential? param-type)
+                       param-type
+
+                       param-type
+                       [param-type])
+          args (let [[x & ys :as args] (take 21 (im/classy-args))]
+                 (if param-type
+                   (cons (mtag x (first param-type)) ys)
+                   args))
+          arity-bodies (for [n (range 2 20)]
+                         (let [params (mtag (vec (take n args)) return-type)
+                               bndgs (if (< 1 (count param-type))
+                                       (let [[_ bt] param-type
+                                             [_ y] params]
+                                         (casting y bt))
+                                       [])
+                               body (nestl op (take n args))]
+                           `(~params
+                             (let ~bndgs
+                               ~body))))
+          optspec (cond-> {:inline-arities (if unary-op
+                                             `#(< 0 %)
+                                             `#(< 1 %))
+                           :arglists `(quote ~(list '[args*]))
+                           :inline (remove nil?
+                                     ['fn
+                                      (when nullary-expr
+                                        (list [] nullary-expr))
+                                      (cond
+                                        unary-expr (list [(first args)] unary-expr)
+                                        unary-op `([~(first args)]
+                                                   (list (quote ~unary-op)
+                                                     ~(first args))))
+                                      (let [args-sym (gensym "args_")]
+                                        `([x# & xs#]
+                                          (let [~args-sym (cons x# xs#)
+                                                bndg# ~(if (< 1 (count param-type))
+                                                         (let [[_ bt] param-type]
+                                                           `(if (< 1 (count ~args-sym))
+                                                              (let [[_# y#] ~args-sym]
+                                                                (casting y# (quote ~bt)))
+                                                              []))
+                                                         [])
+                                                body# (nestl (quote ~op) ~args-sym)]
+                                            `(let ~bndg# ~body#))))])}
+                          doc (assoc :doc doc))
           body (remove nil?
                  (concat
                    [(when nullary-expr
@@ -63,8 +94,7 @@
                       unary-expr (list [(first args)] unary-expr)
                       unary-op `([~(first args)]
                                  (~unary-op ~(first args))))]
-                   (for [n (range 2 20)]
-                     (f op n))
+                   arity-bodies
                    [(list (mtag (conj (vec (take 20 args)) '& 'more) return-type)
                       (list `reduce name
                         (nestl op (take 20 args))
