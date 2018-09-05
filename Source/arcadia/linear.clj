@@ -226,14 +226,11 @@
 
 (defn ^:private >1? [n] (clojure.lang.Numbers/gt n 1))
 
-(defn qq*
-  {:inline (fn [& args]
-             (nestl 'UnityEngine.Quaternion/op_Multiply args))
-  :inline-arities >1?}
-  (^UnityEngine.Quaternion [^UnityEngine.Quaternion a ^UnityEngine.Quaternion b]
-    (UnityEngine.Quaternion/op_Multiply a b))
-  (^UnityEngine.Quaternion [^UnityEngine.Quaternion a ^UnityEngine.Quaternion b & cs]
-    (reduce qq* (qq* a b) cs)))
+(def-vop-lower qq*
+  {:op UnityEngine.Quaternion/op_Multiply
+   :return-type UnityEngine.Quaternion
+   :nullary-expr UnityEngine.Quaternion/identity
+   :unary-expr a})
 
 (definline qv* ^UnityEngine.Vector3 [^UnityEngine.Quaternion a ^UnityEngine.Vector3 b]
   `(UnityEngine.Quaternion/op_Multiply ~a ~b))
