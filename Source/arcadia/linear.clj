@@ -42,6 +42,7 @@
           optspec {:inline-arities (if unary-op
                                      `#(< 0 %)
                                      `#(< 1 %))
+                   :arglists `(quote ~(list '[args*]))
                    :inline (remove nil?
                              ['fn
                               (when nullary-expr
