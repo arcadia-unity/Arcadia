@@ -275,14 +275,23 @@
 ;; ------------------------------------------------------------
 ;; scale
 
-(definline v2scale [a b]
-  `(UnityEngine.Vector2/Scale ~a ~b))
+(def-vop-lower v2scale
+  {:op UnityEngine.Vector2/Scale
+   :return-type UnityEngine.Vector2
+   :nullary-expr UnityEngine.Vector2/one
+   :unary-expr a})
 
-(definline v3scale [a b]
-  `(UnityEngine.Vector3/Scale ~a ~b))
+(def-vop-lower v3scale
+  {:op UnityEngine.Vector3/Scale
+   :return-type UnityEngine.Vector3
+   :nullary-expr UnityEngine.Vector3/one
+   :unary-expr a})
 
-(definline v4scale [a b]
-  `(UnityEngine.Vector4/Scale ~a ~b))
+(def-vop-lower v4scale
+  {:op UnityEngine.Vector4/Scale
+   :return-type UnityEngine.Vector4
+   :nullary-expr UnityEngine.Vector4/one
+   :unary-expr a})
 
 ;; ------------------------------------------------------------
 ;; more rotation
