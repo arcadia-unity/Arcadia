@@ -161,17 +161,17 @@
 
 (def-vop-lower v2-
   {:op UnityEngine.Vector2/op_Subtraction
-   :return-type UnityEngine.Vector2/op_Subtraction
+   :return-type UnityEngine.Vector2
    :unary-op UnityEngine.Vector2/op_UnaryNegation})
 
 (def-vop-lower v3-
   {:op UnityEngine.Vector3/op_Subtraction
-   :return-type UnityEngine.Vector3/op_Subtraction
+   :return-type UnityEngine.Vector3
    :unary-op UnityEngine.Vector3/op_UnaryNegation})
 
 (def-vop-lower v4- 
   {:op UnityEngine.Vector4/op_Subtraction
-   :return-type UnityEngine.Vector4/op_Subtraction
+   :return-type UnityEngine.Vector4
    :unary-op UnityEngine.Vector4/op_UnaryNegation})
 
 ;; undecided whether to support variadic versions of these
