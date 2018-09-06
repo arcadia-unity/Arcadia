@@ -357,18 +357,18 @@ Calls to this function will be inlined if possible."})
 
 Calls to this function will be inlined if possible."})
 
-(definline euler ^UnityEngine.Quaternion
+(definline euler 
   "Wraps UnityEngine.Quaternion/Euler.
 
   Calls to this function will be inlined if possible."
-  [^UnityEngine.Vector3 v]
+  ^UnityEngine.Quaternion [^UnityEngine.Vector3 v]
   `(UnityEngine.Quaternion/Euler ~v))
 
-(definline euler-angles ^UnityEngine.Vector3
+(definline euler-angles 
   "Wraps the eulerAngles method of UnityEngine.Quaternion.
 
   Calls to this function will be inlined if possible."
-  [^UnityEngine.Quaternion q]
+  ^UnityEngine.Vector3 [^UnityEngine.Quaternion q]
   `(.eulerAngles ~q))
 
 (definline to-angle-axis
@@ -378,25 +378,25 @@ Calls to this function will be inlined if possible."})
   [^UnityEngine.Quaternion q]
   `(Arcadia.LinearHelper/toAngleAxis ~q))
 
-(definline angle-axis ^UnityEngine.Quaternion
+(definline angle-axis 
   "Given an angle (float) and an axis (Vector3), constructs a Quarternion, as per UnityEngine.Quaternion/AngleAxis.
 
   Calls to this function will be inlined if possible."
-  [angle, axis]
+  ^UnityEngine.Quaternion [angle, axis]
   `(UnityEngine.Quaternion/AngleAxis ~angle, ~axis))
 
-(definline qforward ^UnityEngine.Vector3
+(definline qforward 
   "Given a Quaternion q, returns the Vector3 derived by multiplying q by UnityEngine.Vector3/forward.
 
   Calls to this function will be inlined if possible."
-  [^UnityEngine.Quaternion q]
+  ^UnityEngine.Vector3 [^UnityEngine.Quaternion q]
   `(q* ~q UnityEngine.Vector3/forward))
 
-(definline aa ^UnityEngine.Quaternion
+(definline aa 
   "Shortcut for angle-axis. (aa a x y z) is the same as (angle-axis a (v3 x y z)).
 
   Calls to this function will be inlined if possible."
-  [ang x y z]
+  ^UnityEngine.Quaternion [ang x y z]
   `(angle-axis ~ang (v3 ~x ~y ~z)))
 
 (defn qlookat ^UnityEngine.Quaternion
@@ -451,7 +451,9 @@ Calls to this function will be inlined if possible."})
 ;; ------------------------------------------------------------
 ;; more rotation
 
-(definline point-pivot ^UnityEngine.Vector3 [^UnityEngine.Vector3 pt, ^UnityEngine.Vector3 piv, ^UnityEngine.Quaternion rot]
+(definline point-pivot ^UnityEngine.Vector3
+  ;;[^UnityEngine.Vector3 pt, ^UnityEngine.Vector3 piv, ^UnityEngine.Quaternion rot]
+  [pt, piv, rot]
   `(let [piv# ~piv]
      (v3+ (qv* ~rot (v3- ~pt piv#))
        piv#)))
