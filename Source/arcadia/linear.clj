@@ -46,6 +46,13 @@
          ~(nestl op args2)))
     (nestl op args)))
 
+(defn- inline-arity-pred [& arities]
+  (let [big (apply max arities)
+        as (set arities)]
+    (fn [n]
+      (or (< big n)
+          (contains? as n)))))
+
 (defmacro ^:private def-vop-lower [name opts]
   (mu/checked-keys [[op] opts]
     (let [{:keys [doc return-type param-type unary-op unary-expr nullary-expr doc]} opts
@@ -70,9 +77,10 @@
                            `(~params
                              (let ~bndgs
                                ~body))))
-          optspec (cond-> {:inline-arities (if unary-op
-                                             `#(< 0 %)
-                                             `#(< 1 %))
+          optspec (cond-> {:inline-arities (cons `inline-arity-pred
+                                             (cond-> [2]
+                                                     nullary-expr (conj 0)
+                                                     (or unary-op unary-expr) (conj 1)))
                            :arglists `(quote ~(list '[args*]))
                            :inline (remove nil?
                                      ['fn
