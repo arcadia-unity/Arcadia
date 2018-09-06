@@ -242,10 +242,10 @@
           (arcadia.internal.namespace/quickquire ns-name)
           (parse-user-type spec)))))
 
-(alter-var-root #'*data-readers* assoc 'arcadia.core/mutable #'parse-user-type)
+(alter-var-root #'clojure.core/*data-readers* assoc 'arcadia.core/mutable #'parse-user-type)
 
 ;; and we also have to do this, for the repl:
-(when (.getThreadBinding ^clojure.lang.Var #'*data-readers*)
+(when (.getThreadBinding ^clojure.lang.Var #'clojure.core/*data-readers*)
   (set! clojure.core/*data-readers*
     (merge clojure.core/*data-readers*
       ;; I guess. so weird
@@ -257,4 +257,4 @@
 
 ;; this is stupid
 
-(def the-bucket (.getRawRoot #'*data-readers*))
+(def the-bucket (.getRawRoot #'clojure.core/*data-readers*))
