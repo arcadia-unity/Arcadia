@@ -601,8 +601,6 @@
   ([go k f x y z & args]
    (with-cmpt go [arcs ArcadiaState]
      (.Add arcs k (apply f (.ValueAtKey arcs k) x y z args))
-
-     (.Add arcs k (f (.ValueAtKey arcs k) x))
      go)))
 
 ;; ============================================================
