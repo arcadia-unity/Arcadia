@@ -19,9 +19,9 @@ public class ClojureNewFile : EditorWindow {
     
     ProjectWindowUtil.StartNameEditingIfProjectWindowExists(0,
       ScriptableObject.CreateInstance(DoCreateScriptAsset) as UnityEditor.ProjectWindowCallback.EndNameEditAction,
-      "Assets/Clojure/Scripts/new-component.clj",
+      "Assets/Arcadia/Scripts/new-component.clj",
       null,
-      "Assets/Clojure/Editor/new-component-template.clj.txt");
+      "Assets/Arcadia/Editor/new-component-template.clj.txt");
   }
   
   [MenuItem ("Arcadia/New File", false, 91)]
@@ -30,8 +30,8 @@ public class ClojureNewFile : EditorWindow {
     
     ProjectWindowUtil.StartNameEditingIfProjectWindowExists(0,
       ScriptableObject.CreateInstance(DoCreateScriptAsset) as UnityEditor.ProjectWindowCallback.EndNameEditAction,
-      "Assets/Clojure/Scripts/new-file.clj",
+      "Assets/Arcadia/Scripts/new-file.clj",
       null,
-      "Assets/Clojure/Editor/new-file-template.clj.txt");
+      "Assets/Arcadia/Editor/new-file-template.clj.txt");
   }
 }
