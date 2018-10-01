@@ -106,17 +106,17 @@ specified.
                   (re-matches timestamp cs)]
            (new-instant
             (parse-int years)
-            (if-not months   1 (parse-int months))
-            (if-not days     1 (parse-int days))
-            (if-not hours    0 (parse-int hours))
-            (if-not minutes  0 (parse-int minutes))
-            (if-not seconds  0 (parse-int seconds))
-            (if-not fraction 0 (parse-int (zero-fill-right fraction 9)))
+            (if (String/IsNullOrEmpty months)   1 (parse-int months))                                 ;;; (if-not months   1 (parse-int months))
+            (if (String/IsNullOrEmpty days)     1 (parse-int days))                                   ;;; (if-not days     1 (parse-int days))
+            (if (String/IsNullOrEmpty hours)    0 (parse-int hours))                                  ;;; (if-not hours    0 (parse-int hours))
+            (if (String/IsNullOrEmpty minutes)  0 (parse-int minutes))                                ;;; (if-not minutes  0 (parse-int minutes))
+            (if (String/IsNullOrEmpty seconds)  0 (parse-int seconds))                                ;;; (if-not seconds  0 (parse-int seconds))
+            (if (String/IsNullOrEmpty fraction) 0 (parse-int (zero-fill-right fraction 9)))           ;;; (if-not fraction 0 (parse-int (zero-fill-right fraction 9)))
             (cond (= "-" offset-sign) -1
                   (= "+" offset-sign)  1
                   :else                0)
-            (if-not offset-hours   0 (parse-int offset-hours))
-            (if-not offset-minutes 0 (parse-int offset-minutes)))
+            (if (String/IsNullOrEmpty offset-hours)   0 (parse-int offset-hours))                     ;;; (if-not offset-hours   0 (parse-int offset-hours))
+            (if (String/IsNullOrEmpty offset-minutes) 0 (parse-int offset-minutes)))                  ;;; (if-not offset-minutes 0 (parse-int offset-minutes))
            (fail (str "Unrecognized date/time syntax: " cs))))))
 
 
@@ -136,7 +136,7 @@ specified.
          ((if leap-year? dim-leap dim-norm) month))))
 
 (defn validated
-  "Return a function which constructs and instant by calling constructor
+  "Return a function which constructs an instant by calling constructor
 after first validating that those arguments are in range and otherwise
 plausible. The resulting function will throw an exception if called
 with invalid arguments."

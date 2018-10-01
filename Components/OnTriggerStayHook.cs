@@ -1,12 +1,12 @@
+#if NET_4_6
 using UnityEngine;
 using clojure.lang;
 
-public class OnTriggerStayHook : ArcadiaBehaviour   
+public class OnTriggerStayHook : ArcadiaBehaviour
 {
   public void OnTriggerStay(UnityEngine.Collider a)
   {
-
-  	RunFunctions(a);
-
+      RunFunctions(a);
   }
 }
+#endif

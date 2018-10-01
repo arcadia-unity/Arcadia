@@ -1,6 +1,8 @@
-﻿using System;
+﻿#if NET_4_6
+using System;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using UnityEngine;
 using UnityEditor;
 using clojure.lang;
@@ -56,6 +58,7 @@ namespace Arcadia
 		public static void Initialize()
 		{
 			Debug.Log("Starting Arcadia...");
+            DisableSpecChecking();
 			SetInitialClojureLoadPath();
 			LoadConfig();
 			LoadPackages();
@@ -70,6 +73,12 @@ namespace Arcadia
 			Debug.Log("Arcadia Started!");
 		}
 
+        // workaround for spec issues
+        static void DisableSpecChecking()
+        {
+        	Environment.SetEnvironmentVariable("clojure.spec.check-asserts", "false");
+        	Environment.SetEnvironmentVariable("clojure.spec.skip-macros", "true");
+        }
 
 		// code is so durn orthogonal we have to explicitly call this
 		// (necessary for package-sensitive loadpaths in presence of stuff like leiningen)
@@ -192,3 +201,4 @@ namespace Arcadia
 		}
 	}
 }
+#endif

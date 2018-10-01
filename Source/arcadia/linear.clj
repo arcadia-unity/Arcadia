@@ -17,8 +17,6 @@
 ;; ------------------------------------------------------------
 ;; utils
 
-;; Should abstract these crazy macros into some other namespace for optimized variadic inlining DSL stuff
-
 (defn- mtag [x tag]
   (if tag
     (with-meta x (assoc (meta x) :tag tag))
@@ -30,30 +28,72 @@
     (first args) (list op (first args))
     :else (list op)))
 
+;; remove this when we fix #298
+(defn- casting
+  ([sym type]
+   (casting sym sym type))
+  ([sym form type]
+   (if (= type 'System.Single)
+     `[~sym (float ~form)]
+     `[~(mtag sym type) ~form])))
+
+(defn inliner [op param-type args]
+  (if (< 1 (count param-type))
+    (let [[_ t] param-type
+          type-lock-sym (gensym "type-lock_")
+          args2 (assoc (vec args) 1 type-lock-sym)]
+      `(let ~(casting type-lock-sym (nth args 1) t)
+         ~(nestl op args2)))
+    (nestl op args)))
+
+(defn- inline-arity-pred [& arities]
+  (let [big (apply max arities)
+        as (set arities)]
+    (fn [n]
+      (or (< big n)
+          (contains? as n)))))
+
 (defmacro ^:private def-vop-lower [name opts]
   (mu/checked-keys [[op] opts]
-    (let [{:keys [doc return-type param-type unary-op unary-expr nullary-expr]} opts
-          return-type (:or return-type param-type)
-          args (map #(mtag % param-type)
-                 (im/classy-args))
-          f (fn [op n]
-              (list (mtag (vec (take n args)) return-type)
-                (nestl op (take n args))))
-          optspec {:inline-arities (if unary-op
-                                     `#(< 0 %)
-                                     `#(< 1 %))
-                   :inline (remove nil?
-                             ['fn
-                              (when nullary-expr
-                                (list [] nullary-expr))
-                              (cond
-                                unary-expr (list [(first args)] unary-expr)
-                                unary-op `([~(first args)]
-                                           (list (quote ~unary-op)
-                                             ~(first args))))
-                              `([x# & xs#]
-                                (nestl (quote ~op)
-                                  (cons x# xs#)))])}
+    (let [{:keys [doc return-type param-type unary-op unary-expr nullary-expr doc]} opts
+          param-type (cond
+                       (sequential? param-type)
+                       param-type
+
+                       param-type
+                       [param-type])
+          args (let [[x & ys :as args] (take 21 (im/classy-args))]
+                 (if param-type
+                   (cons (mtag x (first param-type)) ys)
+                   args))
+          arity-bodies (for [n (range 2 20)]
+                         (let [params (mtag (vec (take n args)) return-type)
+                               bndgs (if (< 1 (count param-type))
+                                       (let [[_ bt] param-type
+                                             [_ y] params]
+                                         (casting y bt))
+                                       [])
+                               body (nestl op (take n args))]
+                           `(~params
+                             (let ~bndgs
+                               ~body))))
+          optspec (cond-> {:inline-arities (cons `inline-arity-pred
+                                             (cond-> [2]
+                                                     nullary-expr (conj 0)
+                                                     (or unary-op unary-expr) (conj 1)))
+                           :arglists `(quote ~(list '[args*]))
+                           :inline (remove nil?
+                                     ['fn
+                                      (when nullary-expr
+                                        (list [] nullary-expr))
+                                      (cond
+                                        unary-expr (list [(first args)] unary-expr)
+                                        unary-op `([~(first args)]
+                                                   (list (quote ~unary-op)
+                                                     ~(first args))))
+                                      `([x# & xs#]
+                                        (inliner (quote ~op) (quote ~param-type) (cons x# xs#)))])}
+                          doc (assoc :doc doc))
           body (remove nil?
                  (concat
                    [(when nullary-expr
@@ -62,8 +102,7 @@
                       unary-expr (list [(first args)] unary-expr)
                       unary-op `([~(first args)]
                                  (~unary-op ~(first args))))]
-                   (for [n (range 2 20)]
-                     (f op n))
+                   arity-bodies
                    [(list (mtag (conj (vec (take 20 args)) '& 'more) return-type)
                       (list `reduce name
                         (nestl op (take 20 args))
@@ -141,72 +180,147 @@
   {:op UnityEngine.Vector2/op_Addition
    :return-type UnityEngine.Vector2
    :nullary-expr UnityEngine.Vector2/zero
-   :unary-expr a})
+   :unary-expr a
+   :doc
+   "Adds UnityEngine.Vector2s.
+
+If called with zero arguments, returns the zero vector. If called with one argument, that argument is returned, as with `identity`.
+
+Calls to this function will be inlined if possible."})
 
 (def-vop-lower v3+
   {:op UnityEngine.Vector3/op_Addition
    :return-type UnityEngine.Vector3
    :nullary-expr UnityEngine.Vector3/zero
-   :unary-expr a})
+   :unary-expr a
+   :doc
+   "Adds UnityEngine.Vector3s.
+
+If called with zero arguments, returns the zero vector. If called with one argument, that argument is returned, as with `identity`.
+
+Calls to this function will be inlined if possible."})
 
 (def-vop-lower v4+
   {:op UnityEngine.Vector4/op_Addition
    :return-type UnityEngine.Vector4
    :nullary-expr UnityEngine.Vector4/zero
-   :unary-expr a})
+   :unary-expr a
+   :doc
+   "Adds UnityEngine.Vector4s.
+
+If called with zero arguments, returns the zero vector. If called with one argument, that argument is returned, as with `identity`.
+
+Calls to this function will be inlined if possible."})
 
 ;; ------------------------------------------------------------
 ;; -
 
 (def-vop-lower v2-
   {:op UnityEngine.Vector2/op_Subtraction
-   :return-type UnityEngine.Vector2/op_Subtraction
-   :unary-op UnityEngine.Vector2/op_UnaryNegation})
+   :return-type UnityEngine.Vector2
+   :unary-op UnityEngine.Vector2/op_UnaryNegation
+   :doc
+   "Subtracts UnityEngine.Vector2s.
+
+If called with one argument, the negation of that argument is returned; that is, the Vector2 that results from multiplying all the components of the input Vector2 by -1.
+
+Calls to this function will be inlined if possible."})
 
 (def-vop-lower v3-
   {:op UnityEngine.Vector3/op_Subtraction
-   :return-type UnityEngine.Vector3/op_Subtraction
-   :unary-op UnityEngine.Vector3/op_UnaryNegation})
+   :return-type UnityEngine.Vector3
+   :unary-op UnityEngine.Vector3/op_UnaryNegation
+   :doc
+   "Subtracts UnityEngine.Vector3s.
+
+If called with one argument, the negation of that argument is returned; that is, the Vector3 that results from multiplying all the components of the input Vector3 by -1.
+
+Calls to this function will be inlined if possible."})
 
 (def-vop-lower v4- 
   {:op UnityEngine.Vector4/op_Subtraction
-   :return-type UnityEngine.Vector4/op_Subtraction
-   :unary-op UnityEngine.Vector4/op_UnaryNegation})
+   :return-type UnityEngine.Vector4
+   :unary-op UnityEngine.Vector4/op_UnaryNegation
+   :doc "Subtracts UnityEngine.Vector4s.
 
-;; undecided whether to support variadic versions of these
-;; non-associative multiply and divide ops (eg force associativity, at
-;; the expense of commutativity in the case of multiply). Probably should, later
+If called with one argument, the negation of that argument is returned; that is, the Vector4 that results from multiplying all the components of the input Vector4 by -1.
+
+Calls to this function will be inlined if possible."})
+
 ;; ------------------------------------------------------------
 ;; *
 
-;; this nonsense should be changed as soon as we get better support for primitive arguments
+(def-vop-lower v2*
+  {:op UnityEngine.Vector2/op_Multiply
+   :return-type UnityEngine.Vector2
+   :param-type [UnityEngine.Vector2, System.Single]
+   :nullary-expr UnityEngine.Vector2/one
+   :unary-expr a
+   :doc "Multiplies a UnityEngine.Vector2 by one or more floats. The UnityEngine.Vector2 must be the first argument (so the arguments of this function do not commute).
 
-(definline v2* [^UnityEngine.Vector2 a b]
-  `(let [b# (float ~b)]
-     (UnityEngine.Vector2/op_Multiply ~a b#)))
+If called with zero arguments, returns UnityEngine.Vector2/one. If called with one argument, returns that argument, as with `identity`.
 
-(definline v3* [^UnityEngine.Vector3 a b]
-  `(let [b# (float ~b)]
-     (UnityEngine.Vector3/op_Multiply ~a b#)))
+Calls to this function will be inlined if possible."})
 
-(definline v4* [^UnityEngine.Vector4 a b]
-  `(let [b# (float ~b)]
-     (UnityEngine.Vector4/op_Multiply ~a b#)))
+(def-vop-lower v3*
+  {:op UnityEngine.Vector3/op_Multiply
+   :return-type UnityEngine.Vector3
+   :param-type [UnityEngine.Vector3, System.Single]
+   :nullary-expr UnityEngine.Vector3/one
+   :unary-expr a
+   :doc "Multiplies a UnityEngine.Vector3 by one or more floats. The UnityEngine.Vector3 must be the first argument (so the arguments of this function do not commute).
+
+If called with zero arguments, returns UnityEngine.Vector3/one. If called with one argument, returns that argument, as with `identity`.
+
+Calls to this function will be inlined if possible."})
+
+(def-vop-lower v4*
+  {:op UnityEngine.Vector4/op_Multiply
+   :return-type UnityEngine.Vector4
+   :param-type [UnityEngine.Vector4, System.Single]
+   :nullary-expr UnityEngine.Vector4/one
+   :unary-expr a
+   :doc "Multiplies a UnityEngine.Vector4 by one or more floats. The UnityEngine.Vector4 must be the first argument (so the arguments of this function do not commute).
+
+If called with zero arguments, returns UnityEngine.Vector4/one. If called with one argument, returns that argument, as with `identity`.
+
+Calls to this function will be inlined if possible."})
 
 ;; ------------------------------------------------------------
 ;; div
 
-(definline v2div [a b]
-  `(let [b# (float ~b)]
-     (UnityEngine.Vector2/op_Division ~a b#)))
+(def-vop-lower v2div
+  {:op UnityEngine.Vector2/op_Division
+   :return-type UnityEngine.Vector2
+   :param-type [UnityEngine.Vector2 System.Single]
+   :unary-expr (Arcadia.LinearHelper/invertV2 a)
+   :doc "Divides a UnityEngine.Vector2 by one or more floats. The UnityEngine.Vector2 must be the first argument (so the arguments of this function do not commute).
 
-(definline v3div [a b]
-  `(let [b# (float ~b)]
-     (UnityEngine.Vector3/op_Division ~a b#)))
+If called with one UnityEngine.Vector2, returns that Vector2 with its components inverted.
 
-(definline v4div [a b]
-  `(let [b# (float ~b)]
-     (UnityEngine.Vector4/op_Division ~a b#)))
+Calls to this function will be inlined if possible."})
+
+(def-vop-lower v3div
+  {:op UnityEngine.Vector3/op_Division
+   :return-type UnityEngine.Vector3
+   :param-type [UnityEngine.Vector3 System.Single]
+   :unary-expr (Arcadia.LinearHelper/invertV3 a)
+   :doc "Divides a UnityEngine.Vector3 by one or more floats. The UnityEngine.Vector3 must be the first argument (so the arguments of this function do not commute).
+
+If called with one UnityEngine.Vector3, returns that Vector3 with its components inverted.
+
+Calls to this function will be inlined if possible."})
+
+(def-vop-lower v4div
+  {:op UnityEngine.Vector4/op_Division
+   :return-type UnityEngine.Vector4
+   :param-type [UnityEngine.Vector4 System.Single]
+   :unary-expr (Arcadia.LinearHelper/invertV4 a)
+   :doc "Divides a UnityEngine.Vector4 by one or more floats. The UnityEngine.Vector4 must be the first argument (so the arguments of this function do not commute).
+
+If called with one UnityEngine.Vector4, returns that Vector4 with its components inverted.
+
+Calls to this function will be inlined if possible."})
 
 ;; ------------------------------------------------------------
 ;; dist
@@ -218,37 +332,79 @@
 
 (defn ^:private >1? [n] (clojure.lang.Numbers/gt n 1))
 
-(defn qq*
-  {:inline (fn [& args]
-             (nestl 'UnityEngine.Quaternion/op_Multiply args))
-  :inline-arities >1?}
-  (^UnityEngine.Quaternion [^UnityEngine.Quaternion a ^UnityEngine.Quaternion b]
-    (UnityEngine.Quaternion/op_Multiply a b))
-  (^UnityEngine.Quaternion [^UnityEngine.Quaternion a ^UnityEngine.Quaternion b & cs]
-    (reduce qq* (qq* a b) cs)))
+;; should always return a Quaternion
+(def-vop-lower qq*
+  {:op UnityEngine.Quaternion/op_Multiply
+   :param-type UnityEngine.Quaternion
+   :return-type UnityEngine.Quaternion
+   :nullary-expr UnityEngine.Quaternion/identity
+   :unary-expr a
+   :doc "Multiplies one or more UnityEngine.Quaternions.
 
-(definline qv* ^UnityEngine.Vector3 [^UnityEngine.Quaternion a ^UnityEngine.Vector3 b]
-  `(UnityEngine.Quaternion/op_Multiply ~a ~b))
+If called with zero arguments, returns UnityEngine.Quaternion/identity. If called with one argument, returns that argument.
 
-(definline q* [a b]
-  `(UnityEngine.Quaternion/op_Multiply ~a ~b))
+Calls to this function will be inlined if possible."})
 
-(definline euler ^UnityEngine.Quaternion [^UnityEngine.Vector3 v]
+;; should always return a Vector3, which makes unary difficult,
+;; and if unary doesn't work neither should nullary
+(def-vop-lower qv*
+  {:op UnityEngine.Quaternion/op_Multiply
+   :return-type UnityEngine.Vector3
+   :param-type [UnityEngine.Quaternion UnityEngine.Vector3]
+   :nullary-expr (throw (clojure.lang.ArityException. "qv* requires at least two arguments, got zero."))
+   :unary-expr (throw (clojure.lang.ArityException. "qv* requires at least two arguments, got one."))
+   :doc "Multiplies a UnityEngine.Quaternion by one or more UnityEngine.Vector3s. The first argument must be a Quaternion, and the remaining arguments must be Vector3s.
+
+Calls to this function will be inlined if possible."})
+
+(def-vop-lower q*
+  {:op UnityEngine.Quaternion/op_Multiply
+   :nullary-expr (throw (clojure.lang.ArityException. "q* requires at least two arguments, got zero."))
+   :unary-expr (throw (clojure.lang.ArityException. "q* requires at least two arguments, got one."))
+   :doc "Multiplies a UnityEngine.Quaternion by one or more UnityEngine.Vector3s or Quaternions. 
+
+Calls to this function will be inlined if possible."})
+
+(definline euler 
+  "Wraps UnityEngine.Quaternion/Euler.
+
+  Calls to this function will be inlined if possible."
+  ^UnityEngine.Quaternion [^UnityEngine.Vector3 v]
   `(UnityEngine.Quaternion/Euler ~v))
 
-(definline euler-angles ^UnityEngine.Vector3 [^UnityEngine.Quaternion q]
+(definline euler-angles 
+  "Wraps the eulerAngles method of UnityEngine.Quaternion.
+
+  Calls to this function will be inlined if possible."
+  ^UnityEngine.Vector3 [^UnityEngine.Quaternion q]
   `(.eulerAngles ~q))
 
-(definline to-angle-axis [^UnityEngine.Quaternion q]
+(definline to-angle-axis
+  "Given a Quaternion q, returns a collection containing the angle (float) and axis (Vector3) that represents that Quaternion, as set by the ToAngleAxis method of Quaternions. 
+
+  Calls to this function will be inlined if possible."
+  [^UnityEngine.Quaternion q]
   `(Arcadia.LinearHelper/toAngleAxis ~q))
 
-(definline angle-axis ^UnityEngine.Quaternion [angle, axis]
+(definline angle-axis 
+  "Given an angle (float) and an axis (Vector3), constructs a Quarternion, as per UnityEngine.Quaternion/AngleAxis.
+
+  Calls to this function will be inlined if possible."
+  ^UnityEngine.Quaternion [angle, axis]
   `(UnityEngine.Quaternion/AngleAxis ~angle, ~axis))
 
-(definline qforward ^UnityEngine.Vector3 [^UnityEngine.Quaternion q]
+(definline qforward 
+  "Given a Quaternion q, returns the Vector3 derived by multiplying q by UnityEngine.Vector3/forward.
+
+  Calls to this function will be inlined if possible."
+  ^UnityEngine.Vector3 [^UnityEngine.Quaternion q]
   `(q* ~q UnityEngine.Vector3/forward))
 
-(definline aa ^UnityEngine.Quaternion [ang x y z]
+(definline aa 
+  "Shortcut for angle-axis. (aa a x y z) is the same as (angle-axis a (v3 x y z)).
+
+  Calls to this function will be inlined if possible."
+  ^UnityEngine.Quaternion [ang x y z]
   `(angle-axis ~ang (v3 ~x ~y ~z)))
 
 (defn qlookat ^UnityEngine.Quaternion
@@ -267,19 +423,45 @@
 ;; ------------------------------------------------------------
 ;; scale
 
-(definline v2scale [a b]
-  `(UnityEngine.Vector2/Scale ~a ~b))
+(def-vop-lower v2scale
+  {:op UnityEngine.Vector2/Scale
+   :return-type UnityEngine.Vector2
+   :nullary-expr UnityEngine.Vector2/one
+   :unary-expr a
+   :doc "Scales one or more UnityEngine.Vector2s, as per UnityEngine.Vector2/Scale.
 
-(definline v3scale [a b]
-  `(UnityEngine.Vector3/Scale ~a ~b))
+If called with zero arguments, returns UnityEngine.Vector2/one. If called with one argument, that argument is returned, as with `identity`.
 
-(definline v4scale [a b]
-  `(UnityEngine.Vector4/Scale ~a ~b))
+Calls to this function will be inlined if possible."})
+
+(def-vop-lower v3scale
+  {:op UnityEngine.Vector3/Scale
+   :return-type UnityEngine.Vector3
+   :nullary-expr UnityEngine.Vector3/one
+   :unary-expr a
+   :doc "Scales one or more UnityEngine.Vector3s, as per UnityEngine.Vector3/Scale.
+
+If called with zero arguments, returns UnityEngine.Vector3/one. If called with one argument, that argument is returned, as with `identity`.
+
+Calls to this function will be inlined if possible."})
+
+(def-vop-lower v4scale
+  {:op UnityEngine.Vector4/Scale
+   :return-type UnityEngine.Vector4
+   :nullary-expr UnityEngine.Vector4/one
+   :unary-expr a
+   :doc "Scales one or more UnityEngine.Vector4s, as per UnityEngine.Vector4/Scale.
+
+If called with zero arguments, returns UnityEngine.Vector4/one. If called with one argument, that argument is returned, as with `identity`.
+
+Calls to this function will be inlined if possible."})
 
 ;; ------------------------------------------------------------
 ;; more rotation
 
-(definline point-pivot ^UnityEngine.Vector3 [^UnityEngine.Vector3 pt, ^UnityEngine.Vector3 piv, ^UnityEngine.Quaternion rot]
+(definline point-pivot ^UnityEngine.Vector3
+  ;;[^UnityEngine.Vector3 pt, ^UnityEngine.Vector3 piv, ^UnityEngine.Quaternion rot]
+  [pt, piv, rot]
   `(let [piv# ~piv]
      (v3+ (qv* ~rot (v3- ~pt piv#))
        piv#)))

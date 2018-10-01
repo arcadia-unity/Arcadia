@@ -36,7 +36,14 @@
    :added "1.0"}
  *print-level* nil)
 
- (def ^:dynamic *verbose-defrecords* false)
+(def ^:dynamic *verbose-defrecords* false)
+
+(def ^:dynamic
+ ^{:doc "*print-namespace-maps* controls whether the printer will print
+  namespace map literal syntax. It defaults to false, but the REPL binds
+  to true."
+   :added "1.9"}
+ *print-namespace-maps* false)
 
 (defn- print-sequential [^String begin, print-one, ^String sep, ^String end, sequence, ^System.IO.TextWriter w]
   (binding [*print-level* (and (not *print-dup*) *print-level* (dec *print-level*))]
@@ -128,12 +135,21 @@
      (if (or (.Contains s ".") (.Contains s "E"))
        s
        (str s ".0"))))
-       
-(defmethod print-method Double [o, ^System.IO.TextWriter w]
-  (.Write w (fp-str o)))
+;;; Whelp, now they have added in print-method for Double and Single, in order to handle infinities and NaN
+
+(defmethod print-method Double [o, ^System.IO.TextWriter w]+  
+  (cond
+    (= Double/PositiveInfinity o) (.Write w "##Inf")                            ;;; POSITIVE_INFINITY
+    (= Double/NegativeInfinity o) (.Write w "##-Inf")                           ;;; NEGATIVE_INFINITY
+    (Double/IsNaN ^Double o) (.Write w "##NaN")                                       ;;; (.IsNaN ^Double o)
+    :else (.Write w (fp-str o))))
 
 (defmethod print-method Single [o, ^System.IO.TextWriter w]
-  (.Write w (fp-str o)))
+  (cond
+    (= Single/PositiveInfinity o) (.Write w "##Inf")                             ;;; Float/POSITIVE_INFINITY
+    (= Single/NegativeInfinity o) (.Write w "##-Inf")                            ;;; Float/NEGATIVE_INFINITY
+    (Single/IsNaN ^Float o) (.Write w "##NaN")                                   ;;; (.IsNaN ^Float o)
+    :else (.Write w (fp-str o))))       
 
 ;;;We need to cover all the numerics, or we are hosed on print-dup.
 (defmethod print-method Int16 [o, ^System.IO.TextWriter w] (.Write w (str o)))
@@ -247,18 +263,45 @@
   (print-meta v w)
   (print-sequential "[" pr-on " " "]" v w))
 
-(defn- print-map [m print-one w]
-  (print-sequential 
-   "{"
-   (fn [e  ^System.IO.TextWriter w] 
-     (do (print-one (key e) w) (.Write w \space) (print-one (val e) w)))
-   ", "
-   "}"
-   (seq m) w))
+(defn- print-prefix-map [prefix m print-one w]
+  (print-sequential
+    (str prefix "{")
+    (fn [e ^System.IO.TextWriter w]
+      (do (print-one (key e) w) (.Write w \space) (print-one (val e) w)))
+    ", "
+    "}"
+    (seq m) w))
+ 
+ (defn- print-map [m print-one w]
+  (print-prefix-map nil m print-one w))
+
+(defn- strip-ns
+  [named]
+  (if (symbol? named)
+    (symbol nil (name named))
+    (keyword nil (name named))))
+
+(defn- lift-ns
+  "Returns [lifted-ns lifted-map] or nil if m can't be lifted."
+  [m]
+  (when *print-namespace-maps*
+    (loop [ns nil
+           [[k v :as entry] & entries] (seq m)
+           lm {}]
+      (if entry
+        (when (or (keyword? k) (symbol? k))
+          (if ns
+            (when (= ns (namespace k))
+              (recur ns entries (assoc lm (strip-ns k) v)))
+            (when-let [new-ns (namespace k)]
+              (recur new-ns entries (assoc lm (strip-ns k) v)))))
+        [ns (apply conj (empty m) lm)]))))
 
 (defmethod print-method clojure.lang.IPersistentMap [m, ^System.IO.TextWriter w]
-  (print-meta m w)
-  (print-map m pr-on w))
+  (let [[ns lift-map] (lift-ns m)]
+    (if ns
+      (print-prefix-map (str "#:" ns) lift-map pr-on w)
+      (print-map m pr-on w))))
 
 (defmethod print-dup System.Collections.IDictionary [m, ^System.IO.TextWriter w]    ;;; java.util.Map
   (print-ctor m #(print-map (seq %1) print-method %2) w))
@@ -468,29 +511,43 @@
 (defmethod print-method clojure.lang.IDeref [o ^System.IO.TextWriter w]
   (print-tagged-object o (deref-as-map o) w))
 
-(defmethod print-method  System.Diagnostics.StackFrame [^System.Diagnostics.StackFrame o ^System.IO.TextWriter w]                            ;;;  StackTraceElement  ^StackTraceElement
+(defmethod print-method  System.Diagnostics.StackFrame [^System.Diagnostics.StackFrame o ^System.IO.TextWriter w]                    ;;;  StackTraceElement  ^StackTraceElement
   (print-method [(symbol (.FullName (.GetType o))) (symbol (.Name (.GetMethod o))) (.GetFileName o) (.GetFileLineNumber o)] w))      ;;; (.getClassName o)  (.getMethodName o) .getFileName .getLineNumber
+
+(defn StackTraceElement->vec
+  "Constructs a data representation for a StackTraceElement"
+  {:added "1.9"}
+  [^System.Diagnostics.StackFrame o]
+  (if (nil? o)
+    nil
+    [(symbol (.FullName (.GetType o)))
+     (if-let [m (.GetMethod o)]
+       (symbol (.Name m))
+       "NO_METHOD")
+     (or (.GetFileName o) "NO_FILE")
+     (.GetFileLineNumber o)]))
 
 (defn Throwable->map
   "Constructs a data representation for a Throwable."
   {:added "1.7"}
   [^Exception o]                                                                                                 ;;; ^Throwable
   (let [base (fn [^Exception t]                                                                                  ;;; ^Throwable
-                 (let [m {:type (class t)
-                        :message (.Message t)                                                                    ;;; .getLocalizedMessage
-                        :at (.GetFrame (System.Diagnostics.StackTrace. t true) 0)}                               ;;; (get (.getStackTrace t) 0)
-                     data (ex-data t)]
-                 (if data
-                   (assoc m :data data)
-                   m)))
+               (merge {:type (symbol (.FullName (class t)))                                                      ;;; .getName
+                       :message (.Message t)}                                                                    ;;; .getLocalizedMessage
+                 (when-let [ed (ex-data t)]
+                   {:data ed})
+                 (let [st (.GetFrames (System.Diagnostics.StackTrace. t true))]                                  ;;; (.getStackTrace t)
+                   (when (and st (pos? (alength st)))                                                            ;;; added the 'and st' because we may get a null back instread of an array.
+                     {:at (StackTraceElement->vec (aget st 0))}))))                                              ;;; aget
         via (loop [via [], ^Exception t o]                                                                       ;;; ^Throwable
               (if t
                 (recur (conj via t) (.InnerException t))                                                         ;;; .getCause
                 via))
         ^Exception root (peek via)                                                                               ;;; Throwable
-        m {:cause (.Message root)                                                                                   ;;; (.getLocalizedMessage root)
+        m {:cause (.Message root)                                                                                ;;; (.getLocalizedMessage root)
            :via (vec (map base via))
-          :trace (vec (.GetFrames (System.Diagnostics.StackTrace. (or root o) true)))}                           ;;;  .getStackTrace ^Throwable  
+          :trace (vec (map StackTraceElement->vec
+		                   (.GetFrames (System.Diagnostics.StackTrace. (or root o) true))))}                     ;;;  .getStackTrace ^Throwable  
         data (ex-data root)]
     (if data
       (assoc m :data data)
@@ -498,15 +555,21 @@
 
 (defn print-throwable [^Exception o ^System.IO.TextWriter w]                                                     ;;; ^Throwable
   (.Write w "#error {\n :cause ")
-  (let [{:keys [cause via trace]} (Throwable->map o)
+  (let [{:keys [cause data via trace]} (Throwable->map o)
         print-via #(do (.Write w "{:type ")
 		               (print-method (:type %) w)
 					   (.Write w "\n   :message ")
-					   (print-method (:message %) w)
-					   (.Write w "\n   :at ")
-					   (print-method (:at %) w)
-					   (.Write w "}"))]
+             (when-let [data (:data %)]
+               (.Write w "\n   :data ")
+               (print-method data w))
+             (when-let [at (:at %)]
+               (.Write w "\n   :at ")
+               (print-method (:at %) w))
+             (.Write w "}"))]
     (print-method cause w)
+    (when data
+      (.Write w "\n :data ")
+      (print-method data w))
     (when via
       (.Write w "\n :via\n [")
       (when-let [fv (first via)]

@@ -19,6 +19,7 @@
 (import
  ;;;'(clojure.asm ClassWriter ClassVisitor Opcodes Type) 
  ;;;'(java.lang.reflect Modifier Constructor)
+ ;;; '(java.io Serializable NotSerializableException)
  ;;;'(clojure.asm.commons Method GeneratorAdapter)
  ;;;'(clojure.lang IProxy Reflector DynamicClassLoader IPersistentMap PersistentHashMap RT)) 
  '(clojure.lang IProxy RT Reflector))   ;;;DM;;;
@@ -32,8 +33,10 @@
   (or (some (fn [t] (when (every? #(isa? t %) rtypes) t)) rtypes)
     (throw (Exception. "Incompatible return types"))))
 
-(defn- group-by-sig [coll]
- "takes a collection of [msig meth] and returns a seq of maps from return-types to meths."
+(defn- group-by-sig
+  "Takes a collection of [msig meth] and returns a seq of maps from
+   return-types to meths."
+  [coll]
   (vals (reduce1 (fn [m [msig meth]]
                   (let [rtype (peek msig)
                         argsig (pop msig)]
@@ -49,14 +52,14 @@
         (concat
           [(.Name super)]                                              ;;; .getName
           (map #(subs % (inc (.LastIndexOf ^String % "."))) inames)       ;;; .lastIndexOf
-          [(.ToString (int (hash inames)) "X")] [(clojure.lang.Compiler/IsCompilingSuffix)])))))                             ;;;[(Integer/toHexString (hash inames))])))))                   
+          [(.ToString (hash inames) "X")] [(clojure.lang.Compiler/IsCompilingSuffix)])))))                             ;;;[(Integer/toHexString (hash inames))])))))                   
 
-(defn- generate-proxy [^Type super interfaces]     ;;; Class
-  (clojure.lang.GenProxy/GenerateProxyClass super interfaces (proxy-name super interfaces)))  ;;;DM;;
+(defn- generate-proxy [^Type super interfaces attributes]     ;;; Class
+  (clojure.lang.GenProxy/GenerateProxyClass super interfaces attributes (proxy-name super interfaces)))  ;;;DM;;
   
 ;;;  (let [cv (new ClassWriter (. ClassWriter COMPUTE_MAXS))
-;;;        cname (.replace (proxy-name super interfaces) \. \/) ;(str "clojure/lang/" (gensym "Proxy__"))
-;;;        ctype (. Type (getObjectType cname))
+;;;        pname (proxy-name super interfaces)
+;;;        cname (.replace pname \. \/) ;(str "clojure/lang/" (gensym "Proxy__"));;;        ctype (. Type (getObjectType cname))
 ;;;        iname (fn [^Class c] (.. Type (getType c) (getInternalName)))
 ;;;        fmap "__clojureFnMap"
 ;;;        totype (fn [^Class c] (. Type (getType c)))
@@ -159,6 +162,22 @@
 ;;;            
 ;;;            (. gen (returnValue))
 ;;;            (. gen (endMethod)))))
+;;;                                        ;disable serialization
+;;;    (when (some #(isa? % Serializable) (cons super interfaces))
+;;;      (let [m (. Method (getMethod "void writeObject(java.io.ObjectOutputStream)"))
+;;;            gen (new GeneratorAdapter (. Opcodes ACC_PRIVATE) m nil nil cv)]
+;;;        (. gen (visitCode))
+;;;        (. gen (loadThis))
+;;;        (. gen (loadArgs))
+;;;        (. gen (throwException (totype NotSerializableException) pname))
+;;;        (. gen (endMethod)))
+;;;      (let [m (. Method (getMethod "void readObject(java.io.ObjectInputStream)"))
+;;;            gen (new GeneratorAdapter (. Opcodes ACC_PRIVATE) m nil nil cv)]
+;;;        (. gen (visitCode))
+;;;        (. gen (loadThis))
+;;;        (. gen (loadArgs))
+;;;        (. gen (throwException (totype NotSerializableException) pname))
+;;;        (. gen (endMethod))))
 ;;;                                        ;add IProxy methods
 ;;;    (let [m (. Method (getMethod "void __initClojureFnMappings(clojure.lang.IPersistentMap)"))
 ;;;          gen (new GeneratorAdapter (. Opcodes ACC_PUBLIC) m nil nil cv)]
@@ -255,8 +274,8 @@
 
 (defn- get-super-and-interfaces [bases]
   (if (. ^Type (first bases) IsInterface)     ;;; ^Class  (IsInterface)
-    [Object bases]
-    [(first bases) (next bases)]))
+    [Object bases (extract-attributes (meta bases))]
+    [(first bases) (next bases) (extract-attributes (meta bases))]))
 
 (defn get-proxy-class 
   "Takes an optional single class followed by zero or more
@@ -266,10 +285,10 @@
   requests for the same class set. Returns a Class object."  
   {:added "1.0"}
   [& bases]
-    (let [[super interfaces] (get-super-and-interfaces bases)
+    (let [[super interfaces attributes] (get-super-and-interfaces bases)
           pname (proxy-name super interfaces)]
       (or  (RT/classForName pname)                            ;;; (RT/loadClassForName pname)  ;; TODO: This causes a problem with muliple compiles
-           (generate-proxy super interfaces))))               ;;; (let [[cname bytecode] (generate-proxy super interfaces)]
+           (generate-proxy super interfaces attributes))))    ;;; (let [[cname bytecode] (generate-proxy super interfaces)]
                                                               ;;;   (. ^DynamicClassLoader (deref clojure.lang.Compiler/LOADER) (defineClass pname bytecode))))))
 
 (defn construct-proxy
@@ -339,7 +358,7 @@
   [class-and-interfaces args & fs]
    (let [bases (map #(or (resolve %) (throw (Exception. (str "Can't resolve: " %)))) 
                     class-and-interfaces)
-         [super interfaces] (get-super-and-interfaces bases)
+         [super interfaces attributes] (get-super-and-interfaces bases)
 ;;;         compile-effect (when *compile-files*
 ;;;                          (let [[cname bytecode] (generate-proxy super interfaces)]
 ;;;                            (clojure.lang.Compiler/writeClassFile cname bytecode)))
@@ -400,23 +419,24 @@
 ;;;        snapshot (fn []
 ;;;                   (reduce (fn [m e]
 ;;;                             (assoc m (key e) ((val e))))
-;;;                           {} (seq pmap)))]
+;;;                           {} (seq pmap)))
+;;;      thisfn (fn thisfn [plseq]
+;;;                 (lazy-seq
+;;;                   (when-let [pseq (seq plseq)]
+;;;                     (cons (clojure.lang.MapEntry/create (first pseq) (v (first pseq)))
+;;;                           (thisfn (rest pseq))))))]
 ;;;    (proxy [clojure.lang.APersistentMap]
 ;;;           []
-;;;      (iterator [] (.iterator ^Iterable pmap))
+;;;      (iterator [] (clojure.lang.SeqIterator. ^java.util.Iterator (thisfn (keys pmap))))
 ;;;      (containsKey [k] (contains? pmap k))
-;;;      (entryAt [k] (when (contains? pmap k) (clojure.lang.Tuple/create k (v k))))
+;;;      (entryAt [k] (when (contains? pmap k) (clojure.lang.MapEntry/create k (v k))))
 ;;;      (valAt ([k] (when (contains? pmap k) (v k)))
 ;;;	     ([k default] (if (contains? pmap k) (v k) default)))
 ;;;      (cons [m] (conj (snapshot) m))
 ;;;      (count [] (count pmap))
 ;;;      (assoc [k v] (assoc (snapshot) k v))
 ;;;      (without [k] (dissoc (snapshot) k))
-;;;      (seq [] ((fn thisfn [plseq]
-;;;		  (lazy-seq
-;;;                   (when-let [pseq (seq plseq)]
-;;;                     (cons (clojure.lang.Tuple/create (first pseq) (v (first pseq)))
-;;;                           (thisfn (rest pseq)))))) (keys pmap))))))
+;;;       (seq [] (thisfn (keys pmap))))))
 
 
 

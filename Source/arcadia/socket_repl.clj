@@ -4,7 +4,8 @@
             [arcadia.config :as config]
             [clojure.main :as m]
             [arcadia.internal.state :as state]
-            arcadia.literals))
+            arcadia.literals)
+  (:import [System.Threading Thread]))
 
 ;; Think this sleaziness has to be a macro, for `set!`
 ;; Getting these from clojure.main
@@ -20,48 +21,148 @@
        ~@settings
        nil)))
 
+(defonce interrupts
+  (agent []))
+
+(add-watch interrupts :unity-logger
+  (fn [k ref old new]
+    (when (not= old new)
+      (UnityEngine.Debug/Log
+        (str "interrupts changed."
+             "\nold: " old
+             "\n---------------------"
+             "\nnew: " new
+             "\n---------------------")))))
+
+(defn send-interrupt [f]
+  (send interrupts conj f))
+
+(defn block-and-drain []
+  (let [p (promise)]
+    (send interrupts
+      #(do (deliver p %)
+           []))
+    (deref p)))
+
+(defn run-interrupts []
+  (doseq [work (block-and-drain)]
+    (work)))
+
+;; need to take a hatchet to it
+(defn data-available? [channel]
+  (let [base-reader-info (.GetField (class channel)
+                           "_baseReader"
+                           (enum-or BindingFlags/Instance
+                             BindingFlags/NonPublic))
+        base-reader (.GetValue base-reader-info channel)]
+    (.DataAvailable (.BaseStream base-reader))))
+
+(defn repl-read [request-prompt request-exit]
+  (let [result (try
+                 (loop []
+                   (if (data-available? *in*)
+                     (or ({:line-start request-prompt :stream-end request-exit}
+                          (m/skip-whitespace *in*))
+                         (let [input (read {:read-cond :allow} *in*)]
+                           (m/skip-if-eol *in*)
+                           (case input
+                             :repl/quit request-exit
+                             input)))
+                     (do
+                       (run-interrupts)
+                       (Thread/Sleep 200)
+                       (recur))))
+                 (catch Exception e
+                   (println "something dreadful happened")
+                   (println (.Message e))
+                   (println (.StackTrace e))
+                   (UnityEngine.Debug/Log "something dreadful happened")
+                   (UnityEngine.Debug/Log e)
+                   (throw (Exception. "wrapper" e))))]
+    result))
+
+(defn register-eval-type [x]
+  (swap! state/state update :eval-fn-types (fnil conj #{}) (class x))
+  x)
+
+;; without this, symbols to lose a level of quotation,
+;; such that a configuration.edn with
+;; {:repl/injections (when true
+;;                    (println 'sassafras))}
+;; will yield an injection that tries to evaluate 'sassafras.
+;; This is because we currently use edn/read-string to ingest
+;; configuration.edn, rather than read-string.
+(defn clean-quotes [expr]
+  (read-string (pr-str expr)))
+
 (defn game-thread-eval
   ([expr] (game-thread-eval expr nil))
   ([expr {:keys [callback-driver]
           :or {callback-driver cb/add-callback}
           :as opts}]
    (let [old-read-eval *read-eval*
-         p (promise)]
+         p (promise)
+         injection (clean-quotes ((config/config) :repl/injections))
+         expr `(do ~injection ~expr)]
      (callback-driver
-       (bound-fn []
-         (deliver p
-           (try
-             (Arcadia.Util/MarkScenesDirty)
-             (let [v (eval expr)]
-               {::success true
-                ::value v
-                ::bindings (get-thread-bindings)
-                ::printed  (binding [*read-eval* old-read-eval]
-                             (with-out-str
-                               (prn v)))})
-             (catch Exception e
-               {::success false
-                ::value e
-                ::bindings (get-thread-bindings)}))))) 
-     (let [{:keys [::success ::value ::bindings ::printed]} @p]
-       (set-tracked-bindings bindings)
-       (if success
-         (do
-           ;; Simulating `print` part of `clojure.main/repl` here, because
-           ;; unity prevents even printing things in the scene graph
-           ;; off the main thread.
+       (register-eval-type
+         (bound-fn []
+           (deliver p ;; needs to go through agent now
+             (try
+               (Arcadia.Util/MarkScenesDirty)
+               (let [v (eval expr)]
+                 {::success true
+                  ::value v
+                  ::bindings (get-thread-bindings)
+                  ::printed  (binding [*read-eval* old-read-eval]
+                               (with-out-str
+                                 (prn v)))})
+               (catch Exception e
+                 {::success false
+                  ::value e
+                  ::bindings (get-thread-bindings)}))))))
+     (loop []
+       (if (realized? p)
+         (let [{:keys [::success ::value ::bindings ::printed]} @p]
+           (set-tracked-bindings bindings)
+           (if success
+             (do
+               ;; Simulating `print` part of `clojure.main/repl` here, because
+               ;; unity prevents even printing things in the scene graph
+               ;; off the main thread.
 
-           ;; NOTE! this removes ability to customize `print` option in
-           ;; repl. Suggestions for cleaner implementation welcome.
-           (print printed)
-           value)
-         (throw value))))))
+               ;; NOTE! this removes ability to customize `print` option in
+               ;; repl. Suggestions for cleaner implementation welcome.
+               (print printed)
+               value)
+             (throw (Exception. "carrier" value))))
+         (do 
+           (run-interrupts)
+           (Thread/Sleep 100) ; yeah it's a spinlock
+           (recur)))))))
+
+(def stuff (atom 0))
+
+;; Our seemingly less broken variant of clojure.main/repl-caught,
+;; which oddly throws away the trace
+(defn repl-caught [e]
+  (swap! stuff inc)
+  (let [ex (clojure.main/repl-exception e)
+        tr (clojure.main/get-stack-trace ex)]
+    (binding [*out* *err*]
+      (println (str (-> ex class .Name)
+                    " " (.Message ex) "\n"
+                    (->> tr
+                         ;; (drop-last 6) ; trim off redundant stuff at end of stack trace. maybe bad idea
+                         (map clojure.main/stack-element-str)                         
+                         (clojure.string/join "\n")))))))
 
 (defn repl []
   (m/repl
     :init s/repl-init
-    :read s/repl-read
+    :read #'repl-read
     :print identity
+    :caught #'repl-caught
     :eval #'game-thread-eval))
 
 (def server-defaults

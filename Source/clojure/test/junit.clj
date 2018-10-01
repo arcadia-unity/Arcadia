@@ -80,7 +80,7 @@
                         (reverse (map #(:name (meta %)) vars)))))
 
 (defn package-class
-  [^System.String name]
+  [name]
   (let [i (.LastIndexOf name ".")]                            ;;; lastIndexOf
     (if (< i 0)
       [nil name]

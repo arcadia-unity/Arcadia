@@ -4,7 +4,7 @@
             [arcadia.internal.state :as state]
             [arcadia.internal.file-system :as fs]
             [arcadia.packages.data :as pd]
-            [clojure.spec :as s]
+            [clojure.spec.alpha :as s]
             [arcadia.internal.spec :as as]
             [arcadia.compiler :as compiler]
             [arcadia.config :as config])

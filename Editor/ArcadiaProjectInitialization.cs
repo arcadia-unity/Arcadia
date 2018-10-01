@@ -15,12 +15,18 @@ namespace Arcadia
         [MenuItem("Arcadia/Initialization/Setup Player Settings")]
         public static void CheckSettings()
         {
-            Debug.Log("Checking Unity Settings...");
-            if (PlayerSettings.apiCompatibilityLevel != ApiCompatibilityLevel.NET_2_0)
+			Debug.Log("Checking Unity Settings...");
+            if (!Application.unityVersion.StartsWith("2018")) // gross string comparison, not sure we can avoid
             {
-                Debug.Log("Updating API Compatibility Level to .NET 20");
-                PlayerSettings.apiCompatibilityLevel = ApiCompatibilityLevel.NET_2_0;
+                Debug.LogWarningFormat("Expected Unity version 2018.x, got {0}. This might cause issues.", Application.unityVersion);
             }
+            
+			if (PlayerSettings.GetApiCompatibilityLevel(BuildTargetGroup.Standalone) != ApiCompatibilityLevel.NET_4_6)
+			 {
+			     Debug.Log("Updating API Compatibility Level to .NET 4.6");
+			     PlayerSettings.SetApiCompatibilityLevel(BuildTargetGroup.Standalone, ApiCompatibilityLevel.NET_4_6);
+			 }
+
 
             if (!PlayerSettings.runInBackground)
             {

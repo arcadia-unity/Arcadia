@@ -270,7 +270,7 @@
          (< (int k) cnt)))
   (entryAt [this k]
     (if (.containsKey this k)
-      (clojure.lang.Tuple/create k (.nth this (int k)))
+      (clojure.lang.MapEntry/create k (.nth this (int k)))
       nil))
 
   clojure.lang.ILookup
@@ -493,6 +493,12 @@
       :char (mk-am char)
       :boolean (mk-am boolean)})
 
+(defmacro ^:private ams-check [t]
+  `(let [am# (ams ~t)]
+     (if am#
+       am#
+       (throw (ArgumentException. (str "Unrecognized type " ~t))))))            ;;; IllegalArgumentException
+
 (defn vector-of 
   "Creates a new vector of a single primitive type t, where t is one
   of :int :long :float :double :byte :short :char or :boolean. The
@@ -503,28 +509,28 @@
   {:added "1.2"
    :arglists '([t] [t & elements])}
   ([t]
-   (let [am ^clojure.core.ArrayManager (ams t)]
+   (let [^clojure.core.ArrayManager am (ams-check t)]
      (Vec. am 0 5 EMPTY-NODE (.array am 0) nil)))
   ([t x1]
-   (let [am ^clojure.core.ArrayManager (ams t)
+   (let [^clojure.core.ArrayManager am (ams-check t)
          arr (.array am 1)]
      (.aset am arr 0 x1)
      (Vec. am 1 5 EMPTY-NODE arr nil)))
   ([t x1 x2]
-   (let [am ^clojure.core.ArrayManager (ams t)
+   (let [^clojure.core.ArrayManager am (ams-check t)
          arr (.array am 2)]
      (.aset am arr 0 x1)
      (.aset am arr 1 x2)
      (Vec. am 2 5 EMPTY-NODE arr nil)))
   ([t x1 x2 x3]
-   (let [am ^clojure.core.ArrayManager (ams t)
+   (let [^clojure.core.ArrayManager am (ams-check t)
          arr (.array am 3)]
      (.aset am arr 0 x1)
      (.aset am arr 1 x2)
      (.aset am arr 2 x3)
      (Vec. am 3 5 EMPTY-NODE arr nil)))
   ([t x1 x2 x3 x4]
-   (let [am ^clojure.core.ArrayManager (ams t)
+   (let [^clojure.core.ArrayManager am (ams-check t)
          arr (.array am 4)]
      (.aset am arr 0 x1)
      (.aset am arr 1 x2)

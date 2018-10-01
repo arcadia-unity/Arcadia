@@ -1,3 +1,4 @@
+#if NET_4_6
 using System;
 using UnityEngine;
 using clojure.lang;
@@ -151,3 +152,4 @@ namespace Arcadia
 		}
 	}
 }
+#endif

@@ -4,7 +4,8 @@
   (:require [clojure.pprint :as pprint]
             [clojure.test :as test])
   (:import [System.Reflection
-            BindingFlags MonoMethod MonoProperty MonoField]))
+            BindingFlags MonoMethod MonoProperty MonoField
+            FieldInfo]))
 
 (def inclusive-binding-flag
   (enum-or

@@ -1,6 +1,6 @@
 (ns arcadia.internal.hook-help
   (:require arcadia.literals
-            [clojure.spec :as s]
+            [clojure.spec.alpha :as s]
             [arcadia.internal.namespace :as ans])
   (:import [UnityEngine Debug]
            clojure.lang.IFn
@@ -137,7 +137,6 @@
   :args (s/cat :behaviour #(instance? ArcadiaBehaviour %)))
 
 (defn hook-state-deserialize [^ArcadiaBehaviour behaviour]
-  (UnityEngine.Debug/Log "in hook-state-deserialize")
   (let [raw (read-string (.edn behaviour))]
     (let []
       (set! (.ifnInfos behaviour)

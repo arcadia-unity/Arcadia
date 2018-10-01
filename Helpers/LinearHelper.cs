@@ -1,3 +1,4 @@
+#if NET_4_6
 using UnityEngine;
 using clojure.lang;
 
@@ -80,6 +81,25 @@ namespace Arcadia {
 			return v;
 		}
 
+		// ============================================================
+		// vector help
+
+		public static Vector2 invertV2 (Vector2 v)
+		{
+			return new Vector2(1 / v.x, 1 / v.y);
+		}
+
+		public static Vector3 invertV3 (Vector3 v)
+		{
+			return new Vector3(1 / v.x, 1 / v.y, 1 / v.z);
+		}
+
+		public static Vector4 invertV4 (Vector4 v)
+		{
+			return new Vector4(1 / v.x, 1 / v.y, 1 / v.z, 1 / v.w);
+		}
+
+		// ============================================================
 		// swizzle help
 
 		public static Vector2 swizzV2(Vector2 v, int xInx, int yInx){
@@ -120,3 +140,4 @@ namespace Arcadia {
 	}
 	
 }
+#endif

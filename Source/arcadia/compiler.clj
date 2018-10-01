@@ -4,7 +4,7 @@
       :author "Tims Gardner and Ramsey Nasser"}
     arcadia.compiler
   (:require [arcadia.config :as config]
-            [clojure.spec :as s]
+            [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [arcadia.internal.state :as state]
             [arcadia.internal.spec :as as]
@@ -173,14 +173,14 @@
                                 *compile-path* path
                                 *compile-files* true
                                 arcadia.compiler/*exporting?* true
-                                *loaded-libs* (ref #{})]
+                                clojure.core/*loaded-libs* (ref #{})]
                         (doseq [ns nss]
                           (require ns)
                           (when file-callback
                             (file-callback ns)))
-                        *loaded-libs*)]
+                        @#'clojure.core/*loaded-libs*)]
      (dosync
-       (alter *loaded-libs* into @loaded-libs'))
+       (alter @#'clojure.core/*loaded-libs* into @loaded-libs'))
      nil)))
 
 (defn aot-asset [path asset]

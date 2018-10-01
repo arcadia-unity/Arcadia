@@ -144,9 +144,17 @@
    [v] (throw (ArgumentException. "by-ref not used at top-level in an interop call or method signature")))
   
 (defn type-args
-  "Supplies type arguments to a generic method interop call
+  "Supplies type arguments to a generic method interop call.
 
-  Should only be used in CLR interop code.  Throws an exception otherwise."
+  Should only be used in CLR interop code.  Throws an exception otherwise.
+  
+  Usage:
+  
+  (.ClrMethod ^T1 obj (type-args T2) 4 5) is equivalant to C#:  ((T1)obj).ClrMethod<T2>(4,5)
+
+  Can also be used with static methods:
+
+  (Enumerable/Repeat (type-args Int32) 2 5)"
   {:added "1.3"}
   [v] (throw (ArgumentException. "type-args not used in interop call")))
 

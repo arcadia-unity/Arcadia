@@ -145,11 +145,12 @@
   clojure.lang.StringSeq
   (internal-reduce
    [str-seq f val]
-   (let [s (.S str-seq)]                             ;;; .s
+   (let [s (.S str-seq)                              ;;; .s
+         len (.Length s)]                            ;;; .length
      (loop [i (.I str-seq)                           ;;; .i
             val val]
-       (if (< i (.Length s))                         ;;; .length
-         (let [ret (f val (.get_Chars s i))]       ;;; .charAt
+       (if (< i len)                        
+         (let [ret (f val (.get_Chars s i))]        ;;; .charAt
                 (if (reduced? ret)
                   @ret
                   (recur (inc i) ret)))

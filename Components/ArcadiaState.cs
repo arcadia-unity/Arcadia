@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿#if NET_4_6
+using UnityEngine;
 using System.Collections;
 using clojure.lang;
 using Arcadia;
@@ -194,3 +195,4 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 		return state.pamv(ks);
 	}
 }
+#endif

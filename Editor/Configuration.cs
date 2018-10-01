@@ -1,3 +1,4 @@
+#if NET_4_6
 using System.Linq;
 using UnityEngine;
 using UnityEditor;
@@ -45,3 +46,4 @@ namespace Arcadia
 		}
 	}
 }
+#endif

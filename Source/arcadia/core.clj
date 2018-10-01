@@ -1,8 +1,8 @@
 (ns arcadia.core
   (:require [clojure.string :as string]
-            [clojure.spec :as s]
+            [clojure.spec.alpha :as s]
             clojure.set
-            [arcadia.internal.messages :refer [messages interface-messages]]
+            [arcadia.internal.messages :as messages]
             [arcadia.internal.macro :as mac]
             [arcadia.internal.map-utils :as mu]
             [arcadia.internal.name-utils :refer [camels-to-hyphens]]
@@ -396,8 +396,7 @@
 
 (def hook-types
   "Map of keywords to hook component types"
-  (->> (merge messages
-              interface-messages)
+  (->> messages/all-messages
        keys
        (map name)
        (mapcat #(vector (message-keyword %)
@@ -602,8 +601,6 @@
   ([go k f x y z & args]
    (with-cmpt go [arcs ArcadiaState]
      (.Add arcs k (apply f (.ValueAtKey arcs k) x y z args))
-
-     (.Add arcs k (f (.ValueAtKey arcs k) x))
      go)))
 
 ;; ============================================================
@@ -751,7 +748,8 @@
 ;; defrole
 
 (def ^:private hook->args
-  (mu/map-keys messages clojurized-keyword))
+  (-> messages/all-messages
+      (mu/map-keys clojurized-keyword)))
 
 (s/def ::defrole-impl
   (s/and
@@ -850,7 +848,7 @@ Note that generating vars is usually a bad idea because it messes with
     (if (= ::s/invalid parse)
       (throw (Exception.
                (str "Invalid arguments to defrole. Spec explanation: "
-                    (with-out-str (clojure.spec/explain ::defrole-args defrole-args)))))
+                    (with-out-str (clojure.spec.alpha/explain ::defrole-args defrole-args)))))
       (let [{nm :name,
              body :body} parse
             entries (defrole-map-entries nm body)
@@ -958,8 +956,6 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
       (name type-sym))))
 
 (defn- snapshot-dictionary-form [this-sym fields element-snapshots-map default-element-snapshots]
-  (println "element-snapshots-map" element-snapshots-map)
-  (println "default-element-snapshots" default-element-snapshots)
   (let [dict-sym (gensym "dictionary_")
         key-sym (gensym "key_")
         val-sym (gensym "val_")
@@ -1066,7 +1062,7 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
     (if (= ::s/invalid parse)
       (throw (Exception.
                (str "Invalid arguments to defmutable. Spec explanation: "
-                    (with-out-str (clojure.spec/explain ::defmutable-args args)))))
+                    (with-out-str (clojure.spec.alpha/explain ::defmutable-args args)))))
       (let [{:keys [name fields protocol-impls more-opts]} parse
             {{element-snapshots-map :element-snapshots} :element-snapshots-map
              default-element-snapshots :default-element-snapshots} (into {} more-opts)

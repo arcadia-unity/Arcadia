@@ -13,15 +13,25 @@
             [clojure.edn :as edn]
             [clojure.main :as m])
   (:import [System.Net.Sockets Socket SocketException TcpListener TcpClient] [System.Net Dns IPAddress]))                ;;; [java.net InetAddress Socket ServerSocket SocketException]
+                                                                                                                         ;;; [java.util.concurrent.locks ReentrantLock]
 
 (set! *warn-on-reflection* true)
 
 (def ^:dynamic *session* nil)
 
 ;; lock protects servers
-(defonce ^:private lock (Object.))
+(defonce ^:private lock (Object.))             ;;; ReentrantLock.  -- no CLR equivalent
 (defonce ^:private servers {})
 
+(defmacro ^:private with-lock
+   [lock-expr & body]
+  `(let [lockee# ~lock-expr]                   ;;;   ~(with-meta lock-expr {:tag 'java.util.concurrent.locks.ReentrantLock})
+      (monitor-enter lockee#)                  ;;;  (.lock lockee#)
+	  (try
+        ~@body
+        (finally
+          (monitor-exit lockee#)))))           ;;; (.unlock lockee#)
+ 
 (defmacro ^:private thread
   [^String name daemon & body]
   `(doto (System.Threading.Thread.  ^System.Threading.ThreadStart (gen-delegate System.Threading.ThreadStart [] ~@body))          ;;; (doto (Thread. (fn [] ~@body) ~name)
@@ -57,14 +67,14 @@
               *out* out
               *err* err
               *session* {:server name :client client-id}]
-      (locking lock
+      (with-lock lock
         (alter-var-root #'servers assoc-in [name :sessions client-id] {}))
       (require (symbol (namespace accept)))
       (let [accept-fn (resolve accept)]
         (apply accept-fn args)))
     (catch SocketException _disconnect)
     (finally
-      (locking lock
+      (with-lock lock
         (alter-var-root #'servers update-in [name :sessions] dissoc client-id))
       (.Close ^System.IO.TextReader in) (.Close conn))))                                                                 ;;; .close  DM: Added (.Close in)
 
@@ -85,9 +95,9 @@
          :or {bind-err true
               server-daemon true
               client-daemon true}} opts
-         address (aget (.AddressList (let [^String a (or address "localhost")] (Dns/GetHostEntry a))) 0)                          ;;; (InetAddress/getByName address)  ;; nil returns loopback  Added let to get type info
+         address (if (instance? System.Net.IPAddress address) address (aget (.AddressList (let [^String a (or address "localhost")] (Dns/GetHostEntry a))) 0))                          ;;; Add IPAddress check,  also: (InetAddress/getByName address)  ;; nil returns loopback  Added let to get type info
          socket (TcpListener. address port)]                                                                         ;;; ( ServerSocket. port 0 address)
-    (locking lock
+    (with-lock lock
       (alter-var-root #'servers assoc name {:name name, :socket socket, :sessions {}}))
     (thread
       (str "Clojure Server " name) server-daemon
@@ -105,7 +115,7 @@
               (catch SocketException _disconnect))
             (recur (inc client-counter))))
         (finally
-          (locking lock
+          (with-lock lock
             (alter-var-root #'servers dissoc name)))))
     socket))
 
@@ -116,7 +126,7 @@
   ([]
    (stop-server (:server *session*)))
   ([name]
-   (locking lock
+   (with-lock lock
      (let [server-socket ^TcpListener (get-in servers [name :socket])]               ;;; ^ServerSocket
        (when server-socket
          (alter-var-root #'servers dissoc name)
@@ -126,7 +136,7 @@
 (defn stop-servers
   "Stop all servers ignores all errors, and returns nil."
   []
-  (locking lock
+  (with-lock lock
     (doseq [name (keys servers)]
       (future (stop-server name)))))
 

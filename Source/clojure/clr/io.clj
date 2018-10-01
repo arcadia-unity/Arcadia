@@ -384,8 +384,8 @@
       (let [size (.Read input buffer 0 len)]
         (when (pos? size)
           (let [ cnt (.GetCharCount decoder buffer 0 size)
-                 ^|System.Char[]| chbuf (make-array Char cnt)]
-            (do (.GetChars decoder buffer 0 (int size) chbuf 0)
+                 chbuf (make-array Char cnt)]
+            (do (.GetChars decoder buffer 0 size chbuf 0)
                 (.Write output chbuf 0 cnt)
                 (recur))))))))
 
