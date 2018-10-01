@@ -168,7 +168,7 @@ See [`Arcadia/configuration.edn`](configuration.edn) for more details.
 
 ### Improving Startup Times
 
-Arcadia's startup time can be improved by clicking `Arcadia → Compiler → AOT Compile Internal Namespaces` menu item. You only need to do this once per project, and each time you update Arcadia from git.
+Arcadia's startup time can be improved by clicking `Arcadia → Build → Internal Namespaces` menu item. You only need to do this once per project, and each time you update Arcadia from git.
 
 This will compile all of Arcadia's internal namespaces (including Clojure's standard library) into `.clj.dll` files (containing MSIL bytecode) ahead of time. These files can be loaded faster than the `.clj` source code files we currently ship. Otherwise, internal namespaces are compiled every time [the VM is restarted](#vm-restarting), which can slow down your workflow considerably.
 
