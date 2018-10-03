@@ -60,34 +60,30 @@
   ([listener-group-key listener-key]
    (swap! state mu/dissoc-in [::listeners listener-group-key listener-key])))
 
-(defmacro ^:private run-listener-body [listener-group-key listener listener-form]
-  `(reduce-kv (fn [_# key# ~listener]
-                (try
-                  ~listener-form
-                  (catch Exception e#
-                    (Debug/Log
-                      (str "Exception encountered for " key#
-                           " in listener group " ~listener-group-key ":"))
-                    (Debug/Log e#)
-                    (Debug/Log
-                      (str "Removing listener " key#
-                           " in listener group " ~listener-group-key))
-                    (remove-listener ~listener-group-key key#)
-                    nil)))
-     nil
-     (get-in @state [::listeners ~listener-group-key])))
+(defn run-listeners-body [listener-group-key f]
+  (reduce-kv (fn [_ key listener]
+               (try
+                 (f listener)
+                 (catch Exception e
+                   (Debug/Log
+                     (str "Exception encountered for " key
+                          " in listener group " listener-group-key ":"))
+                   (Debug/Log e)
+                   (Debug/Log
+                     (str "Removing listener " key
+                          " in listener group " listener-group-key))
+                   (remove-listener listener-group-key key)
+                   nil)))
+    nil
+    (get-in @state [::listeners listener-group-key])))
 
 (defn run-listeners
-  ([listener-group-key]
-   (run-listener-body listener-group-key listener
-     (listener)))
+  ([listener-group-key]   
+   (run-listeners-body listener-group-key #(%)))
   ([listener-group-key data]
-   (run-listener-body listener-group-key listener
-     (listener data)))
+   (run-listeners-body listener-group-key #(% data)))
   ([listener-group-key data & args]
-   (let [args2 (cons data args)]
-     (run-listener-body listener-group-key listener
-       (apply listener args2)))))
+   (run-listeners-body listener-group-key #(apply % data args))))
 
 (defn listeners
   ([]
