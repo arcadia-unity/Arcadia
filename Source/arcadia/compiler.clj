@@ -169,7 +169,7 @@
    ;; will not do a deep walk over already-loaded namespaces. So
    ;; instead we rebind the *loaded-libs* var to a ref with an empty
    ;; set and call normal `require`, which gives the desired behavior.
-   (let [loaded-libs' (binding [*compiler-options* (get (arcadia.config/config) :compiler/options {})
+   (let [loaded-libs' (binding [*compiler-options* (get (arcadia.config/config) :compiler-options {})
                                 *compile-path* path
                                 *compile-files* true
                                 arcadia.compiler/*exporting?* true
