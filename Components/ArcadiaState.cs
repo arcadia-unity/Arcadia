@@ -66,9 +66,8 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 		if (varsInitialized)
 			return;
 
-		string literalsNs = "arcadia.literals";
-		Arcadia.Util.require(literalsNs);
-		Arcadia.Util.getVar(ref dataReaders, literalsNs, "*data-readers*");
+		Arcadia.Util.require("arcadia.literals"); // side-effects clojure.core/*data-readers*
+		Arcadia.Util.getVar(ref dataReaders, "clojure.core", "*data-readers*");
 
 		string stateHelpNs = "arcadia.internal.state-help";
 		Arcadia.Util.require(stateHelpNs);

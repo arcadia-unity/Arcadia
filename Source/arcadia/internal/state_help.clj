@@ -16,10 +16,7 @@
 (defn deserialize [^ArcadiaState as]
   (.BuildDatabaseAtom as true)
   (let [objdb (.objectDatabase as)]
-    (binding [arcadia.literals/*object-db* objdb
-              *data-readers* (if-not (empty? *data-readers*)
-                               (merge *data-readers* arcadia.literals/the-bucket)
-                               arcadia.literals/the-bucket)]
+    (binding [arcadia.literals/*object-db* objdb]
       (try
         (let [^JumpMap jm (.state as)]
           (.Clear jm)
