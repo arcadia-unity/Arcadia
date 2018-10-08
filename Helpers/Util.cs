@@ -150,6 +150,21 @@ namespace Arcadia
 			}
 			return obj;
 		}
+
+		// ==================================================================
+		// Timing
+
+		public static double NTiming (IFn f, int n)
+		{
+			var sw = new System.Diagnostics.Stopwatch();
+			sw.Start();
+			for (int i = 0; i < n; i++) {
+				f.invoke();
+			}
+			sw.Stop();
+			return sw.Elapsed.TotalMilliseconds / n;
+		}
+
 	}
 }
 #endif
