@@ -7,19 +7,16 @@ namespace Arcadia
 {
 	public class DefmutableDictionary
 	{
-		public Dictionary<clojure.lang.Keyword, System.Object> dict;
+		public Dictionary<object, object> dict;
 
 		public DefmutableDictionary ()
 		{
-			dict = new Dictionary<Keyword, object>();
+			dict = new Dictionary<object, object>();
 		}
 
-		public DefmutableDictionary (clojure.lang.IPersistentMap map)
+		public DefmutableDictionary (IDictionary<object,object> map)
 		{
-			dict = new Dictionary<Keyword, object>();
-			foreach (var entry in map) {
-				dict.Add((clojure.lang.Keyword)entry.key(), entry.val());
-			}
+			dict = new Dictionary<object, object>(map);
 		}
 
 		// not trying to implement clojure interfaces yet, this is all internal stuff
