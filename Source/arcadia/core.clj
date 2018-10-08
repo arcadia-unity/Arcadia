@@ -7,7 +7,7 @@
             [arcadia.internal.map-utils :as mu]
             [arcadia.internal.name-utils :refer [camels-to-hyphens]]
             [arcadia.internal.state-help :as sh]
-            arcadia.literals)
+            arcadia.data)
   (:import ArcadiaBehaviour
            ArcadiaBehaviour+IFnInfo
            ArcadiaState
@@ -1081,6 +1081,7 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
                                 `(case ~k
                                    ~@(mapcat
                                        (fn [field-kw, field]
+
                                          `[~field-kw (set! (. ~this-sym ~field) ~v)])
                                        field-kws
                                        fields)
@@ -1167,7 +1168,7 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
                  (quote ~fields))
                (defmethod concrete-field-kws (quote ~type-name) [_#]
                  ~(mapv clojurized-keyword fields))
-               (defmethod arcadia.literals/parse-user-type (quote ~type-name) [~dict-param]
+               (defmethod arcadia.data/parse-user-type (quote ~type-name) [~dict-param]
                  (mutable ~dict-param))
                ~(let [field-map (zipmap field-kws
                                   (map (fn [field] `(. ~this-sym ~field)) fields))]

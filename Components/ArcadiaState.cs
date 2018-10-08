@@ -66,7 +66,7 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 		if (varsInitialized)
 			return;
 
-		Arcadia.Util.require("arcadia.literals"); // side-effects clojure.core/*data-readers*
+		Arcadia.Util.require("arcadia.data"); // side-effects clojure.core/*data-readers*
 		Arcadia.Util.getVar(ref dataReaders, "clojure.core", "*data-readers*");
 
 		string stateHelpNs = "arcadia.internal.state-help";
@@ -104,8 +104,8 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 		Initialize();
 
 		if (prStr == null) prStr = (IFn)RT.var("clojure.core", "pr-str");
-		Arcadia.Util.require("arcadia.literals");
-		Namespace ArcadiaLiteralsNamespace = Namespace.findOrCreate(Symbol.intern("arcadia.literals"));
+		Arcadia.Util.require("arcadia.data");
+		Namespace ArcadiaLiteralsNamespace = Namespace.findOrCreate(Symbol.intern("arcadia.data"));
 		Var ObjectDbVar = Var.intern(ArcadiaLiteralsNamespace, Symbol.intern("*object-db*")).setDynamic();
 
 		InitializeOwnVars();

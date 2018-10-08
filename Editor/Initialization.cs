@@ -51,7 +51,7 @@ namespace Arcadia
 		{
 			// this has to happen here becasue the repl
 			// binds a thread local *data-readers*
-            Util.require("arcadia.literals");
+            Util.require("arcadia.data");
 		}
 
 		[MenuItem("Arcadia/Initialization/Rerun")]

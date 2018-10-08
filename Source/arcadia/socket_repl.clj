@@ -4,7 +4,7 @@
             [arcadia.config :as config]
             [clojure.main :as m]
             [arcadia.internal.state :as state]
-            arcadia.literals)
+            arcadia.data)
   (:import [System.Threading Thread]))
 
 ;; Think this sleaziness has to be a macro, for `set!`

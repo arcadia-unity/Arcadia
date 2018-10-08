@@ -1,5 +1,5 @@
 (ns arcadia.internal.state-help
-  (:require arcadia.literals
+  (:require arcadia.data
             ;; just for deserialized-var-form?, var-form->var
             [arcadia.internal.hook-help :as hh])
   (:import [UnityEngine Debug]
@@ -16,7 +16,7 @@
 (defn deserialize [^ArcadiaState as]
   (.BuildDatabaseAtom as true)
   (let [objdb (.objectDatabase as)]
-    (binding [arcadia.literals/*object-db* objdb]
+    (binding [arcadia.data/*object-db* objdb]
       (try
         (let [^JumpMap jm (.state as)]
           (.Clear jm)
@@ -25,8 +25,8 @@
         (catch Exception e
           (Debug/Log "Exception encountered in arcadia.internal.state-help/deserialize:")
           (Debug/Log e)
-          (Debug/Log "arcadia.literals/*object-db*:")
-          (Debug/Log arcadia.literals/*object-db*)
+          (Debug/Log "arcadia.data/*object-db*:")
+          (Debug/Log arcadia.data/*object-db*)
           (throw e))))))
 
 (defn initialize [^ArcadiaState as]

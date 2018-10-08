@@ -1,4 +1,4 @@
-(ns arcadia.literals
+(ns arcadia.data
   (:require [arcadia.internal.namespace])
   (:import [System.Reflection
             FieldInfo
@@ -127,7 +127,7 @@
   (let [type (.GetType obj)
         type-name (symbol (.FullName type))]
     (.Write stream
-            (str "#=(arcadia.literals/instance-from-values "
+            (str "#=(arcadia.data/instance-from-values "
                  type-name
                  " "
                  (field-values obj)
@@ -150,7 +150,7 @@
      (var clojure.core/*data-readers*)
      assoc
      (quote ~(symbol (str "unity/" (.Name type))))
-     (var ~(symbol (str "arcadia.literals/parse-" (.Name type))))))
+     (var ~(symbol (str "arcadia.data/parse-" (.Name type))))))
 
 
 (defmacro ^:private value-type-stuff []
@@ -184,7 +184,7 @@
 
 (defmethod print-dup
   UnityEngine.Object [^UnityEngine.Object v ^System.IO.TextWriter w]
-  (.Write w (str "#=(arcadia.literals/db-get " (.GetInstanceID v) ")")))
+  (.Write w (str "#=(arcadia.data/db-get " (.GetInstanceID v) ")")))
 
 (defmethod print-method
   UnityEngine.Object [^UnityEngine.Object v ^System.IO.TextWriter w]
@@ -195,7 +195,7 @@
      (var clojure.core/*data-readers*)
      assoc
      (quote ~(symbol (str "unity/" (.Name type))))
-     (var ~(symbol (str "arcadia.literals/parse-object")))))
+     (var ~(symbol (str "arcadia.data/parse-object")))))
 
 (defmacro ^:private object-type-stuff []
   (cons `do
@@ -241,7 +241,7 @@
     #'clojure.core/*data-readers*
     assoc
     'unity/AnimationCurve
-    #'arcadia.literals/parse-AnimationCurve))
+    #'arcadia.data/parse-AnimationCurve))
 
 ;; ============================================================
 ;; for defmutable:

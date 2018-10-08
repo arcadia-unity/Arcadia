@@ -262,7 +262,7 @@
 
 (def internal-namespaces
   '[arcadia.core arcadia.repl arcadia.packages arcadia.linear
-    arcadia.literals arcadia.config arcadia.compiler
+    arcadia.data arcadia.config arcadia.compiler
     arcadia.internal.tracker arcadia.internal.thread arcadia.internal.test
     arcadia.internal.state arcadia.internal.spec
     arcadia.internal.name-utils arcadia.internal.messages arcadia.internal.map-utils

@@ -1,5 +1,5 @@
 (ns arcadia.internal.hook-help
-  (:require arcadia.literals
+  (:require arcadia.data
             [clojure.spec.alpha :as s]
             [arcadia.internal.namespace :as ans])
   (:import [UnityEngine Debug]
