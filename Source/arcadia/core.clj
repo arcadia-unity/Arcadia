@@ -998,6 +998,9 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
              ~@processed-field-kvs)
           dict-sym))))
 
+(defmacro ^:private mdissoc [m & ks]  
+  `(-> ~m ~@(for [k ks] `(dissoc ~k))))
+
 (defmacro  ^{:arglists '([name [fields*]])}
   defmutable
   "Defines a new serializable, type-hinted, mutable datatype, intended
@@ -1111,51 +1114,55 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
                    ~@lookup-cases
                    (do ~ensure-internal-dictionary-form ;; macro
                        (.GetValue ~'defmutable-internal-dictionary key#))))
-               ;; System.ICloneable
-               ;; (Clone [_#]
-               ;;   (do ~ensure-internal-dictionary-form
-               ;;       (new ~type-name ~@fields (.Clone ~'defmutable-internal-dictionary))))
+               System.ICloneable
+               (Clone [_#]
+                 (do ~ensure-internal-dictionary-form
+                     (new ~type-name ~@fields (.Clone ~'defmutable-internal-dictionary))))
                ISnapshotable
                (snapshot [~this-sym]
-                 ~ensure-internal-dictionary-form
-                 {:arcadia.data/type (quote ~type-name)
-                  ::dictionary ~(snapshot-dictionary-form this-sym fields
-                                  element-snapshots-map default-element-snapshots)})
+                 (-> ~(snapshot-dictionary-form this-sym, fields, element-snapshots-map, default-element-snapshots)
+                     (assoc :arcadia.data/type (quote ~type-name))))
+
                IMutable
                ~@mut-impl
+               
                IIsMutable
                (mutable? [~this-sym] true)
+               
                ;; splice in any other protocol implementations, including overwrites for these defaults
                ~@protocol-impl-forms)
              ;; Overwrite the generated constructor
              ~(let [naked-fields (map #(vary-meta % dissoc :tag) fields)
-                    docs (str "Positional factory function for class " ~type-name)]
+                    docs (str "Positional factory function for class " type-name)]
                 `(defn ~ctr ~docs
                    ([~@naked-fields]
                     (new ~type-name ~@naked-fields (new Arcadia.DefmutableDictionary)))))
+             
              ;; like defrecord:
              ~(let [map-sym (gensym "data-map_")
                     field-vals (for [kw field-kws] `(get ~map-sym ~kw))]
                 `(defn ~(symbol (str "map->" name)) [~map-sym]
-                   (new ~type-name ~@field-vals (new Arcadia.DefmutableDictionary (dissoc ~map-sym ~@field-kws)))))
+                   (new ~type-name ~@field-vals
+                     (new Arcadia.DefmutableDictionary
+                       (mdissoc ~map-sym :arcadia.data/type ~@field-kws)))))
              
-             ;; serialize as dictionary
+             ;; convert from generic persistent map to mutable type instance
              (defmethod mutable (quote ~type-name) [~data-param]
-               ~(let [dict-sym  (gensym "dict_")
-                      field-vals (for [kw field-kws] `(get ~dict-sym ~kw))]
-                  `(let [~dict-sym (get ~data-param ::dictionary)]
-                     (new ~type-name ~@field-vals (new Arcadia.DefmutableDictionary (dissoc ~dict-sym ~@field-kws))))))
+               ~(let [field-vals (for [kw field-kws] `(get ~data-param ~kw))]
+                  `(let [dict# (new Arcadia.DefmutableDictionary
+                                 (mdissoc ~data-param :arcadia.data/type ~@field-kws))]
+                     (new ~type-name ~@field-vals dict#))))
 
              ;; register with our general deserialization
              (defmethod arcadia.data/parse-user-type (quote ~type-name) [~dict-param]
                (mutable ~dict-param))
+
+             ;; serialize via print-method
+             (defmethod print-method ~type-name [~this-sym ^System.IO.TextWriter stream#]
+               (.Write stream#
+                 (str "#arcadia.data/data " (pr-str (snapshot ~this-sym)))))
              
-             ~(let [field-map (zipmap field-kws
-                                (map (fn [field] `(. ~this-sym ~field)) fields))]
-                `(defmethod print-method ~type-name [~this-sym ^System.IO.TextWriter stream#]
-                   (.Write stream#
-                     (str "#arcadia.data/data " (pr-str (snapshot ~this-sym))))))
-             ~name)))))
+             ~type-name)))))
 
 (defmacro defmutable-once
   "Like `defmutable`, but will only evaluate if no type with the same name has been defined."
