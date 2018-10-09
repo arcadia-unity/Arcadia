@@ -908,11 +908,7 @@ Note that generating vars is usually a bad idea because it messes with
 
 ;; the symbol
 (defn mutable-dispatch [{t :arcadia.data/type}]
-  (cond (instance? System.Type t) (symbol (pr-str t))
-        (symbol? t) t
-        :else (throw
-                (Exception.
-                  (str "Expects type or symbol, instead got instance of " (class t))))))
+  t)
 
 ;; constructor (no instance), so this has to be a multimethod
 ;; if we're sticking to clojure stuff
