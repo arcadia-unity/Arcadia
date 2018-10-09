@@ -921,6 +921,16 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
 (= (snapshot x) (snapshot (mutable (snapshot x))))"
   #'mutable-dispatch)
 
+;; This is here to avoid the very wasteful overhead of `satisfies?`.
+;; It's up to implementers to ensure that this will only return `true`
+;; for types that satisfy `IMutable`.
+(defprotocol IIsMutable
+  (mutable? [_]))
+
+(extend-protocol IIsMutable
+  System.Object
+  (mutable? [_] false))
+
 (defprotocol IMutable
   (mut!
     [_]
@@ -941,12 +951,7 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
     [_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _]
     [_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _]
     [_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _]
-    [_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _])
-  (mutable? [_]))
-
-(extend-protocol IMutable
-  System.Object
-  (mutable? [_] false))
+    [_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _]))
 
 (defn- expand-type-sym [type-sym]
   (symbol
@@ -1094,60 +1099,63 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
                                       (for [{:keys [name args body]} method-impls]
                                         (list* name args body)))))]
         `(do (declare ~ctr)
-             (let [t# (deftype ~name ~(-> (->> fields (mapv #(vary-meta % assoc :unsynchronized-mutable true)))
-                                          (conj
-                                            (with-meta
-                                              'defmutable-internal-dictionary
-                                              {:unsynchronized-mutable true,
-                                               :tag 'Arcadia.DefmutableDictionary})))
-                        clojure.lang.ILookup
-                        (valAt [this#, key#]
-                          (case key#
-                            ~@lookup-cases
-                            (do ~ensure-internal-dictionary-form ;; macro
-                                (.GetValue ~'defmutable-internal-dictionary key#))))
-                        System.ICloneable
-                        (Clone [_#]
-                          (do ~ensure-internal-dictionary-form
-                              (~ctr ~@fields (.Clone ~'defmutable-internal-dictionary))))
-                        ISnapshotable
-                        (snapshot [~this-sym]
-                          ~ensure-internal-dictionary-form
-                          {:arcadia.data/type (quote ~type-name)
-                           ::dictionary ~(snapshot-dictionary-form this-sym fields
-                                           element-snapshots-map default-element-snapshots)})
-                        IMutable
-                        ~@mut-impl
-                        (mutable? [~this-sym] true)
-                        ;; splice in any other protocol implementations, including overwrites for these defaults
-                        ~@protocol-impl-forms)]
-               ;; add an arity to the generated constructor
-               ~(let [naked-fields (map #(vary-meta % dissoc :tag) fields)]
-                  `(let [prev-fn# (var-get (var ~ctr))]
-                     (defn ~ctr
-                       ([~@naked-fields]
-                        (~ctr ~@naked-fields (new Arcadia.DefmutableDictionary)))
-                       ([~@naked-fields dict#]
-                        (prev-fn# ~@naked-fields dict#)))))
-               ;; like defrecord:
-               ~(let [map-sym (gensym "data-map_")
-                      field-vals (for [kw field-kws] `(get ~map-sym ~kw))]
-                  `(defn ~(symbol (str "map->" name)) [~map-sym]
-                     (~ctr ~@field-vals (new Arcadia.DefmutableDictionary (dissoc ~map-sym ~@field-kws)))))
-               ;; serialize as dictionary
-               (defmethod mutable (quote ~type-name) [~data-param]
-                 ~(let [dict-sym  (gensym "dict_")
-                        field-vals (for [kw field-kws] `(get ~dict-sym ~kw))]
-                    `(let [~dict-sym (get ~data-param ::dictionary)]
-                       (~ctr ~@field-vals (new Arcadia.DefmutableDictionary (dissoc ~dict-sym ~@field-kws))))))
-               (defmethod arcadia.data/parse-user-type (quote ~type-name) [~dict-param]
-                 (mutable ~dict-param))
-               ~(let [field-map (zipmap field-kws
-                                  (map (fn [field] `(. ~this-sym ~field)) fields))]
-                 `(defmethod print-method ~type-name [~this-sym ^System.IO.TextWriter stream#]
-                    (.Write stream#
-                      (str "#arcadia.data/data " (pr-str (snapshot ~this-sym))))))
-               t#))))))
+             (deftype ~name ~(-> (->> fields (mapv #(vary-meta % assoc :unsynchronized-mutable true)))
+                                 (conj
+                                   (with-meta
+                                     'defmutable-internal-dictionary
+                                     {:unsynchronized-mutable true,
+                                      :tag 'Arcadia.DefmutableDictionary})))
+               clojure.lang.ILookup
+               (valAt [this#, key#]
+                 (case key#
+                   ~@lookup-cases
+                   (do ~ensure-internal-dictionary-form ;; macro
+                       (.GetValue ~'defmutable-internal-dictionary key#))))
+               ;; System.ICloneable
+               ;; (Clone [_#]
+               ;;   (do ~ensure-internal-dictionary-form
+               ;;       (new ~type-name ~@fields (.Clone ~'defmutable-internal-dictionary))))
+               ISnapshotable
+               (snapshot [~this-sym]
+                 ~ensure-internal-dictionary-form
+                 {:arcadia.data/type (quote ~type-name)
+                  ::dictionary ~(snapshot-dictionary-form this-sym fields
+                                  element-snapshots-map default-element-snapshots)})
+               IMutable
+               ~@mut-impl
+               IIsMutable
+               (mutable? [~this-sym] true)
+               ;; splice in any other protocol implementations, including overwrites for these defaults
+               ~@protocol-impl-forms)
+             ;; Overwrite the generated constructor
+             ~(let [naked-fields (map #(vary-meta % dissoc :tag) fields)
+                    docs (str "Positional factory function for class " ~type-name)]
+                `(defn ~ctr ~docs
+                   ([~@naked-fields]
+                    (new ~type-name ~@naked-fields (new Arcadia.DefmutableDictionary)))))
+             ;; like defrecord:
+             ~(let [map-sym (gensym "data-map_")
+                    field-vals (for [kw field-kws] `(get ~map-sym ~kw))]
+                `(defn ~(symbol (str "map->" name)) [~map-sym]
+                   (new ~type-name ~@field-vals (new Arcadia.DefmutableDictionary (dissoc ~map-sym ~@field-kws)))))
+             
+             ;; serialize as dictionary
+             (defmethod mutable (quote ~type-name) [~data-param]
+               ~(let [dict-sym  (gensym "dict_")
+                      field-vals (for [kw field-kws] `(get ~dict-sym ~kw))]
+                  `(let [~dict-sym (get ~data-param ::dictionary)]
+                     (new ~type-name ~@field-vals (new Arcadia.DefmutableDictionary (dissoc ~dict-sym ~@field-kws))))))
+
+             ;; register with our general deserialization
+             (defmethod arcadia.data/parse-user-type (quote ~type-name) [~dict-param]
+               (mutable ~dict-param))
+             
+             ~(let [field-map (zipmap field-kws
+                                (map (fn [field] `(. ~this-sym ~field)) fields))]
+                `(defmethod print-method ~type-name [~this-sym ^System.IO.TextWriter stream#]
+                   (.Write stream#
+                     (str "#arcadia.data/data " (pr-str (snapshot ~this-sym))))))
+             ~name)))))
 
 (defmacro defmutable-once
   "Like `defmutable`, but will only evaluate if no type with the same name has been defined."
