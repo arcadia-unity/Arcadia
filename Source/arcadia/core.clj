@@ -992,32 +992,6 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
              ~@processed-field-kvs)
           dict-sym))))
 
-;; takes a symbol representing a type
-;; (defmulti concrete-fields identity)
-
-;; (defmulti concrete-field-kws identity)
-
-;; (defn dynamic-element-map [type-symbol element-map]
-;;   (apply dissoc element-map (concrete-field-kws type-symbol)))
-
-;; (defn dynamic-element-dict [type-symbol element-map]
-;;   (new Arcadia.DefmutableDictionary
-;;     (dynamic-element-map type-symbol element-map)))
-
-;; (defn field-snapshot-forms [this-sym fields element-snapshots-map default-element-snapshots]
-;;   (for [field fields]
-;;     (if-let [[_ {[arg-sym] :args
-;;                  body :body}] (find element-snapshots-map field)]
-;;       `(let [~arg-sym (cond
-;;                         (symbol? field) field
-;;                         (keyword? field) `(valAt ~this-sym field)
-;;                         :else (throw (Exception. "Field must be keyword or symbol")))]
-;;          ~@body)
-;;       (if-let [[[this-sym-2 ]] default-element-snapshots]))))
-
-;; note: there are 2 serialization formats for defmutable currently,
-;; snapshot and what it prints as. one of those *could* preserve reference
-;; information, maybe? risk of contradictory data though
 (defmacro  ^{:arglists '([name [fields*]])}
   defmutable
   "Defines a new serializable, type-hinted, mutable datatype, intended
@@ -1164,10 +1138,6 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
                         field-vals (for [kw field-kws] `(get ~dict-sym ~kw))]
                     `(let [~dict-sym (get ~data-param ::dictionary)]
                        (~ctr ~@field-vals (new Arcadia.DefmutableDictionary (dissoc ~dict-sym ~@field-kws))))))
-               ;; (defmethod concrete-fields (quote ~type-name) [_#]
-               ;;   (quote ~fields))
-               ;; (defmethod concrete-field-kws (quote ~type-name) [_#]
-               ;;   ~(mapv clojurized-keyword fields))
                (defmethod arcadia.data/parse-user-type (quote ~type-name) [~dict-param]
                  (mutable ~dict-param))
                ~(let [field-map (zipmap field-kws
