@@ -945,7 +945,12 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
     [_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _]
     [_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _]
     [_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _]
-    [_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _]))
+    [_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _])
+  (mutable? [_]))
+
+(extend-protocol IMutable
+  System.Object
+  (mutable? [_] false))
 
 (defn- expand-type-sym [type-sym]
   (symbol
@@ -1117,6 +1122,7 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
                                            element-snapshots-map default-element-snapshots)})
                         IMutable
                         ~@mut-impl
+                        (mutable? [~this-sym] true)
                         ;; splice in any other protocol implementations, including overwrites for these defaults
                         ~@protocol-impl-forms)]
                ;; add an arity to the generated constructor
