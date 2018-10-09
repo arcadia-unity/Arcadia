@@ -9,6 +9,7 @@
 **/Export.meta
 **/Export/*.dll*
 Source/clojure/**/*.meta
+Source/**/*.clj.meta
 
 # =============== #
 # Unity generated #
