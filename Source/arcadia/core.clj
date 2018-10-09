@@ -907,7 +907,7 @@ Note that generating vars is usually a bad idea because it messes with
     :more-opts ::more-opts))
 
 ;; the symbol
-(defn mutable-dispatch [{t ::mutable-type}]
+(defn mutable-dispatch [{t :arcadia.data/type}]
   (cond (instance? System.Type t) (symbol (pr-str t))
         (symbol? t) t
         :else (throw
@@ -993,16 +993,16 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
           dict-sym))))
 
 ;; takes a symbol representing a type
-(defmulti concrete-fields identity)
+;; (defmulti concrete-fields identity)
 
-(defmulti concrete-field-kws identity)
+;; (defmulti concrete-field-kws identity)
 
-(defn dynamic-element-map [type-symbol element-map]
-  (apply dissoc element-map (concrete-field-kws type-symbol)))
+;; (defn dynamic-element-map [type-symbol element-map]
+;;   (apply dissoc element-map (concrete-field-kws type-symbol)))
 
-(defn dynamic-element-dict [type-symbol element-map]
-  (new Arcadia.DefmutableDictionary
-    (dynamic-element-map type-symbol element-map)))
+;; (defn dynamic-element-dict [type-symbol element-map]
+;;   (new Arcadia.DefmutableDictionary
+;;     (dynamic-element-map type-symbol element-map)))
 
 ;; (defn field-snapshot-forms [this-sym fields element-snapshots-map default-element-snapshots]
 ;;   (for [field fields]
@@ -1138,7 +1138,7 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
                         ISnapshotable
                         (snapshot [~this-sym]
                           ~ensure-internal-dictionary-form
-                          {::mutable-type (quote ~type-name)
+                          {:arcadia.data/type (quote ~type-name)
                            ::dictionary ~(snapshot-dictionary-form this-sym fields
                                            element-snapshots-map default-element-snapshots)})
                         IMutable
@@ -1164,17 +1164,17 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
                         field-vals (for [kw field-kws] `(get ~dict-sym ~kw))]
                     `(let [~dict-sym (get ~data-param ::dictionary)]
                        (~ctr ~@field-vals (new Arcadia.DefmutableDictionary (dissoc ~dict-sym ~@field-kws))))))
-               (defmethod concrete-fields (quote ~type-name) [_#]
-                 (quote ~fields))
-               (defmethod concrete-field-kws (quote ~type-name) [_#]
-                 ~(mapv clojurized-keyword fields))
+               ;; (defmethod concrete-fields (quote ~type-name) [_#]
+               ;;   (quote ~fields))
+               ;; (defmethod concrete-field-kws (quote ~type-name) [_#]
+               ;;   ~(mapv clojurized-keyword fields))
                (defmethod arcadia.data/parse-user-type (quote ~type-name) [~dict-param]
                  (mutable ~dict-param))
                ~(let [field-map (zipmap field-kws
                                   (map (fn [field] `(. ~this-sym ~field)) fields))]
                  `(defmethod print-method ~type-name [~this-sym ^System.IO.TextWriter stream#]
                     (.Write stream#
-                      (str "#arcadia.core/mutable " (pr-str (snapshot ~this-sym))))))
+                      (str "#arcadia.data/data " (pr-str (snapshot ~this-sym))))))
                t#))))))
 
 (defmacro defmutable-once

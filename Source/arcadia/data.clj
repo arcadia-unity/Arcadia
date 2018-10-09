@@ -246,8 +246,8 @@
 ;; ============================================================
 ;; for defmutable:
 
-(defn- parse-user-type-dispatch [{:keys [:arcadia.core/mutable-type]}]
-  mutable-type)
+(defn- parse-user-type-dispatch [{:keys [::type]}]
+  type)
 
 (defmulti parse-user-type
   "This multimethod should be considered an internal, unstable
@@ -257,9 +257,9 @@
 ;; ugh
 ;; so maybe the type and its parser haven't been loaded yet because
 ;; their namespace hasn't, yknow
-(def seen-user-type-names (atom #{}))
+(defonce seen-user-type-names (atom #{}))
 
-(defmethod parse-user-type :default [{t :arcadia.core/mutable-type
+(defmethod parse-user-type :default [{t ::type
                                       :as spec}]
   (if (contains? @seen-user-type-names t)
     (throw (Exception. (str "Already seen type " t ", something's wrong.")))
@@ -272,7 +272,7 @@
           (arcadia.internal.namespace/quickquire ns-name)
           (parse-user-type spec)))))
 
-(alter-var-root #'clojure.core/*data-readers* assoc 'arcadia.core/mutable #'parse-user-type)
+(alter-var-root #'clojure.core/*data-readers* assoc 'arcadia.data/data #'parse-user-type)
 
 ;; and we also have to do this, for the repl:
 (when (.getThreadBinding ^clojure.lang.Var #'clojure.core/*data-readers*)
