@@ -873,21 +873,20 @@ Note that generating vars is usually a bad idea because it messes with
                         :args vector?
                         :body (s/* any?))))))
 
-(s/def ::element-snapshots-impl
+(s/def ::element-process
   (s/cat
     :args (s/and vector? #(= 3 (count %)))
     :body (s/* any?)))
 
 (s/def ::element-snapshots-map
-  (s/map-of
-    #(or (symbol? %) (keyword? %))
-    ::element-snapshots-impl))
+  (s/map-of keyword? ::element-process))
 
-(s/def ::default-element-snapshots
-  (s/spec
-    (s/cat
-      :args (s/and vector? #(= 3 (count %)))
-      :body (s/* any?))))
+(s/def ::default-element-snapshots ::element-process)
+
+(s/def ::element-to-mutable
+  (s/map-of keyword? ::element-process))
+
+(s/def ::default-element-to-mutable ::element-process)
 
 (s/def ::defmutable-args
   (s/cat
@@ -896,7 +895,9 @@ Note that generating vars is usually a bad idea because it messes with
     :protocol-impls (s/* ::protocol-impl)
     :more-opts (s/keys*
                  :opt-un [::default-element-snapshots
-                          ::element-snapshots-map])))
+                          ::element-snapshots-map
+                          ::element-to-mutable
+                          ::default-element-to-mutable])))
 
 ;; the symbol
 (defn mutable-dispatch [{t :arcadia.data/type}]
@@ -953,25 +954,32 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
       "."
       (name type-sym))))
 
-;; TODO actually pass the right map in
+(defmacro ^:private mdissoc [m & ks]  
+  `(-> ~m ~@(for [k ks] `(dissoc ~k))))
+
+(defmacro ^:private massoc [m & ks]
+  `(-> ~m ~@(for [k ks] `(assoc ~k))))
+
+(defn- apply-user-form [user-form tkv]
+  (let [{:keys [args body]} user-form]
+    `(let ~(vec (interleave args tkv))
+       ~@body)))
+
 (defn- snapshot-dictionary-form [{:keys [this-sym fields field-kws type-name],
                                   {:keys [default-element-snapshots
                                           element-snapshots-map]} :more-opts}]
-  (let [apply-user-form (fn apply-user-form [user-form tkv]
-                          (let [{:keys [args body]} user-form]
-                            `(let ~(vec (interleave args tkv))
-                               ~@body))) ;; apply this later
-        k-sym (gensym "k_")
+  (let [k-sym (gensym "k_")
         v-sym (gensym "v_")
         tkv [this-sym k-sym v-sym]
         els (->> (interleave field-kws fields)
                  (partition 2)
                  (reduce (fn [acc [k v]]
-                           (let [m (if default-element-snapshots
-                                     {:k k,
-                                      :field v,
-                                      :body default-element-snapshots})]
-                             (assoc acc k {:k k :field v})))
+                           (assoc acc k
+                             (if default-element-snapshots
+                               {:k k,
+                                :field v,
+                                :body default-element-snapshots}
+                               {:k k :field v})))
                    {}))
         els (reduce-kv (fn [acc k body]
                          (update acc k (fnil assoc {:k k}) :body body))
@@ -1014,8 +1022,52 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
                ~@(apply concat maybe-processed-field-kvs)
                :arcadia.data/type (quote ~type-name)))))))
 
-(defmacro ^:private mdissoc [m & ks]  
-  `(-> ~m ~@(for [k ks] `(dissoc ~k))))
+(defn- mutable-impl-form [{:keys [fields field-kws type-name data-param]
+                           {:keys [element-to-mutable
+                                   default-element-to-mutable]} :more-opts}]
+  (let [k-sym (gensym "k_")
+        v-sym (gensym "v_")
+        els (reduce (fn [acc k]
+                      (assoc acc k
+                        (if default-element-to-mutable
+                          {:k k, :is-field true, :body default-element-to-mutable}
+                          {:k k, :is-field true})))
+              {}
+              field-kws)
+        els (reduce-kv (fn [acc k body]
+                         (update acc k (fnil assoc {:k k}) :body body))
+              els
+              element-to-mutable)
+        has-dynamic-element-process (boolean
+                                      (or default-element-to-mutable
+                                          (some #(and (:body %) (not (:is-field %))) (vals els))))
+        processed-field-vals (->> (map els field-kws)
+                                  (map (fn [{:keys [k body]}]
+                                         (if body
+                                           (apply-user-form body [data-param k `(get ~data-param ~k)])
+                                           `(get ~data-param ~k)))))
+        dict-form (if has-dynamic-element-process
+                    (let [element-cases (apply concat
+                                          (for [{:keys [k is-field body]} els
+                                                :when (and body (not is-field))]
+                                            [k (apply-user-form body [data-param k-sym v-sym])]))]
+                      `(new Arcadia.DefmutableDictionary ;; can make a constructor that takes arrays instead for more speed
+                         (persistent!
+                           (reduce-kv
+                             (fn ~(gensym "dynamic-element-process_") [acc# ~k-sym ~v-sym]
+                               (if (~(conj (set field-kws) :arcadia.data/type) ~k-sym)
+                                 acc#
+                                 (assoc! acc# ~k-sym
+                                   (case ~k-sym
+                                     ~@element-cases
+                                     ~(if default-element-to-mutable
+                                        (apply-user-form default-element-to-mutable [data-param k-sym v-sym])
+                                        v-sym)))))
+                             (transient {})
+                             ~data-param))))
+                    `(new Arcadia.DefmutableDictionary))]
+    `(new ~type-name ~@processed-field-vals ~dict-form)))
+
 
 (defmacro  ^{:arglists '([name [fields*]])}
   defmutable
@@ -1112,8 +1164,7 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
                                     (cons protocol-name
                                       (for [{:keys [name args body]} method-impls]
                                         (list* name args body)))))]
-        `(do (declare ~ctr)
-             (deftype ~name ~(-> (->> fields (mapv #(vary-meta % assoc :unsynchronized-mutable true)))
+        `(do (deftype ~name ~(-> (->> fields (mapv #(vary-meta % assoc :unsynchronized-mutable true)))
                                  (conj
                                    (with-meta
                                      'defmutable-internal-dictionary
@@ -1133,10 +1184,7 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
                
                ISnapshotable
                (snapshot [~this-sym]
-                 (-> ~(snapshot-dictionary-form (mu/lit-assoc parse field-kws type-name this-sym)
-                        ;; this-sym, fields, element-snapshots-map, default-element-snapshots
-                        )
-                     (assoc :arcadia.data/type (quote ~type-name))))
+                 ~(snapshot-dictionary-form (mu/lit-assoc parse field-kws type-name this-sym)))
 
                IMutable
                ~@mut-impl
@@ -1164,10 +1212,12 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
              
              ;; convert from generic persistent map to mutable type instance
              (defmethod mutable (quote ~type-name) [~data-param]
-               ~(let [field-vals (for [kw field-kws] `(get ~data-param ~kw))]
-                  `(let [dict# (new Arcadia.DefmutableDictionary
-                                 (mdissoc ~data-param :arcadia.data/type ~@field-kws))]
-                     (new ~type-name ~@field-vals dict#))))
+               ~(mutable-impl-form (mu/lit-assoc parse field-kws type-name data-param))
+               ;; ~(let [field-vals (for [kw field-kws] `(get ~data-param ~kw))]
+               ;;    `(let [dict# (new Arcadia.DefmutableDictionary
+               ;;                   (mdissoc ~data-param :arcadia.data/type ~@field-kws))]
+               ;;       (new ~type-name ~@field-vals dict#)))
+               )
 
              ;; register with our general deserialization
              (defmethod arcadia.data/parse-user-type (quote ~type-name) [~dict-param]
