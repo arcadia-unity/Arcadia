@@ -9,6 +9,10 @@ namespace Arcadia
 	{
 		public Dictionary<object, object> dict;
 
+		public int Count { 
+			get { return dict.Count; }
+		}
+
 		public DefmutableDictionary ()
 		{
 			dict = new Dictionary<object, object>();
@@ -41,6 +45,8 @@ namespace Arcadia
 		{
 			return dict.Remove(kw);
 		}
+
+
 
 		public clojure.lang.IPersistentMap ToPersistentMap ()
 		{

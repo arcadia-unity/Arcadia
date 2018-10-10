@@ -875,7 +875,7 @@ Note that generating vars is usually a bad idea because it messes with
 
 (s/def ::element-snapshots-impl
   (s/cat
-    :args (s/and vector? #(= 2 (count %)))
+    :args (s/and vector? #(= 3 (count %)))
     :body (s/* any?)))
 
 (s/def ::element-snapshots-map
@@ -883,28 +883,20 @@ Note that generating vars is usually a bad idea because it messes with
     #(or (symbol? %) (keyword? %))
     ::element-snapshots-impl))
 
-(s/def ::default-element-snapshots-impl
+(s/def ::default-element-snapshots
   (s/spec
     (s/cat
       :args (s/and vector? #(= 3 (count %)))
       :body (s/* any?))))
-
-(s/def ::more-opts
-  (s/*
-    (s/alt
-      :element-snapshots-map (s/cat
-                               :key #{:element-snapshots}
-                               :element-snapshots ::element-snapshots-map)
-      :default-element-snapshots (s/cat
-                                   :key #{:default-element-snapshots}
-                                   :default-element-snapshots-impl ::default-element-snapshots-impl))))
 
 (s/def ::defmutable-args
   (s/cat
     :name symbol?
     :fields (s/coll-of symbol?, :kind vector?)
     :protocol-impls (s/* ::protocol-impl)
-    :more-opts ::more-opts))
+    :more-opts (s/keys*
+                 :opt-un [::default-element-snapshots
+                          ::element-snapshots-map])))
 
 ;; the symbol
 (defn mutable-dispatch [{t :arcadia.data/type}]
@@ -961,42 +953,66 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
       "."
       (name type-sym))))
 
-(defn- snapshot-dictionary-form [this-sym fields element-snapshots-map default-element-snapshots]
-  (let [dict-sym (gensym "dictionary_")
-        key-sym (gensym "key_")
-        val-sym (gensym "val_")
-        this-sym-2 (gensym "this_")
-        process-element-sym (gensym "process-element_")
-        processed-field-kvs (apply concat
-                              (for [field fields
-                                    :let [cljf (clojurized-keyword field)]]
-                                [cljf `(~process-element-sym
-                                        ~this-sym
-                                        ~cljf
-                                        ~field)]))]
-    `(let [~process-element-sym  (fn [~this-sym-2 ~key-sym ~val-sym] ; this function will be handed off to 
-                                   (case ~key-sym ; .ToPersistentMap on the internal dictionary
-                                     ~@(apply concat
-                                         (for [[k, {[this-sym-3 val-sym-2] :args,
-                                                    body :body}] element-snapshots-map]
-                                           (let [rform `(let [~this-sym-3 ~this-sym-2
-                                                              ~val-sym-2 ~val-sym]
-                                                          ~@body)
-                                                 k2 (if (keyword? k) k (clojurized-keyword k))]
-                                             [k2 rform])))
-                                     ~(if default-element-snapshots
-                                        (let [{[this-sym-3 key-sym-2 val-sym-2] :args
-                                               body :body} default-element-snapshots]
-                                          `(let [~this-sym-3 ~this-sym-2
-                                                 ~key-sym-2 ~key-sym
-                                                 ~val-sym-2 ~val-sym]
-                                             ~@body))
-                                        val-sym)))
-           ~dict-sym (.ToPersistentMap ~'defmutable-internal-dictionary ~this-sym ~process-element-sym)]       
-       ~(if (seq fields)
-          `(assoc ~dict-sym
-             ~@processed-field-kvs)
-          dict-sym))))
+;; TODO actually pass the right map in
+(defn- snapshot-dictionary-form [{:keys [this-sym fields field-kws type-name],
+                                  {:keys [default-element-snapshots
+                                          element-snapshots-map]} :more-opts}]
+  (let [apply-user-form (fn apply-user-form [user-form tkv]
+                          (let [{:keys [args body]} user-form]
+                            `(let ~(vec (interleave args tkv))
+                               ~@body))) ;; apply this later
+        k-sym (gensym "k_")
+        v-sym (gensym "v_")
+        tkv [this-sym k-sym v-sym]
+        els (->> (interleave field-kws fields)
+                 (partition 2)
+                 (reduce (fn [acc [k v]]
+                           (let [m (if default-element-snapshots
+                                     {:k k,
+                                      :field v,
+                                      :body default-element-snapshots})]
+                             (assoc acc k {:k k :field v})))
+                   {}))
+        els (reduce-kv (fn [acc k body]
+                         (update acc k (fnil assoc {:k k}) :body body))
+              els
+              element-snapshots-map)
+        els (mu/map-vals els
+              (fn [rec]
+                (if (and (:field rec) (:body rec))
+                  (assoc rec :sym (gensym (str (name (:k rec)) "_")))
+                  rec)))
+        has-dynamic-element-process (boolean
+                                      (or default-element-snapshots
+                                          (some #(and (:body %) (not (:field %))) (vals els))))
+        processed-field-bindings (apply concat
+                                   (for [{:keys [body field sym k]} (vals els)
+                                         :when sym]
+                                     [sym (apply-user-form body [this-sym k field])]))
+        dynamic-element-process-sym (gensym "dynamic-element-process_")
+        dynamic-element-process (when has-dynamic-element-process
+                                  (let [element-cases (apply concat
+                                                        (for [{:keys [k body field]} (vals els)
+                                                              :when (and body (not field))]
+                                                          [k (apply-user-form body tkv)]))]
+                                    `(fn ~dynamic-element-process-sym ~tkv
+                                       (case ~k-sym ~@element-cases
+                                         ~(if default-element-snapshots
+                                            (apply-user-form default-element-snapshots tkv)
+                                            v-sym)))))
+        maybe-processed-dict-map (if has-dynamic-element-process
+                                   `(.ToPersistentMap ~'defmutable-internal-dictionary ~this-sym ~dynamic-element-process)
+                                   `(.ToPersistentMap ~'defmutable-internal-dictionary))
+        maybe-processed-field-kvs (-> (select-keys els field-kws)
+                                      (mu/filter-vals :field)
+                                      (mu/map-vals #(or (:sym %) (:field %))))]
+    `(let [~@processed-field-bindings]
+       (if (zero? (.Count ~'defmutable-internal-dictionary))
+         ~(-> maybe-processed-field-kvs (assoc :arcadia.data/type `(quote ~type-name)))
+         (-> ~maybe-processed-dict-map
+             (massoc
+               ~@(apply concat maybe-processed-field-kvs)
+               :arcadia.data/type (quote ~type-name)))))))
 
 (defmacro ^:private mdissoc [m & ks]  
   `(-> ~m ~@(for [k ks] `(dissoc ~k))))
@@ -1048,18 +1064,14 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
                     (with-out-str (clojure.spec.alpha/explain ::defmutable-args args)))))
       (let [{:keys [name fields protocol-impls more-opts]} parse
             {{element-snapshots-map :element-snapshots} :element-snapshots-map
-             default-element-snapshots :default-element-snapshots} (into {} more-opts)
+             default-element-snapshots :default-element-snapshots} more-opts
             type-name (expand-type-sym name)
             param-sym (-> (gensym (str name "_"))
                           (with-meta {:tag type-name}))
             field-kws (map clojurized-keyword fields)
             datavec [type-name (zipmap field-kws fields)]
             dict-param (gensym "dict_")
-            data-param (gensym "data_")
-            ensure-internal-dictionary-form `(when (nil? ~'defmutable-internal-dictionary)
-                                               (set! ~'defmutable-internal-dictionary
-                                                 (new Arcadia.DefmutableDictionary)))
-            
+            data-param (gensym "data_")            
             mut-cases-form-fn (fn [this-sym [k v]]
                                 `(case ~k
                                    ~@(mapcat
@@ -1068,8 +1080,7 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
                                          `[~field-kw (set! (. ~this-sym ~field) ~v)])
                                        field-kws
                                        fields)
-                                   (do ~ensure-internal-dictionary-form
-                                       (.Add ~'defmutable-internal-dictionary ~k ~v))))
+                                   (.Add ~'defmutable-internal-dictionary ~k ~v)))
             even-args-mut-impl (fn [[_ args]]
                                 `(mut! ~args (throw (Exception. "requires odd number of arguments"))))
             mut-impl (mac/arities-forms
@@ -1108,29 +1119,34 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
                                      'defmutable-internal-dictionary
                                      {:unsynchronized-mutable true,
                                       :tag 'Arcadia.DefmutableDictionary})))
+               
                clojure.lang.ILookup
                (valAt [this#, key#]
                  (case key#
                    ~@lookup-cases
-                   (do ~ensure-internal-dictionary-form ;; macro
-                       (.GetValue ~'defmutable-internal-dictionary key#))))
-               System.ICloneable
-               (Clone [_#]
-                 (do ~ensure-internal-dictionary-form
-                     (new ~type-name ~@fields (.Clone ~'defmutable-internal-dictionary))))
+                   (.GetValue ~'defmutable-internal-dictionary key#)))
+               
+               ;; System.ICloneable
+               ;; (Clone [_#]
+               ;;   (do ~ensure-internal-dictionary-form
+               ;;       (new ~type-name ~@fields (.Clone ~'defmutable-internal-dictionary))))
+               
                ISnapshotable
                (snapshot [~this-sym]
-                 (-> ~(snapshot-dictionary-form this-sym, fields, element-snapshots-map, default-element-snapshots)
+                 (-> ~(snapshot-dictionary-form (mu/lit-assoc parse field-kws type-name this-sym)
+                        ;; this-sym, fields, element-snapshots-map, default-element-snapshots
+                        )
                      (assoc :arcadia.data/type (quote ~type-name))))
 
                IMutable
                ~@mut-impl
                
                IIsMutable
-               (mutable? [~this-sym] true)
-               
+               (mutable? [~this-sym] true)               
                ;; splice in any other protocol implementations, including overwrites for these defaults
+               
                ~@protocol-impl-forms)
+             
              ;; Overwrite the generated constructor
              ~(let [naked-fields (map #(vary-meta % dissoc :tag) fields)
                     docs (str "Positional factory function for class " type-name)]
