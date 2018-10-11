@@ -878,15 +878,15 @@ Note that generating vars is usually a bad idea because it messes with
     :args (s/and vector? #(= 3 (count %)))
     :body (s/* any?)))
 
-(s/def ::element-snapshots-map
+(s/def ::snapshot-elements
   (s/map-of keyword? ::element-process))
 
-(s/def ::default-element-snapshots ::element-process)
+(s/def ::snapshot ::element-process)
 
-(s/def ::element-to-mutable
+(s/def ::mutable-elements
   (s/map-of keyword? ::element-process))
 
-(s/def ::default-element-to-mutable ::element-process)
+(s/def ::mutable ::element-process)
 
 (s/def ::defmutable-args
   (s/cat
@@ -894,10 +894,10 @@ Note that generating vars is usually a bad idea because it messes with
     :fields (s/coll-of symbol?, :kind vector?)
     :protocol-impls (s/* ::protocol-impl)
     :more-opts (s/keys*
-                 :opt-un [::default-element-snapshots
-                          ::element-snapshots-map
-                          ::element-to-mutable
-                          ::default-element-to-mutable])))
+                 :opt-un [::snapshot
+                          ::snapshot-elements
+                          ::mutable-elements
+                          ::mutable])))
 
 ;; the symbol
 (defn mutable-dispatch [{t :arcadia.data/type}]
@@ -966,8 +966,8 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
        ~@body)))
 
 (defn- snapshot-dictionary-form [{:keys [this-sym fields field-kws type-name],
-                                  {:keys [default-element-snapshots
-                                          element-snapshots-map]} :more-opts}]
+                                  {:keys [snapshot-elements]
+                                   default-element-snapshots :snapshot} :more-opts}]
   (let [k-sym (gensym "k_")
         v-sym (gensym "v_")
         tkv [this-sym k-sym v-sym]
@@ -984,7 +984,7 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
         els (reduce-kv (fn [acc k body]
                          (update acc k (fnil assoc {:k k}) :body body))
               els
-              element-snapshots-map)
+              snapshot-elements)
         els (mu/map-vals els
               (fn [rec]
                 (if (and (:field rec) (:body rec))
@@ -1023,8 +1023,8 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
                :arcadia.data/type (quote ~type-name)))))))
 
 (defn- mutable-impl-form [{:keys [fields field-kws type-name data-param]
-                           {:keys [element-to-mutable
-                                   default-element-to-mutable]} :more-opts}]
+                           {:keys [mutable-elements]
+                            default-element-to-mutable :mutable} :more-opts}]
   (let [k-sym (gensym "k_")
         v-sym (gensym "v_")
         els (reduce (fn [acc k]
@@ -1037,7 +1037,7 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
         els (reduce-kv (fn [acc k body]
                          (update acc k (fnil assoc {:k k}) :body body))
               els
-              element-to-mutable)
+              mutable-elements)
         has-dynamic-element-process (boolean
                                       (or default-element-to-mutable
                                           (some #(and (:body %) (not (:is-field %))) (vals els))))
@@ -1114,9 +1114,7 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
       (throw (Exception.
                (str "Invalid arguments to defmutable. Spec explanation: "
                     (with-out-str (clojure.spec.alpha/explain ::defmutable-args args)))))
-      (let [{:keys [name fields protocol-impls more-opts]} parse
-            {{element-snapshots-map :element-snapshots} :element-snapshots-map
-             default-element-snapshots :default-element-snapshots} more-opts
+      (let [{:keys [name fields protocol-impls]} parse
             type-name (expand-type-sym name)
             param-sym (-> (gensym (str name "_"))
                           (with-meta {:tag type-name}))
