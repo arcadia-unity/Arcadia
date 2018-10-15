@@ -264,9 +264,9 @@
   '[arcadia.core arcadia.repl arcadia.packages arcadia.linear
     arcadia.literals arcadia.config arcadia.compiler
     arcadia.internal.tracker arcadia.internal.thread arcadia.internal.test
-    arcadia.internal.state arcadia.internal.spec
+    arcadia.internal.state arcadia.internal.spec arcadia.internal.nudge
     arcadia.internal.name-utils arcadia.internal.messages arcadia.internal.map-utils
     arcadia.internal.macro arcadia.internal.leiningen arcadia.internal.functions
     arcadia.internal.filewatcher-dummy arcadia.internal.file-system arcadia.internal.editor-interop
     arcadia.internal.components arcadia.internal.benchmarking arcadia.internal.asset-watcher
-    arcadia.internal.array-utils arcadia.packages.data])
+    arcadia.internal.array-utils arcadia.packages.data arcadia.socket-repl])
