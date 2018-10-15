@@ -25,18 +25,7 @@ namespace Arcadia
 
 		public static String GetClojureDllFolder()
 		{
-			try
-			{
-				return
-				  Path.GetDirectoryName(
-					AssetDatabase.GetAllAssetPaths()
-					  .Where(s => System.Text.RegularExpressions.Regex.IsMatch(s, ".*/Clojure.dll$")) // for compatibility with 4.3
-					  .Single());
-			}
-			catch (InvalidOperationException e)
-			{
-				throw new SystemException("Error Loading Arcadia! Arcadia expects exactly one Arcadia folder (a folder with Clojure.dll in it)");
-			}
+			return Path.GetDirectoryName(typeof(clojure.lang.RT).Assembly.Location).Substring(Directory.GetCurrentDirectory().Length + 1);
 		}
 
 		public static void StartWatching()
