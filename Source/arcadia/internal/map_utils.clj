@@ -193,6 +193,15 @@
   (if (set? x) x (set x)))
 
 ;; ==================================================
+;; macro versions of common tasks, saves seq/vector allocations
+
+(defmacro mdissoc [m & ks]  
+  `(-> ~m ~@(for [k ks] `(dissoc ~k))))
+
+(defmacro massoc [m & kvs]
+  `(-> ~m ~@(for [[k v] (partition 2 kvs)] `(assoc ~k ~v))))
+
+;; ==================================================
 
 (defn keysr
   "Returns reducible collection of keys in m. Fast."

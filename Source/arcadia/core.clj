@@ -914,16 +914,6 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
 (= (snapshot x) (snapshot (mutable (snapshot x))))"
   #'mutable-dispatch)
 
-;; This is here to avoid the very wasteful overhead of `satisfies?`.
-;; It's up to implementers to ensure that this will only return `true`
-;; for types that satisfy `IMutable`.
-(defprotocol IIsMutable
-  (mutable? [_]))
-
-(extend-protocol IIsMutable
-  System.Object
-  (mutable? [_] false))
-
 (defprotocol IMutable
   (mut!
     [_]
@@ -946,6 +936,11 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
     [_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _]
     [_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _]))
 
+
+;; consider expanding this to more variadic protocol
+(defprotocol IDeleteableElements
+  (delete! [this key]))
+
 (defn- expand-type-sym [type-sym]
   (symbol
     (str
@@ -953,12 +948,6 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
           (clojure.string/replace "-" "_"))
       "."
       (name type-sym))))
-
-(defmacro ^:private mdissoc [m & ks]  
-  `(-> ~m ~@(for [k ks] `(dissoc ~k))))
-
-(defmacro ^:private massoc [m & ks]
-  `(-> ~m ~@(for [k ks] `(assoc ~k))))
 
 (defn- apply-user-form [user-form tkv]
   (let [{:keys [args body]} user-form]
@@ -1018,7 +1007,7 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
        (if (zero? (.Count ~'defmutable-internal-dictionary))
          ~(-> maybe-processed-field-kvs (assoc :arcadia.data/type `(quote ~type-name)))
          (-> ~maybe-processed-dict-map
-             (massoc
+             (mu/massoc
                ~@(apply concat maybe-processed-field-kvs)
                :arcadia.data/type (quote ~type-name)))))))
 
@@ -1174,11 +1163,13 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
                  (case key#
                    ~@lookup-cases
                    (.GetValue ~'defmutable-internal-dictionary key#)))
-               
-               ;; System.ICloneable
-               ;; (Clone [_#]
-               ;;   (do ~ensure-internal-dictionary-form
-               ;;       (new ~type-name ~@fields (.Clone ~'defmutable-internal-dictionary))))
+
+               (valAt [this#, key#, not-found#]
+                 (case key#
+                   ~@lookup-cases
+                   (if (.ContainsKey ~'defmutable-internal-dictionary)
+                     (.GetValue ~'defmutable-internal-dictionary key#)
+                     not-found#)))
                
                ISnapshotable
                (snapshot [~this-sym]
@@ -1186,10 +1177,60 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
 
                IMutable
                ~@mut-impl
-               
-               IIsMutable
-               (mutable? [~this-sym] true)               
-               ;; splice in any other protocol implementations, including overwrites for these defaults
+
+               IDeleteableElements
+               ~(let [key-sym (gensym "key_")
+                      key-cases (apply concat
+                                  (for [k field-kws]
+                                    [k `(throw
+                                          (System.NotSupportedException.
+                                            (str "Attempting to delete field key " ~k ". Deleting fields on types defined via `arcadia.core/defmutable` is currently not supported.")))]))]
+                  `(delete! [this# ~key-sym]
+                     (case ~key-sym
+                       ~@key-cases
+                       (.Remove ~'defmutable-internal-dictionary ~key-sym))))
+
+               System.Collections.IDictionary
+               (get_IsFixedSize [this#]
+                 false)
+
+               (get_IsReadOnly [this#]
+                 false)
+
+               (get_Item [this# k#]
+                 (get this# k#))
+
+               (set_Item [this# k# v#]
+                 (mut! this# k# v#))
+
+               (get_Keys [this#]
+                 (into [~@field-kws] (.Keys ~'defmutable-internal-dictionary)))
+
+               (get_Values [this#]
+                 (into [~@fields] (.Values ~'defmutable-internal-dictionary)))
+
+               (Add [this# k# v#]
+                 (mut! this# k# v#))
+
+               (System.Collections.IDictionary.Clear [this#]
+                 (throw
+                   (System.NotSupportedException.
+                     "`Clear` is not currently supported for types defined via `arcadia.core/defmutable`")))
+
+               (Contains [this# k#]
+                 (or (#{~@field-kws} k#) (.Contains ~'defmutable-internal-dictionary k#)))
+
+               (System.Collections.IDictionary.GetEnumerator [this#]
+                 (throw
+                   (System.NotSupportedException.
+                     "`System.Collections.IDictionary.GetEnumerator` is not currently supported for types defined via `arcadia.core/defmutable`")))
+
+               (Remove [this# k#]
+                 (if (#{~@field-kws} k#)
+                   (throw
+                     (System.NotSupportedException.
+                       "`Remove` on fields is not currently supported for types defined via `arcadia.core/defmutable`"))
+                   (.Remove ~'defmutable-internal-dictionary k#)))
                
                ~@protocol-impl-forms)
              
@@ -1206,16 +1247,11 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
                 `(defn ~(symbol (str "map->" name)) [~map-sym]
                    (new ~type-name ~@field-vals
                      (new Arcadia.DefmutableDictionary
-                       (mdissoc ~map-sym :arcadia.data/type ~@field-kws)))))
+                       (mu/mdissoc ~map-sym :arcadia.data/type ~@field-kws)))))
              
              ;; convert from generic persistent map to mutable type instance
              (defmethod mutable (quote ~type-name) [~data-param]
-               ~(mutable-impl-form (mu/lit-assoc parse field-kws type-name data-param))
-               ;; ~(let [field-vals (for [kw field-kws] `(get ~data-param ~kw))]
-               ;;    `(let [dict# (new Arcadia.DefmutableDictionary
-               ;;                   (mdissoc ~data-param :arcadia.data/type ~@field-kws))]
-               ;;       (new ~type-name ~@field-vals dict#)))
-               )
+               ~(mutable-impl-form (mu/lit-assoc parse field-kws type-name data-param)))
 
              ;; register with our general deserialization
              (defmethod arcadia.data/parse-user-type (quote ~type-name) [~dict-param]

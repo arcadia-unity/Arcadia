@@ -9,8 +9,29 @@ namespace Arcadia
 	{
 		public Dictionary<object, object> dict;
 
+		public System.Collections.ICollection Keys {
+			get {
+				return dict.Keys;
+			}
+		}
+
+		public System.Collections.ICollection Values {
+			get {
+				return dict.Values;
+			}
+		}
+
 		public int Count { 
 			get { return dict.Count; }
+		}
+
+		public bool Contains (object key) {
+			return dict.ContainsKey(key);
+		}
+
+		public void Remove (object key)
+		{
+			dict.Remove(key);
 		}
 
 		public DefmutableDictionary ()
@@ -45,8 +66,6 @@ namespace Arcadia
 		{
 			return dict.Remove(kw);
 		}
-
-
 
 		public clojure.lang.IPersistentMap ToPersistentMap ()
 		{
