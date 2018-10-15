@@ -204,9 +204,6 @@
         ;; object types share the same parser
         (install-parser-for-object-type t)))))
 
-
-
-
 (object-type-stuff)
 
 ;; AnimationCurves are different
@@ -252,25 +249,31 @@
 (defmulti parse-user-type
   "This multimethod should be considered an internal, unstable
   implementation detail for now. Please refrain from extending it."
-  parse-user-type-dispatch)
+  parse-user-type-dispatch
+  :default ::default)
 
-;; ugh
-;; so maybe the type and its parser haven't been loaded yet because
-;; their namespace hasn't, yknow
-(defonce seen-user-type-names (atom #{}))
-
-(defmethod parse-user-type :default [{t ::type
-                                      :as spec}]
-  (if (contains? @seen-user-type-names t)
-    (throw (Exception. (str "Already seen type " t ", something's wrong.")))
-    (do (swap! seen-user-type-names conj t)
-        (let [ns-name (-> (clojure.string/join "."
-                            (butlast
-                              (clojure.string/split (name t) #"\." )))
-                          (clojure.string/replace "_" "-")
-                          symbol)]
-          (arcadia.internal.namespace/quickquire ns-name)
-          (parse-user-type spec)))))
+(defmethod parse-user-type ::default [{t ::type
+                                       :as spec}]
+  (cond
+    (nil? t)
+    (throw
+      (Exception. "No value found for key `::arcadia.data/type`"))
+    
+    (not (symbol? t))
+    (throw
+      (Exception. (str "Value for key `::arcadia.data/type` must be a symbol, instead got " (class t)))))
+  (let [ns-name (-> (clojure.string/join "."
+                      (butlast
+                        (clojure.string/split (name t) #"\." )))
+                    (clojure.string/replace "_" "-")
+                    symbol)]
+    (arcadia.internal.namespace/quickquire ns-name)
+    (if (contains? (methods parse-user-type) (parse-user-type-dispatch spec))
+      (parse-user-type spec)
+      (throw
+        (Exception.
+          (str
+            "`arcadia.data/parse-user-type` multimethod extension cannot be found for `::arcadia.data/type` value " t))))))
 
 (alter-var-root #'clojure.core/*data-readers* assoc 'arcadia.data/data #'parse-user-type)
 
@@ -278,7 +281,4 @@
 (when (.getThreadBinding ^clojure.lang.Var #'clojure.core/*data-readers*)
   (set! clojure.core/*data-readers*
     (merge clojure.core/*data-readers*
-      ;; I guess. so weird
-      (.getRawRoot #'clojure.core/*data-readers*)
-      ;;'arcadia.core/mutable #'parse-user-type
-      )))
+      (.getRawRoot #'clojure.core/*data-readers*))))
