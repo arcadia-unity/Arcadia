@@ -1,8 +1,7 @@
 (ns ^{:doc "C# Introspection functionality, useful for hacking the Unity API."}
   arcadia.introspection
   (:refer-clojure :exclude [methods])
-  (:require [clojure.pprint :as pprint]
-            [clojure.test :as test])
+  (:require [clojure.pprint :as pprint])
   (:import [System.Reflection
             BindingFlags MonoMethod MonoProperty MonoField
             FieldInfo]))
