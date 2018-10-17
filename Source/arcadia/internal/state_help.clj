@@ -1,7 +1,8 @@
 (ns arcadia.internal.state-help
   (:require arcadia.data
             ;; just for deserialized-var-form?, var-form->var
-            [arcadia.internal.hook-help :as hh])
+            [arcadia.internal.hook-help :as hh]
+            [clojure.edn :as edn])
   (:import [UnityEngine Debug]
            [Arcadia JumpMap JumpMap+KeyVal JumpMap+PartialArrayMapView]
            ArcadiaState))
@@ -21,13 +22,13 @@
         (let [^JumpMap jm (.state as)]
           (.Clear jm)
           (.AddAll jm
-            (read-string (.edn as))))
+            (edn/read-string {:readers *data-readers*} (.edn as))))
         (catch Exception e
           (Debug/Log "Exception encountered in arcadia.internal.state-help/deserialize:")
           (Debug/Log e)
           (Debug/Log "arcadia.data/*object-db*:")
           (Debug/Log arcadia.data/*object-db*)
-          (throw e))))))
+          (throw (Exception. "wrapper" e)))))))
 
 (defn initialize [^ArcadiaState as]
   (deserialize as)

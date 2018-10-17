@@ -57,6 +57,14 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 
 	public static Var deserializeVar;
 
+	public static Var objectDbVar;
+
+	public static Var serializeVar;
+
+	public static Var printReadablyVar;
+
+	public static Var prStrVar;
+
 	public static bool varsInitialized = false;
 
 	// =====================================================
@@ -74,6 +82,15 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 		Arcadia.Util.getVar(ref awakeFn, stateHelpNs, "awake");
 		Arcadia.Util.getVar(ref jumpMapToMapVar, stateHelpNs, "jumpmap-to-map");
 		Arcadia.Util.getVar(ref deserializeVar, stateHelpNs, "deserialize");
+
+		var arcadiaLiteralsNs = "arcadia.data";
+		Arcadia.Util.require(arcadiaLiteralsNs);
+		Arcadia.Util.getVar(ref serializeVar, arcadiaLiteralsNs, "*serialize*");
+		Arcadia.Util.getVar(ref objectDbVar, arcadiaLiteralsNs, "*object-db*");
+
+		var coreNs = "clojure.core";
+		Arcadia.Util.getVar(ref printReadablyVar, coreNs, "*print-readably*");
+		Arcadia.Util.getVar(ref prStrVar, coreNs, "pr-str");
 
 		varsInitialized = true;
 	}
@@ -100,20 +117,12 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 
 	public void OnBeforeSerialize ()
 	{
-		// experimental:
 		Initialize();
 
-		if (prStr == null) prStr = (IFn)RT.var("clojure.core", "pr-str");
-		Arcadia.Util.require("arcadia.data");
-		Namespace ArcadiaLiteralsNamespace = Namespace.findOrCreate(Symbol.intern("arcadia.data"));
-		Var ObjectDbVar = Var.intern(ArcadiaLiteralsNamespace, Symbol.intern("*object-db*")).setDynamic();
-
-		InitializeOwnVars();
-
 		WipeDatabase();
-		Var.pushThreadBindings(RT.map(ObjectDbVar, objectDatabase));
+		Var.pushThreadBindings(RT.map(objectDbVar, objectDatabase, serializeVar, true, printReadablyVar, false));
 		try {
-			edn = (string)prStr.invoke(jumpMapToMapVar.invoke(state)); // side effects, updating objectDatabase
+			edn = (string)prStrVar.invoke(jumpMapToMapVar.invoke(state)); // side effects, updating objectDatabase
 			var map = (PersistentHashMap)objectDatabase.deref();
 			objectDatabaseIds = (int[])RT.seqToTypedArray(typeof(int), RT.keys(map));
 			objectDatabaseObjects = (Object[])RT.seqToTypedArray(typeof(Object), RT.vals(map));

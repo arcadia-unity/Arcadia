@@ -21,6 +21,15 @@
              `(.Append ~x)
              `(.Append (str ~x)))))))
 
+
+;; ============================================================
+;; serialization flag
+
+(def
+  ^:dynamic
+  ^{:doc "Determines whether objects should print in a manner that can be read back in by the edn reader. Defaults to false."}
+  *serialize* false)
+
 ;; ============================================================
 ;; object database 
 ;; ============================================================
@@ -176,21 +185,61 @@
        (remove #(.IsEnum ^Type %))
        (remove #(.IsNested ^Type %))))
 
-;; ------------------------------------------------------------
+;; ============================================================
 ;; print things
+;; ============================================================
 
-(defn default-unity-print [x ^System.IO.TextWriter w]
+(defonce print-hierarchy (atom (make-hierarchy)))
+
+(swap! print-hierarchy
+  (fn [h]
+    (letfn [(rfn [h, ^System.Type t]
+              (derive h t ::unity-value-type))]
+      (reduce rfn h value-types))))
+
+;; ------------------------------------------------------------
+;; print-unserialized
+
+(defn print-unserialized-dispatch [x _]
+  (class x))
+
+(defmulti print-unserialized #'print-unserialized-dispatch
+  :hierarchy print-hierarchy
+  :default ::default)
+
+(defmethod print-unserialized ::default [x ^System.IO.TextWriter w]
   (.Write w
     (lit-str "#<" (class x) " " x ">")))
 
-;; don't want to mutate the global hierarchy for this
+;; ------------------------------------------------------------
+;; serialize
+
+(defn serialize-dispatch [x _]
+  (class x))
+
+(defmulti serialize #'serialize-dispatch
+  :hierarchy print-hierarchy
+  :default ::default)
+
+(defmethod serialize ::default [x _]
+  (throw
+    (ArgumentException.
+      (str "No implementation of `arcadia.data/serialize` found for class " (class x)))))
+
+(defn arcadia-print [x w]
+  (if *serialize*
+    (serialize x w)
+    (print-unserialized x w)))
+
+;; doing this because we don't want to mutate the global hierarchy
+;; just yet
 (doseq [t value-types]
-  (.addMethod ^clojure.lang.MultiFn print-method t default-unity-print))
+  (.addMethod ^clojure.lang.MultiFn print-method t arcadia-print))
 
 ;; ------------------------------------------------------------
-;; print value types with *print-dup*
+;; print value types
 
-(defn value-type-print-dup-vec [x ^System.IO.TextWriter w]
+(defn vt-serialize-vec [x ^System.IO.TextWriter w]
   (let [sb (new StringBuilder "#unity/value")
         t (class x)
         fs (sorted-fields t)]
@@ -207,7 +256,7 @@
     (.Append sb "]")
     (.Write w (str sb))))
 
-(defn value-type-print-dup-map [x ^System.IO.TextWriter w]
+(defn vt-serialize-map [x ^System.IO.TextWriter w]
   (let [t (class x)
         fs (sorted-fields t)
         ^StringBuilder sb (new StringBuilder "#unity/value")]
@@ -229,19 +278,23 @@
           (do (.Append sb "}")
               (str sb)))))))
 
-(defn value-type-print-dup [x w]
+(defmethod serialize ::unity-value-type [x w]
   (if *print-readably*
-    (value-type-print-dup-map x w)
-    (value-type-print-dup-vec x w)))
+    (vt-serialize-map x w)
+    (vt-serialize-vec x w)))
 
-;; we don't want to mutate the global hierarchy for this
 (doseq [t value-types]
-  (.addMethod ^clojure.lang.MultiFn print-dup t value-type-print-dup))
+  (.addMethod ^clojure.lang.MultiFn print-method t arcadia-print))
+
+;; ;; we don't want to mutate the global hierarchy for this
+;; (doseq [t value-types]
+;;   (.addMethod ^clojure.lang.MultiFn print-dup t value-type-print-dup))
+
+;; don't want to mutate the global hierarchy for this
 
 ;; ============================================================
 ;; read value types printed with *print-dup* back
 
-(defonce parse-value-type-hierarchy (atom (make-hierarchy)))
 
 ;; We need to do this because `derive` doesn't work with strings.
 ;; Don't want to memoize it because that might enable attacks on
@@ -255,7 +308,7 @@
         (transient {})
         value-types))))
 
-(defn parse-value-type-dispatch [args]
+(defn read-value-type-dispatch [args]
   (get @value-type-string->type
     (cond
       (vector? args)
@@ -270,16 +323,10 @@
 
 ;; install the dispatch function itself rather than a reference to it
 ;; when we're confident
-(defmulti parse-value-type #'parse-value-type-dispatch
-  :hierarchy parse-value-type-hierarchy)
+(defmulti read-value-type #'read-value-type-dispatch
+  :hierarchy print-hierarchy)
 
-(swap! parse-value-type-hierarchy
-  (fn [h]
-    (letfn [(rfn [h, ^System.Type t]
-              (derive h t ::value-type))]
-      (reduce rfn h value-types))))
-
-(defmethod parse-value-type ::value-type [args]
+(defmethod read-value-type ::unity-value-type [args]
   (cond
     (vector? args)
     (instance-from-values (nth args 0) (subvec args 1))
@@ -291,7 +338,7 @@
             (ArgumentException.
               (str "Expects vector or map, instead got " (class args))))))
 
-(install-reader 'unity/value #'parse-value-type)
+(install-reader 'unity/value #'read-value-type)
 
 ;; ============================================================
 ;; custom serialization/deserialization for common types
@@ -305,7 +352,7 @@
         sorted (sort fields)
         value-sym (with-meta (gensym "value_") {:tag type-sym})]
     `(do
-       (defmethod parse-value-type ~type-sym [~'args]
+       (defmethod read-value-type ~type-sym [~'args]
          (cond
            (vector? ~'args)
            (let [[_# ~@sorted] ~'args]
@@ -320,7 +367,7 @@
              (ArgumentException.
                (str "Expects vector or map, instead got " (class ~'args))))))
        
-       (defmethod print-dup ~type-sym [^UnityEngine.Vector3 ~value-sym, ^TextWriter w#]
+       (defmethod serialize ~type-sym [^UnityEngine.Vector3 ~value-sym, ^TextWriter w#]
          (.Write w#
            (if *print-readably*
              (lit-str
@@ -346,30 +393,33 @@
 ;; object types
 ;; ============================================================
 
-(defmethod print-method UnityEngine.Object [^UnityEngine.Object x, ^System.IO.TextWriter stream]
+(defmethod print-method UnityEngine.Object [x w]
+  (arcadia-print x w))
+
+(defmethod print-unserialized UnityEngine.Object [^UnityEngine.Object x, ^System.IO.TextWriter stream]
   (.Write stream
     (lit-str "#<" x ">")))
 
-(defmethod print-dup UnityEngine.Object [^UnityEngine.Object v ^System.IO.TextWriter w]
+(defmethod serialize UnityEngine.Object [^UnityEngine.Object v ^System.IO.TextWriter w]
   (.Write w
     (lit-str "#unity/object[" (class v) " " (db-put v) "]")))
 
-(defn parse-object [[_ id]]
+(defn read-object [[_ id]]
   (db-get id))
 
-(install-reader 'unity/object #'parse-object)
+(install-reader 'unity/object #'read-object)
 
 ;; ============================================================
 ;; for defmutable:
 
-(defn- parse-user-type-dispatch [{:keys [::type]}]
+(defn- read-user-type-dispatch [{:keys [::type]}]
   type)
 
-(defmulti parse-user-type
-  parse-user-type-dispatch
+(defmulti read-user-type
+  read-user-type-dispatch
   :default ::default)
 
-(defmethod parse-user-type ::default [{t ::type
+(defmethod read-user-type ::default [{t ::type
                                        :as spec}]
   (cond
     (nil? t)
@@ -381,11 +431,11 @@
       (Exception. (str "Value for key `::arcadia.data/type` must be a symbol, instead got " (class t)))))
   (let [ns-name (symbol (Arcadia.Util/TypeNameToNamespaceName (name t)))]
     (arcadia.internal.namespace/quickquire ns-name)
-    (if (contains? (methods parse-user-type) (parse-user-type-dispatch spec))
-      (parse-user-type spec)
+    (if (contains? (methods read-user-type) (read-user-type-dispatch spec))
+      (read-user-type spec)
       (throw
         (Exception.
           (str
-            "`arcadia.data/parse-user-type` multimethod extension cannot be found for `::arcadia.data/type` value " t))))))
+            "`arcadia.data/read-user-type` multimethod extension cannot be found for `::arcadia.data/type` value " t))))))
 
-(install-reader 'arcadia.data/data #'parse-user-type)
+(install-reader 'arcadia.data/data #'read-user-type)
