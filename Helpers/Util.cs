@@ -152,6 +152,18 @@ namespace Arcadia
 		}
 
 		// ==================================================================
+		// String
+
+		public static string TypeNameToNamespaceName (string typeName)
+		{
+			var inx = typeName.LastIndexOf('.');
+			if (inx != -1) {
+				return typeName.Substring(0, inx).Replace('_', '-');
+			} 
+			throw new ArgumentException("No namespace string found for typeName " + typeName);
+		}
+
+		// ==================================================================
 		// Timing
 
 		public static double NTiming (IFn f, int n)

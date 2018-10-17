@@ -5,11 +5,10 @@
             ConstructorInfo
             BindingFlags
             ParameterInfo]
+           Arcadia.Util
            [System TimeSpan]
+           System.IO.TextWriter
            [System.Reflection Assembly]))
-
-;; 
-
 ;; ============================================================
 ;; utils
 
@@ -30,7 +29,8 @@
 ;; TODO is the atom needed?
 (defonce ^:dynamic *object-db* (atom {}))
 
-;; this never drains - memory leak.
+;; This never drains - potential memory leak. Should only run in repl
+;; though.
 (defn db-put [^UnityEngine.Object obj]
   (let [id (.GetInstanceID obj)]
     (swap! *object-db* assoc id obj)
@@ -123,7 +123,7 @@
   (let [type (resolve-serialized-type type) ; bad that we have to do this, find root problem upstream
         obj (Activator/CreateInstance type)
         fields (sorted-fields type)]
-    (arcadia.debug/break)
+    ;;(arcadia.debug/break)
     (loop [i (int 0)]
       (when (< i (count fields))
         (let [^FieldInfo field (nth fields i)
@@ -154,31 +154,6 @@
     obj))
 
 ;; ============================================================
-;; experimental direct method on Vector3 (for timing)
-;; ============================================================
-
-;; result: looks like we can speed things up by a fair amount by
-;; using direct setting rather than reflection
-
-;; (def counter (atom 0))
-
-;; (defn deserialize-v3 [[x y z :as stuff]]
-;;   ;; (swap! counter inc)
-;;   ;; (println "args:" stuff)
-;;   (UnityEngine.Vector3. x y z))
-
-;; (defonce old-v3-deserialize
-;;   (get clojure.core/*data-readers* 'unity/Vector3))
-
-;; (alter-var-root #'clojure.core/*data-readers*
-;;   assoc
-;;   'unity/Vector3
-;;   #'deserialize-v3)
-
-;; (set! clojure.core/*data-readers* (.getRawRoot #'clojure.core/*data-readers*))
-
-
-;; ============================================================
 ;; value types
 ;; ============================================================
 
@@ -200,57 +175,6 @@
        (remove obsolete?)
        (remove #(.IsEnum ^Type %))
        (remove #(.IsNested ^Type %))))
-
-;; (defn parser-for-value-type [^Type t]
-;;   `(defn ~(symbol (str "parse-" (.Name t))) [params#]
-;;      (instance-from-values
-;;        ~(-> t .FullName symbol)
-;;        params#)))
-
-;; (defn value-type-print-dup-impl [obj ^System.IO.TextWriter stream]
-;;   (let [type (.GetType obj)
-;;         type-name (symbol (.FullName type))]
-;;     (.Write stream
-;;             (str "#=(arcadia.data/instance-from-values "
-;;                  type-name
-;;                  " "
-;;                  (field-values obj)
-;;                  ")"))))
-
-;; (defn install-value-type-print-dup [^Type t]
-;;   (.addMethod ^clojure.lang.MultiFn print-dup t value-type-print-dup-impl))
-
-;; (defn value-type-print-method-impl [obj ^System.IO.TextWriter w]
-;;   (let [type (.GetType obj)]
-;;     (.Write w
-;;             (str "#unity/" (.Name type) " "
-;;                  (field-values obj)))))
-
-;; (defn install-value-type-print-method [^Type t]
-;;   (.addMethod ^clojure.lang.MultiFn print-method t value-type-print-method-impl))
-
-;; (defn install-parser-for-value-type [^Type type]
-;;   `(alter-var-root
-;;      (var clojure.core/*data-readers*)
-;;      assoc
-;;      (quote ~(symbol (str "unity/" (.Name type))))
-;;      (var ~(symbol (str "arcadia.data/parse-" (.Name type))))))
-
-
-;; (defmacro ^:private value-type-stuff []
-;;   (cons `do
-;;     (for [t value-types]
-;;       (list `do
-;;         (parser-for-value-type t)
-;;         (install-parser-for-value-type t)))))
-
-;; (value-type-stuff)
-
-;; (doseq [t value-types]
-;;   (install-value-type-print-method t)
-;;   (install-value-type-print-dup t))
-
-
 
 ;; ------------------------------------------------------------
 ;; print things
@@ -314,14 +238,6 @@
 (doseq [t value-types]
   (.addMethod ^clojure.lang.MultiFn print-dup t value-type-print-dup))
 
-;; ------------------------------------------------------------
-;; custom interventions
-
-;; (defmethod print-dup UnityEngine.Vector3 [v ^System.IO.TextWriter w]
-;;   (let [^UnityEngine.Vector3 v v]
-;;     (.Write w
-;;       (lit-str "#unity/Vector3[" (.x v) " " (.y v) " " (.z v) "]"))))
-
 ;; ============================================================
 ;; read value types printed with *print-dup* back
 
@@ -378,42 +294,57 @@
 (install-reader 'unity/value #'parse-value-type)
 
 ;; ============================================================
+;; custom serialization/deserialization for common types
+
+;; Note that the vector representation is still sorted
+;; by field name here. This means we can go back and
+;; add custom extensions for other types without breaking
+;; anything.
+(defmacro ^:private standard-extension [type-sym fields]
+  (let [shortname (-> type-sym resolve (.Name))
+        sorted (sort fields)
+        value-sym (with-meta (gensym "value_") {:tag type-sym})]
+    `(do
+       (defmethod parse-value-type ~type-sym [~'args]
+         (cond
+           (vector? ~'args)
+           (let [[_# ~@sorted] ~'args]
+             (new ~type-sym ~@fields))
+
+           (map? ~'args)
+           (let [{:keys [~@fields]} ~'args]
+             (new ~type-sym ~@fields))
+
+           :else
+           (throw
+             (ArgumentException.
+               (str "Expects vector or map, instead got " (class ~'args))))))
+       
+       (defmethod print-dup ~type-sym [^UnityEngine.Vector3 ~value-sym, ^TextWriter w#]
+         (.Write w#
+           (if *print-readably*
+             (lit-str
+               ~(str "#unity/value{:arcadia.data/type \"" shortname "\"")
+               ~@(apply concat
+                   (for [field fields]
+                     [(str ",:" field " ") `(. ~value-sym ~field)]))         
+               "}")
+             (lit-str
+               ~(str "#unity/value[\"" shortname "\"")
+               ~@(apply concat
+                   (for [field sorted]
+                     ["," `(. ~value-sym ~field)]))
+               "]")))))))
+
+(standard-extension UnityEngine.Vector2 [x y])
+(standard-extension UnityEngine.Vector3 [x y z])
+(standard-extension UnityEngine.Vector4 [x y z w])
+(standard-extension UnityEngine.Color [r g b a])
+(standard-extension UnityEngine.Quaternion [x y z w])
+
+;; ============================================================
 ;; object types
 ;; ============================================================
-
-;; (def object-types
-;;   (->> UnityEngine.GameObject
-;;        .Assembly
-;;        .GetTypes
-;;        (filter #(isa? % UnityEngine.Object))))
-
-;; (defn parse-object [id]
-;;   (or (db-get id)
-;;       (do
-;;         (UnityEngine.Debug/Log (str "Cant find object with ID " id))
-;;         (UnityEngine.Object.))))
-
-
-
-;; (defmethod print-method
-;;   UnityEngine.Object [^UnityEngine.Object v ^System.IO.TextWriter w]
-;;   (.Write w (str "#unity/" (.. v GetType Name) " "(db-put v))))
-
-;; (defn install-parser-for-object-type [^Type type]
-;;   `(alter-var-root
-;;      (var clojure.core/*data-readers*)
-;;      assoc
-;;      (quote ~(symbol (str "unity/" (.Name type))))
-;;      (var ~(symbol (str "arcadia.data/parse-object")))))
-
-;; (defmacro ^:private object-type-stuff []
-;;   (cons `do
-;;     (for [t object-types]
-;;       (list `do
-;;         ;; object types share the same parser
-;;         (install-parser-for-object-type t)))))
-
-;; (object-type-stuff)
 
 (defmethod print-method UnityEngine.Object [^UnityEngine.Object x, ^System.IO.TextWriter stream]
   (.Write stream
@@ -421,56 +352,12 @@
 
 (defmethod print-dup UnityEngine.Object [^UnityEngine.Object v ^System.IO.TextWriter w]
   (.Write w
-    (lit-str "#unity/object[" (class v) " " (db-put v) "]")
-    ;; (str "#=(arcadia.data/db-get " (db-put v) ")")
-    ))
+    (lit-str "#unity/object[" (class v) " " (db-put v) "]")))
 
 (defn parse-object [[_ id]]
   (db-get id))
 
 (install-reader 'unity/object #'parse-object)
-
-;; (defmethod print-dup UnityEngine.Object [^UnityEngine.Object x, ^System.IO.TextWriter stream]
-;;   )
-
-;; AnimationCurves are different
-;; finish
-;; (comment 
-;;   (defmethod print-dup
-;;     UnityEngine.AnimationCurve [ac stream]
-;;     (.Write stream
-;;             (str "#=(UnityEngine.AnimationCurve. "
-;;                  "(into-array ["
-;;                  (apply str 
-;;                         (->> ac
-;;                              .keys
-;;                              (map #(str "(UnityEngine.Keyframe. "
-;;                                         (.time %)
-;;                                         (.value %)
-;;                                         (.inTangent %)
-;;                                         (.outTangent %)
-;;                                         ")"))
-;;                              (interleave (repeat " "))))
-;;                  ")")))
-;;   (defmethod print-method
-;;     UnityEngine.AnimationCurve [ac w]
-;;     (.Write w
-;;             (str "#unity/AnimationCurve"
-;;                  (.GetInstanceID ~v))))
-  
-;;   (defn parse-AnimationCurve [v]
-;;     (new UnityEngine.AnimationCurve (into-array (map eval (first v)))))
-  
-;;   (alter-var-root
-;;     #'clojure.core/*data-readers*
-;;     assoc
-;;     'unity/AnimationCurve
-;;     #'arcadia.data/parse-AnimationCurve))
-
-;; ============================================================
-;; for value types:
-
-
 
 ;; ============================================================
 ;; for defmutable:
@@ -479,8 +366,6 @@
   type)
 
 (defmulti parse-user-type
-  "This multimethod should be considered an internal, unstable
-  implementation detail for now. Please refrain from extending it."
   parse-user-type-dispatch
   :default ::default)
 
@@ -494,11 +379,7 @@
     (not (symbol? t))
     (throw
       (Exception. (str "Value for key `::arcadia.data/type` must be a symbol, instead got " (class t)))))
-  (let [ns-name (-> (clojure.string/join "."
-                      (butlast
-                        (clojure.string/split (name t) #"\." )))
-                    (clojure.string/replace "_" "-")
-                    symbol)]
+  (let [ns-name (symbol (Arcadia.Util/TypeNameToNamespaceName (name t)))]
     (arcadia.internal.namespace/quickquire ns-name)
     (if (contains? (methods parse-user-type) (parse-user-type-dispatch spec))
       (parse-user-type spec)
