@@ -424,17 +424,17 @@
   (cond
     (nil? t)
     (throw
-      (Exception. "No value found for key `::arcadia.data/type`"))
+      (ArgumentException. "No value found for key `::arcadia.data/type`"))
     
     (not (symbol? t))
     (throw
-      (Exception. (str "Value for key `::arcadia.data/type` must be a symbol, instead got " (class t)))))
+      (ArgumentException. (str "Value for key `::arcadia.data/type` must be a symbol, instead got " (class t)))))
   (let [ns-name (symbol (Arcadia.Util/TypeNameToNamespaceName (name t)))]
     (arcadia.internal.namespace/quickquire ns-name)
     (if (contains? (methods read-user-type) (read-user-type-dispatch spec))
       (read-user-type spec)
       (throw
-        (Exception.
+        (ArgumentException.
           (str
             "`arcadia.data/read-user-type` multimethod extension cannot be found for `::arcadia.data/type` value " t))))))
 
