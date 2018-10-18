@@ -46,8 +46,8 @@
 
 (defn handle-repeating-callback-error [^System.Exception e, ^EditorCallbacks+IntervalData ecd]
   (Debug/LogError e)
-  (Debug/Log "Removing callback at key " (.key ecd))
-  (swap! repeating-callbacks remove-repeating-callback (.key ecd)))
+  (Debug/Log (str "Removing callback at key " (.key ecd)))
+  (remove-repeating-callback (.key ecd)))
 
 (defn run-repeating-callbacks [rcs]
   (EditorCallbacks/RunIntervalCallbacks (::arr rcs), handle-repeating-callback-error))
