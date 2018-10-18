@@ -1,10 +1,11 @@
 (ns arcadia.internal.editor-callbacks
-  (:require [arcadia.internal.map-utils :as mu]
-           ;; [arcadia.internal.editor-callbacks.types :as ect]
-            )
+  (:require [arcadia.internal.map-utils :as mu])
   (:import [UnityEngine Debug]
            [System.Collections Queue]
            [Arcadia EditorCallbacks EditorCallbacks+IntervalData]))
+
+;; Notice that this namespace does *not* reference the Unity Editor,
+;; nor do any of its dependencies. It is therefore safe to export.
 
 ;; ============================================================
 ;; normal callbacks
@@ -51,6 +52,21 @@
 
 (defn run-repeating-callbacks [rcs]
   (EditorCallbacks/RunIntervalCallbacks (::arr rcs), handle-repeating-callback-error))
+
+;; ============================================================
+;; crude timeout
+;; Extremely coarse-grained, only useful for scheduling stuff
+;; roughly later
+
+(defn add-timeout [k f timeout]
+  (let [state (volatile! true)]
+    (arcadia.internal.editor-callbacks/add-repeating-callback
+      k
+      (fn timeout-callback []
+        (if @state
+          (vreset! state false)
+          (f)))
+      timeout)))
 
 ;; ============================================================
 ;; run all
