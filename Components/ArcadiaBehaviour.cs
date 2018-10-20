@@ -324,7 +324,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 			}
 		} catch (System.Exception e) {
 			PrintContext(i);
-			throw e;
+			throw;
 		}
 	}
 
@@ -350,7 +350,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 			}
 		} catch (System.Exception e) {
 			PrintContext(i);
-			throw e;
+			throw;
 		}
 	}
 
@@ -376,7 +376,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 			}
 		} catch (System.Exception e) {
 			PrintContext(i);
-			throw e;
+			throw;
 		}
 	}
 
@@ -402,7 +402,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 			}
 		} catch (System.Exception e) {
 			PrintContext(i);
-			throw e;
+			throw;
 		}
 	}
 }
