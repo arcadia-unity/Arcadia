@@ -21,7 +21,7 @@ namespace Arcadia
 
 		public JumpMap ()
 		{
-			dict = new Dictionary<object, KeyVal>();
+			dict = new Dictionary<object, KeyVal>(53);
 		}
 
 		// ==========================================================
@@ -114,6 +114,28 @@ namespace Arcadia
 				kv.Evacuate();
 				dict.Remove(k);
 			}
+		}
+
+		// ==========================================================
+		// duplication
+
+		public JumpMap Duplicate ()
+		{
+			var jm = new JumpMap();
+			foreach (var e in dict) {
+				var kv = e.Value;
+				jm.Add(kv.key, kv.val);
+			}
+			return jm;
+		}
+
+		public JumpMap CopyTo (JumpMap jm2)
+		{
+			foreach (var e in dict) {
+				var kv = e.Value;
+				jm2.Add(kv.key, kv.val);
+			}
+			return jm2;
 		}
 
 		// ==========================================================
