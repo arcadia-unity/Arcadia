@@ -4,6 +4,7 @@ using UnityEngine;
 using clojure.lang;
 #if UNITY_EDITOR
 using UnityEditor;
+using System.Collections.Generic;
 using UnityEditor.SceneManagement;
 #endif
 
@@ -137,6 +138,15 @@ namespace Arcadia
 				kvs[i + 1] = vs[i / 2];
 			}
 			return PersistentHashMap.create(kvs);
+		}
+
+		public static IPersistentMap DictionaryToMap <T1,T2>(Dictionary<T1,T2> dict)
+		{
+			ITransientMap bldg =  (ITransientMap)PersistentHashMap.EMPTY.asTransient();
+			foreach (var kv in dict) {
+				bldg = bldg.assoc(kv.Key, kv.Value);
+			}
+			return bldg.persistent();
 		}
 
 		// ==================================================================
