@@ -7,22 +7,27 @@
            [Arcadia JumpMap JumpMap+KeyVal JumpMap+PartialArrayMapView]
            ArcadiaState))
 
-(defn jumpmap-to-map [^JumpMap jm]
-  (persistent!
-    (reduce (fn [m, ^JumpMap+KeyVal kv]
-              (assoc! m (.key kv) (.val kv)))
-      (transient {})
-      (.. jm KeyVals))))
+;; (defn jumpmap-to-map [^JumpMap jm]
+;;   (persistent!
+;;     (reduce (fn [m, ^JumpMap+KeyVal kv]
+;;               (assoc! m (.key kv) (.val kv)))
+;;       (transient {})
+;;       (.. jm KeyVals))))
 
 (defn deserialize [^ArcadiaState as]
   (.BuildDatabaseAtom as true)
   (let [objdb (.objectDatabase as)]
     (binding [arcadia.data/*object-db* objdb]
       (try
-        (let [^JumpMap jm (.state as)]
-          (.Clear jm)
-          (.AddAll jm
-            (edn/read-string {:readers *data-readers*} (.edn as))))
+        (let []
+          (Arcadia.Util/MapToDictionary
+            (type-args clojure.lang.Keyword, System.Object)
+            (edn/read-string {:readers *data-readers*} (.edn as))
+            (.state as)))
+        ;; (let [^JumpMap jm (.state as)]
+        ;;   (.Clear jm)
+        ;;   (.AddAll jm
+        ;;     (edn/read-string {:readers *data-readers*} (.edn as))))
         (catch Exception e
           (Debug/Log "Exception encountered in arcadia.internal.state-help/deserialize:")
           (Debug/Log e)
@@ -32,4 +37,5 @@
 
 (defn initialize [^ArcadiaState as]
   (deserialize as)
-  (.RefreshAll as))
+  ;;(.RefreshAll as)
+  )

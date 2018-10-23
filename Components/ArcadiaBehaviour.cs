@@ -10,7 +10,10 @@ using Arcadia;
 public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 {
 	[SerializeField]
-	public string edn = "[]";
+	public string[] keyNames;
+
+	[SerializeField]
+	public string[] varNames;
 
 	[System.NonSerialized]
 	protected bool _fullyInitialized = false;
@@ -24,53 +27,51 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		}
 	}
 
-	public class IFnInfo
+	public struct IFnInfo
 	{
-		public object key;
+		public Keyword key;
 		public IFn fn;
-		public JumpMap.PartialArrayMapView pamv;
-
-		// for the awkward pause between deserialization and connection to the scene graph
-		public object[] fastKeys = new object[0];
-
-		public IFnInfo (object key, IFn fn, JumpMap.PartialArrayMapView pamv)
+		
+		public IFnInfo (Keyword key_, IFn fn_)
 		{
-
-			this.key = key;
-			this.fn = fn;
-			this.pamv = pamv;
-			if (pamv != null)
-				this.fastKeys = pamv.keys;
+			this.key = key_;
+			this.fn = fn_;
 		}
 
-		public static IFnInfo LarvalIFnInfo (object key, IFn fn)
-		{
-			return LarvalIFnInfo(key, fn, new object[0]);
-		}
+	}
 
-		public static IFnInfo LarvalIFnInfo (object key, IFn fn, object[] fastKeys)
-		{
-			var inf = new IFnInfo(key, fn, null);
-			inf.fastKeys = fastKeys;
-			return inf;
-		}
+	// ============================================================
+	// for ISerializationCallbackReceiver
 
-		public bool IsLarval ()
-		{
-			return pamv == null;
-		}
+	// TODO	: Will not allow things like anonymous functions even in the inspector,
+	// change this when basic principle validated
 
-		public void Realize (JumpMap jm)
-		{
-			if (pamv == null)
-				pamv = jm.pamv(fastKeys);
+	void ISerializationCallbackReceiver.OnBeforeSerialize ()
+	{
+		keyNames = new string[ifnInfos.Length];
+		varNames = new string[ifnInfos.Length];
+
+		for (int i = 0; i < ifnInfos.Length; i++) {
+			var inf = ifnInfos[i];
+			keyNames[i] = inf.key.Name;
+			Var v = inf.fn as Var;
+			if (v != null) {
+				varNames[i] = v.ToString();
+			} else {
+				throw new InvalidOperationException("Attempting to serialize non-Var function in ArcadiaBehaviour. Key: " + inf.key);
+			}
 		}
+	}
+
+	void ISerializationCallbackReceiver.OnAfterDeserialize ()
+	{
+
 	}
 
 	// ============================================================
 	// data
 
-	private IFnInfo[] ifnInfos_ = new IFnInfo[0];
+	private IFnInfo[] ifnInfos_ = new IFnInfo[0]; // might not need to initialize this to empty?
 
 	// maybe this should be NonSerialized
 	// [System.NonSerialized]
@@ -120,24 +121,27 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 	// ============================================================
 	// vars etc
 
-	private static Var requireFn;
+	// private static Var requireFn;
 
-	private static Var hookStateDeserializeFn;
+	// private static Var hookStateDeserializeFn;
 
-	private static Var serializeBehaviourFn;
+	// private static Var serializeBehaviourFn;
 
-	public static Var requireVarNamespacesFn;
+	// public static Var requireVarNamespacesFn;
 
 	[System.NonSerialized]
 	public static bool varsInitialized = false;
 
 	private static void InitializeOwnVars ()
 	{
+		if (varsInitialized)
+			return;
+		
 		string nsStr = "arcadia.internal.hook-help";
 		Arcadia.Util.require(nsStr);
-		Arcadia.Util.getVar(ref hookStateDeserializeFn, nsStr, "hook-state-deserialize");
-		Arcadia.Util.getVar(ref serializeBehaviourFn, nsStr, "serialize-behaviour");
-		Arcadia.Util.getVar(ref requireVarNamespacesFn, nsStr, "require-var-namespaces");
+		//Arcadia.Util.getVar(ref hookStateDeserializeFn, nsStr, "hook-state-deserialize");
+		//Arcadia.Util.getVar(ref serializeBehaviourFn, nsStr, "serialize-behaviour");
+		//Arcadia.Util.getVar(ref requireVarNamespacesFn, nsStr, "require-var-namespaces");
 
 		varsInitialized = true;
 	}
@@ -149,49 +153,53 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		indexes_ = null;
 	}
 
-	public void AddFunction (IFn f, object key)
-	{
-		AddFunction(f, key, new object[0]);
-	}
-
-	public void AddFunction (IFn f, object key, object[] fastKeys)
+	public void AddFunction (IFn f, Keyword key)
 	{
 		FullInit();
-		
-		for (int i = 0; i < ifnInfos_.Length; i++) {
-			var inf = ifnInfos_[i];
-			if (inf.key == key) {
+		// just treat it like an associative array for now
+		for (int i = 0; i < ifnInfos.Length; i++) {
+			if (ifnInfos[i].key == key) {
+				ifnInfos[i] = new IFnInfo(key, f);
 				InvalidateIndexes();
-				// shift over
-				if (i < ifnInfos_.Length - 1)
-					Arcadia.Util.WindowShift(ifnInfos_, i + 1, ifnInfos_.Length - 1, i);
-				ifnInfos_[ifnInfos_.Length - 1] = new IFnInfo(key, f, arcadiaState.pamv(fastKeys));
 				return;
 			}
 		}
+		ifnInfos = Arcadia.Util.ArrayAppend(ifnInfos, new IFnInfo(key, f));
+		InvalidateIndexes();
 		
-		ifnInfos = Arcadia.Util.ArrayAppend(
-			ifnInfos_,
-			new IFnInfo(key, f, arcadiaState.pamv(fastKeys)));
+		//for (int i = 0; i < ifnInfos_.Length; i++) {
+		//	var inf = ifnInfos_[i];
+		//	if (inf.key == key) {
+		//		InvalidateIndexes();
+		//		// shift over
+		//		if (i < ifnInfos_.Length - 1)
+		//			Arcadia.Util.WindowShift(ifnInfos_, i + 1, ifnInfos_.Length - 1, i);
+		//		ifnInfos_[ifnInfos_.Length - 1] = new IFnInfo(key, f);
+		//		return;
+		//	}
+		//}
+
+		//ifnInfos = Arcadia.Util.ArrayAppend(
+		//	ifnInfos_,
+		//	new IFnInfo(key, f));
 	}
 
-	public void AddFunctions (IFnInfo[] newIfnInfos)
-	{
-		var ixs = indexes;
-		var newKeys = new HashSet<System.Object>(newIfnInfos.Select(inf => inf.key));
+	//public void AddFunctions (IFnInfo[] newIfnInfos)
+	//{
+	//	var newKeys = new HashSet<System.Object>(newIfnInfos.Select(inf => inf.key));
 
-		ifnInfos = ifnInfos
-			.Where(inf => !newKeys.Contains(inf.key))
-			.Concat(newIfnInfos)
-			.ToArray();
-	}
+	//	ifnInfos = ifnInfos
+	//		.Where(inf => !newKeys.Contains(inf.key))
+	//		.Concat(newIfnInfos)
+	//		.ToArray();
+	//}
 
 	public void RemoveAllFunctions ()
 	{
 		ifnInfos = new IFnInfo[0];
 	}
 
-	public void RemoveFunction (object key)
+	public void RemoveFunction (Keyword key)
 	{
 		int inx = -1;
 		for (int i = 0; i < ifnInfos_.Length; i++) {
@@ -208,16 +216,22 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 	// ============================================================
 	// setup
-
-	public void RealizeAll (JumpMap jm)
+		
+	public void RealizeVars ()
 	{
-		foreach (var inf in ifnInfos) {
-			if (inf.IsLarval()) {
-				inf.Realize(jm);
-			}
+		ifnInfos = new IFnInfo[keyNames.Length];
+
+		for (int i = 0; i < keyNames.Length; i++) {
+			var kn = keyNames[i];
+			var vn = varNames[i];
+			Keyword k = Keyword.intern(kn); // TODO might be slightly wasteful, check this
+			Symbol vsym = Symbol.intern(vn);
+			Arcadia.Util.require(vsym.Namespace);
+			Var v = RT.var(vsym.Namespace, vsym.Name);
+			ifnInfos[i] = new IFnInfo(k, v);
 		}
 	}
-
+	
 	public void FullInit ()
 	{
 		if (_fullyInitialized)
@@ -225,47 +239,17 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 		//Init();
 		InitializeOwnVars();
+		RealizeVars();
 		// deserialization:
-		hookStateDeserializeFn.invoke(this);
-		arcadiaState = GetComponent<ArcadiaState>();
+		// hookStateDeserializeFn.invoke(this);
+		arcadiaState = GetComponent<ArcadiaState>(); // not sure this should be here
 		arcadiaState.Initialize();
-		RealizeAll(arcadiaState.state);
-		requireVarNamespacesFn.invoke(this);
+		//RealizeAll(arcadiaState.state);
+		// requireVarNamespacesFn.invoke(this);
 
 		_fullyInitialized = true;
 		_go = gameObject;
 
-		// for debugging
-		foreach (var inf in ifnInfos_) {
-			if (inf.IsLarval()) {
-				Debug.Log("Larval inf encountered! inf.key: " + inf.key + "; inf.fn: " + inf.fn);
-			}
-		}
-	}
-
-	public void RefreshPamvs ()
-	{
-		for (int i = 0; i < ifnInfos_.Length; i++) {
-			var inf = ifnInfos_[i];
-			if (!inf.IsLarval()) {
-				ifnInfos_[i].pamv.Refresh();
-			}
-		}
-	}
-
-	public bool HasEvacuatedKV ()
-	{
-		for (int i = 0; i < ifnInfos_.Length; i++) {
-			var pamv = ifnInfos_[i].pamv;
-			if (pamv != null) {
-				var kvs = pamv.kvs;
-				for (int j = 0; j < kvs.Length; j++) {
-					if (!kvs[j].isInhabited)
-						return true;
-				}
-			}
-		}
-		return false;
 	}
 
 	// ============================================================
@@ -274,20 +258,6 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 	public virtual void Awake ()
 	{
 		FullInit();
-	}
-
-	public void OnBeforeSerialize ()
-	{
-		FullInit();
-		edn = (string)serializeBehaviourFn.invoke(this);
-	}
-
-	public void OnAfterDeserialize ()
-	{
-		//Debug.Log("edn:\n" + edn);
-		//if (!varsInitialized)
-		//	InitializeOwnVars();
-		//hookStateDeserializeFn.invoke(this);
 	}
 
 	// ============================================================
@@ -314,7 +284,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		try {
 			for (; i < ifnInfos_.Length; i++) {
 				var inf = ifnInfos_[i];
-				HookStateSystem.pamv = inf.pamv;
+				//HookStateSystem.pamv = inf.pamv;
 				var v = inf.fn as Var;
 				if (v != null) {
 					((IFn)v.getRawRoot()).invoke(_go, inf.key);
@@ -340,7 +310,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		try {
 			for (; i < ifnInfos_.Length; i++) {
 				var inf = ifnInfos_[i];
-				HookStateSystem.pamv = inf.pamv;
+				//HookStateSystem.pamv = inf.pamv;
 				var v = inf.fn as Var;
 				if (v != null) {
 					((IFn)v.getRawRoot()).invoke(_go, arg1, inf.key);
@@ -366,7 +336,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		try {
 			for (; i < ifnInfos_.Length; i++) {
 				var inf = ifnInfos_[i];
-				HookStateSystem.pamv = inf.pamv;
+				//HookStateSystem.pamv = inf.pamv;
 				var v = inf.fn as Var;
 				if (v != null) {
 					((IFn)v.getRawRoot()).invoke(_go, arg1, arg2, inf.key);
@@ -392,7 +362,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		try {
 			for (; i < ifnInfos_.Length; i++) {
 				var inf = ifnInfos_[i];
-				HookStateSystem.pamv = inf.pamv;
+				//HookStateSystem.pamv = inf.pamv;
 				var v = inf.fn as Var;
 				if (v != null) {
 					((IFn)v.getRawRoot()).invoke(_go, arg1, arg2, arg3, inf.key);
@@ -405,5 +375,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 			throw;
 		}
 	}
+
+
 }
 #endif

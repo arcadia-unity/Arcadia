@@ -149,6 +149,41 @@ namespace Arcadia
 			return bldg.persistent();
 		}
 
+		// TODO replace when better interface for fast PersistentMap iteration
+		class MapToDictionaryRFn<T1, T2> : AFn
+		{
+			Dictionary<T1, T2> dict;
+
+			public MapToDictionaryRFn (Dictionary<T1, T2> dict_)
+			{
+				dict = dict_;
+			}
+
+			public override object invoke (object arg, object k, object v)
+			{
+				dict.Add((T1)k, (T2)v);
+				return arg;
+			}
+		}
+
+		public static Dictionary<T1, T2> MapToDictionary<T1, T2> (IPersistentMap m)
+		{
+			return MapToDictionary<T1, T2>(m, new Dictionary<T1, T2>());
+		}
+
+		public static Dictionary<T1, T2> MapToDictionary<T1, T2> (IPersistentMap m, Dictionary<T1, T2> dict)
+		{			
+			clojure.lang.IKVReduce m2 = m as clojure.lang.IKVReduce;
+			if (m2 != null) {
+				m2.kvreduce(new MapToDictionaryRFn<T1, T2>(dict), null);
+			} else {
+				foreach (var e in m) {
+					dict.Add((T1)e.key(), (T2)e.val());
+				}
+			}
+			return dict;
+		}
+
 		// ==================================================================
 		// nil
 
@@ -159,6 +194,19 @@ namespace Arcadia
 				return null;
 			}
 			return obj;
+		}
+
+		// ==================================================================
+		// Equals (for sanity)
+
+		public static bool DoesEqual (object x, object y)
+		{
+			return x == y;
+		}
+
+		public static bool ObjectDoesEqual (GameObject x, GameObject y)
+		{
+			return x == y;
 		}
 
 		// ==================================================================
