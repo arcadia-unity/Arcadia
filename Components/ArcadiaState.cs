@@ -11,8 +11,9 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 
 	// TODO sorted maps?
 	public string edn = "{}";
-	//public JumpMap state = new JumpMap();
-	public Dictionary<Keyword, object> state = new Dictionary<Keyword, object>();
+	public JumpMap state = new JumpMap();
+
+	//public Dictionary<Keyword, object> state = new Dictionary<Keyword, object>();
 
 	public Atom objectDatabase = null;
 	public int[] objectDatabaseIds = new int[0];
@@ -113,7 +114,8 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 		}
 
 		InitializeOwnVars();
-		deserializeVar.invoke(this);
+		// TODO: should this be here?
+		//deserializeVar.invoke(this);
 		fullyInitialized = true;
 	}
 
@@ -130,7 +132,7 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 		Var.pushThreadBindings(RT.map(objectDbVar, objectDatabase, serializeVar, true, printReadablyVar, false));
 		try {
 			//edn = (string)prStrVar.invoke(jumpMapToMapVar.invoke(state)); // side effects, updating objectDatabase
-			edn = (string)prStrVar.invoke(Arcadia.Util.DictionaryToMap(state));
+			edn = (string)prStrVar.invoke(state.ToPersistentMap());
 			// TODO optimize this
 			var map = (PersistentHashMap)objectDatabase.deref();
 			objectDatabaseIds = (int[])RT.seqToTypedArray(typeof(int), RT.keys(map));
@@ -158,7 +160,7 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 
 	public clojure.lang.IPersistentMap ToPersistentMap ()
 	{
-		return Arcadia.Util.DictionaryToMap<Keyword,object>(state);
+		return state.ToPersistentMap();
 	}
 
 	// ============================================================

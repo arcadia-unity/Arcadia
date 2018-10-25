@@ -53,6 +53,22 @@ namespace Arcadia
 			}
 		}
 
+		public bool TryGetValue (object key, out object val)
+		{
+			KeyVal val2;
+			if (dict.TryGetValue(key, out val2)) {
+				val = val2.val;
+				return true;
+			}
+			val = null;
+			return false;
+		}
+
+		public bool TryGetKeyVal (object key, out KeyVal keyval)
+		{
+			return dict.TryGetValue(key, out keyval);
+		}
+
 		// sadly it seems we will need null keyvals
 		// do we need them EVERY time we ask?
 		// let us say we do not
@@ -72,6 +88,15 @@ namespace Arcadia
 				kv = new KeyVal(k, null, this, false);
 			}
 			return kv;
+		}
+
+		public IPersistentMap ToPersistentMap ()
+		{
+			ATransientMap building = (ATransientMap)PersistentHashMap.EMPTY.asTransient();
+			foreach (var e in dict) {
+				building.assoc(e.Key, e.Value.val);
+			}
+			return building.persistent();
 		}
 
 		// ----------------------------------------------------------

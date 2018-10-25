@@ -11,60 +11,88 @@ namespace Arcadia
 	{
 		// at least start out *real* simple
 		public static ArcadiaState arcadiaState;
-
+		// this is actually a GameObject but we don't want to compare it as such
+		public static object cachedGameObject;
 		// checking for null ArcadiaState etc is weird
 		public static bool hasState = false;
 
-		//public static JumpMap.PartialArrayMapView pamv;
+		// be a bit careful here. be sure we don't try
+		// to use a stale cache, for example when calling
+		// `state` outside a Unity message
+		public static int ifnInfoIndex;
+		public static ArcadiaBehaviour.IFnInfo[] ifnInfos;
 
-		//public static object FullLookup (object obj, object key)
-		//{
-		//	ArcadiaState arcs;
-
-		//	var gobj = obj as GameObject;
-		//	if (gobj != null) {
-		//		arcs = gobj.GetComponent<ArcadiaState>();
-		//	} else {
-		//		var cmpt = obj as Component;
-		//		if (cmpt != null) {
-		//			arcs = cmpt.GetComponent<ArcadiaState>();
-		//		} else {
-		//			return null;
-		//		}
-		//	}
-
-		//	if (arcs == null)
-		//		return null;
-
-		//	var jm = arcs.state;
-		//	Arcadia.JumpMap.KeyVal kv;
-		//	if (jm.dict.TryGetValue(key, out kv)) {
-		//		return kv.val;
-		//	}
-		//	return null;
-		//}
-
-		public static object Lookup (GameObject gobj, object key)
+		public static void SetState (ArcadiaState arcadiaState_, GameObject go_, ArcadiaBehaviour.IFnInfo[] ifnInfos_)
 		{
-			ArcadiaState arcs;
-			//if (hasState && gobj == arcadiaState.gameObject) {
-			//if (hasState && ReferenceEquals(gobj, arcadiaState.gameObject)) {
-			if (hasState && ((object) gobj) == ((object) arcadiaState.gameObject)){
-				arcs = arcadiaState;
-				//var kvs = pamv.kvs;
-				//for (int i = 0; i < kvs.Length; i++) {
-				//	var kv = kvs[i];
-				//	if (kv.key == key) {
-				//		if (kv.isInhabited)
-				//			return kv.val;
-				//		return kv.jumpMap.ValueAtKey(key);
-				//	}
-				//}
-			} else {
-				arcs = gobj.GetComponent<ArcadiaState>();
+			arcadiaState = arcadiaState_;
+			cachedGameObject = go_;
+			ifnInfos = ifnInfos_;
+			hasState = true;
+		}
+
+		public static void Clear ()
+		{
+			arcadiaState = null;
+			cachedGameObject = null;
+			ifnInfos = null;
+			hasState = false;
+		}
+
+		// filling up to 4 and sticking there for now
+		public static void UpdateCache (JumpMap.KeyVal kv)
+		{
+			if (ifnInfos[ifnInfoIndex].cacheSize < 4) {
+				ArcadiaBehaviour.IFnInfo inf = ifnInfos[ifnInfoIndex];
+				switch (inf.cacheSize) {
+				case 0:
+					inf.cacheSize = 1;
+					inf.kv1 = kv;
+					break;
+				case 1:
+					inf.cacheSize = 2;
+					inf.kv2 = kv;
+					break;
+				case 2:
+					inf.cacheSize = 3;
+					inf.kv3 = kv;
+					break;
+				case 3:
+					inf.cacheSize = 4;
+					inf.kv4 = kv;
+					break;
+				}
+				ifnInfos[ifnInfoIndex] = inf;
 			}
-			return arcs.ValueAtKey(key);
-			//return FullLookup(gobj, key);
+		}
+
+		public static object LookupTest (object key)
+		{
+			object val;
+			if (ifnInfos[ifnInfoIndex].Lookup(key, out val)) {
+				return val;
+			}
+			return null;
+		}
+				
+		public static object Lookup (object gobj, object key)
+		{
+			// object/object comparison faster
+			if (hasState && gobj == cachedGameObject){
+
+				object val;
+				if (ifnInfos[ifnInfoIndex].Lookup(key, out val)) {
+					return val;
+				}
+
+				// update cache
+				JumpMap.KeyVal kv;
+				if (arcadiaState.state.TryGetKeyVal(key, out kv)) {
+					UpdateCache(kv);
+					return kv.val;
+				}
+			}
+
+			return ((GameObject)gobj).GetComponent<ArcadiaState>().ValueAtKey(key);
 		}
 
 	}
