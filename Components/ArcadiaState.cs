@@ -69,6 +69,10 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 
 	public static Var prStrVar;
 
+	public static Var readStringVar;
+
+	public static Var dataReadersVar;
+
 	public static bool varsInitialized = false;
 
 	// =====================================================
@@ -96,7 +100,34 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 		Arcadia.Util.getVar(ref printReadablyVar, coreNs, "*print-readably*");
 		Arcadia.Util.getVar(ref prStrVar, coreNs, "pr-str");
 
+		Arcadia.Util.getVar(ref readStringVar, "clojure.edn", "read-string");
+		Arcadia.Util.getVar(ref dataReadersVar, "clojure.core", "data-readers");
+
 		varsInitialized = true;
+	}
+
+	
+	
+	public void DeserializeState ()
+	{
+		// until we have a better idea
+
+		deserializeVar.invoke(this);
+		
+		//Var.pushThreadBindings(RT.map(objectDbVar, objectDatabase));
+		//try {
+		//	// TODO: is this really the best representation? Check out Garden, etc, with eye towards perf
+		//	IPersistentMap readerThing = RT.map(Keyword.intern("readers"), dataReadersVar.get());
+		//	Debug.Log(prStrVar.invoke(readerThing));
+		//	IPersistentMap intermediate = (IPersistentMap) readStringVar.invoke(edn, readerThing);
+		//	state.AddAll(intermediate);
+		//}  catch (Exception e) {
+		//	Debug.Log("problem hit in DeserializeState. edn: \n" + edn);
+		//	throw;
+		//} finally {
+		//	Var.popThreadBindings();
+		//}
+		
 	}
 
 
@@ -109,13 +140,9 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 			return;
 		
 		// TODO: cache component access
-		foreach (var ab in GetComponents<ArcadiaBehaviour>()) {
-			ab.RealizeVars();
-		}
 
 		InitializeOwnVars();
-		// TODO: should this be here?
-		//deserializeVar.invoke(this);
+		DeserializeState();
 		fullyInitialized = true;
 	}
 
@@ -131,7 +158,6 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 		WipeDatabase();
 		Var.pushThreadBindings(RT.map(objectDbVar, objectDatabase, serializeVar, true, printReadablyVar, false));
 		try {
-			//edn = (string)prStrVar.invoke(jumpMapToMapVar.invoke(state)); // side effects, updating objectDatabase
 			edn = (string)prStrVar.invoke(state.ToPersistentMap());
 			// TODO optimize this
 			var map = (PersistentHashMap)objectDatabase.deref();
@@ -151,7 +177,7 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 	void OnDestroy ()
 	{
 		if (ReferenceEquals(HookStateSystem.arcadiaState, this)) {
-			HookStateSystem.hasState = false;
+			HookStateSystem.Clear();
 		}
 	}
 

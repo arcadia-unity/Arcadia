@@ -19,15 +19,10 @@
   (let [objdb (.objectDatabase as)]
     (binding [arcadia.data/*object-db* objdb]
       (try
-        (let []
-          (Arcadia.Util/MapToDictionary
-            (type-args clojure.lang.Keyword, System.Object)
-            (edn/read-string {:readers *data-readers*} (.edn as))
-            (.state as)))
-        ;; (let [^JumpMap jm (.state as)]
-        ;;   (.Clear jm)
-        ;;   (.AddAll jm
-        ;;     (edn/read-string {:readers *data-readers*} (.edn as))))
+        (let [^JumpMap jm (.state as)]
+          (.Clear jm)
+          (.AddAll jm
+            (edn/read-string {:readers *data-readers*} (.edn as))))
         (catch Exception e
           (Debug/Log "Exception encountered in arcadia.internal.state-help/deserialize:")
           (Debug/Log e)
