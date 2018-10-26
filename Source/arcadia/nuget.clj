@@ -1,8 +1,12 @@
 (ns arcadia.nuget
-  (:require [clojure.string :as s])
+  (:require [clojure.string :as s]
+            [arcadia.internal.leiningen :as lein]
+            [arcadia.config :as config])
   (:import Newtonsoft.Json.JsonTextReader
            Newtonsoft.Json.Linq.JObject
-           Arcadia.Shell
+           [Arcadia ProgressBar Shell]
+           UnityEditor.EditorUtility
+           UnityEngine.Debug
            [System.Diagnostics Process]
            [System.Xml XmlWriter XmlWriterSettings]
            [System.Text StringBuilder]
@@ -59,14 +63,26 @@
 (def external-packages-folder (Path/Combine "Arcadia" "Libraries"))
 (def internal-packages-folder (Path/Combine "Assets" "Arcadia" "Libraries"))
 (def external-package-files-folder (Path/Combine external-packages-folder "Files"))
-(def package-lock-file (Path/Combine external-packages-folder "obj" "project.assets.json"))
+(def package-lock-folder (Path/Combine external-packages-folder "obj"))
+(def package-lock-file (Path/Combine package-lock-folder "project.assets.json"))
 
-(defn restore [coords]
-  (let [csproj-xml (coords->csproj coords)
-        csproj-file (Path/Combine external-packages-folder  (str (gensym "arcadia-packages" ) ".csproj"))]
-    (Directory/CreateDirectory external-packages-folder)
-    (spit csproj-file csproj-xml)
-    (Shell/MonoRun nuget-exe-path (str "restore " csproj-file " -PackagesDirectory " external-package-files-folder))))
+(defn restore
+  ([coords] (restore coords (fn [])))
+  ([coords donefn]
+   (let [csproj-xml (coords->csproj coords)
+         csproj-file (Path/Combine external-packages-folder  (str (gensym "arcadia-packages" ) ".csproj"))]
+     (Directory/CreateDirectory external-packages-folder)
+     (spit csproj-file csproj-xml)
+     (ProgressBar/Start {:title "Restoring Packages" :info "" :progress 0})
+     (Shell/MonoRun nuget-exe-path
+                    (str "restore " csproj-file " -PackagesDirectory " external-package-files-folder)
+                    {:output (fn [s] (swap! ProgressBar/State assoc :info (.Trim s)))
+                     :error (fn [s]
+                              (ProgressBar/Stop)
+                              (Debug/LogError s))
+                     :done (fn []
+                             (File/Delete csproj-file)
+                             (donefn))}))))
 
 
 (defn get-json-keys
@@ -101,17 +117,25 @@
                                        (map #(Path/Combine name+version %) runtime-files))
                                      (when compile-obj
                                        (map #(Path/Combine name+version %) compile-files)))))
-                                (get-json-keys obj)))]
+                                (get-json-keys obj)))
+        total (count to-copy)
+        current (volatile! 0)]
     (Directory/CreateDirectory destination)
     (doseq [f to-copy]
       (let [full-source (Path/Combine external-package-files-folder f)]
+        (swap! ProgressBar/State assoc
+               :title "Installing Packages"
+               :info f
+               :progress (float (/ @current total)))
+        (vswap! current inc)
         (cond
           (Directory/Exists full-source)
           (cp-r (Path/Combine external-package-files-folder f) destination)
           (File/Exists full-source)
           (File/Copy full-source
                      (Path/Combine destination (Path/GetFileName f))
-                     true))))))
+                     true))))
+    (ProgressBar/Stop)))
 
 (defn clean [dir]
   (let [di (DirectoryInfo. dir)]
@@ -120,8 +144,25 @@
     (doseq [file (.EnumerateDirectories di)]
       (.Delete file true))))
 
+(defn restore-from-config []
+  (clean internal-packages-folder)
+  (if (Directory/Exists package-lock-folder)
+    (Directory/Delete package-lock-folder true))
+  (let [user-deps (:dependencies (config/config))
+        lein-deps (mapcat #(get-in % [::lein/defproject ::lein/dependencies])
+                          (lein/all-project-data))
+        dependencies (->> (concat user-deps lein-deps))]
+    (restore dependencies (fn [] (install internal-packages-folder)))))
+
+(defn clean-libraries []
+  (clean internal-packages-folder))
+
+(defn clean-cache []
+  (clean external-packages-folder))
+
 (comment
  (clean internal-packages-folder)
- (restore '[[]])
+ (restore '[[Vector2D "1.0.0"]
+            [Nasser.Flumbo "1.0.0"]])
  (install internal-packages-folder)
  )
