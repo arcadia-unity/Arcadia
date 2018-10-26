@@ -114,7 +114,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 				}
 				break;
 			default:
-				throw new System.InvalidOperationException("size of SampleCacheStruct out of bounds");
+				throw new System.InvalidOperationException("Size of IfnInfo out of bounds");
 			}
 			val = null;
 			return false;
@@ -135,10 +135,12 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 		for (int i = 0; i < ifnInfos.Length; i++) {
 			var inf = ifnInfos[i];
-			keyNames[i] = inf.key.Name;
+			// TODO: come back to this after Keyword rewrite
+			keyNames[i] = inf.key.Namespace != null ? inf.key.Namespace + "/" + inf.key.Name : inf.key.Name; 
 			Var v = inf.fn as Var;
 			if (v != null) {
-				varNames[i] = v.ToString();
+				// TODO: come back to this after Var rewrite
+				varNames[i] = v.Namespace.Name + "/" + v.Symbol.Name;
 			} else {
 				throw new InvalidOperationException("Attempting to serialize non-Var function in ArcadiaBehaviour. Key: " + inf.key);
 			}
@@ -212,22 +214,22 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 	// public static Var requireVarNamespacesFn;
 
-	[System.NonSerialized]
-	public static bool varsInitialized = false;
+	//[System.NonSerialized]
+	//public static bool varsInitialized = false;
 
-	private static void InitializeOwnVars ()
-	{
-		if (varsInitialized)
-			return;
+	//private static void InitializeOwnVars ()
+	//{
+	//	if (varsInitialized)
+	//		return;
 
-		string nsStr = "arcadia.internal.hook-help";
-		Arcadia.Util.require(nsStr);
-		//Arcadia.Util.getVar(ref hookStateDeserializeFn, nsStr, "hook-state-deserialize");
-		//Arcadia.Util.getVar(ref serializeBehaviourFn, nsStr, "serialize-behaviour");
-		//Arcadia.Util.getVar(ref requireVarNamespacesFn, nsStr, "require-var-namespaces");
+	//	string nsStr = "arcadia.internal.hook-help";
+	//	Arcadia.Util.require(nsStr);
+	//	//Arcadia.Util.getVar(ref hookStateDeserializeFn, nsStr, "hook-state-deserialize");
+	//	//Arcadia.Util.getVar(ref serializeBehaviourFn, nsStr, "serialize-behaviour");
+	//	//Arcadia.Util.getVar(ref requireVarNamespacesFn, nsStr, "require-var-namespaces");
 
-		varsInitialized = true;
-	}
+	//	varsInitialized = true;
+	//}
 
 	// ============================================================
 
@@ -319,7 +321,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 			for (int i = 0; i < keyNames.Length; i++) {
 				var kn = keyNames[i];
 				var vn = varNames[i];
-				Keyword k = Keyword.intern(kn); // TODO might be slightly wasteful, check this
+				Keyword k = Keyword.intern(kn);
 				Symbol vsym = Symbol.intern(vn);
 				Arcadia.Util.require(vsym.Namespace);
 				Var v = RT.var(vsym.Namespace, vsym.Name);
@@ -334,7 +336,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 			return;
 
 		//Init();
-		InitializeOwnVars();
+		//InitializeOwnVars();
 		RealizeVars();
 		// deserialization:
 		// hookStateDeserializeFn.invoke(this);
