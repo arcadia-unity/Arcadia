@@ -50,8 +50,8 @@ namespace Arcadia
             DisableSpecChecking();
 			SetInitialClojureLoadPath();
 			LoadConfig();
-			LoadPackages();
 			LoadLiterals();
+			InitializeLoadPathExtensions();
 			SetClojureLoadPath();
             BuildPipeline.EnsureCompiledFolders();
 			StartEditorCallbacks();
@@ -62,24 +62,18 @@ namespace Arcadia
 			Debug.Log("Arcadia Started!");
 		}
 
-        // workaround for spec issues
+		private static void InitializeLoadPathExtensions()
+		{
+			Util.require("arcadia.internal.leiningen");
+			Util.require("arcadia.internal.deps");
+		}
+
+		// workaround for spec issues
         static void DisableSpecChecking()
         {
         	Environment.SetEnvironmentVariable("clojure.spec.check-asserts", "false");
         	Environment.SetEnvironmentVariable("clojure.spec.skip-macros", "true");
         }
-
-		// code is so durn orthogonal we have to explicitly call this
-		// (necessary for package-sensitive loadpaths in presence of stuff like leiningen)
-		// on the other hand, packages pulls in almost everything else
-		public static void LoadPackages(){
-			Debug.Log("Loading packages...");
-            Util.require("arcadia.packages");
-			if(((int)RT.var("arcadia.packages", "dependency-count").invoke()) > 0) {
-				// may want to make this conditional on some config thing
-				RT.var("arcadia.packages", "install-all-deps").invoke();
-			}
-		}
 
 		[MenuItem("Arcadia/Initialization/Load Configuration")]
 		public static void LoadConfig()
@@ -122,6 +116,7 @@ namespace Arcadia
 		[MenuItem("Arcadia/Initialization/Update Clojure Load Path")]
 		public static void SetClojureLoadPath ()
 		{
+			Util.require("arcadia.compiler");
 			Debug.Log("Setting Load Path...");
 			string clojureDllFolder = GetClojureDllFolder();
 
