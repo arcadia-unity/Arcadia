@@ -8,13 +8,13 @@ namespace Arcadia
 {
     public static class Packages
     {
-        private static Var _restoreFromConfigVar = RT.var("arcadia.nuget", "restore-from-config");
-        private static Var _cleanLibraiesVar = RT.var("arcadia.nuget", "clean-libraries");
-        private static Var _cleanCacheVar = RT.var("arcadia.nuget", "clean-cache");
+        private static Var _restoreFromConfigVar = RT.var("arcadia.packages", "restore-from-config");
+        private static Var _cleanLibraiesVar = RT.var("arcadia.packages", "clean-libraries");
+        private static Var _cleanCacheVar = RT.var("arcadia.packages", "clean-cache");
 
         static Packages()
         {
-            Util.require("arcadia.nuget");
+            Util.require("arcadia.packages");
         }
         
         [MenuItem("Arcadia/Packages/Restore")]
