@@ -144,21 +144,23 @@ namespace Arcadia
 		// ==========================================================
 		// duplication
 
-		public JumpMap Duplicate ()
+		public JumpMap CopyTo (JumpMap jm2, IFn defaultConversion, ILookup conversions, object sourceObject, object targetObject)
 		{
-			var jm = new JumpMap();
-			foreach (var e in dict) {
-				var kv = e.Value;
-				jm.Add(kv.key, kv.val);
-			}
-			return jm;
-		}
-
-		public JumpMap CopyTo (JumpMap jm2)
-		{
-			foreach (var e in dict) {
-				var kv = e.Value;
-				jm2.Add(kv.key, kv.val);
+			// TODO: clean this up when we get generic persistent lookup
+			if (conversions != null) {
+				foreach (var e in dict) {
+					object key = e.Key;
+					IFn conversion = defaultConversion;
+					object tempConversion = conversions.valAt(key);
+					if (tempConversion != null) {
+						conversion = Arcadia.Util.AsIFn((IFn)tempConversion);
+					}
+					jm2.Add(key, conversion.invoke(key, e.Value.val, sourceObject, targetObject));
+				}
+			} else {
+				foreach (var e in dict) {
+					jm2.Add(e.Key, defaultConversion.invoke(e.Key, e.Value.val, sourceObject, targetObject));
+				}
 			}
 			return jm2;
 		}
@@ -196,6 +198,19 @@ namespace Arcadia
 				if (isInhabited)
 					return val;
 				return this.jumpMap.ValueAtKey(key);
+			}
+
+			// If the corresponding KeyVal is there now, returns it, 
+			// else returns null.
+			public KeyVal Refreshed ()
+			{
+				if (isInhabited)
+					return this;
+				KeyVal kv;
+				if (jumpMap.TryGetKeyVal(key, out kv)) {
+					return kv;
+				}
+				return null;
 			}
 
 		}

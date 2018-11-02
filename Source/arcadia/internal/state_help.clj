@@ -30,6 +30,10 @@
           (Debug/Log arcadia.data/*object-db*)
           (throw (Exception. "wrapper" e)))))))
 
+;; TODO: change this up for defmutable
+(defn default-conversion [k v source target]
+  v)
+
 (defn initialize [^ArcadiaState as]
   (deserialize as)
   ;;(.RefreshAll as)

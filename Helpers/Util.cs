@@ -60,6 +60,16 @@ namespace Arcadia
 			return ((IFn)v.getRawRoot()).invoke(a, b, c);
 		}
 
+		// TODO: get rid of this when var invocation debugged
+		public static IFn AsIFn (IFn f)
+		{
+			Var v = f as Var;
+			if (v != null) {
+				return (IFn)v.getRawRoot();
+			}
+			return f;
+		}
+
 		// ==================================================================
 		// Arrays
 
@@ -127,6 +137,49 @@ namespace Arcadia
 		}
 
 		// ==================================================================
+		// qualified names of keywords, symbols, vars
+
+		public static string QualifiedName (Symbol s)
+		{
+			if (s.Namespace != null)
+				return s.Namespace + "/" + s.Name;
+			return s.Name;
+		}
+
+		public static String QualifiedName (Keyword kw)
+		{
+			if (kw.Namespace != null) {
+				return kw.Namespace + "/" + kw.Name;
+			}
+			return kw.Name;
+		}
+
+		public static String QualifiedName (Var v)
+		{
+			return QualifiedName(v.sym);
+		}
+
+		public static Tuple<string, string> SplitQualifiedName (string qualifiedName)
+		{
+			int i = qualifiedName.IndexOf('/');
+			if (i == -1) {
+				return new Tuple<string, string>(null, qualifiedName);
+			}
+			return new Tuple<string, string>(qualifiedName.Substring(0, i), qualifiedName.Substring(i));
+		}
+
+		// loads var namespace as it goes
+		public static Var DeserializeVar (string name)
+		{
+			var ss = SplitQualifiedName(name);
+			if (ss.Item1 != null) {
+				require(ss.Item1);
+				return RT.var(ss.Item1, ss.Item2);
+			}
+			throw new ArgumentException("Can only deserialize qualified Var names. Var name: " + name);
+		}
+
+		// ==================================================================
 		// Persistent maps
 
 		public static IPersistentMap Zipmap (object[] ks, object[] vs)
@@ -140,9 +193,9 @@ namespace Arcadia
 			return PersistentHashMap.create(kvs);
 		}
 
-		public static IPersistentMap DictionaryToMap <T1,T2>(Dictionary<T1,T2> dict)
+		public static IPersistentMap DictionaryToMap<T1, T2> (Dictionary<T1, T2> dict)
 		{
-			ITransientMap bldg =  (ITransientMap)PersistentHashMap.EMPTY.asTransient();
+			ITransientMap bldg = (ITransientMap)PersistentHashMap.EMPTY.asTransient();
 			foreach (var kv in dict) {
 				bldg = bldg.assoc(kv.Key, kv.Value);
 			}
@@ -172,7 +225,7 @@ namespace Arcadia
 		}
 
 		public static Dictionary<T1, T2> MapToDictionary<T1, T2> (IPersistentMap m, Dictionary<T1, T2> dict)
-		{			
+		{
 			clojure.lang.IKVReduce m2 = m as clojure.lang.IKVReduce;
 			if (m2 != null) {
 				m2.kvreduce(new MapToDictionaryRFn<T1, T2>(dict), null);
@@ -182,6 +235,65 @@ namespace Arcadia
 				}
 			}
 			return dict;
+		}
+
+		// ------------------------------------------------------------------
+		// serialization thereof
+		// as usual, change this when we have 0-alloc persistent map iteration
+
+		class SerializeKeyVarMapRFn : AFn
+		{
+			string[] keysAr;
+			string[] valsAr;
+			int i = 0;
+
+			public SerializeKeyVarMapRFn (string[] keysAr, string[] valsAr)
+			{
+				this.keysAr = keysAr;
+				this.valsAr = valsAr;
+			}
+
+			public override object invoke (object arg, object kIn, object vIn)
+			{
+				Keyword k = kIn as Keyword;
+				if (k != null) {
+					keysAr[i] = QualifiedName(k);
+				} else {
+					throw new InvalidOperationException("Keys must be Keywords, instead got instance of " + kIn.GetType());
+				}
+
+				Var v = vIn as Var;
+				if (v != null) {
+					valsAr[i] = QualifiedName(v);
+				} else {
+					throw new InvalidOperationException("Vals must be Vars, instead got instance of " + vIn.GetType());
+				}
+				i++;
+				return null;
+			}
+		}
+
+		public static Tuple<string[], string[]> SerializeKeyVarMap (IKVReduce m, string[] keysArIn, string[] valsArIn)
+		{
+			int len = ((clojure.lang.Counted)m).count();
+			string[] keysAr = (keysArIn != null && keysArIn.Length == len) ? keysArIn : new string[len];
+			string[] valsAr = (valsArIn != null && valsArIn.Length == len) ? valsArIn : new string[len];
+
+			m.kvreduce(new SerializeKeyVarMapRFn(keysAr, valsAr), null);
+
+			return new Tuple<string[], string[]>(keysAr, valsAr);
+		}
+
+		// ------------------------------------------------------------------
+		// deserialization thereof
+
+		public static IPersistentMap DeserializeKeyVarMap (string[] ks, string[] vs)
+		{
+			ITransientMap m = (ITransientMap)PersistentHashMap.EMPTY.asTransient();
+			for (int i = 0; i < ks.Length; i++) {
+				m.assoc(Keyword.intern(ks[i]), DeserializeVar(vs[i]));
+			}
+			return m.persistent();
 		}
 
 		// ==================================================================
@@ -217,7 +329,7 @@ namespace Arcadia
 			var inx = typeName.LastIndexOf('.');
 			if (inx != -1) {
 				return typeName.Substring(0, inx).Replace('_', '-');
-			} 
+			}
 			throw new ArgumentException("No namespace string found for typeName " + typeName);
 		}
 

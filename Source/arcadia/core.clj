@@ -430,19 +430,12 @@
   will be invoked every time the message identified by `message-kw` is sent by Unity. `f`
   must have the same arity as the expected Unity message. When called with a key `k`
   this key can be passed to `message-kw-` to remove the function."
-  ([obj message-kw f] (hook+ obj message-kw :default f))
+  ([obj message-kw f] (hook+ obj message-kw :default f)) ;; TODO: don't like this
   ([obj message-kw k f]
-   (hook+ obj message-kw k f nil))
-  ([obj message-kw k f {:keys [fast-keys]}]
-   (let [fast-keys (or fast-keys
-                       (when (instance? clojure.lang.IMeta f)
-                         (::keys (meta f))))]
-     ;; need to actually do something here
-     ;; (when-not (empty? fast-keys) (println "fast-keys: " fast-keys))
-     (let [hook-type (ensure-hook-type message-kw)
-           ^ArcadiaBehaviour hook-cmpt (ensure-cmpt obj hook-type)]
-       (.AddFunction hook-cmpt f k (into-array System.Object (cons k fast-keys)))
-       obj))))
+   (let [hook-type (ensure-hook-type message-kw)
+         ^ArcadiaBehaviour hook-cmpt (ensure-cmpt obj hook-type)]
+     (.AddFunction hook-cmpt f k)
+     obj)))
 
 (defn hook-var [obj message-kw var]
   (if (var? var)
@@ -663,14 +656,14 @@
         (= obj ret)))
 
 (defn role+ [obj k spec]
+  ;; unfortunately we need to blow away previous hooks
+  ;; in addition to overriding existing things
   (role- obj k)
   (reduce-kv
     (fn [_ k2 v]
       (cond
         (hook-types k2)
-        (hook+ obj k2 k v
-          (when-let [ks (get spec (get hook-ks k2))]
-            {:fast-keys ks}))
+        (hook+ obj k2 k v)
 
         (= :state k2)
         (state+ obj k (maybe-mutable v))))
@@ -699,13 +692,7 @@
     x))
 
 (defn- inner-role-step [bldg, ^ArcadiaBehaviour+IFnInfo inf, hook-type-key]
-  (as-> bldg bldg
-        (assoc bldg hook-type-key (.fn inf))
-        (let [fk (.fastKeys inf)]
-          (if (< 1 (count fk))
-            (assoc bldg (hook-type-key->fastkeys-key hook-type-key)
-              (vec (rest fk)))
-            bldg))))
+  (assoc bldg hook-type-key (.fn inf)))
 
 (defn role [obj k]
   (let [step (fn [bldg ^ArcadiaBehaviour ab]
@@ -1157,8 +1144,10 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
                                      'defmutable-internal-dictionary
                                      {:unsynchronized-mutable true,
                                       :tag 'Arcadia.DefmutableDictionary})))
-               
+
+               ;; ------------------------------------------------------------
                clojure.lang.ILookup
+               
                (valAt [this#, key#]
                  (case key#
                    ~@lookup-cases
@@ -1170,12 +1159,16 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
                    (if (.ContainsKey ~'defmutable-internal-dictionary)
                      (.GetValue ~'defmutable-internal-dictionary key#)
                      not-found#)))
-               
+
+               ;; ------------------------------------------------------------
                ISnapshotable
+
                (snapshot [~this-sym]
                  ~(snapshot-dictionary-form (mu/lit-assoc parse field-kws type-name this-sym)))
 
+               ;; ------------------------------------------------------------
                IMutable
+               
                ~@mut-impl
 
                IDeleteableElements
@@ -1190,7 +1183,9 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
                        ~@key-cases
                        (.Remove ~'defmutable-internal-dictionary ~key-sym))))
 
+               ;; ------------------------------------------------------------
                System.Collections.IDictionary
+               
                (get_IsFixedSize [this#]
                  false)
 
@@ -1231,8 +1226,14 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
                      (System.NotSupportedException.
                        "`Remove` on fields is not currently supported for types defined via `arcadia.core/defmutable`"))
                    (.Remove ~'defmutable-internal-dictionary k#)))
+
+               ;; ------------------------------------------------------------
+               ;; User-provided interface and protocol implementations
                
                ~@protocol-impl-forms)
+             
+             ;; ------------------------------------------------------------
+             ;; Multimethod extensions and generated vars
              
              ;; Overwrite the generated constructor
              ~(let [naked-fields (map #(vary-meta % dissoc :tag) fields)

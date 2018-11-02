@@ -68,7 +68,7 @@ namespace Arcadia
 		public static object LookupTest (object key)
 		{
 			object val;
-			if (ifnInfos[ifnInfoIndex].Lookup(key, out val)) {
+			if (ifnInfos[ifnInfoIndex].TryGetVal(key, out val)) {
 				return val;
 			}
 			return null;
@@ -80,7 +80,7 @@ namespace Arcadia
 			if (hasState && gobj == cachedGameObject){
 
 				object val;
-				if (ifnInfos[ifnInfoIndex].Lookup(key, out val)) {
+				if (ifnInfos[ifnInfoIndex].TryGetVal(key, out val)) {
 					return val;
 				}
 
@@ -90,6 +90,7 @@ namespace Arcadia
 					UpdateCache(kv);
 					return kv.val;
 				}
+				return null;
 			}
 
 			return ((GameObject)gobj).GetComponent<ArcadiaState>().ValueAtKey(key);

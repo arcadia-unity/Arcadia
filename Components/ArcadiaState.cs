@@ -8,12 +8,19 @@ using System;
 [ExecuteInEditMode]
 public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 {
+	// TODO Figure out stylistic best practices for this sort of thing, bit of a mess right now
 
 	// TODO sorted maps?
 	public string edn = "{}";
 	public JumpMap state = new JumpMap();
 
-	//public Dictionary<Keyword, object> state = new Dictionary<Keyword, object>();
+	public string[] conversionKeys;
+	public string[] conversionVars;
+	public IPersistentMap conversions;
+
+	// copy control
+	public enum CopyStatus { Normal, Source, Receiver };
+	public CopyStatus copyStatus = CopyStatus.Normal;
 
 	public Atom objectDatabase = null;
 	public int[] objectDatabaseIds = new int[0];
@@ -73,6 +80,8 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 
 	public static Var dataReadersVar;
 
+	public static Var defaultConversion;
+
 	public static bool varsInitialized = false;
 
 	// =====================================================
@@ -90,6 +99,7 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 		Arcadia.Util.getVar(ref awakeFn, stateHelpNs, "awake");
 		Arcadia.Util.getVar(ref jumpMapToMapVar, stateHelpNs, "jumpmap-to-map");
 		Arcadia.Util.getVar(ref deserializeVar, stateHelpNs, "deserialize");
+		Arcadia.Util.getVar(ref defaultConversion, stateHelpNs, "default-conversion");
 
 		var arcadiaLiteralsNs = "arcadia.data";
 		Arcadia.Util.require(arcadiaLiteralsNs);
@@ -106,28 +116,18 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 		varsInitialized = true;
 	}
 
-	
-	
+
+
 	public void DeserializeState ()
 	{
-		// until we have a better idea
-
 		deserializeVar.invoke(this);
-		
-		//Var.pushThreadBindings(RT.map(objectDbVar, objectDatabase));
-		//try {
-		//	// TODO: is this really the best representation? Check out Garden, etc, with eye towards perf
-		//	IPersistentMap readerThing = RT.map(Keyword.intern("readers"), dataReadersVar.get());
-		//	Debug.Log(prStrVar.invoke(readerThing));
-		//	IPersistentMap intermediate = (IPersistentMap) readStringVar.invoke(edn, readerThing);
-		//	state.AddAll(intermediate);
-		//}  catch (Exception e) {
-		//	Debug.Log("problem hit in DeserializeState. edn: \n" + edn);
-		//	throw;
-		//} finally {
-		//	Var.popThreadBindings();
-		//}
-		
+	}
+
+	public void DeserializeConversions ()
+	{
+		if (conversionKeys != null && conversionKeys.Length > 0) {
+			conversions = Arcadia.Util.DeserializeKeyVarMap(conversionKeys, conversionVars);
+		}
 	}
 
 
@@ -138,11 +138,12 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 	{
 		if (fullyInitialized)
 			return;
-		
+
 		// TODO: cache component access
 
 		InitializeOwnVars();
 		DeserializeState();
+		DeserializeConversions();
 		fullyInitialized = true;
 	}
 
@@ -166,12 +167,22 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 		} finally {
 			Var.popThreadBindings();
 		}
+
+		// serialize conversions
+		if (conversions != null) {
+			var ss = Arcadia.Util.SerializeKeyVarMap((IKVReduce)conversions, conversionKeys, conversionVars);
+			conversionKeys = ss.Item1;
+			conversionVars = ss.Item2;
+		} else {
+			conversionKeys = (conversionKeys != null && conversionKeys.Length == 0) ? conversionKeys : new string[0];
+			conversionVars = (conversionVars != null && conversionVars.Length == 0) ? conversionVars : new string[0];
+		}
 	}
 
 	// need for ISerializationCallbackReceiver interface
 	public void OnAfterDeserialize ()
 	{
-	
+
 	}
 
 	void OnDestroy ()
@@ -191,6 +202,12 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 
 	// ============================================================
 	// modification
+	// I suppose
+	public void Refresh (object k)
+	{
+
+	}
+
 	//public void RefreshAll ()
 	//{
 	//	var arcadiaBehaviours = gameObject.GetComponents<ArcadiaBehaviour>();
@@ -199,20 +216,45 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 	//	}
 	//}
 
-	public void Add (object k, object v)
+	public bool ContainsKey (object k)
 	{
-		//bool hadKey = state.ContainsKey(k);
-		state.Add((Keyword)k, v);
-		// determine if this warrants refreshing the pamv's
-		//if (!hadKey) {
-		//	RefreshAll();
-		//}
+		return state.ContainsKey(k);
 	}
 
+	public void Add (object k, object v)
+	{
+		state.Add((Keyword)k, v);
+	}
+
+	// Strategies for removing keys in the presence of a lookup
+	// system distributed as cached views. Reference type KeyVals 
+	// means the caches immediately reflect new vals, but make 
+	// removal of values trickier.
+	// One approach is to flag the KeyVals as obsolete or evacuated,
+	// then check this flag on every cached lookup, falling back to
+	// a lookup against the backing dictionary which may be accompanied
+	// by replacing the evacuated KeyVal. This has the advantage of laziness
+	// and avoiding scans or maintaining an index of the location of KeyVals
+	// so they can be efficiently removed on their actual removal from the
+	// dictionary, but incurs an extra boolean check for every lookup,
+	// which may be a bit expensive at this level where we're counting every op,
+	// and you'd still have to do a bit of dancing around for an evacuated KeyVal.
+	// We're close to having the infrastructure for that though, so it might be
+	// a path to explore more in the future.
+	// Another approach is to maintain an index of where all the keyvals are.
+	// This would make finding and updating them faster, but incur all the overhead,
+	// in terms of speed, memory, and code complexity, of maintaining the index itself.
+	// We don't want to do that right now.
+	// The approach we're going with for the moment is to just scan everything
+	// and remove matching KeyVals as soon as their key is deleted, on the premise
+	// that it's the simplest thing to do and key deletions are probably pretty rare.
 	public void Remove (object k)
 	{
 		state.Remove((Keyword)k);
-		// don't need to refresh anything
+		// TODO: consider caching this
+		foreach (var x in GetComponents<ArcadiaBehaviour>()) {
+			x.RemoveCachedKey(k);
+		}
 	}
 
 	public void Clear ()
@@ -223,7 +265,6 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 	// TODO add arity with default value
 	public object ValueAtKey (object k)
 	{
-		//return state.ValueAtKey(k);
 		object v;
 		if (state.TryGetValue((Keyword)k, out v)) {
 			return v;
@@ -231,12 +272,19 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 		return null;
 	}
 
-	//public JumpMap.PartialArrayMapView pamv (object[] ks)
-	//{
-	//	Debug.Log("In ArcadiaState.pamv. ks.Length:" + ks.Length);
-	//	return state.pamv(ks);
-	//}
+	// ============================================================
+	// copying
+
+	// TODO presumably can make this a lot faster though more
+	// structure sharing, for now main objective is to outperform
+	// edn serialization and deserialization
 
 
+	public void CopyTo (ArcadiaState target)
+	{
+		state.CopyTo(target.state, defaultConversion, conversions, gameObject, target.gameObject);
+		target.conversions = conversions;
+	}
+	
 }
 #endif
