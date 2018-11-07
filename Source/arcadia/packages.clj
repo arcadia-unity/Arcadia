@@ -1,5 +1,6 @@
 (ns arcadia.packages
   (:require [clojure.string :as s]
+            [clojure.edn :as edn]
             [arcadia.internal.leiningen :as lein]
             [arcadia.config :as config])
   (:import Newtonsoft.Json.JsonTextReader
@@ -54,8 +55,11 @@
                (doseq [d data]
                  (elem "PackageReference"
                        (attr "Include" (str (first d)))
-                       (attr "Version" (str (last d)))))))))
-
+                       (attr "Version" (str (or (:nuget/version (last d))
+                                                (throw (ex-info "Expected :nuget/version key in dependency map"
+                                                                {:id (first d)
+                                                                 :dependency d
+                                                                 :dependencies data})))))))))))
 
 ;;;; NuGet & JSON wrangling
 
@@ -144,14 +148,19 @@
     (doseq [file (.EnumerateDirectories di)]
       (.Delete file true))))
 
+(defn lein-coords->deps-map [coord]
+  (hash-map (first coord) {:nuget/version (last coord)}))
+
 (defn restore-from-config []
   (clean internal-packages-folder)
   (if (Directory/Exists package-lock-folder)
     (Directory/Delete package-lock-folder true))
   (let [user-deps (:dependencies (config/config))
-        lein-deps (mapcat #(get-in % [::lein/defproject ::lein/dependencies])
-                          (lein/all-project-data))
-        dependencies (->> (concat user-deps lein-deps))]
+        lein-deps (->> (lein/all-project-data)
+                       (mapcat #(get-in % [::lein/defproject ::lein/dependencies]))
+                       (map lein-coords->deps-map)
+                       (apply merge))
+        dependencies (->> (merge user-deps lein-deps))]
     (restore dependencies (fn [] (install internal-packages-folder)))))
 
 (defn clean-libraries []
@@ -159,3 +168,151 @@
 
 (defn clean-cache []
   (clean external-packages-folder))
+
+;;;; package & publish
+
+(def external-publish-folder (Path/Combine external-packages-folder "Publish"))
+
+(defn nuspec [data dependencies skip-content?]
+  (doc
+   (elem "package"
+         (elem "metadata"
+               (doseq [[k v] data]
+                 (elem (name k) (string (str v))))
+               (when dependencies
+                 (elem "dependencies"
+                       (doseq [d dependencies]
+                         (elem "dependency"
+                               (attr "id" (str (first d)))
+                               (attr "version" (str (or (:nuget/version (last d))
+                                                        (throw (ex-info "Expected :nuget/version key in dependency map"
+                                                                        {:id (first d)
+                                                                         :dependency d
+                                                                         :dependencies dependencies}))))))))))
+         (when-not skip-content?
+           (elem "files"
+                 (elem "file"
+                       (attr "src" "content/**/*.clj")
+                       (attr "target" "content")))))))
+
+(defn pack [dir
+            {:keys [id version source aot metadata dependencies framework]
+             :or {framework "net46"}}
+            donefn]
+  (when-not id (throw (ex-info "missing required key" {:key :id})))
+  (when-not version (throw (ex-info "missing required key" {:key :version})))
+  (when (and (not source)
+             (not aot))
+    (throw (ex-info "missing required key" {:key [:source :aot]})))
+  (when-not (Directory/Exists external-publish-folder)
+    (Directory/CreateDirectory external-publish-folder))
+  (let [temp-dir (Path/Combine external-publish-folder (str id "." version (gensym "-publish")))
+        nuspec-path (Path/Combine temp-dir (str id "." version ".nuspec"))
+        nuspec (nuspec
+                (merge {:id id :version version} metadata)
+                dependencies
+                (nil? source))]
+    (Directory/CreateDirectory temp-dir)
+    (when aot
+      (let [lib-folder (Path/Combine temp-dir "lib" framework)]
+        (Directory/CreateDirectory (Path/Combine temp-dir "lib"))
+        (Directory/CreateDirectory lib-folder)
+        (binding [*compile-path* lib-folder]
+          (doseq [ns aot]
+            (compile ns)))))
+    (when source
+      (let [content-folder (Path/Combine temp-dir "content")]
+        (Directory/CreateDirectory content-folder)
+        (doseq [path source]
+          (cp-r path content-folder))))
+    (spit nuspec-path nuspec)
+    (Shell/MonoRun nuget-exe-path
+                   (str "pack " nuspec-path " -OutputDirectory " dir)
+                   {:output (fn [s] (swap! ProgressBar/State assoc :info (.Trim s)))
+                    :error (fn [s]
+                             (ProgressBar/Stop)
+                             (Debug/LogError s))
+                    :done donefn})))
+
+(defn push [path donefn]
+  (Shell/MonoRun nuget-exe-path
+                 (str "push " path " -Source nuget.org")
+                 {:output (fn [s] (swap! ProgressBar/State assoc :info (.Trim s)))
+                  :error (fn [s]
+                           (ProgressBar/Stop)
+                           (Debug/LogError s))
+                  :done donefn}))
+
+(defn publish [{:keys [id version] :as spec}]
+  (pack external-publish-folder spec
+        (fn []
+          (push (Path/Combine external-publish-folder (str id "." version ".nupkg"))
+                (fn []
+                  ;; TODO clean up here
+                  )))))
+
+;;;; config / api key management
+
+(def config-path (Path/Combine external-packages-folder "NuGet.config"))
+
+(def default-config
+  (doc
+   (elem "configuration"
+         (elem "packageSources"
+               (elem "add"
+                     (attr "key" "nuget.org")
+                     (attr "value" "https://api.nuget.org/v3/index.json")
+                     (attr "protocolVersion" "3"))))))
+
+(defn ensure-config []
+  (when-not (File/Exists config-path)
+    (spit config-path default-config)))
+
+(defn reset-config []
+  (ensure-config)
+  (File/Delete config-path)
+  (spit config-path default-config))
+
+(defn set-api-key [key]
+  (ensure-config)
+  (Shell/MonoRun nuget-exe-path
+                 (str "setApiKey " key " -ConfigFile " config-path)
+                 {:output (fn [s] (swap! ProgressBar/State assoc :info (.Trim s)))
+                  :error (fn [s]
+                           (ProgressBar/Stop)
+                           (Debug/LogError s))}))
+
+;;;; high level
+
+(defn ->package-map [path]
+  (cond
+    (.EndsWith path "deps.edn")
+    (let [project-data (-> path
+                           (slurp :enc "utf8")
+                           edn/read-string)
+          project-dir (-> path
+                          Path/GetDirectoryName)]
+      {:dependencies
+       (:deps project-data)
+       :source (->> project-data
+                    :paths
+                    (map #(Path/Combine project-dir %))
+                    vec)})
+    (.EndsWith path "project.clj")
+    (let [project-data (-> path
+                           Path/GetDirectoryName
+                           lein/project-data)]
+      {:dependencies
+       (->> project-data
+            ::lein/defproject
+            ::lein/dependencies
+            (map lein-coords->deps-map)
+            (apply merge))
+       :source
+       (lein/project-data-loadpath project-data)})
+    :else
+    (throw (ex-info "Unsupported project file"
+                    {:file path}))))
+
+(defn publish-project [path]
+  (-> path ->package-map publish))
