@@ -194,7 +194,7 @@
                   socket-repl)]
        (start-server opts))
 
-     (= false socket-repl) ; lets think about this
+     (false? socket-repl) ; lets think about this
      (s/stop-servers))))
 
 (state/add-listener ::config/on-update ::server-reactive #'server-reactive)
