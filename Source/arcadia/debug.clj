@@ -38,6 +38,14 @@
                  :when (instance? clojure.lang.CljCompiler.Ast.LocalBinding bind)]
              [`(quote ~sym) (.Symbol bind)])))
 
+;; system should evade STM
+(defn- send! [a f & args]
+  (if (clojure.lang.LockingTransaction/isRunning)
+    (thread/start-thread
+      #(apply send a f args))
+    (apply send a f args))
+  a)
+
 ;; --------------------------------------------------
 ;; for building, debugging
 (def repl-thread (current-thread))
@@ -131,7 +139,7 @@
   (agent empty-registry))
 
 (defn drain-outbox-async []
-  (send breakpoint-registry
+  (send! breakpoint-registry
     (fn [{:keys [::outbox] :as bpr}]
       (doseq [{:keys [::promise ::payload]} outbox]
         (deliver promise payload))
@@ -155,7 +163,7 @@
 
 (defn bpr-sync [f]
   (let [p (promise)]
-    (send breakpoint-registry
+    (send! breakpoint-registry
       (fn [bpr]
         (try
           (let [res (f bpr)]
