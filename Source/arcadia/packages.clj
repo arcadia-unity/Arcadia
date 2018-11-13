@@ -47,17 +47,28 @@
    (elem "Project"
          (attr "Sdk" "Microsoft.NET.Sdk")
          (elem "PropertyGroup"
-               (elem "OutputType" (string "Exe"))
-               (elem "TargetFramework" (string "net461")))
-         (elem "ItemGroup"
-               (doseq [d data]
+               (elem "OutputType" (string "Exe")) ;; TODO do we need this?
+               (elem "TargetFramework" (string "net46")))
+         (when (not (empty? data))
+           (elem "ItemGroup"
                  (elem "PackageReference"
-                       (attr "Include" (str (first d)))
-                       (attr "Version" (str (or (:nuget/version (last d))
-                                                (throw (ex-info "Expected :nuget/version key in dependency map"
-                                                                {:id (first d)
-                                                                 :dependency d
-                                                                 :dependencies data})))))))))))
+                       (attr "Include" "Arcadia.Clojure")
+                       (attr "Version" "*")
+                       (elem "ExcludeAssets"
+                             (string "all")))
+                 (elem "PackageReference"
+                       (attr "Include" "DynamicLanguageRuntime")
+                       (attr "Version" "*")
+                       (elem "ExcludeAssets"
+                             (string "all")))
+                 (doseq [d data]
+                   (elem "PackageReference"
+                         (attr "Include" (str (first d)))
+                         (attr "Version" (str (or (:nuget/version (last d))
+                                                  (throw (ex-info "Expected :nuget/version key in dependency map"
+                                                                  {:id (first d)
+                                                                   :dependency d
+                                                                   :dependencies data}))))))))))))
 
 ;;;; NuGet & JSON wrangling
 
