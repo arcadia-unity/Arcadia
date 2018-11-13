@@ -3,9 +3,7 @@
             [clojure.edn :as edn]
             [arcadia.internal.leiningen :as lein]
             [arcadia.config :as config])
-  (:import Newtonsoft.Json.JsonTextReader
-           Newtonsoft.Json.Linq.JObject
-           [Arcadia ProgressBar Shell]
+  (:import [Arcadia ProgressBar Shell]
            UnityEditor.EditorUtility
            UnityEngine.Debug
            [System.Diagnostics Process]
@@ -88,12 +86,6 @@
                              (File/Delete csproj-file)
                              (donefn))}))))
 
-
-(defn get-json-keys
-  [^System.Collections.Generic.IDictionary|`2[System.String,Newtonsoft.Json.Linq.JToken]| o]
-  (when o
-    (.get_Keys o)))
-
 (defn cp-r-info [from to]
   (doseq [dir (.GetDirectories from)]
     (cp-r-info dir (.CreateSubdirectory to (.Name dir))))
@@ -105,41 +97,30 @@
              (DirectoryInfo. to)))
 
 (defn install [destination]
-  (let [json-path package-lock-file
-        json (JObject/Parse (slurp json-path :encoding "utf8"))
-        obj (.SelectToken json "$.targets['.NETFramework,Version=v4.6.1']")
-        to-copy (apply hash-set
-                        (mapcat (fn [k]
-                                  (let [name+version (s/lower-case k)
-                                        compile-obj (.. obj (GetValue k) (GetValue "compile"))
-                                        runtime-obj (.. obj (GetValue k) (GetValue "runtime"))
-                                        compile-files (remove #(= "_._" (Path/GetFileName %)) (get-json-keys compile-obj))
-                                        runtime-files (remove #(= "_._" (Path/GetFileName %)) (get-json-keys runtime-obj))]
-                                    (concat
-                                     [(Path/Combine name+version "content")]
-                                     (when runtime-obj
-                                       (map #(Path/Combine name+version %) runtime-files))
-                                     (when compile-obj
-                                       (map #(Path/Combine name+version %) compile-files)))))
-                                (get-json-keys obj)))
-        total (count to-copy)
-        current (volatile! 0)]
-    (Directory/CreateDirectory destination)
-    (doseq [f to-copy]
-      (let [full-source (Path/Combine external-package-files-folder f)]
-        (swap! ProgressBar/State assoc
-               :title "Installing Packages"
-               :info f
-               :progress (float (/ @current total)))
-        (vswap! current inc)
-        (cond
-          (Directory/Exists full-source)
-          (cp-r (Path/Combine external-package-files-folder f) destination)
-          (File/Exists full-source)
-          (File/Copy full-source
-                     (Path/Combine destination (Path/GetFileName f))
-                     true))))
-    (ProgressBar/Stop)))
+  (let [to-copy (volatile! [])]
+    (Shell/MonoRun
+     "Assets/Arcadia/Infrastructure/NuGetAssetParser.exe"
+     (str package-lock-file " 4.6")
+     {:output (fn [s] (vswap! to-copy conj s))
+      :done (fn []
+              (let [to-copy @to-copy
+                    total (count to-copy)
+                    current (volatile! 0)]
+                (Directory/CreateDirectory destination)
+                (doseq [f to-copy]
+                  (let [full-source (Path/Combine external-package-files-folder f)]
+                    (swap! ProgressBar/State assoc
+                           :title "Installing Packages"
+                           :info f
+                           :progress (float (/ @current total)))
+                    (vswap! current inc)
+                    (cond
+                      (Directory/Exists full-source)
+                      (cp-r (Path/Combine external-package-files-folder f) destination)
+                      (File/Exists full-source)
+                      (File/Copy full-source
+                                 (Path/Combine destination (Path/GetFileName f))
+                                 true))))))})))
 
 (defn clean [dir]
   (let [di (DirectoryInfo. dir)]
