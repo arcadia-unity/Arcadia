@@ -96,6 +96,7 @@
                               (Debug/LogError s))
                      :done (fn []
                              (File/Delete csproj-file)
+                             (ProgressBar/Stop)
                              (donefn))}))))
 
 (defn cp-r-info [from to]
