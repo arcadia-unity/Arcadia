@@ -78,6 +78,7 @@
 (def external-package-files-folder (Path/Combine external-packages-folder "Files"))
 (def package-lock-folder (Path/Combine external-packages-folder "obj"))
 (def package-lock-file (Path/Combine package-lock-folder "project.assets.json"))
+(def config-path (Path/GetFullPath (Path/Combine external-packages-folder "NuGet.config")))
 
 (defn restore
   ([coords] (restore coords (fn [])))
@@ -88,7 +89,7 @@
      (spit csproj-file csproj-xml)
      (ProgressBar/Start {:title "Restoring Packages" :info "" :progress 0})
      (Shell/MonoRun nuget-exe-path
-                    (str "restore " csproj-file " -PackagesDirectory " external-package-files-folder)
+                    (str "restore " csproj-file " -PackagesDirectory " external-package-files-folder " -ConfigFile " config-path)
                     {:output (fn [s] (swap! ProgressBar/State assoc :info (.Trim s)))
                      :error (fn [s]
                               (ProgressBar/Stop)
@@ -219,8 +220,8 @@
           (cp-r path content-folder))))
     (spit nuspec-path nuspec)
     (Shell/MonoRun nuget-exe-path
-                   (str "pack " nuspec-path " -OutputDirectory " dir)
-                   {:output (fn [s] (swap! ProgressBar/State assoc :info (.Trim s)))
+                   (str "pack " nuspec-path " -OutputDirectory " dir " -ConfigFile " config-path)
+                   {:output #(swap! ProgressBar/State assoc :info (.Trim %))
                     :error (fn [s]
                              (ProgressBar/Stop)
                              (Debug/LogError s))
@@ -228,7 +229,7 @@
 
 (defn push [path donefn]
   (Shell/MonoRun nuget-exe-path
-                 (str "push " path " -Source nuget.org")
+                 (str "push " path " -Source nuget.org -ConfigFile " config-path)
                  {:output (fn [s] (swap! ProgressBar/State assoc :info (.Trim s)))
                   :error (fn [s]
                            (ProgressBar/Stop)
@@ -239,13 +240,9 @@
   (pack external-publish-folder spec
         (fn []
           (push (Path/Combine external-publish-folder (str id "." version ".nupkg"))
-                (fn []
-                  ;; TODO clean up here
-                  )))))
+                #(clean external-publish-folder)))))
 
 ;;;; config / api key management
-
-(def config-path (Path/Combine external-packages-folder "NuGet.config"))
 
 (def default-config
   (doc
