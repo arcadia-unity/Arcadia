@@ -108,6 +108,14 @@
   (cp-r-info (DirectoryInfo. from)
              (DirectoryInfo. to)))
 
+(defn cp-r-folder-info [from to]
+  (let [destination (.CreateSubdirectory to (.Name from))]
+    (cp-r-info from destination)))
+
+(defn cp-folder [from to]
+  (cp-r-folder-info (DirectoryInfo. from)
+                    (DirectoryInfo. to)))
+
 (defn install [destination]
   (let [to-copy (volatile! [])]
     (Shell/MonoRun
@@ -185,8 +193,8 @@
          (when-not skip-content?
            (elem "files"
                  (elem "file"
-                       (attr "src" "content/**/*.clj")
-                       (attr "target" "content")))))))
+                       (attr "src" (Path/Combine "content" "clojure" "**" "*.clj"))
+                       (attr "target" (Path/Combine "content" "clojure"))))))))
 
 (defn pack [dir
             {:keys [id version source aot metadata dependencies framework]
@@ -214,10 +222,10 @@
           (doseq [ns aot]
             (compile ns)))))
     (when source
-      (let [content-folder (Path/Combine temp-dir "content")]
+      (let [content-folder (Path/Combine temp-dir "content" "clojure")]
         (Directory/CreateDirectory content-folder)
         (doseq [path source]
-          (cp-r path content-folder))))
+          (cp-folder path content-folder))))
     (spit nuspec-path nuspec)
     (Shell/MonoRun nuget-exe-path
                    (str "pack " nuspec-path " -OutputDirectory " dir " -ConfigFile " config-path)
