@@ -1,4 +1,5 @@
-(ns arcadia.internal.macro)
+(ns arcadia.internal.macro
+  (:require [arcadia.internal.array-utils :as au]))
 
 ;; ============================================================
 ;; evaluation manipulation
@@ -134,13 +135,13 @@
 (defn arities-forms
   ([base-fn] (arities-forms base-fn nil))
   ([base-fn, {:keys [::max-args, ::min-args, ::cases, ::arg-fn]
-              :or {max-args 20,
+              :or {max-args 22,
                    min-args 0,
                    cases {},
                    arg-fn #(gensym (str "arg-" (inc %) "_"))}}]
    (let [args-n (range min-args (inc max-args))
-         args (map arg-fn args-n)
-         arity-args (vec (rest (reductions conj [] args)))
+         args (mapv arg-fn args-n)
+         arity-args (mapv #(subvec args 0 %) args-n)
          cases-fn (fn [i val]
                     (if (contains? cases i)
                       ((cases i) val)
@@ -149,6 +150,24 @@
        (map cases-fn
          args-n
          (map base-fn arity-args))))))
+
+;; ============================================================
+;; help generating IFn types
+
+;; see RestFn for inspiration
+(defmacro reify-variadic-ifn [& impls]
+  `(reify clojure.lang.IFn
+     ~@(arities-forms
+           (fn [args]
+             `(~'invoke ~args
+               (apply ~(first args)
+                 (clojure.lang.ArraySeq/create
+                   ^|System.Object[]|
+                   (au/lit-array System.Object
+                     ~@(rest args))))))
+         {::min-args 1}) ;; `this` arg
+     ;; remember to implement (applyTo [this args] ...) !
+     ~@impls))
 
 ;; ============================================================
 ;; type utils

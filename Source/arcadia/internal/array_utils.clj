@@ -1,5 +1,8 @@
 (ns arcadia.internal.array-utils)
 
+;; TODO: should be possible for this
+;; macro to type-hint returned form
+
 (defmacro lit-array [t & contents]
   (let [len (count contents)
         arsym (with-meta (gensym "array_")
