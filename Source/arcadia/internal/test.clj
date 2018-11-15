@@ -285,7 +285,10 @@
 
 (defmulti data-scuba #'data-dispatch)
 
-;; (UnityEngine.Debug/Log "HERE WE FUCKING ARE")
+(defmethod data-scuba :default [x]
+  (throw
+    (InvalidOperationException.
+      (str "No method found in `data-scuba` for dispatch value. Type of argument: " (class x)))))
 
 (defmethod data-scuba ::tester [x]
   (data-scuba (get-ref x)))
@@ -326,6 +329,11 @@
 
 ;; drop the var
 (defmulti print-data #'print-data-dispatch)
+
+(defmethod print-data :default [ctx x]
+  (throw
+    (InvalidOperationException.
+      (str "No dispatch value defined in print-data for this value. Type of data: " (class x)))))
 
 (defn- ind [{:keys [indent]}]
   (let [s  (apply str (repeat indent (apply str "|" (repeat 4 " "))))]
@@ -387,7 +395,7 @@
 ;; ;; deftest
 
 ;; contains test functions, not testers
-(def ^:private test-registry (atom {}))
+(defonce ^:private test-registry (atom {}))
 
 ;; if doing redef stuff call this first in the namespace
 (defn clear-registry
@@ -395,7 +403,9 @@
   ([ns]
    (swap! test-registry dissoc ns)))
 
-(defn- register-test [ns key test]
+(defn register-test
+  "Internal, don't use"
+  [ns key test]
   (swap! test-registry assoc-in [ns key] test))
 
 ;; run tests
@@ -437,3 +447,4 @@
          ~tester-sym))
      (register-test *ns* ~(clojure.core/name name) (var ~name))
      (var ~name)))
+
