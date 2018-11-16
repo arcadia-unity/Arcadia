@@ -4,6 +4,7 @@
             [arcadia.config :as config]
             [clojure.main :as m]
             [arcadia.internal.state :as state]
+            [arcadia.internal.stacktrace :as stacktrace]
             arcadia.data)
   (:import [System.Threading Thread]))
 
@@ -141,21 +142,12 @@
            (Thread/Sleep 100) ; yeah it's a spinlock
            (recur)))))))
 
-(def stuff (atom 0))
-
 ;; Our seemingly less broken variant of clojure.main/repl-caught,
 ;; which oddly throws away the trace
 (defn repl-caught [e]
-  (swap! stuff inc)
-  (let [ex (clojure.main/repl-exception e)
-        tr (clojure.main/get-stack-trace ex)]
-    (binding [*out* *err*]
-      (println (str (-> ex class .Name)
-                    " " (.Message ex) "\n"
-                    (->> tr
-                         ;; (drop-last 6) ; trim off redundant stuff at end of stack trace. maybe bad idea
-                         (map clojure.main/stack-element-str)                         
-                         (clojure.string/join "\n")))))))
+  (binding [*out* *err*]
+    (println
+      (stacktrace/exception-str e, stacktrace/default-opts))))
 
 (defn repl []
   (m/repl
