@@ -8,7 +8,10 @@
    :collapse-invocations true
    :ditto-classnames true
    :star-ifn true
-   :quiet-invocations true})
+   :quiet-invocations true
+   ;; if false, all other flags are moot and we print the
+   ;; raw exception
+   :format true})
 
 ;; ------------------------------------------------------------
 
@@ -121,6 +124,8 @@
 (defn exception-str ^String [^Exception e, opts]
   (let [es (reverse (exception-layers e))]
     (clojure.string/join "\nvia\n"
-      (for [e es]
-        (str (class e) ": " (.Message e) "\n"
-             (trace-str (StackTrace. e) opts))))))
+      (if (:format opts)
+        (for [^Exception e es]
+          (str (class e) ": " (.Message e) "\n"
+               (trace-str (StackTrace. e true) opts))) ; important that this is type-hinted, changes behavior
+        es))))
