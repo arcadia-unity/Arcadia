@@ -421,6 +421,13 @@
   [ns key test]
   (swap! test-registry assoc-in [ns key] test))
 
+;; ------------------------------------------------------------
+
+;; We reify `exec` in `run-tests` so that this typically cyclical
+;; value doesn't kill the repl if `*print-level*` is set to
+;; nil. Should find a more elegant solution that doesn't gum up the
+;; ITester protocol.
+
 ;; run tests
 (defn run-tests
   ([] (run-tests *ns*))
@@ -447,7 +454,9 @@
                  (binding [*out* out]
                    (print-data {:indent 0}
                      (data-scuba new)))))))
-         exec)))))
+         ;; this is kind of dumb, really just using it for get-ref
+         (reify ITester 
+           (get-ref [this] exec)))))))
 
 (defmacro deftest [name tester-sym & body]
   (assert (symbol? name))
