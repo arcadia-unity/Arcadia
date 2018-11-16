@@ -114,8 +114,10 @@
         (clojure.string/join " "
           (remove nil?
             [(when star-ifn (if ifn "*", " "))
-             classname-str
-             (when (and (not quiet-invocations) (invocation? frame-analysis) ifn) methodname-str)
+             (str
+               classname-str
+               (when-not (and quiet-invocations (invocation? frame-analysis))
+                 (str "." methodname-str)))
              (file-data-string frame-analysis opts)]))))))
 
 (defn exception-layers [e]
