@@ -154,7 +154,7 @@
       :else
       (do
         (alter parent-ref update ::children conj child-ref)
-        (alter child-ref update ::parent conj parent-ref))))
+        (alter child-ref update ::parents conj parent-ref))))
   parent-ref)
 
 ;; tester's complete if it is closed and all of its descendents
@@ -177,7 +177,22 @@
       (check-complete state-ref)))
   state-ref)
 
+;; narrow rather than broad gives more latitude for
+;; future api extensions
+(defn valid-input? [x]
+  (or (tester? x)
+      (= :close x)
+      (and (map? x) (= ::result (::type x)))))
+
+(defn validate-input [x]
+  (or (valid-input? x)
+      (throw
+        (InvalidOperationException.
+          (str "Invalid input. Type of input: " (class x))))))
+
 (defn consume-inputs [tester inputs]
+  (doseq [input inputs]
+    (validate-input input))
   (let [state (get-ref tester)
         [label results] (if (string? (first inputs))
                           [(first inputs) (next inputs)]
