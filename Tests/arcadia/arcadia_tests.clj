@@ -1,5 +1,4 @@
 (ns arcadia.arcadia-tests
-  (:use clojure.test)
   (:require [arcadia.core :as ac]
             [arcadia.internal.test :as at]
             [arcadia.internal.editor-callbacks :as ec]
@@ -157,51 +156,51 @@
     (with-temp-objects :lit [obj]
       (ac/state+ obj :test state-1)
       (ac/state+ obj :test-2 state-2)
-      (t (is (= (ac/state obj)
-                {:test state-1
-                 :test-2 state-2})
+      (t (at/is (= (ac/state obj)
+                   {:test state-1
+                    :test-2 state-2})
            "no-key state recovers all state entries")))
     (with-temp-objects :lit [obj]
       (ac/state+ obj :test state-1)
-      (t (is (= (ac/state obj :test) state-1)
+      (t (at/is (= (ac/state obj :test) state-1)
            "basic state roundtrip")))
     (t :close))
-  ;; (as-sub [t "state-"]
-  ;;   (with-temp-objects :lit [obj]
-  ;;     (ac/state+ obj :test state-1)
-  ;;     (ac/state- obj :test)
-  ;;     (t (is (= (ac/state obj) nil))))
-  ;;   (with-temp-objects :lit [obj]
-  ;;     (ac/state+ obj :test state-1)
-  ;;     (ac/state+ obj :test-2 state-2)
-  ;;     (ac/state- obj :test)
-  ;;     (t (is (= (ac/state obj) {:test-2 state-2})
-  ;;          "partial state retrieval after state-")
-  ;;       :close)))
-  ;; (as-sub [t "state serialization"]
-  ;;   (with-temp-objects :lit [obj]
-  ;;     (ac/state+ obj :test state-1)
-  ;;     (ac/state+ obj :test-2 state-2)
-  ;;     (with-temp-objects [obj-2 (ac/instantiate obj)]
-  ;;       (t (is (= (ac/state obj)
-  ;;                 (ac/state obj-2))
-  ;;            "round-trip serialization")
-  ;;         :close))))
-  ;; ;; requires play mode
-  ;; ;; not throwing if not in play mode, though, because
-  ;; ;; we need to test both edit and play mode.
-  ;; (when (Arcadia.UnityStatusHelper/IsInPlayMode)
-  ;;   (as-sub [t "hook+"]
-  ;;     (with-temp-objects
-  ;;       :frames 10
-  ;;       :lit [obj]
-  ;;       (let [state (ac/state+ obj :test {:v2 (UnityEngine.Vector2. 0 1)
-  ;;                                         :v3 (UnityEngine.Vector3. 0 1 2)})]        
-  ;;         (ac/hook+ obj :update :test
-  ;;           (fn [obj' k]
-  ;;             (t
-  ;;               (is (= obj obj') "correct obj")
-  ;;               (is (= k :update) "correct key")
-  ;;               (is (= state (ac/state obj')) "correct state")
-  ;;               :close)))))))
-  )
+  (as-sub [t "state-"]
+    (with-temp-objects :lit [obj]
+      (ac/state+ obj :test state-1)
+      (ac/state- obj :test)
+      (t (at/is (= (ac/state obj) nil))))
+    (with-temp-objects :lit [obj]
+      (ac/state+ obj :test state-1)
+      (ac/state+ obj :test-2 state-2)
+      (ac/state- obj :test)
+      (t (at/is (= (ac/state obj) {:test-2 state-2})
+           "partial state retrieval after state-")
+        :close)))
+  (as-sub [t "state serialization"]
+    (with-temp-objects :lit [obj]
+      (ac/state+ obj :test state-1)
+      (ac/state+ obj :test-2 state-2)
+      (with-temp-objects [obj-2 (ac/instantiate obj)]
+        (t (at/is (= (ac/state obj)
+                  (ac/state obj-2))
+             "round-trip serialization")
+          :close))))
+  ;; requires play mode
+  ;; not throwing if not in play mode, though, because
+  ;; we need to test both edit and play mode.
+  (when (Arcadia.UnityStatusHelper/IsInPlayMode)
+    (as-sub [t "hook+"]
+      (with-temp-objects
+        :frames 2
+        :lit [obj]
+        (let [state {:v2 (UnityEngine.Vector2. 0 1)
+                     :v3 (UnityEngine.Vector3. 0 1 2)}]
+          (ac/state+ obj :test state)
+          (ac/hook+ obj :update :test
+            (fn [obj' k]
+              (t 
+                (at/is (= obj obj') "correct obj")
+                (at/is (= k :test) "correct key")
+                (at/is (= state (ac/state obj' k)) "correct state")
+                :close))))))))
