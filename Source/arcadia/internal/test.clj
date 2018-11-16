@@ -378,9 +378,7 @@
 (defmethod print-data ::tester-state [{:keys [:indent] :as ctx}
                                       {:keys [::result-groups ::label]}]
   (let [p (ind ctx)]
-    (when label
-      (p "------------------------------")
-      (p label))
+    (when label (p label))
     (let [ctx2 (if label (update ctx :indent + 1) ctx)]
       (doseq [rg result-groups]
         (print-data ctx2 rg)))))
