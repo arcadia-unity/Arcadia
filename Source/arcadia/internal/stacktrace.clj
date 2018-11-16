@@ -7,31 +7,25 @@
   {:demunge-classnames true
    :collapse-invocations true
    :ditto-classnames true
-   :star-ifn true})
+   :star-ifn true
+   :quiet-invocations true})
 
 ;; ------------------------------------------------------------
 
 (defn frame-analysis [^StackFrame frame, opts]
-  (-> {:type :stack-frame-analysis
-       :frame frame}
-      (as-> analysis
-            (if-let [method (.GetMethod frame)]
-              (assoc analysis
-                :method-name (.Name method)
-                :methodname-str (.Name method)
-                :method-declaring-class (.DeclaringType method)
-                :classname-str (.ToString (.DeclaringType method))
-                :ifn (isa? (.DeclaringType method) clojure.lang.IFn))
-              analysis)
-            (if-let [file (.GetFileName frame)]
-              (assoc analysis :file file)
-              analysis)
-            (if-let [line (.GetFileLineNumber frame)]
-              (assoc analysis :line line)
-              analysis)
-            (if-let [column (.GetFileColumnNumber frame)]
-              (assoc analysis :column column)
-              analysis))))
+  (let [analysis {:type :stack-frame-analysis
+                  :frame frame
+                  :file (.GetFileName frame)
+                  :line (.GetFileLineNumber frame)
+                  :column (.GetFileColumnNumber frame)}]
+    (if-let [method (.GetMethod frame)]
+      (assoc analysis
+        :method-name (.Name method)
+        :methodname-str (.Name method)
+        :method-declaring-class (.DeclaringType method)
+        :classname-str (.ToString (.DeclaringType method))
+        :ifn (isa? (.DeclaringType method) clojure.lang.IFn))
+      analysis)))
 
 (defn ditto-index [^String s1, ^String s2, opts]
   (let [len (min (count s1) (count s2))
@@ -69,7 +63,6 @@
     frames))
 
 (defn demunge-classnames [opts frames]
-  (break)
   (if (:demunge-classnames opts)
     (for [{:keys [:classname-str] :as frame} frames]
       (if classname-str
@@ -79,23 +72,22 @@
         frame))
     frames))
 
+(defn invocation? [{:keys [ifn method-name]}]
+  (boolean
+    (and ifn (#{"invoke" "invokeStatic" "doInvoke" "applyTo" "ApplyToHelper"} method-name))))
+
 (defn collapse-invocations [{:keys [collapse-invocations]} frames]
   (if collapse-invocations
-    (let [invocations #{"invoke" "invokeStatic" "doInvoke" "applyTo" "ApplyToHelper"}]
-      (letfn [(step [last-class last-method-name frames]
-                (lazy-seq
-                  (when-first [{:keys [method-declaring-class
-                                       method-name
-                                       ifn] :as frame-analysis} frames]
-                    (if (and ifn 
-                             (= last-class method-declaring-class)
-                             (invocations last-method-name)
-                             (invocations method-name))
-                      (step method-declaring-class method-name (next frames))
-                      (cons frame-analysis
-                        (step method-declaring-class method-name (next frames)))))))]
-        (when-first [{:keys [method-declaring-class method-name] :as frame} frames]
-          (cons frame (step method-declaring-class method-name (next frames))))))
+    (letfn [(step [{last-class :method-declaring-class :as last-frame}, frames]
+              (lazy-seq
+                (when-first [{:keys [method-declaring-class ifn] :as frame-analysis} frames]
+                  (if (and (= last-class method-declaring-class)
+                           (invocation? last-frame)
+                           (invocation? frame-analysis))
+                    (step frame-analysis (next frames))
+                    (cons frame-analysis (step frame-analysis (next frames)))))))]
+      (when-first [frame frames]
+        (cons frame (step frame (next frames)))))
     frames))
 
 (defn relative-file-path [s]
@@ -104,28 +96,24 @@
       (System.Uri. UnityEngine.Application/dataPath)
       (System.Uri. s))))
 
-(defn file-data-string [{:keys [^StackFrame frame]} opts]
-  (let [file (.GetFileName frame)
-        line (.GetFileLineNumber frame)
-        column (.GetFileColumnNumber frame)]
-    (when (and file line column)
-      (str (relative-file-path file) " (" line ":" column ")"))))
+(defn file-data-string [{:keys [file, line, column]} opts]
+  (when (and file line column)
+    (str (relative-file-path file) " (" line ":" column ")")))
 
 (defn trace-str [^StackTrace st, opts]
-  (let [{:keys [star-ifn]} opts
+  (let [{:keys [star-ifn quiet-invocations]} opts
         analysis (->> (map #(frame-analysis % opts) (.GetFrames st))
                       (collapse-invocations opts)
                       (demunge-classnames opts)
                       (ditto-classnames opts))]
     (clojure.string/join "\n"
-      (for [{:keys [classname-str, methodname-str, ifn, ^StackFrame frame] :as m} analysis]
-        (str
-          (when star-ifn (if ifn "* ", " "))
-          classname-str
-          " "
-          methodname-str
-          " "
-          (file-data-string m opts))))))
+      (for [{:keys [classname-str, methodname-str, ifn] :as frame-analysis} analysis]
+        (clojure.string/join " "
+          (remove nil?
+            [(when star-ifn (if ifn "*", " "))
+             classname-str
+             (when (and (not quiet-invocations) (invocation? frame-analysis) ifn) methodname-str)
+             (file-data-string frame-analysis opts)]))))))
 
 (defn exception-layers [e]
   (take-while some? (iterate #(.InnerException ^Exception %) e)))
