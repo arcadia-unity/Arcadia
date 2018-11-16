@@ -96,7 +96,7 @@
 (defn relative-file-path [s]
   (str
     (.MakeRelativeUri
-      (System.Uri. UnityEngine.Application/dataPath)
+      (System.Uri. (System.IO.Directory/GetCurrentDirectory))
       (System.Uri. s))))
 
 (defn file-data-string [{:keys [file, line, column]} opts]
