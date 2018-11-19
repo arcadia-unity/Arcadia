@@ -191,12 +191,12 @@
           (str "Invalid input. Type of input: " (class x))))))
 
 (defn consume-inputs [tester inputs]
-  (doseq [input inputs]
-    (validate-input input))
   (let [state (get-ref tester)
         [label results] (if (string? (first inputs))
                           [(first inputs) (next inputs)]
                           [nil inputs])
+        _   (doseq [input results]
+              (validate-input input))
         closed? (some #(= :close %) inputs)
         results (vec (remove keyword? results)) ;; there for control
         children-inputs (filter tester? results)
