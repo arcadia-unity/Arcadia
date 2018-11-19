@@ -12,11 +12,11 @@
 ;; ============================================================
 ;; utils
 
-(def ^:private retirement-key-counter (atom 0))
+(defonce ^:private retirement-key-counter (atom 0))
 
 (defn schedule-retirement [timing-type timeout & xs]
-  (let [k (swap! retirement-key-counter inc)
-        f (fn []
+  (let [k (keyword (str  (ns-name *ns*)) (str "test-" (swap! retirement-key-counter inc)))
+        f (fn retirement-callback []
             (doseq [x xs]
               (try
                 (ac/retire x)
@@ -115,15 +115,6 @@
 
 (defn unique-key [] (swap! unique-key-counter inc))
 
-(def state-1
-  {:v2 (UnityEngine.Vector2. 1 2)
-   :v3 (UnityEngine.Vector3. 1 2 3)
-   :vec [:a :b :c :d]
-   :set #{:a :b :c :d}})
-
-(def state-2
-  {:a :A
-   :b :B})
 
 ;; move to internal test framework
 
@@ -149,6 +140,57 @@
             (InvalidOperationException.
               (str "`t-or-t-and-label` must be either symbol or vector, instead got "
                    (class t-or-t-and-label))))))
+
+(defmacro as-sub-closing [t-or-t-and-label & body]
+  (let [t (if (vector? t-or-t-and-label)
+            (first t-or-t-and-label)
+            t-or-t-and-label)]
+    `(as-sub ~t-or-t-and-label
+       ~@body
+       (~t :close))))
+
+(defn close-after-frames [t frames message]
+  (assert (at/tester? t))
+  (assert (number? frames))
+  (assert (string? message))
+  (pc/add-update-frame-timeout (unique-key)
+    #(dosync
+       (let [r (at/get-ref t)]
+         (when-not (::at/closed @r)
+           (t (at/is false message) :close))))
+    frames))
+
+;; ============================================================
+;; the tests
+;; ============================================================
+
+(def state-1
+  {:v2 (UnityEngine.Vector2. 1 2)
+   :v3 (UnityEngine.Vector3. 1 2 3)
+   :vec [:a :b :c :d]
+   :set #{:a :b :c :d}})
+
+(def state-2
+  {:a :A
+   :b :B})
+
+;; This one requires some existing functionality to work.
+;; Could even make its run conditional on some other tests
+;; passing using a watch, if we want to be fancy.
+(defn update-function-testable-example-1 [obj k]
+  (let [tester-fn (ac/state obj :tester)]
+    (tester-fn obj k)))
+
+(defn runs-once [f]
+  (let [ran (volatile! false)]
+    (fn [& args]
+      (locking ran
+        (when (not @ran)
+          (vreset! ran true)
+          (apply f args))))))
+
+(defn set-tester [obj f]
+  (ac/state+ obj :tester (runs-once f)))
 
 ;; consider breaking this up
 (at/deftest hook-state-system t
@@ -186,21 +228,123 @@
                   (ac/state obj-2))
              "round-trip serialization")
           :close))))
-  ;; requires play mode
-  ;; not throwing if not in play mode, though, because
-  ;; we need to test both edit and play mode.
-  (when (Arcadia.UnityStatusHelper/IsInPlayMode)
-    (as-sub [t "hook+"]
-      (with-temp-objects
-        :frames 2
-        :lit [obj]
-        (let [state {:v2 (UnityEngine.Vector2. 0 1)
-                     :v3 (UnityEngine.Vector3. 0 1 2)}]
-          (ac/state+ obj :test state)
-          (ac/hook+ obj :update :test
-            (fn [obj' k]
+  (as-sub [t "hook+"]
+    (with-temp-objects :lit [obj-1]
+      (ac/state+ obj-1 :test state-1)
+      (ac/state+ obj-1 :test state-2)
+      (t (at/is (= (ac/state obj-1 :test) state-2)
+           "hook+ overwrites")))
+    ;; requires play mode
+    ;; not throwing if not in play mode, though, because
+    ;; we need to test both edit and play mode.
+    (when (Arcadia.UnityStatusHelper/IsInPlayMode)
+      (as-sub t
+        (with-temp-objects
+          :frames 2
+          :lit [obj-a]
+          (ac/state+ obj-a :test state-1)
+          (ac/hook+ obj-a :update :test
+            (fn [obj-a' k]
               (t 
-                (at/is (= obj obj') "correct obj")
+                (at/is (= obj-a obj-a') "correct obj")
                 (at/is (= k :test) "correct key")
-                (at/is (= state (ac/state obj' k)) "correct state")
-                :close))))))))
+                (at/is (= state-1 (ac/state obj-a' k)) "correct state")
+                :close)))))
+      (as-sub [t "var hook+"]
+        (with-temp-objects
+          :frames 5
+          :lit [obj]
+          (set-tester obj 
+            (fn hook-tester [obj' k]
+              (t
+                (at/is true "var hook ran")
+                (at/is (= k :test) "correct key for var hook")
+                (at/is (= obj' obj) "correct obj for var hook")
+                :close)))
+          (ac/hook+ obj :update :test #'update-function-testable-example-1))
+        ;; set timeout
+        (close-after-frames t 5 "var hook+ test didn't complete")))
+    (t :close))
+  (as-sub [t "role system"]
+    (let [r1 {:update #'update-function-testable-example-1
+              :state state-1}
+          r2 {:update #'update-function-testable-example-1
+              :state state-2}
+          r3 {:update (fn [_ _])}]
+      (as-sub [t "role+"]
+        (with-temp-objects
+          :frames 3
+          :lit [obj]
+          (set-tester obj
+            (fn [obj k]
+              (t
+                (at/is true "`:update` ran for `role+`")
+                (at/is (= k :test-role) "correct key in role `update`")
+                (at/is (= state-1 (ac/state obj :test-role)) "correct state retrieval in role `update`")
+                :close)))
+          (ac/role+ obj :test-role r1))
+        (close-after-frames t 4 "`role+` test didn't complete"))
+      (as-sub-closing t
+        (with-temp-objects :lit [obj]
+          (ac/role+ obj :test-role-1 r1)
+          (ac/role+ obj :test-role-2 r2)
+          (t
+            (at/is (= (ac/role obj :test-role-1) r1) "can retrive roles using `role`")
+            (at/is (= (ac/role obj :not-there) nil) "`role` on absent key returns nil"))
+          (ac/role- obj :test-role-2)
+          (t (at/is (= (ac/role obj :test-role-2) nil) "`role-` subtracts roles"))
+          (ac/role+ obj :test-role-1 r3)
+          (t "`role+` overwrites"
+            (at/is (= (ac/role obj :test-role-1) r3))
+            (at/is (= (ac/state obj :test-role-1) nil) "`role+` overwrites rather than merges"))))
+      (as-sub-closing [t "`roles`"]
+        (with-temp-objects :lit [obj]
+          (ac/role+ obj :test-role-1 r1)
+          (ac/role+ obj :test-role-2 r2)
+          (t (at/is (= (ac/roles obj) {:test-role-1 r1, :test-role-2 r2})))
+          (ac/role+ obj :test-role-1 r3)
+          (t (at/is (= (ac/roles obj) {:test-role-1 r3, :test-role-2 r2}))))
+        (let [f1 (fn [_ _])
+              s1 (System.Object.)]
+          ;; does roles pick up on roles formed by calls to hook+ and state+?          
+          (with-temp-objects :lit [obj]
+            (ac/hook+ obj :update :test-role-1 f1)
+            (ac/state+ obj :test-role-1 s1)
+            (t (at/is (= (ac/roles obj) {:test-role-1 {:update f1, :state s1}})
+                 "`roles` works for roles built with `hook+` and `state+`")))))
+      (as-sub-closing [t "`roles+`"]
+        ;; - does roles retrieve roles+?
+        ;; - does roles+ work with nil for the roles map?
+        ;; - does roles+ work with an empty map for the roles map?        
+        (with-temp-objects :lit [obj]
+          (let [the-roles {:test-role-1 r1, :test-role-2 r2}]
+            (ac/roles+ obj the-roles)
+            (t (at/is (= (ac/roles obj) the-roles) "`roles+` can be retrieved by `roles`"))
+            (ac/roles+ obj {:test-role-2 r3})
+            (t (at/is (= (ac/roles obj) (merge the-roles {:test-role-2 r3})) "roles+ does shallow merge")))))
+      (as-sub-closing [t "`role-`"]
+        ;; - does role- get reflected in roles?
+        ;; - does role- work when the key is absent?
+        ;; - does role- work when an object hasn't had any of this stuff done to it yet?
+        (let [the-roles {:test-role-1 r1, :test-role-2 r2}]
+          (with-temp-objects :lit [obj]
+            (ac/roles+ obj the-roles)
+            (ac/role- obj :test-role-1)
+            (t
+              (at/is (= (ac/roles obj) {:test-role-2 r2}) "`role-` reflected in `roles`")))
+          (with-temp-objects :lit [obj]
+            (ac/roles+ obj the-roles)
+            (t
+              (at/is ;; TODO: better setup for this sort of thing in tests, where Exceptions are the fail
+                (do (ac/role- obj :absent-key)
+                    (= (ac/roles obj) the-roles))
+                "`role-` works for absent keys")))
+          (with-temp-objects :lit [obj]
+            (t
+              (at/is
+                (do (ac/role- obj :absent-key)
+                    (= (ac/roles obj) {}))
+                "`role-` works for fresh object")))))
+      (t :close))
+    (t :close))
+  )
