@@ -206,7 +206,8 @@
                                           results)}
                              label (assoc ::label label))]
     (dosync
-      (alter state update ::result-groups conj result-group)
+      (when (seq (::results result-group))
+        (alter state update ::result-groups conj result-group))
       (doseq [x children-inputs]
         (add-child-ref state (get-ref x)))
       (when closed? (mark-closed state))
