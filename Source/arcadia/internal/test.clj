@@ -453,8 +453,9 @@
              (fn complete-test-run [k r old new]
                (when (and (not (::complete old)) (::complete new))
                  (binding [*out* out]
-                   (print-data {:indent 0}
-                     (data-scuba new)))))))
+                   (locking out
+                     (print-data {:indent 0}
+                       (data-scuba new))))))))
          ;; this is kind of dumb, really just using it for get-ref
          (reify ITester 
            (get-ref [this] exec)))))))
