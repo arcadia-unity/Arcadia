@@ -708,7 +708,10 @@
         init (if-let [s (state obj k)]
                {:state (maybe-snapshot s)}
                {})]
-    (reduce step init (cmpts obj ArcadiaBehaviour))))
+    (let [m (reduce step init (cmpts obj ArcadiaBehaviour))]
+      (if (zero? (count m))
+        nil
+        m))))
 
 (defn- roles-step [bldg ^ArcadiaBehaviour ab]
   (let [hook-type-key (hook->hook-type-key ab)]
