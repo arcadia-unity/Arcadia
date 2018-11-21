@@ -529,11 +529,13 @@
   "Returns the state of object `go` at key `k`."
   ([gobj]
    (when-let [^ArcadiaState s (cmpt gobj ArcadiaState)]
-     (persistent!
-       (reduce (fn [m, ^Arcadia.JumpMap+KeyVal kv]
-                 (assoc! m (.key kv) (.val kv)))
-         (transient {})
-         (.. s state KeyVals)))))
+     (let [m (persistent!
+               (reduce (fn [m, ^Arcadia.JumpMap+KeyVal kv]
+                         (assoc! m (.key kv) (.val kv)))
+                 (transient {})
+                 (.. s state KeyVals)))]
+       (when-not (zero? (count m))
+         m))))
   ([gobj k]
    (Arcadia.HookStateSystem/Lookup gobj k)))
 
