@@ -251,10 +251,8 @@
        (alter r-2 update ::parents conj r))
      t-2)))
 
-
 (defn complete? [tester]
   (-> tester get-ref deref ::complete boolean))
-
 
 (defn process-is [expr result message]
   {::type ::result
@@ -366,6 +364,35 @@
                 (conj rgs {::type ::result-group, ::results extra-children})
                 (mapv data-scuba))))
           (dissoc ::parents ::children)))))
+
+;; ============================================================
+;; results
+;; more "relational" view. Vector containing just results and "paths" to them
+;; as vector of labels. Can make this a multimethod later if we want the system
+;; to be more extensible.
+
+(defn results [x]
+  (letfn [(step [results labels x]
+            (cond
+              (and (map? x) (= ::result (::type x)))
+              (conj results (assoc x ::labels labels)) ;; New key, just for this
+
+              
+              (and (map? x) (#{::tester-state ::result-group ::tester-exec} (::type x)))
+              (let [labels-2 (if-let [l (::label x)] (conj labels l) labels)
+                    children (case (::type x)
+                               ::tester-exec  (::children x)
+                               ::tester-state (::result-groups x)
+                               ::result-group (::results x))]
+                (reduce #(step %1 labels-2 %2) results children))
+              
+              :else
+              (throw
+                (InvalidOperationException.
+                  (str "Invalid data. Type of data: " (class x))))))]
+    (step [] [] (data-scuba x))))
+
+;; 
 
 ;; ;; As is, there's going to be a problem with the spec for the data
 ;; ;; representation.  This is a sort of stupid spec issue more than a
@@ -495,9 +522,11 @@
              (fn complete-test-run [k r old new]
                (when (and (not (::complete old)) (::complete new))
                  (binding [*out* out]
-                   (locking out
-                     (print-data {:indent 0}
-                       (data-scuba new))))))))
+                   (println
+                     (with-out-str
+                       (println)
+                       (print-data {:indent 0}
+                         (data-scuba new)))))))))
          ;; this is kind of dumb, really just using it for get-ref
          (reify ITester 
            (get-ref [this] exec)))))))
