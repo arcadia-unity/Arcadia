@@ -196,6 +196,10 @@
 (at/deftest hook-state-system t
   (as-sub [t "basic state tests"]
     (with-temp-objects :lit [obj]
+      (t
+        (at/is (= (ac/state obj) nil) "state is nil for fresh obj")
+        (at/is (= (ac/state obj :absent-key) nil) "state (with key) is nil for fresh obj")))
+    (with-temp-objects :lit [obj]
       (ac/state+ obj :test state-1)
       (ac/state+ obj :test-2 state-2)
       (t (at/is (= (ac/state obj)
@@ -206,12 +210,18 @@
       (ac/state+ obj :test state-1)
       (t (at/is (= (ac/state obj :test) state-1)
            "basic state roundtrip")))
+    (with-temp-objects :lit [obj]
+      (ac/state+ obj :test state-1)
+      (at/is (= (ac/state obj :absent-key) nil) "state (with key) is nil if key is absent"))
     (t :close))
   (as-sub [t "state-"]
     (with-temp-objects :lit [obj]
+      (t (at/is (do (ac/state- obj :absent-key) true) "state- runs for fresh objects")))
+    (with-temp-objects :lit [obj]
       (ac/state+ obj :test state-1)
       (ac/state- obj :test)
-      (t (at/is (= (ac/state obj) nil))))
+      (t (at/is (= (ac/state obj) nil) "subtracted `state` is nil"))
+      (t (at/is (= (ac/state obj :test) nil) "subtracted `state` (with key) is nil")))
     (with-temp-objects :lit [obj]
       (ac/state+ obj :test state-1)
       (ac/state+ obj :test-2 state-2)
@@ -219,7 +229,15 @@
       (t (at/is (= (ac/state obj) {:test-2 state-2})
            "partial state retrieval after state-")
         :close)))
-  (as-sub [t "state serialization"]
+  (as-sub t "hook-"
+    (let [f (fn [_ _])]
+      (with-temp-objects :lit [obj]
+        (t (at/is (do (ac/hook- obj :update :absent-key) true) "hook- runs for fresh object"))
+        (at/hook+ obj :update :testing f)
+        (t
+          (at/is (do (at/hook- obj :update :testing) true) "hook- with two keys runs for hooked object")
+          (at/is (= (at/hook obj :update :testing) nil) "hook- with two keys works for hooked object")))))
+  (as-sub [t "state serialization via instantiate"]
     (with-temp-objects :lit [obj]
       (ac/state+ obj :test state-1)
       (ac/state+ obj :test-2 state-2)
@@ -346,5 +364,4 @@
                     (= (ac/roles obj) {}))
                 "`role-` works for fresh object")))))
       (t :close))
-    (t :close))
-  )
+    (t :close)))
