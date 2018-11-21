@@ -93,9 +93,12 @@ namespace Arcadia
 				return null;
 			}
 
-			return ((GameObject)gobj).GetComponent<ArcadiaState>().ValueAtKey(key);
+			ArcadiaState state = ((GameObject)gobj).GetComponent<ArcadiaState>();
+			if (state != null) {
+				return state.ValueAtKey(key);
+			}
+			return null;
 		}
-
 	}
 }
 #endif
