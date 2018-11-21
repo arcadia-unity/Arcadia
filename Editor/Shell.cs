@@ -25,7 +25,7 @@ namespace Arcadia
                 "Data/MonoBleedingEdge/bin/mono");
 #endif
 
-        
+
         public static readonly string MozrootsExePath =
 #if UNITY_EDITOR_OSX
             Path.Combine(
@@ -39,12 +39,12 @@ namespace Arcadia
             Path.Combine(
                 Path.GetDirectoryName(EditorApplication.applicationPath),
                 "Data/MonoBleedingEdge/lib/mono/4.5/mozroots.exe");
+#endif
 
         private static readonly Keyword WorkingDirectoryKeyword = Keyword.intern("directory");
         private static readonly Keyword OutputKeyword = Keyword.intern("output");
         private static readonly Keyword ErrorKeyword = Keyword.intern("error");
         private static readonly Keyword DoneKeyword = Keyword.intern("done");
-#endif
 
         public static Process Run(string filename, string arguments = null, string workingDirectory = null, IFn outputFn = null, IFn errorFn = null, IFn doneFn = null)
         {
@@ -57,21 +57,21 @@ namespace Arcadia
             process.StartInfo.UseShellExecute = false;
             process.EnableRaisingEvents = true;
             process.Start();
-            
+
             if (outputFn != null)
-            { 
+            {
                 process.OutputDataReceived += (sender, args) => { if(args.Data != null) outputFn.invoke(args.Data); };
                 process.BeginOutputReadLine();
             }
             if (errorFn != null)
-            { 
+            {
                 process.ErrorDataReceived += (sender, args) => { if(args.Data != null) errorFn.invoke(args.Data); };
                 process.BeginErrorReadLine();
             }
             if(doneFn != null)
                 process.Exited += (sender, args) => { doneFn.invoke(); };
-            
-            return process;            
+
+            return process;
         }
 
         public static Process MonoRun(string pathToExe, string arguments, IPersistentMap options)
@@ -87,7 +87,7 @@ namespace Arcadia
         {
             return Run(MonoExecutablePath, string.Join(" ", pathToExe, arguments));
         }
-        
+
         public static Process MonoRun(string pathToExe)
         {
             return Run(MonoExecutablePath, pathToExe);
