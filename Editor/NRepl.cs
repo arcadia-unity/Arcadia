@@ -1,16 +1,21 @@
 using System;
-using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
-using System.Runtime.CompilerServices;
-using System.Text;
 using System.Threading;
-using BencodeNET;
 using BencodeNET.Exceptions;
 using BencodeNET.Objects;
 using UnityEngine;
 using clojure.lang;
+
+// gross, but makes errors in some REPL clients better
+namespace java.io
+{
+    public class FileNotFoundException : System.IO.FileNotFoundException
+    {
+    }
+}
 
 namespace Arcadia
 {
@@ -31,6 +36,45 @@ namespace Arcadia
             prStrVar = RT.var("clojure.core", "pr-str");
         }
 
+        private static ConcurrentDictionary<Guid, Associative>
+            _sessions = new ConcurrentDictionary<Guid, Associative>();
+
+        private static Associative DefaultBindings =>
+            RT.map(
+                RT.CurrentNSVar, Namespace.findOrCreate(Symbol.intern("user")),
+                RT.UncheckedMathVar, false,
+                RT.WarnOnReflectionVar, false,
+                RT.MathContextVar, null);
+
+        static Guid NewSession() => NewSession(DefaultBindings);
+
+        static Guid NewSession(Associative bindings)
+        {
+            var newGuid = Guid.NewGuid();
+            _sessions.GetOrAdd(newGuid, bindings);
+            return newGuid;
+        }
+
+        static Associative UpdateSession(Guid session, Associative newBindings)
+        {
+            return _sessions.AddOrUpdate(session, newBindings, (guid, associative) => newBindings);
+        }
+
+        static Guid CloneSession(Guid originalGuid)
+        {
+            return NewSession(_sessions[originalGuid]);
+        }
+        
+        static Guid GetSession(BDictionary message)
+        {
+            Guid session;
+            if (message.ContainsKey("session"))
+                session = Guid.Parse(message["session"].ToString());
+            else
+                session = NewSession();
+            return session;
+        }
+
         class EvalFn : AFn
         {
             private BDictionary _request;
@@ -44,22 +88,53 @@ namespace Arcadia
 
             public override object invoke()
             {
+                var session = GetSession(_request);
                 var code = _request["code"].ToString();
+                var sessionBindings = _sessions[session];
+                var outWriter = new StringWriter();
+                
 
-                // TODO try catch, send back exceptions
-                var form = readStringVar.invoke(code);
-                var result = evalVar.invoke(form);
-                var output = (string) prStrVar.invoke(result);
-                
-                NRepl.SendMessage(new BDictionary
+                Var.pushThreadBindings(sessionBindings);
+                try
                 {
-                    {"id", _request["id"]},
-                    {"status", new BList {"done"}}, // TODO does this have to be a list?
-                    {"value", output}, // TODO do we need :values?
-                    {"ns", "user"}, // TODO get actual *ns*
-                    {"session", "dummy-session"}, // TODO real sessions
-                }, _client);
-                
+                    var form = readStringVar.invoke(code);
+                    var result = evalVar.invoke(form);
+                    var value = (string) prStrVar.invoke(result);
+                    outWriter.Flush();
+                    var outString = outWriter.ToString();
+
+                    UpdateSession(session, Var.getThreadBindings());
+                    
+
+                    SendMessage(new BDictionary
+                    {
+                        {"id", _request["id"]},
+                        {"status", new BList {"done"}}, // TODO does this have to be a list?
+                        {"value", value}, // TODO do we need :values?
+                        {"ns", RT.CurrentNSVar.deref().ToString()},
+                        {"out", outString},
+                        {"session", session.ToString()},
+                    }, _client);
+                }
+                catch (Exception e)
+                {
+                    SendMessage(new BDictionary
+                    {
+                        {"id", _request["id"]},
+                        {"status", "eval-error"},
+                        {"ex", e.GetType().ToString()},
+                        {"err", e.Message},
+                        {"ns", RT.CurrentNSVar.deref().ToString()},
+                        {"session", session.ToString()},
+                    }, _client);
+
+                    throw;
+                }
+                finally
+                {
+                    Var.popThreadBindings();
+                }
+
                 return null;
             }
         }
@@ -81,19 +156,66 @@ namespace Arcadia
                 switch (opString.ToString())
                 {
                     case "clone":
-                        var response = new BDictionary
-                        {
-                            {"id", message["id"]},
-                            {"status", new BList {"done"}},
-                            {"new-session", "dummy-session"}
-                        };
-                        SendMessage(response, client);
+                        var session = GetSession(message);
+                        var newSession = CloneSession(session);
+                        SendMessage(
+                            new BDictionary
+                            {
+                                {"id", message["id"]},
+                                {"status", new BList {"done"}},
+                                {"new-session", newSession.ToString()}
+                            }, client);
+                        break;
+                    case "describe":
+                        // TODO include arcadia version 
+                        var clojureVersion = (IPersistentMap) RT.var("clojure.core", "*clojure-version*").deref();
+                        var clojureMajor = (int) clojureVersion.valAt(Keyword.intern("major"));
+                        var clojureMinor = (int) clojureVersion.valAt(Keyword.intern("minor"));
+                        var clojureIncremental = (int) clojureVersion.valAt(Keyword.intern("incremental"));
+                        var clojureQualifier = (string) clojureVersion.valAt(Keyword.intern("qualifier"));
+                        SendMessage(
+                            new BDictionary
+                            {
+                                {"id", message["id"]},
+                                {"status", new BList {"done"}},
+                                {
+                                    "ops",
+                                    new BDictionary
+                                    {
+                                        {"eval", 1},
+                                        {"describe", 1},
+                                        {"clone", 1},
+                                    }
+                                },
+                                {
+                                    "versions",
+                                    new BDictionary
+                                    {
+                                        {
+                                            "clojure", new BDictionary
+                                            {
+                                                {"major", clojureMajor},
+                                                {"minor", clojureMinor},
+                                                {"incremental", clojureIncremental},
+                                                {"qualifier", clojureQualifier}
+                                            }
+                                        },
+                                        {
+                                            "nrepl", new BDictionary
+                                            {
+                                                {"major", 0},
+                                                {"minor", 2},
+                                                {"incremental", 3}
+                                            }
+                                        }
+                                    }
+                                }
+                            }, client);
                         break;
                     case "eval":
                         var fn = new EvalFn(message, client);
                         addCallbackVar.invoke(fn);
                         break;
-                    // TODO "describe"
                 }
             }
         }
@@ -146,7 +268,14 @@ namespace Arcadia
                                         var message = obj as BDictionary;
                                         if (message != null)
                                         {
-                                            HandleMessage(message, client);
+                                            try
+                                            {
+                                                HandleMessage(message, client);
+                                            }
+                                            catch (Exception e)
+                                            {
+                                                Debug.LogException(e);
+                                            }
                                         }
                                     }
                                     catch (InvalidBencodeException<BDictionary> e)
