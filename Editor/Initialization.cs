@@ -57,6 +57,7 @@ namespace Arcadia
 			StartEditorCallbacks();
 			StartWatching();
 			LoadSocketREPL();
+			NRepl.StartServer();
 			StartREPL();
 			StartNudge();
 			Debug.Log("Arcadia Started!");
