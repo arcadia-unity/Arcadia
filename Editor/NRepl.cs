@@ -9,13 +9,34 @@ using BencodeNET.Objects;
 using UnityEngine;
 using clojure.lang;
 
-// gross, but makes errors in some REPL clients better
+// shim for atom proto-repl
 namespace java.io
 {
     public class FileNotFoundException : System.IO.FileNotFoundException
     {
     }
 }
+
+// shim for vim-fireplace
+public class GetPropertyShimFn : AFn
+{
+    public override object invoke(object property)
+    {
+        var propString = (string) property;
+        switch (propString)
+        {
+            case "path.separator":
+                return Path.PathSeparator.ToString();
+            case "java.class.path":
+                return "";
+            case "fake.class.path":
+                return "";
+            default:
+                return null;
+        }
+    }
+}
+
 
 namespace Arcadia
 {
@@ -25,6 +46,7 @@ namespace Arcadia
         private static Var evalVar;
         private static Var prStrVar;
         private static Var addCallbackVar;
+        private static Namespace shimsNS;
 
         static NRepl()
         {
@@ -34,6 +56,10 @@ namespace Arcadia
             readStringVar = RT.var("clojure.core", "read-string");
             evalVar = RT.var("clojure.core", "eval");
             prStrVar = RT.var("clojure.core", "pr-str");
+
+            shimsNS = Namespace.findOrCreate(Symbol.intern("arcadia.nrepl.shims"));
+            Var.intern(shimsNS, Symbol.intern("getProperty"), new GetPropertyShimFn());
+            Namespace.findOrCreate(Symbol.intern("user")).addAlias(Symbol.intern("System"), shimsNS);
         }
 
         private static ConcurrentDictionary<Guid, Associative>
@@ -44,6 +70,7 @@ namespace Arcadia
                 RT.CurrentNSVar, Namespace.findOrCreate(Symbol.intern("user")),
                 RT.UncheckedMathVar, false,
                 RT.WarnOnReflectionVar, false,
+                RT.var("clojure.core", "*print-length*"), null,
                 RT.MathContextVar, null);
 
         static Guid NewSession() => NewSession(DefaultBindings);
@@ -64,7 +91,7 @@ namespace Arcadia
         {
             return NewSession(_sessions[originalGuid]);
         }
-        
+
         static Guid GetSession(BDictionary message)
         {
             Guid session;
@@ -92,7 +119,7 @@ namespace Arcadia
                 var code = _request["code"].ToString();
                 var sessionBindings = _sessions[session];
                 var outWriter = new StringWriter();
-                
+
 
                 Var.pushThreadBindings(sessionBindings);
                 try
@@ -104,15 +131,20 @@ namespace Arcadia
                     var outString = outWriter.ToString();
 
                     UpdateSession(session, Var.getThreadBindings());
-                    
+
+                    SendMessage(new BDictionary
+                    {
+                        {"id", _request["id"]},
+                        {"value", value}, // TODO do we need :values?
+                        {"ns", RT.CurrentNSVar.deref().ToString()},
+                        {"out", outString},
+                        {"session", session.ToString()},
+                    }, _client);
 
                     SendMessage(new BDictionary
                     {
                         {"id", _request["id"]},
                         {"status", new BList {"done"}}, // TODO does this have to be a list?
-                        {"value", value}, // TODO do we need :values?
-                        {"ns", RT.CurrentNSVar.deref().ToString()},
-                        {"out", outString},
                         {"session", session.ToString()},
                     }, _client);
                 }
@@ -121,10 +153,22 @@ namespace Arcadia
                     SendMessage(new BDictionary
                     {
                         {"id", _request["id"]},
-                        {"status", "eval-error"},
+                        {"status", new BList {"eval-error"}},
+                        {"session", session.ToString()},
                         {"ex", e.GetType().ToString()},
+                    }, _client);
+                    
+                    SendMessage(new BDictionary
+                    {
+                        {"id", _request["id"]},
+                        {"session", session.ToString()},
                         {"err", e.Message},
-                        {"ns", RT.CurrentNSVar.deref().ToString()},
+                    }, _client);
+                    
+                    SendMessage(new BDictionary
+                    {
+                        {"id", _request["id"]},
+                        {"status", new BList {"done"}},
                         {"session", session.ToString()},
                     }, _client);
 
@@ -153,10 +197,10 @@ namespace Arcadia
             var opString = opValue as BString;
             if (opString != null)
             {
+                var session = GetSession(message);
                 switch (opString.ToString())
                 {
                     case "clone":
-                        var session = GetSession(message);
                         var newSession = CloneSession(session);
                         SendMessage(
                             new BDictionary
@@ -177,6 +221,7 @@ namespace Arcadia
                             new BDictionary
                             {
                                 {"id", message["id"]},
+                                {"session", session.ToString()},
                                 {"status", new BList {"done"}},
                                 {
                                     "ops",
@@ -215,6 +260,15 @@ namespace Arcadia
                     case "eval":
                         var fn = new EvalFn(message, client);
                         addCallbackVar.invoke(fn);
+                        break;
+                    default:
+                        SendMessage(
+                            new BDictionary
+                            {
+                                {"id", message["id"]},
+                                {"session", session.ToString()},
+                                {"status", new BList {"done", "error", "unknown-op"}}
+                            }, client);
                         break;
                 }
             }
