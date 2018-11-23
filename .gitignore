@@ -51,3 +51,5 @@ Thumbs.db
 /Helpers/TimeSnap.cs.meta
 /Source/arcadia/debug.clj.meta
 /Helpers/Garden.cs.meta
+/Tests.meta
+/Tests/arcadia.meta
