@@ -488,7 +488,7 @@
 (hook obj message-kw :default)"
   [obj message-kw key]
   (when-let [^ArcadiaBehaviour hook-cmpt (cmpt obj (ensure-hook-type message-kw))]
-    (get (.indexes hook-cmpt) key)))
+    (.CallbackForKey hook-cmpt key)))
 
 ;; are these necessary?
 
