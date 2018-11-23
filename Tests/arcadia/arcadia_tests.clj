@@ -192,6 +192,8 @@
 (defn set-tester [obj f]
   (ac/state+ obj :tester (runs-once f)))
 
+;; ============================================================
+
 ;; consider breaking this up
 (at/deftest hook-state-system t
   (as-sub [t "basic state tests"]
@@ -233,19 +235,20 @@
     (let [f (fn [_ _])]
       (with-temp-objects :lit [obj]
         (t (at/is (do (ac/hook- obj :update :absent-key) true) "hook- runs for fresh object"))
-        (at/hook+ obj :update :testing f)
+        (ac/hook+ obj :update :testing f)
         (t
-          (at/is (do (at/hook- obj :update :testing) true) "hook- with two keys runs for hooked object")
-          (at/is (= (at/hook obj :update :testing) nil) "hook- with two keys works for hooked object")))))
+          (at/is (do (ac/hook- obj :update :testing) true) "hook- with two keys runs for hooked object")
+          (at/is (= (ac/hook obj :update :testing) nil) "hook- with two keys works for hooked object"))))
+    (t :close))
   (as-sub [t "state serialization via instantiate"]
     (with-temp-objects :lit [obj]
       (ac/state+ obj :test state-1)
       (ac/state+ obj :test-2 state-2)
       (with-temp-objects [obj-2 (ac/instantiate obj)]
         (t (at/is (= (ac/state obj)
-                  (ac/state obj-2))
-             "round-trip serialization")
-          :close))))
+                     (ac/state obj-2))
+             "round-trip serialization"))))
+    (t :close))
   (as-sub [t "hook+"]
     (with-temp-objects :lit [obj-1]
       (ac/state+ obj-1 :test state-1)
@@ -319,9 +322,11 @@
         (with-temp-objects :lit [obj]
           (ac/role+ obj :test-role-1 r1)
           (ac/role+ obj :test-role-2 r2)
-          (t (at/is (= (ac/roles obj) {:test-role-1 r1, :test-role-2 r2})))
+          (t (at/is (= (ac/roles obj) {:test-role-1 r1, :test-role-2 r2})
+               "`roles` retrieves previous `role+` data"))
           (ac/role+ obj :test-role-1 r3)
-          (t (at/is (= (ac/roles obj) {:test-role-1 r3, :test-role-2 r2}))))
+          (t (at/is (= (ac/roles obj) {:test-role-1 r3, :test-role-2 r2})
+               "`roles` reflects roles overwritten by `role+`")))
         (let [f1 (fn [_ _])
               s1 (System.Object.)]
           ;; does roles pick up on roles formed by calls to hook+ and state+?          
