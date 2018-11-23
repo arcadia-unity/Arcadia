@@ -376,7 +376,6 @@
             (cond
               (and (map? x) (= ::result (::type x)))
               (conj results (assoc x ::labels labels)) ;; New key, just for this
-
               
               (and (map? x) (#{::tester-state ::result-group ::tester-exec} (::type x)))
               (let [labels-2 (if-let [l (::label x)] (conj labels l) labels)
@@ -441,8 +440,8 @@
                      (binding [*print-level* 10 *print-length* 5] ; bit arbitrary
                        (pr-str actual)))))
       :error (p (if message
-                  (str "ERROR: " (.Message ^Exception error))
-                  (str "ERROR: " (.Message ^Exception error) " in " message))
+                  (str "ERROR: " (.Message ^Exception error) " in " message)
+                  (str "ERROR: " (.Message ^Exception error)))
                " Form: " form))))
 
 (defmethod print-data ::tester-state [{:keys [:indent] :as ctx}
