@@ -189,6 +189,30 @@
 ;; ------------------------------------------------------------
 ;; IEntityComponent
 
+;; TODO: get rid of this forward declaration by promoting ISceneGraph functions
+;; above this
+(declare gobj)
+
+(comment
+  (defn cmpt [x t]
+    "Returns the first component typed `t` attached to the GameObject `x`."
+    (obj-nil (.GetComponent (gobj x) t)))
+
+  (defn cmpts [x t]
+    (.GetComponents (gobj x) t)) ;; chance of nil'd components? would be inconsistent with obj-nil
+
+  (defn cmpt+ ^GameObject [x t]
+    (.AddComponent (gobj x) t)
+    x)
+
+  (defn cmpt- [x t]
+    (let [^|UnityEngine.Component[]| a (.GetComponents x t)]
+      (loop [i (int 0)]
+        (when (< i (count a))
+          (retire (aget a i))
+          (recur (inc i)))))
+    x))
+
 (defprotocol IEntityComponent
   "Common protocol for everything in Unity that supports attached
   components."
@@ -272,7 +296,61 @@
     "Moves `child` to under `this` object in the hierarchy, optionally
     recalculating its local transform.")
   (child- ^GameObject [this child]
-          "Move `child` from under `this` object ti the top of the hierarchy"))
+    "Move `child` from under `this` object ti the top of the hierarchy"))
+
+;; ------------------------------------------------------------
+;; refactor
+
+;; NOTE FOR MAGIC: there should be a much faster way to do this
+(comment
+  (defn gobj ^GameObject [x]
+    (obj-nil
+      (cond
+        (instance? UnityEngine.GameObject x)
+        x
+        
+        (instance? UnityEngine.Component x)
+        (.gameObject ^UnityEngine.Component x))))
+
+  (defn child+
+    ([x child]
+     (child+ x child false))
+    ([x child world-position-stays]
+     (when-let [^GameObject x (gobj x)]
+       (when-let [^GameObject c (gobj child)]
+         (.SetParent (.transform c) (.transform x) ^Boolean world-position-stays)))
+     x))
+
+  (defn child-
+    ([x child]
+     (child- x child false))
+    ([x child world-position-stays]
+     (when-let [^GameObject x (gobj x)]
+       (when-let [^GameObject c (gobj child)]
+         (when (= (.parent c) x)
+           (.SetParent (.transform c) nil ^Boolean world-position-stays))))
+     x))
+
+  (defn children ^System.Collections.IEnumerable [x]
+    (when-let [^GameObject x (gobj x)]
+      (let [t (.transform x)]
+        (reify
+          System.Collections.IEnumerable
+          (GetEnumerator [this]
+            (let [e (.GetEnumerator t)]
+              (reify System.Collections.IEnumerator
+                (System.Collections.IEnumerator.MoveNext ^Boolean [this]
+                  (.MoveNext e))
+                (System.Collections.IEnumerator.Reset [this]
+                  (.Reset e))
+                (System.Collections.IEnumerator.Current [this]
+                  (.gameObject ^UnityEngine.Transform (.Current e))))))
+          clojure.lang.Counted
+          (count [this]
+            (.childCount t)))))))
+
+
+;; ------------------------------------------------------------
 
 (extend-protocol ISceneGraph
   GameObject
