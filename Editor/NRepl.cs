@@ -306,7 +306,8 @@ namespace Arcadia
             new Thread(() =>
             {
                 // TODO timeout and respond to StopServer
-                var listener = new TcpListener(IPAddress.Any, 9999);
+                // TODO make IPAddress.Loopback configurable to allow remote connections
+                var listener = new TcpListener(IPAddress.Loopback, 9999);
                 listener.Start();
                 Debug.LogFormat("nrepl: listening on port {0}", 9999);
                 while (running)
