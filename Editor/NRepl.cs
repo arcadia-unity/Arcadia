@@ -76,6 +76,8 @@ namespace Arcadia
 
         private static Associative DefaultBindings =>
             RT.map(
+                RT.OutVar, new StringWriter(),
+                RT.ErrVar, new StringWriter(),
                 RT.CurrentNSVar, Namespace.findOrCreate(Symbol.intern("user")),
                 RT.UncheckedMathVar, false,
                 RT.WarnOnReflectionVar, false,
@@ -131,17 +133,20 @@ namespace Arcadia
                 var session = GetSession(_request);
                 var code = _request["code"].ToString();
                 var sessionBindings = _sessions[session];
-                var outWriter = new StringWriter();
-
 
                 Var.pushThreadBindings(sessionBindings);
                 try
                 {
+                    var outWriter = (StringWriter) sessionBindings.valAt(RT.OutVar);
+                    var errWriter = (StringWriter) sessionBindings.valAt(RT.ErrVar);
+                    outWriter.GetStringBuilder().Clear();
+                    errWriter.GetStringBuilder().Clear();
+
                     var form = readStringVar.invoke(code);
                     var result = evalVar.invoke(form);
                     var value = (string) prStrVar.invoke(result);
                     outWriter.Flush();
-                    var outString = outWriter.ToString();
+                    errWriter.Flush();
 
                     star3Var.set(star2Var.deref());
                     star2Var.set(star1Var.deref());
@@ -154,8 +159,21 @@ namespace Arcadia
                         {"id", _request["id"]},
                         {"value", value}, // TODO do we need :values?
                         {"ns", RT.CurrentNSVar.deref().ToString()},
-                        {"out", outString},
                         {"session", session.ToString()},
+                    }, _client);
+
+                    SendMessage(new BDictionary
+                    {
+                        {"id", _request["id"]},
+                        {"out", outWriter.ToString()},
+                        {"session", session.ToString()},
+                    }, _client);
+                    
+                    SendMessage(new BDictionary
+                    {
+                        {"id", _request["id"]},
+                        {"session", session.ToString()},
+                        {"err", errWriter.ToString()},
                     }, _client);
 
                     SendMessage(new BDictionary
