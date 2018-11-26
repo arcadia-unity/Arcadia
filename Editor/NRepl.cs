@@ -46,6 +46,10 @@ namespace Arcadia
         private static Var evalVar;
         private static Var prStrVar;
         private static Var addCallbackVar;
+        private static Var star1Var;
+        private static Var star2Var;
+        private static Var star3Var;
+        private static Var starEVar;
         private static Namespace shimsNS;
 
         static NRepl()
@@ -56,6 +60,11 @@ namespace Arcadia
             readStringVar = RT.var("clojure.core", "read-string");
             evalVar = RT.var("clojure.core", "eval");
             prStrVar = RT.var("clojure.core", "pr-str");
+
+            star1Var = RT.var("clojure.core", "*1");
+            star2Var = RT.var("clojure.core", "*2");
+            star3Var = RT.var("clojure.core", "*3");
+            starEVar = RT.var("clojure.core", "*e");
 
             shimsNS = Namespace.findOrCreate(Symbol.intern("arcadia.nrepl.shims"));
             Var.intern(shimsNS, Symbol.intern("getProperty"), new GetPropertyShimFn());
@@ -71,6 +80,10 @@ namespace Arcadia
                 RT.UncheckedMathVar, false,
                 RT.WarnOnReflectionVar, false,
                 RT.var("clojure.core", "*print-length*"), null,
+                star1Var, null,
+                star2Var, null,
+                star3Var, null,
+                starEVar, null,
                 RT.MathContextVar, null);
 
         static Guid NewSession() => NewSession(DefaultBindings);
@@ -130,6 +143,10 @@ namespace Arcadia
                     outWriter.Flush();
                     var outString = outWriter.ToString();
 
+                    star3Var.set(star2Var.deref());
+                    star2Var.set(star1Var.deref());
+                    star1Var.set(result);
+
                     UpdateSession(session, Var.getThreadBindings());
 
                     SendMessage(new BDictionary
@@ -150,6 +167,10 @@ namespace Arcadia
                 }
                 catch (Exception e)
                 {
+                    starEVar.set(e);
+                    
+                    UpdateSession(session, Var.getThreadBindings());
+                    
                     SendMessage(new BDictionary
                     {
                         {"id", _request["id"]},
