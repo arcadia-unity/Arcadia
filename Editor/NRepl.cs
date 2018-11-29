@@ -74,7 +74,7 @@ namespace Arcadia
         private static ConcurrentDictionary<Guid, Associative>
             _sessions = new ConcurrentDictionary<Guid, Associative>();
 
-        private static Associative DefaultBindings =>
+        private static Associative DefaultSessionBindings =>
             RT.map(
                 RT.OutVar, new StringWriter(),
                 RT.ErrVar, new StringWriter(),
@@ -88,7 +88,7 @@ namespace Arcadia
                 starEVar, null,
                 RT.MathContextVar, null);
 
-        static Guid NewSession() => NewSession(DefaultBindings);
+        static Guid NewSession() => NewSession(DefaultSessionBindings);
 
         static Guid NewSession(Associative bindings)
         {
