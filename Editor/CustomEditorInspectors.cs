@@ -1,100 +1,20 @@
 #if NET_4_6
 using System;
-using System.Linq;
-using System.Collections;
-using System.Collections.Generic;
+using System.IO;
+using System.Runtime.CompilerServices;
+using Arcadia;
 using UnityEditor;
-using UnityEditorInternal;
 using UnityEngine;
 using clojure.lang;
 
 [CustomEditor(typeof(ArcadiaBehaviour), true)]
 public class ArcadiaBehaviourEditor : Editor
 {
-	public static IFn requireFn;
-	public static IFn intoArrayFn;
-	public static IFn allUserFns;
-	public static IFn titleCase;
-	public static Symbol editorInteropSymbol;
-
-	static ArcadiaBehaviourEditor()
-	{
-		requireFn = RT.var("clojure.core", "require");
-		requireFn.invoke(Symbol.intern("arcadia.internal.editor-interop"));
-		intoArrayFn = RT.var("clojure.core", "into-array");
-		allUserFns = RT.var("arcadia.internal.editor-interop", "all-user-fns");
-	}
-
-	public static ReorderableList rl;
-
-	void OnEnable()
-	{
-		ArcadiaBehaviour ab = (ArcadiaBehaviour)target;
-		//if (rl == null)
-		//{
-		//	rl = new ReorderableList(ab.fns, typeof(IFn), true, false, true, true);
-		//	rl.headerHeight = 4;
-		//	rl.onAddDropdownCallback = (buttonRect, list) =>
-		//	{
-		//		EditorGUI.Popup(buttonRect, 0, ((IList<object>)allUserFns.invoke()).Select(x => x.ToString().Substring(2)).ToArray());
-		//	};
-		//}
-	}
-
-	void PopupInspector()
-	{
-		EditorGUILayout.Space();
-		ArcadiaBehaviour ab = (ArcadiaBehaviour)target;
-		rl.DoLayoutList();
-	//	if (ab.serializedVar != null)
-	//	{
-	//		// var, show popup
-	//		var loadedNamespaces = (ISeq)allLoadedUserNamespacesFn.invoke();
-	//		if (loadedNamespaces.count() == 0)
-	//			return;
-	//		Namespace[] namespaces = (Namespace[])intoArrayFn.invoke(loadedNamespaces);
-	//		var fullyQualifiedVars = namespaces.
-	//		SelectMany(ns => ns.getMappings().
-	//		  Select((IMapEntry me) => me.val()).
-	//		  Where(v => v.GetType() == typeof(Var) &&
-	//		   ((Var)v).Namespace == ns).
-	//		  Select(v => v.ToString().Substring(2)));
-
-	//		string[] blank = new string[] { "" };
-	//		string[] popUpItems = blank.Concat(fullyQualifiedVars).ToArray();
-
-	//		int selectedVar = Array.IndexOf(popUpItems, ab.serializedVar);
-	//		if (selectedVar < 0) selectedVar = 0;
-	//		selectedVar = EditorGUILayout.Popup("Function", selectedVar, popUpItems);
-
-	//		ab.serializedVar = popUpItems[selectedVar];
-	//		ab.OnAfterDeserialize();
-	//	}
-	//	else {
-	//		EditorGUILayout.LabelField("Function", ab.fn == null ? "nil" : ab.fn.ToString());
-
-	//	}
-	}
-
-	void TextInspector()
-	{
-		//EditorGUILayout.Space();
-		//ArcadiaBehaviour ab = (ArcadiaBehaviour)target;
-		//ab.serializedVar = EditorGUILayout.TextField("Function", ab.serializedVar);
-		//ab.OnAfterDeserialize();
-	}
-
 	public override void OnInspectorGUI()
 	{
-		// var inspectorConfig = ClojureConfiguration.Get("editor", "hooks-inspector");
-
-		// EditorGUILayout.LabelField("Disabled For Now, use the REPL");
-
-		ArcadiaBehaviour ab = (ArcadiaBehaviour)target;
-		//var fns = ab.fns;
-		//var keys = ab.keys;
+		ArcadiaBehaviour ab = (ArcadiaBehaviour) target;
 		var ifns = ab.ifnInfos;
-		if(ifns.Length == 0)
+		if (ifns.Length == 0)
 		{
 			EditorGUILayout.LabelField("No functions");
 		}
@@ -102,61 +22,165 @@ public class ArcadiaBehaviourEditor : Editor
 		{
 			for (int i = 0; i < ifns.Length; i++)
 			{
-				var ifn = ifns[i];				
+				var ifn = ifns[i];
 				Var v = ifn.fn as Var;
-				if (v != null && v.isBound)
+				var boldStyle = new GUIStyle(EditorStyles.label);
+				boldStyle.font = EditorStyles.boldFont;
+				var redStyle = new GUIStyle(boldStyle);
+				redStyle.normal.textColor = Color.red;
+				if (v != null)
 				{
-					EditorGUILayout.LabelField(ifn.key.ToString() + ": " + v.ToString());
-				} else {
-					GUIStyle style = new GUIStyle(GUI.skin.label);
-					style.normal.textColor = Color.red;
-					EditorGUILayout.LabelField(ifn.key.ToString() + ": " + ifn.fn.ToString(), style);
+					if (v.isBound)
+					{
+						EditorGUILayout.BeginHorizontal();
+						EditorGUILayout.PrefixLabel(ifn.key.ToString(), EditorStyles.label, boldStyle);
+						EditorGUILayout.LabelField(v.ToString());
+						EditorGUILayout.EndHorizontal();
+					}
+					else
+					{
+						EditorGUILayout.BeginHorizontal();
+						EditorGUILayout.PrefixLabel(ifn.key.ToString(), EditorStyles.label, redStyle);
+						EditorGUILayout.LabelField(v.ToString());
+						EditorGUILayout.EndHorizontal();						
+					}
 				}
-				
+				else
+				{
+					EditorGUILayout.BeginHorizontal();
+					EditorGUILayout.PrefixLabel(ifn.key.ToString(), EditorStyles.label, boldStyle);
+					EditorGUILayout.LabelField(ifn.fn.ToString());
+					EditorGUILayout.EndHorizontal();
+				}
 			}
 		}
 		
-		// PopupInspector();
-		/*
-		if(inspectorConfig == Keyword.intern(null, "popup")) {
-		  PopupInspector();
-		} else if(inspectorConfig == Keyword.intern(null, "text")) {
-		  TextInspector();
-		} else {
-		  EditorGUILayout.HelpBox("Invalid value for :editor/hooks-inspector in configuration file." +
-								  "Expected :text or :drop-down, got " + inspectorConfig.ToString() +
-								  ". Showing text inspector.", MessageType.Warning);
-		  TextInspector();
-		}
-		*/
+		EditorGUILayout.Space();
 	}
 }
 
 [CustomEditor(typeof(ArcadiaState), true)]
 public class ArcadiaStateEditor : Editor
 {
+	private static Var pprint;
+	
 	static ArcadiaStateEditor()
 	{
-        Arcadia.Util.require("arcadia.core");
+		Arcadia.Util.require("clojure.pprint");
+		pprint = RT.var("clojure.pprint", "pprint");
 	}
 
-	public static Var OnInspectorGUIVar;
-	public static bool ownVarsInitialized = false;
-
-	public static void RequireOwnVars ()
+	class InspectorCache
 	{
-		if (ownVarsInitialized)
-			return;
-		string ns = "arcadia.internal.editor-interop";
-		Arcadia.Util.require(ns);
-		Arcadia.Util.getVar(ref OnInspectorGUIVar, ns, "state-inspector!");
-		ownVarsInitialized = true;
+		public int Length;
+		public bool[] Foldouts;
+		public string[] PrintedKeys;
+		public string[] PrintedValues;
+		public object[] CachedKeys;
+		public object[] CachedValues;
+
+		public void UpdateFrom(ArcadiaState state)
+		{
+			if (!state.fullyInitialized)
+				state.Initialize();
+			var kvs = state.state.KeyVals();
+
+			Length = kvs.Length;
+			if (Foldouts == null)
+			{
+				Foldouts = new bool[Length];
+				for (var i = 0; i < Length; i++)
+					Foldouts[i] = true;
+			}
+
+			PrintedValues = new string[Length];
+			PrintedKeys = new string[Length];
+			CachedKeys = new object[Length];
+			CachedValues = new object[Length];
+		
+			for (var i = 0; i < Length; i++)
+			{
+				var sw = new StringWriter();
+				pprint.invoke(kvs[i].key, sw);
+				PrintedKeys[i] = sw.ToString();
+				sw.GetStringBuilder().Clear();
+				pprint.invoke(kvs[i].val, sw);
+				PrintedValues[i] = sw.ToString();
+				CachedKeys[i] = kvs[i].key;
+				CachedValues[i] = kvs[i].val;
+			}
+		}
 	}
+
+	private static ConditionalWeakTable<ArcadiaState, InspectorCache> _cache =
+		new ConditionalWeakTable<ArcadiaState, InspectorCache>();
 	
+	private ArcadiaState state;
+	private InspectorCache cache;
+
+	private void MaybeRefresh()
+	{
+		var kvs = state.state.KeyVals();
+		if (kvs.Length != cache.Length)
+		{
+			Refresh();
+			return;
+		}
+
+		for (int i = 0; i < cache.Length; i++)
+		{
+			JumpMap.KeyVal kv;
+			if (state.state.dict.TryGetValue(cache.CachedKeys[i], out kv))
+			{
+				if (!ReferenceEquals(cache.CachedValues[i], kv.val))
+				{
+					Refresh();
+					return;
+				}
+			}
+			else
+			{
+				Refresh();
+				return;
+			}
+		}
+	}
+
+	private void Refresh()
+	{
+		cache = _cache.GetValue(state, _ => new InspectorCache());
+		cache.UpdateFrom(state);
+		EditorUtility.SetDirty(target);
+	}
+
+	private void OnEnable()
+	{
+		state = target as ArcadiaState;
+		if(state == null)
+			throw new Exception(String.Format("target of ArcadiaState inspector has type {0}", target.GetType()));
+		
+		Refresh();
+	}
+
 	public override void OnInspectorGUI()
 	{
-		RequireOwnVars();
-		Arcadia.Util.Invoke(OnInspectorGUIVar, target);
-	}
+		MaybeRefresh();
+		for (int i = 0; i < cache.PrintedKeys.Length; i++)
+		{
+			var keyStyle = new GUIStyle(EditorStyles.foldout);
+			var valStyle = new GUIStyle(EditorStyles.label);
+			keyStyle.font = EditorStyles.boldFont;
+			cache.Foldouts[i] = EditorGUILayout.Foldout(cache.Foldouts[i], cache.PrintedKeys[i], keyStyle);
+			if (cache.Foldouts[i])
+			{
+				GUILayout.Label(cache.PrintedValues[i], valStyle);
+			}
+		}
+			
+		if (GUILayout.Button("Refresh"))
+		{
+			Refresh();
+		}
+	}	
 }
 #endif
