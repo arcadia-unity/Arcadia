@@ -272,24 +272,6 @@
         (.transform x)))
     (gobj-arg-fail-exception x)))
 
-;; (defprotocol ISceneGraph
-;;   "Common protocol for everything in Unity that is part of the scene
-;;   graph hierarchy."
-;;   (gobj ^GameObject [this]
-;;         "")
-;;   (children [this]
-;;     "Returns all objects under `this` object in the hierarchy.")
-;;   (parent ^GameObject [this]
-;;           "Returns the object that contains `this` object, or `nil` if it is
-;;           at the top of the hierarchy.")
-;;   (child+ 
-;;     ^GameObject [this child]
-;;     ^GameObject [this child transform-to]
-;;     "Moves `child` to under `this` object in the hierarchy, optionally
-;;     recalculating its local transform.")
-;;   (child- ^GameObject [this child]
-;;     "Move `child` from under `this` object ti the top of the hierarchy"))
-
 ;; ------------------------------------------------------------
 ;; IEntityComponent
 
@@ -493,25 +475,6 @@
   [obj message-kw key]
   (when-let [^ArcadiaBehaviour hook-cmpt (cmpt obj (ensure-hook-type message-kw))]
     (.CallbackForKey hook-cmpt key)))
-
-;; are these necessary?
-
-;; (defn hook-fns
-;;   "Return the functions associated with `hook` on `obj`."
-;;   [obj message-kw]
-;;   (.fns (hook obj message-kw)))
-
-;; (defn hooks 
-;;   "Return all components for `hook` attached to `obj`"
-;;   [obj hook]
-;;   (let [hook-type (ensure-hook-type hook)]
-;;     (cmpts obj hook-type)))
-
-(defn hook?
-  ([t hook] (= (type t)
-               (ensure-hook-type hook)))
-  ([t] (isa? (type t)
-         ArcadiaBehaviour)))
 
 ;; ============================================================
 ;; ISnapShotable
