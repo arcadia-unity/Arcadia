@@ -417,7 +417,6 @@
   will be invoked every time the message identified by `message-kw` is sent by Unity. `f`
   must have the same arity as the expected Unity message. When called with a key `k`
   this key can be passed to `message-kw-` to remove the function."
-  ([obj message-kw f] (hook+ obj message-kw :default f)) ;; TODO: don't like this
   ([obj message-kw k f]
    (let [hook-type (ensure-hook-type message-kw)
          ^ArcadiaBehaviour hook-cmpt (ensure-cmpt obj hook-type)]
