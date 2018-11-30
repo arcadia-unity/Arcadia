@@ -304,152 +304,40 @@
 
 ;; TODO: get rid of this forward declaration by promoting ISceneGraph functions
 ;; above this
-(declare gobj)
 
-(comment
-  (defn cmpt [x t]
-    "Returns the first component typed `t` attached to the GameObject `x`."
-    (obj-nil (.GetComponent (gobj x) t)))
+(defn cmpt 
+  "Returns the first Component of type `t` attached to the GameObject `x`.
+  Returns `nil` if no such component is attached."
+  ^UnityEngine.Component [x ^Type t]
+  (if-let [x (gobj x)]
+    (obj-nil (.GetComponent x t))
+    (gobj-arg-fail-exception x)))
 
-  (defn cmpts [x t]
-    (.GetComponents (gobj x) t)) ;; chance of nil'd components? would be inconsistent with obj-nil
+(defn cmpts
+  "Returns all Components of type `t` attached to the GameObject `x`
+  as a (possibly empty) array."
+  ^|UnityEngine.Component[]| [x ^Type t]
+  (if-let [x (gobj x)]
+    (.GetComponents x t)
+    (gobj-arg-fail-exception x)))
 
-  (defn cmpt+ ^GameObject [x t]
-    (.AddComponent (gobj x) t)
-    x)
+(defn cmpt+
+  "Adds a new Component of type `t` to GameObject `x`. Returns the new Component."
+  ^UnityEngine.Component [x ^Type t]
+  (if-let [x (gobj x)]
+    (.AddComponent x t)
+    (gobj-arg-fail-exception x)))
 
-  (defn cmpt- [x t]
-    (let [^|UnityEngine.Component[]| a (.GetComponents x t)]
+;; returns nil because returning x would be inconsistent with cmpt+,
+;; which must return the new component
+(defn cmpt- [x ^Type t]
+  (if-let [x (gobj x)]
+    (let [^|UnityEngine.Component[]| a (.GetComponents (gobj x) t)]
       (loop [i (int 0)]
         (when (< i (count a))
           (retire (aget a i))
           (recur (inc i)))))
-    x))
-
-(defprotocol IEntityComponent
-  "Common protocol for everything in Unity that supports attached
-  components."
-  (cmpt [this t]
-    "Returns the first component typed `t` attached to the object")
-  (cmpts [this t]
-    "Returns a vector of all components typed `t` attached to the object")
-  (cmpt+ [this t]
-    "Adds a component of type `t` to the object and returns the new instance")
-  (cmpt- [this t]
-    "Removes all components of type `t` from the object and returns the object"))
-
-(defmacro ^:private do-reduce [[x coll] & body]
-  `(do
-     (reduce
-       (fn [_# ~x]
-         ~@body
-         nil)
-       ~coll)
-     nil))
-
-(defmacro ^:private do-components [[x access] & body]
-  `(let [^|UnityEngine.Component[]| ar# ~access
-         c# (int (count ar#))]
-     (loop [i# (int 0)]
-       (when (< i# c#)
-         (let [^Component ~x (aget ar# i#)]
-           (do ~@body)
-           (recur (inc i#)))))))
-
-(extend-protocol IEntityComponent
-  GameObject
-  (cmpt [this t]
-    (obj-nil (.GetComponent this t)))
-  (cmpts [this t]
-    (into [] (.GetComponents this t)))
-  (cmpt+ [this t]
-    (.AddComponent this t))
-  (cmpt- [this t]
-    (do-components [x (.GetComponents this t)]
-      (destroy x)))
-
-  ;; exactly the same:
-  Component
-  (cmpt [this t]
-    (obj-nil (.GetComponent this t)))
-  (cmpts [this t]
-    (into [] (.GetComponents this t)))
-  (cmpt+ [this t]
-    (.AddComponent this t))
-  (cmpt- [this t]
-    (do-components [x (.GetComponents this t)]
-      (destroy x))) 
-  
-  clojure.lang.Var
-  (cmpt [this t]
-    (cmpt (var-get this) t))
-  (cmpts [this t]
-    (cmpts (var-get this) t))
-  (cmpt+ [this t]
-    (cmpt+ (var-get this) t))
-  (cmpt- [this t]
-    (cmpt- (var-get this) t)))
-
-
-;; ------------------------------------------------------------
-;; refactor
-
-;; NOTE FOR MAGIC: there should be a much faster way to do this
-
-;; ------------------------------------------------------------
-
-;; (extend-protocol ISceneGraph
-;;   GameObject
-;;   (gobj [this]
-;;     this)
-;;   (children [this]
-;;     (into []
-;;       (map (fn [^Transform tr] (.gameObject tr)))
-;;       (.transform this)))
-;;   (parent [this]
-;;     (when-let [p (.. this transform parent)]
-;;       (.gameObject p)))
-;;   (child+
-;;     ([this child]
-;;      (child+ this child false))
-;;     ([this child transform-to]
-;;      (let [^GameObject c (gobj child)]
-;;        (.SetParent (.transform c) (.transform this) transform-to)
-;;        this)))
-;;   (child- [this child]
-;;     (let [^GameObject c (gobj child)]
-;;       (.SetParent (.transform c) nil false)
-;;       this))
-
-;;   Component
-;;   (gobj [^Component this]
-;;     (.gameObject this))
-;;   (children [^Component this]
-;;     (into [] (.. this gameObject transform)))
-;;   (parent [^Component this]
-;;     (.. this gameObject parent))
-;;   (child+
-;;     ([^Component this child]
-;;      (child+ (.gameObject this) child))
-;;     ([^Component this, child, transform-to]
-;;      (child+ (.gameObject this) child transform-to)))
-;;   (child- [^Component this, child]
-;;     (child- (.gameObject this) child))
-
-;;   clojure.lang.Var
-;;   (gobj [this]
-;;     (gobj (var-get this)))
-;;   (children [this]
-;;     (children (var-get this)))
-;;   (parent [this]
-;;     (parent (var-get this)))
-;;   (child+
-;;     ([this child]
-;;      (child+ (var-get this) child))
-;;     ([this child transform-to]
-;;      (child+ (var-get this) child transform-to)))
-;;   (child- [this child]
-;;     (child- (var-get this) child)))
+    (gobj-arg-fail-exception x)))
 
 ;; ------------------------------------------------------------
 ;; repercussions
@@ -507,7 +395,6 @@
 
 (defn gobj-seq [x]
   (tree-seq identity children (gobj x)))
-
 
 ;; ============================================================
 ;; hooks
