@@ -375,17 +375,18 @@
 (defn- clojurized-keyword [m]
   (-> m str camels-to-hyphens string/lower-case keyword))
 
-(defn- message-keyword [m]
-  (clojurized-keyword m))
-
-(def hook-types
-  "Map of keywords to hook component types"
+(def ^:private hook-types
+  "Map of keywords to hook component types. Unstable."
   (->> messages/all-messages
        keys
        (map name)
-       (mapcat #(vector (message-keyword %)
-                        (RT/classForName (str % "Hook"))))
-       (apply hash-map)))
+       (map #(do [(clojurized-keyword %), (RT/classForName (str % "Hook"))]))
+       (into {})))
+
+(defn available-hooks
+  "Returns a sorted seq of all permissible hook keywords."
+  []
+  (sort (keys hook-types)))
 
 (defn- ensure-hook-type [hook]
   (or (get hook-types hook)
