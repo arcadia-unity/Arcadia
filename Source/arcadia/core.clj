@@ -420,7 +420,7 @@
   ([obj message-kw k f]
    (let [hook-type (ensure-hook-type message-kw)
          ^ArcadiaBehaviour hook-cmpt (ensure-cmpt obj hook-type)]
-     (.AddFunction hook-cmpt f k)
+     (.AddFunction hook-cmpt k f)
      obj)))
 
 (defn hook-
@@ -435,7 +435,7 @@
      (.RemoveFunction hook-cmpt key))
    nil))
 
-(defn clear-hook
+(defn clear-hooks
   "Removes all callbacks on the Unity message corresponding to
   `message-kw`, regardless of their keys."
   [obj message-kw]

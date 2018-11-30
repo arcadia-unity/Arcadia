@@ -306,7 +306,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		//InvalidateIndexes();
 	}
 
-	public void AddFunction (IFn f, Keyword key)
+	public void AddFunction (Keyword key, IFn f)
 	{
 		FullInit();
 		if (isBuilding) {
