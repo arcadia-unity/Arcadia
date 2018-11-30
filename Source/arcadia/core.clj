@@ -189,28 +189,19 @@
 ;; ------------------------------------------------------------
 ;; ISceneGraph
 
-(defn gobj ^GameObject [x]
-  (obj-nil
-    (cond
-      (instance? UnityEngine.GameObject x)
-      x
-      
-      (instance? UnityEngine.Component x)
-      (.gameObject ^UnityEngine.Component x)
-
-      ;; TODO: review this. But the basic idea is that this is a query-style function,
-      ;; and it is reasonable to ask what the GameObject of nothing is (answer: there is none).
-      ;; Ergonomically, gobj is often used in if-let or when-let, and can itself return nil. It
-      ;; is useful if gobj has mathematical closure. May lead to a bit of nil-chasing.
-      (nil? x)
-      nil
-
-      :else (throw
-              (ArgumentException.
-                (str
-                  "Expects instance of UnityEngine.GameObject or UnityEngine.Component, instead received instance of "
-                  (class x))
-                "x")))))
+(defn gobj
+  "Coerces `x`, expected to be a GameObject or Component, to a
+  corresponding live (non-destroyed) GameObject instance or to nil by
+  the following policy:
+  
+  - If `x` is a live GameObject, returns it.
+  - If `x` is a destroyed GameObject, returns nil.
+  - If `x` is a live Component instance, returns its containing GameObject.
+  - If `x` is a destroyed Component instance, returns nil.
+  - If `x` is nil, returns nil.
+  - Otherwise throws an ArgumentException."
+  ^GameObject [x]
+  (Util/ToGameObject x))
 
 (defmacro ^:private gobj-arg-fail-exception [param]
   (let [param-str (name param)]

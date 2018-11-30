@@ -333,6 +333,28 @@ namespace Arcadia
 			throw new ArgumentException("No namespace string found for typeName " + typeName);
 		}
 
+		public static GameObject ToGameObject (object x)
+		{
+			
+			GameObject g = x as GameObject;
+			if (g != null) {
+				return g;
+			}
+
+			Component c = x as Component;
+			if (c != null) {
+				return c.gameObject;
+			}
+
+			if (x == null || g is GameObject || c is Component) {
+				return null;
+			}
+
+			throw new ArgumentException (
+				"Expects instance of UnityEngine.GameObject or UnityEngine.Component, instead received instance of " + x.GetType(), 
+				nameof(x));
+		}
+
 		// ==================================================================
 		// Timing
 
