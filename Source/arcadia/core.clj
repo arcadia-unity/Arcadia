@@ -187,6 +187,119 @@
   [^String t] `(UnityEngine.GameObject/FindGameObjectsWithTag ~t))
 
 ;; ------------------------------------------------------------
+;; ISceneGraph
+
+(defn gobj ^GameObject [x]
+  (obj-nil
+    (cond
+      (instance? UnityEngine.GameObject x)
+      x
+      
+      (instance? UnityEngine.Component x)
+      (.gameObject ^UnityEngine.Component x)
+
+      ;; TODO: review this. But the basic idea is that this is a query-style function,
+      ;; and it is reasonable to ask what the GameObject of nothing is (answer: there is none).
+      ;; Ergonomically, gobj is often used in if-let or when-let, and can itself return nil. It
+      ;; is useful if gobj has mathematical closure. May lead to a bit of nil-chasing.
+      (nil? x)
+      nil
+
+      :else (throw
+              (ArgumentException.
+                (str
+                  "Expects instance of UnityEngine.GameObject or UnityEngine.Component, instead received instance of "
+                  (class x))
+                "x")))))
+
+(defmacro ^:private gobj-arg-fail-exception [param]
+  (let [param-str (name param)]
+    `(if (some? ~param)
+       (throw
+         (ArgumentException.
+           (str
+             "Expects non-destroyed instance of UnityEngine.GameObject or UnityEngine.Component, instead received destroyed instance of "
+             (class ~param))
+           ~param-str))
+       (throw
+         (ArgumentNullException.
+           "Expects instance of UnityEngine.GameObject or UnityEngine.Component, instead received `nil`"
+           ~param-str)))))
+
+;; Should this return the parent or the child?
+;; child- should return either the gameobject or nil,
+;; more consistent with that to return the parent,
+;; unless we want to change child- to return nil
+;; just to keep the api consistent.
+;; otoh cmpt+ returns the component (and HAS to).
+;; assoc returns the new map, of course.
+;; aset returns the val. and method chaining
+;; isn't a strong idiom in Clojure.
+(defn child+
+  (^GameObject [x child]
+   (child+ x child false))
+  (^GameObject [x child world-position-stays]
+   (if-let [x (gobj x)]
+     (if-let [child (gobj child)]
+       (.SetParent
+         (.transform (gobj child))
+         (.transform (gobj x))
+         ^Boolean world-position-stays)
+       (gobj-arg-fail-exception child))
+     (gobj-arg-fail-exception x))
+   child))
+
+(defn child-
+  ([x child]
+   (child- x child false))
+  ([x child world-position-stays]
+   (if-let [^GameObject x (gobj x)]
+     (if-let [^GameObject child (gobj child)]
+       (when (= (.parent child) x)
+         (.SetParent (.transform child) nil ^Boolean world-position-stays))
+       (gobj-arg-fail-exception child))
+     (gobj-arg-fail-exception x))
+   x))
+
+;; `nil` semantics of this one is a little tricky.
+;; It seems like a query function, which normally
+;; suggests nil should be supported, but we can't
+;; traverse the children of nulled game objects in
+;; unity, and in a sense it's incorrect to offer an
+;; empty vector for them either, since that asserts
+;; the nulled game object in fact has no children,
+;; rather than that the children are inaccessible.
+;; We could return nil for that and vectors for other things
+;; I suppose.
+(defn children [x]
+  (if-let [^GameObject x (gobj x)]
+    (persistent!
+      (reduce
+        (fn [acc ^UnityEngine.Transform x]
+          (conj! acc (.gameObject x)))
+        (transient [])
+        (.transform x)))
+    (gobj-arg-fail-exception x)))
+
+;; (defprotocol ISceneGraph
+;;   "Common protocol for everything in Unity that is part of the scene
+;;   graph hierarchy."
+;;   (gobj ^GameObject [this]
+;;         "")
+;;   (children [this]
+;;     "Returns all objects under `this` object in the hierarchy.")
+;;   (parent ^GameObject [this]
+;;           "Returns the object that contains `this` object, or `nil` if it is
+;;           at the top of the hierarchy.")
+;;   (child+ 
+;;     ^GameObject [this child]
+;;     ^GameObject [this child transform-to]
+;;     "Moves `child` to under `this` object in the hierarchy, optionally
+;;     recalculating its local transform.")
+;;   (child- ^GameObject [this child]
+;;     "Move `child` from under `this` object ti the top of the hierarchy"))
+
+;; ------------------------------------------------------------
 ;; IEntityComponent
 
 ;; TODO: get rid of this forward declaration by promoting ISceneGraph functions
@@ -277,133 +390,66 @@
   (cmpt- [this t]
     (cmpt- (var-get this) t)))
 
-;; ------------------------------------------------------------
-;; ISceneGraph
-
-(defprotocol ISceneGraph
-  "Common protocol for everything in Unity that is part of the scene
-  graph hierarchy."
-  (gobj ^GameObject [this]
-        "")
-  (children [this]
-    "Returns all objects under `this` object in the hierarchy.")
-  (parent ^GameObject [this]
-          "Returns the object that contains `this` object, or `nil` if it is
-          at the top of the hierarchy.")
-  (child+ 
-    ^GameObject [this child]
-    ^GameObject [this child transform-to]
-    "Moves `child` to under `this` object in the hierarchy, optionally
-    recalculating its local transform.")
-  (child- ^GameObject [this child]
-    "Move `child` from under `this` object ti the top of the hierarchy"))
 
 ;; ------------------------------------------------------------
 ;; refactor
 
 ;; NOTE FOR MAGIC: there should be a much faster way to do this
-(comment
-  (defn gobj ^GameObject [x]
-    (obj-nil
-      (cond
-        (instance? UnityEngine.GameObject x)
-        x
-        
-        (instance? UnityEngine.Component x)
-        (.gameObject ^UnityEngine.Component x))))
-
-  (defn child+
-    ([x child]
-     (child+ x child false))
-    ([x child world-position-stays]
-     (when-let [^GameObject x (gobj x)]
-       (when-let [^GameObject c (gobj child)]
-         (.SetParent (.transform c) (.transform x) ^Boolean world-position-stays)))
-     x))
-
-  (defn child-
-    ([x child]
-     (child- x child false))
-    ([x child world-position-stays]
-     (when-let [^GameObject x (gobj x)]
-       (when-let [^GameObject c (gobj child)]
-         (when (= (.parent c) x)
-           (.SetParent (.transform c) nil ^Boolean world-position-stays))))
-     x))
-
-  (defn children ^System.Collections.IEnumerable [x]
-    (when-let [^GameObject x (gobj x)]
-      (let [t (.transform x)]
-        (reify
-          System.Collections.IEnumerable
-          (GetEnumerator [this]
-            (let [e (.GetEnumerator t)]
-              (reify System.Collections.IEnumerator
-                (System.Collections.IEnumerator.MoveNext ^Boolean [this]
-                  (.MoveNext e))
-                (System.Collections.IEnumerator.Reset [this]
-                  (.Reset e))
-                (System.Collections.IEnumerator.Current [this]
-                  (.gameObject ^UnityEngine.Transform (.Current e))))))
-          clojure.lang.Counted
-          (count [this]
-            (.childCount t)))))))
-
 
 ;; ------------------------------------------------------------
 
-(extend-protocol ISceneGraph
-  GameObject
-  (gobj [this]
-    this)
-  (children [this]
-    (into []
-      (map (fn [^Transform tr] (.gameObject tr)))
-      (.transform this)))
-  (parent [this]
-    (when-let [p (.. this transform parent)]
-      (.gameObject p)))
-  (child+
-    ([this child]
-     (child+ this child false))
-    ([this child transform-to]
-     (let [^GameObject c (gobj child)]
-       (.SetParent (.transform c) (.transform this) transform-to)
-       this)))
-  (child- [this child]
-    (let [^GameObject c (gobj child)]
-      (.SetParent (.transform c) nil false)
-      this))
+;; (extend-protocol ISceneGraph
+;;   GameObject
+;;   (gobj [this]
+;;     this)
+;;   (children [this]
+;;     (into []
+;;       (map (fn [^Transform tr] (.gameObject tr)))
+;;       (.transform this)))
+;;   (parent [this]
+;;     (when-let [p (.. this transform parent)]
+;;       (.gameObject p)))
+;;   (child+
+;;     ([this child]
+;;      (child+ this child false))
+;;     ([this child transform-to]
+;;      (let [^GameObject c (gobj child)]
+;;        (.SetParent (.transform c) (.transform this) transform-to)
+;;        this)))
+;;   (child- [this child]
+;;     (let [^GameObject c (gobj child)]
+;;       (.SetParent (.transform c) nil false)
+;;       this))
 
-  Component
-  (gobj [^Component this]
-    (.gameObject this))
-  (children [^Component this]
-    (into [] (.. this gameObject transform)))
-  (parent [^Component this]
-    (.. this gameObject parent))
-  (child+
-    ([^Component this child]
-     (child+ (.gameObject this) child))
-    ([^Component this, child, transform-to]
-     (child+ (.gameObject this) child transform-to)))
-  (child- [^Component this, child]
-    (child- (.gameObject this) child))
+;;   Component
+;;   (gobj [^Component this]
+;;     (.gameObject this))
+;;   (children [^Component this]
+;;     (into [] (.. this gameObject transform)))
+;;   (parent [^Component this]
+;;     (.. this gameObject parent))
+;;   (child+
+;;     ([^Component this child]
+;;      (child+ (.gameObject this) child))
+;;     ([^Component this, child, transform-to]
+;;      (child+ (.gameObject this) child transform-to)))
+;;   (child- [^Component this, child]
+;;     (child- (.gameObject this) child))
 
-  clojure.lang.Var
-  (gobj [this]
-    (gobj (var-get this)))
-  (children [this]
-    (children (var-get this)))
-  (parent [this]
-    (parent (var-get this)))
-  (child+
-    ([this child]
-     (child+ (var-get this) child))
-    ([this child transform-to]
-     (child+ (var-get this) child transform-to)))
-  (child- [this child]
-    (child- (var-get this) child)))
+;;   clojure.lang.Var
+;;   (gobj [this]
+;;     (gobj (var-get this)))
+;;   (children [this]
+;;     (children (var-get this)))
+;;   (parent [this]
+;;     (parent (var-get this)))
+;;   (child+
+;;     ([this child]
+;;      (child+ (var-get this) child))
+;;     ([this child transform-to]
+;;      (child+ (var-get this) child transform-to)))
+;;   (child- [this child]
+;;     (child- (var-get this) child)))
 
 ;; ------------------------------------------------------------
 ;; repercussions
@@ -486,7 +532,9 @@
       (throw (ArgumentException. (str hook " is not a valid Arcadia hook")))))
 
 (s/def ::scenegraphable
-  #(satisfies? ISceneGraph %))
+  any? ;; for now
+  ;; #(satisfies? ISceneGraph %)
+  )
 
 (s/def ::hook-kw
   #(contains? hook-types %))
@@ -725,7 +773,7 @@
   obj)
 
 (s/fdef role+
-  :args (s/cat :obj #(satisfies? ISceneGraph %)
+  :args (s/cat :obj any? ;; for now #(satisfies? ISceneGraph %)
                :k any?
                :spec ::role)
   :ret any?
@@ -755,7 +803,7 @@
   (reduce role- obj ks))
 
 (s/fdef role
-  :args (s/cat :obj #(satisfies? ISceneGraph %)
+  :args (s/cat :obj any? ;; for now ;; #(satisfies? ISceneGraph %)
                :k any?)
   :ret ::role)
 
