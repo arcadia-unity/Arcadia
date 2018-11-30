@@ -388,7 +388,7 @@
        (apply hash-map)))
 
 (defn- ensure-hook-type [hook]
-  (or (hook-types hook)
+  (or (get hook-types hook)
       (throw (ArgumentException. (str hook " is not a valid Arcadia hook")))))
 
 (s/def ::scenegraphable
