@@ -196,148 +196,165 @@
 ;; The Tests
 ;; ============================================================
 
+(at/clear-registry)
+
+;; ------------------------------------------------------------
+
+(at/deftest scene-graph-system t
+  (as-sub-closing [t "gobj"]
+    (with-temp-objects :lit [x]
+      (t (at/is (= (ac/gobj x) x) "If argument is a live GameObject, returns it.")))
+    (with-temp-objects :lit [x]
+      (UnityEngine.Object/DestroyImmediate x)
+      (t (at/is (= (ac/gobj x) nil) "If argument is a destroyed GameObject, returns nil.")))
+    (with-temp-objects :lit [x]
+      (let [mf (.AddComponent x UnityEngine.MeshFilter)]
+        (t (at/is (= (ac/gobj mf) x) "If argument is a live Component, returns its containing GameObject."))))
+    (with-temp-objects :lit [x]
+      (let [mf (.AddComponent x UnityEngine.MeshFilter)]
+        (UnityEngine.Object/DestroyImmediate mf)
+        (t (at/is (= (ac/gobj mf) nil) "If argument is a destroyed Component, returns nil."))))
+    (t
+      (at/is (= (ac/gobj nil) nil) "If argument is nil, returns nil.")
+      (at/throws (ac/gobj :not-a-unity-object)
+        System.ArgumentException
+        "If argument is neither a GameObject, Component, nor nil, throws System.ArgumentException."))))
 
 ;; ------------------------------------------------------------
 ;; cmpt system
 
-;; (at/deftest cmpt-system t
-;;   (as-sub-closing [t "cmpt"]
-;;     ;; does cmpt work with nil x?
-;;     ;; does cmpt work with null x?
-;;     ;; does cmpt work with non-GameObject, non-Component x?
-;;     ;; does cmpt work with GameObject x?
-;;     ;; does cmpt work with Component x?
-;;     ;; does cmpt throw the right error if t is a string?
-;;     (t (at/is (= (ac/cmpt nil UnityEngine.BoxCollider) nil)
-;;          "nil `x` returns nil."))
-;;     (with-temp-objects :lit [x]
-;;       (t (at/is (= (ac/cmpt x nil) nil)
-;;            "nil `t` returns nil.")))
-;;     (with-temp-objects :lit [x]
-;;       (ac/destroy-immediate x)
-;;       (t (at/is (= (ac/cmpt x Transform) nil)
-;;            "null (destroyed) `x` returns nil.")))
-;;     (t (at/is (= (ac/cmpt :not-a-unity-object Transform) nil) ; perhaps this should throw
-;;          "Non-GameObject, non-Component `x` returns nil."))
-;;     (with-temp-objects :lit [x]
-;;       (let [bc (.AddComponent x UnityEngine.BoxCollider)]
-;;         (t (at/is (= (ac/cmpt x UnityEngine.BoxCollider) bc)
-;;              "Retrieves present component with GameObject `x`."))))
-;;     (with-temp-objects :lit [x]
-;;       (let [bc (.AddComponent x UnityEngine.BoxCollider)]
-;;         (t (at/is (= (ac/cmpt (.transform x) UnityEngine.BoxCollider) bc)
-;;              "Retrieves present component with Component `x`.")))))
-;;   (as-sub-closing [t "cmpts"] ;; should this return nil or an empty array under various conditions?
-;;     ;; does cmpts work with nil x?
-;;     ;; does cmpts work with null x?
-;;     ;; does cmpts work with non-GameObject, non-Componenet x?
-;;     ;; does cmpts work with GameObject x?
-;;     ;; does cmpts work with Component x?
-;;     (t (at/is (= (ac/cmpts nil UnityEngine.BoxCollider) nil)
-;;          "nil `x` returns nil."))
-;;     (with-temp-objects :lit [x]
-;;       (t (at/is (= (ac/cmpts x nil) nil)
-;;            "nil `t` returns nil.")))
-;;     (with-temp-objects :lit [x]
-;;       (ac/destroy-immediate x)
-;;       (t (at/is (= (ac/cmpts x Transform) nil)
-;;            "null (destroyed) `x` returns nil.")))
-;;     (t (at/is (= (ac/cmpts :not-a-unity-object Transform) nil) ; perhaps this should throw
-;;          "Non-GameObject, non-Component `x` returns nil."))
-;;     (with-temp-objects :lit [x]
-;;       (let [bc (.AddComponent x UnityEngine.BoxCollider)]
-;;         (t
-;;           (at/is (instance? |UnityEngine.Component[]| (ac/cmpts x UnityEngine.BoxCollider))
-;;             "Retrieves Component array with GameObject `x` and present Component.")
-;;           (at/is (= (first (ac/cmpts x UnityEngine.BoxCollider)) bc)
-;;             "Retrieves correct Components with GameObject `x` and present Component."))))
-;;     (with-temp-objects :lit [x]
-;;       (let [bc (.AddComponent x UnityEngine.BoxCollider)]
-;;         (t (at/is (= (first (ac/cmpts (.transform x) UnityEngine.BoxCollider)) bc)
-;;              "Retrieves correct components with Component `x` and present Component.")))))
-;;   (as-sub-closing [t "cmpt+"]
-;;     ;; does cmpt+ work with nil x?
-;;     ;; does cmpt+ work with null x?
-;;     ;; does cmpt+ work with non-GameObject, non-Componenet x?
-;;     ;; does cmpt+ work with GameObject x?
-;;     ;; does cmpt+ work with Component x?
+(defmacro nil-behavior [t f]
+  (assert (symbol? t))
+  (assert (symbol? f))
+  `(let [t# ~t]
+     (t#
+       (at/throws
+         (~f nil UnityEngine.BoxCollider)
+         ArgumentNullException
+         "nil `x` throws ArgumentNullException.")
+       (at/throws
+         (~f :not-a-unity-object UnityEngine.BoxCollider)
+         ArgumentException
+         "Non-GameObject or Component `x` throws ArgumentException."))
+     (with-temp-objects :lit [x#]
+       (t# (at/throws
+             (~f x# nil)
+             ArgumentException
+             "nil `t` throws ArgumentException.")))
+     (with-temp-objects :lit [x#]
+       (t# (at/throws
+             (~f x# :not-a-type)
+             InvalidCastException ;; unfortunately
+             "Non-Type `t` throws InvalidCastException.")))
+     (let [x# (GameObject. "test")]
+       (UnityEngine.Object/DestroyImmediate x#)
+       (t# (at/throws
+             (~f x# UnityEngine.BoxCollider)
+             ArgumentException
+             "Destroyed `x` throws ArgumentException.")))))
 
-;;     ;; I guess it should work the same for nil and null x?
-;;     (as-sub-closing [t "With nil `x`"]
-;;       (try
-;;         (ac/cmpt+ nil UnityEngine.BoxCollider)
-;;         (t (at/is false "Didn't throw."))
-;;         (catch Exception e
-;;           (t (at/is (= (class e) InvalidOperationException)
-;;                "Throws InvalidOperationException.")))))
-;;     (as-sub-closing [t "With null x"]
-;;       (with-temp-objects :lit [obj]
-;;         (ac/destroy-immediate obj)
-;;         (try
-;;           (ac/cmpt+ obj UnityEngine.BoxCollider)
-;;           (t (at/is false "Didn't throw."))
-;;           (catch Exception e
-;;             (t (at/is (= (class e) InvalidOperationException))
-;;               "Throws InvalidOperationException.")))))
-;;     (as-sub-closing [t "With non-GameObject, non-Component x."]
-;;       (try
-;;         (ac/cmpt+ :not-a-unity-object UnityEngine.BoxCollider)
-;;         (t (at/is false "Didn't throw."))
-;;         (catch Exception e
-;;           (t (at/is (= (class e) InvalidOperationException)
-;;                "Throws InvalidOperationException.")))))
-;;     (with-temp-objects :lit [x]
-;;       (let [bc (ac/cmpt+ x UnityEngine.BoxCollider)]
-;;         (t (at/is (= (.GetComponent x UnityEngine.BoxCollider) bc)
-;;              "Attaches and returns new Component instance with GameObject `x`."))))
-;;     (with-temp-objects :lit [x]
-;;       (let [tr (.transform x)
-;;             bc (ac/cmpt+ tr UnityEngine.BoxCollider)]
-;;         (t (at/is (= (.GetComponent x UnityEngine.BoxCollider) bc)
-;;              "Attaches and returns new Component instance with Component `x`.")))))
-;;   (as-sub-closing [t "cmpt-"]
-;;     ;; does cmpt- work with nil x?
-;;     ;; does cmpt- work with null x?
-;;     ;; does cmpt- work with non-GameObject, non-Componenet x?
-;;     ;; does cmpt- work with GameObject x?
-;;     ;; does cmpt- work with Component x?
-;;     (as-sub-closing [t "With nil `x`"]
-;;       (try
-;;         (ac/cmpt- nil UnityEngine.BoxCollider)
-;;         (t (at/is false "Didn't throw."))
-;;         (catch Exception e
-;;           (t (at/is (= (class e) InvalidOperationException)
-;;                "Throws InvalidOperationException.")))))
-;;     (as-sub-closing [t "With null x"]
-;;       (with-temp-objects :lit [obj]
-;;         (ac/destroy-immediate obj)
-;;         (try
-;;           (ac/cmpt- obj UnityEngine.BoxCollider)
-;;           (t (at/is false "Didn't throw."))
-;;           (catch Exception e
-;;             (t (at/is (= (class e) InvalidOperationException)
-;;                  "Throws InvalidOperationException."))))))
-;;     (as-sub-closing [t "With non-GameObject, non-Component x."]
-;;       (try
-;;         (ac/cmpt- :not-a-unity-object UnityEngine.BoxCollider)
-;;         (t (at/is false "Didn't throw."))
-;;         (catch Exception e
-;;           (t (at/is (= (class e) InvalidOperationException)
-;;                "Throws InvalidOperationException.")))))
-;;     (with-temp-objects :lit [x]
-;;       (.AddComponent x UnityEngine.BoxCollider)
-;;       (.AddComponent x UnityEngine.BoxCollider)
-;;       (ac/cmpt- x UnityEngine.BoxCollider)
-;;       (t (at/is (= (seq (.GetComponents x UnityEngine.BoxCollider)) nil)
-;;            "Removes all attached Components of given type with GameObject `x`.")))
-;;     (with-temp-objects :lit [x]
-;;       (let [tr (.transform x)]
-;;         (.AddComponent x UnityEngine.BoxCollider)
-;;         (.AddComponent x UnityEngine.BoxCollider)
-;;         (ac/cmpt- tr UnityEngine.BoxCollider)
-;;         (t (at/is (= (seq (.GetComponents x UnityEngine.BoxCollider)) nil)
-;;              "Removes all attached Components of given type with Component `x`.")))))
-;;   (as-sub-closing [t "holistic"]))
+(at/deftest cmpt-system t
+  (as-sub-closing [t "cmpt"]
+    ;; does cmpt work with nil x?
+    ;; does cmpt work with null x?
+    ;; does cmpt work with non-GameObject, non-Component x?
+    ;; does cmpt work with GameObject x?
+    ;; does cmpt work with Component x?
+    ;; does cmpt throw the right error if t is a string?
+    (nil-behavior t ac/cmpt)
+    (with-temp-objects :lit [x]
+      (let [bc (.AddComponent x UnityEngine.BoxCollider)]
+        (t (at/is (= (ac/cmpt x UnityEngine.BoxCollider) bc)
+             "Retrieves present component with GameObject `x`."))))
+    (with-temp-objects :lit [x]
+      (let [bc (.AddComponent x UnityEngine.BoxCollider)]
+        (t (at/is (= (ac/cmpt (.transform x) UnityEngine.BoxCollider) bc)
+             "Retrieves present component with Component `x`.")))))
+  (as-sub-closing [t "cmpts"] ;; should this return nil or an empty array under various conditions?
+    ;; does cmpts work with nil x?
+    ;; does cmpts work with null x?
+    ;; does cmpts work with non-GameObject, non-Componenet x?
+    ;; does cmpts work with GameObject x?
+    ;; does cmpts work with Component x?
+    (nil-behavior t ac/cmpt)
+    (with-temp-objects :lit [x]
+      (let [bc (.AddComponent x UnityEngine.BoxCollider)]
+        (t
+          (at/is (instance? |UnityEngine.Component[]| (ac/cmpts x UnityEngine.BoxCollider))
+            "Retrieves Component array with GameObject `x` and present Component.")
+          (at/is (= (first (ac/cmpts x UnityEngine.BoxCollider)) bc)
+            "Retrieves correct Components with GameObject `x` and present Component."))))
+    (with-temp-objects :lit [x]
+      (let [bc (.AddComponent x UnityEngine.BoxCollider)]
+        (t (at/is (= (first (ac/cmpts (.transform x) UnityEngine.BoxCollider)) bc)
+             "Retrieves correct components with Component `x` and present Component.")))))
+  (as-sub-closing [t "cmpt+"]
+    ;; does cmpt+ work with nil x?
+    ;; does cmpt+ work with null x?
+    ;; does cmpt+ work with non-GameObject, non-Componenet x?
+    ;; does cmpt+ work with GameObject x?
+    ;; does cmpt+ work with Component x?
+
+    ;; I guess it should work the same for nil and null x?
+    (nil-behavior t ac/cmpt)
+    (with-temp-objects :lit [x]
+      (let [bc (ac/cmpt+ x UnityEngine.BoxCollider)]
+        (t (at/is (= (.GetComponent x UnityEngine.BoxCollider) bc)
+             "Attaches and returns new Component instance with GameObject `x`."))))
+    (with-temp-objects :lit [x]
+      (as-sub-closing [t "Attaching new Component instance with Component `x`."]
+        (let [tr (.transform x)]
+          (try
+            (let [bc (ac/cmpt+ tr UnityEngine.BoxCollider)]
+              (t (at/is (= (.GetComponent x UnityEngine.BoxCollider) bc)
+                   "works")))
+            (catch Exception e
+              (t (at/is false (str "throws: " (class e) "; Message: " (.Message e)))))))))
+    )
+  ;; (as-sub-closing [t "cmpt-"]
+  ;;   ;; does cmpt- work with nil x?
+  ;;   ;; does cmpt- work with null x?
+  ;;   ;; does cmpt- work with non-GameObject, non-Componenet x?
+  ;;   ;; does cmpt- work with GameObject x?
+  ;;   ;; does cmpt- work with Component x?
+  ;;   (as-sub-closing [t "With nil `x`"]
+  ;;     (try
+  ;;       (ac/cmpt- nil UnityEngine.BoxCollider)
+  ;;       (t (at/is false "Didn't throw."))
+  ;;       (catch Exception e
+  ;;         (t (at/is (= (class e) InvalidOperationException)
+  ;;              "Throws InvalidOperationException.")))))
+  ;;   (as-sub-closing [t "With null x"]
+  ;;     (with-temp-objects :lit [obj]
+  ;;       (ac/destroy-immediate obj)
+  ;;       (try
+  ;;         (ac/cmpt- obj UnityEngine.BoxCollider)
+  ;;         (t (at/is false "Didn't throw."))
+  ;;         (catch Exception e
+  ;;           (t (at/is (= (class e) InvalidOperationException)
+  ;;                "Throws InvalidOperationException."))))))
+  ;;   (as-sub-closing [t "With non-GameObject, non-Component x."]
+  ;;     (try
+  ;;       (ac/cmpt- :not-a-unity-object UnityEngine.BoxCollider)
+  ;;       (t (at/is false "Didn't throw."))
+  ;;       (catch Exception e
+  ;;         (t (at/is (= (class e) InvalidOperationException)
+  ;;              "Throws InvalidOperationException.")))))
+  ;;   (with-temp-objects :lit [x]
+  ;;     (.AddComponent x UnityEngine.BoxCollider)
+  ;;     (.AddComponent x UnityEngine.BoxCollider)
+  ;;     (ac/cmpt- x UnityEngine.BoxCollider)
+  ;;     (t (at/is (= (seq (.GetComponents x UnityEngine.BoxCollider)) nil)
+  ;;          "Removes all attached Components of given type with GameObject `x`.")))
+  ;;   (with-temp-objects :lit [x]
+  ;;     (let [tr (.transform x)]
+  ;;       (.AddComponent x UnityEngine.BoxCollider)
+  ;;       (.AddComponent x UnityEngine.BoxCollider)
+  ;;       (ac/cmpt- tr UnityEngine.BoxCollider)
+  ;;       (t (at/is (= (seq (.GetComponents x UnityEngine.BoxCollider)) nil)
+  ;;            "Removes all attached Components of given type with Component `x`.")))))
+  ;; (as-sub-closing [t "holistic"])
+  )
 
 
 ;; ------------------------------------------------------------
@@ -345,7 +362,7 @@
 
 ;; consider breaking this up
 (at/deftest hook-state-system t
-  (as-sub [t "basic state tests"]
+  (as-sub-closing [t "basic state tests"]
     (with-temp-objects :lit [obj]
       (t
         (at/is (= (ac/state obj) nil) "state is nil for fresh obj")
@@ -363,9 +380,14 @@
            "basic state roundtrip")))
     (with-temp-objects :lit [obj]
       (ac/state+ obj :test state-1)
-      (at/is (= (ac/state obj :absent-key) nil) "state (with key) is nil if key is absent"))
-    (t :close))
-  (as-sub [t "state-"]
+      (at/is (= (ac/state obj :absent-key) nil) "state (with key) is nil if key is absent")))
+  (as-sub-closing [t "state+"]
+    (with-temp-objects :lit [obj-1]
+      (ac/state+ obj-1 :test state-1)
+      (ac/state+ obj-1 :test state-2)
+      (t (at/is (= (ac/state obj-1 :test) state-2)
+           "state+ overwrites"))))
+  (as-sub-closing [t "state-"]
     (with-temp-objects :lit [obj]
       (t (at/is (do (ac/state- obj :absent-key) true) "state- runs for fresh objects")))
     (with-temp-objects :lit [obj]
@@ -378,32 +400,16 @@
       (ac/state+ obj :test-2 state-2)
       (ac/state- obj :test)
       (t (at/is (= (ac/state obj) {:test-2 state-2})
-           "partial state retrieval after state-")
-        :close)))
-  (as-sub t "hook-"
-    (let [f (fn [_ _])]
-      (with-temp-objects :lit [obj]
-        (t (at/is (do (ac/hook- obj :update :absent-key) true) "hook- runs for fresh object"))
-        (ac/hook+ obj :update :testing f)
-        (t
-          (at/is (do (ac/hook- obj :update :testing) true) "hook- with two keys runs for hooked object")
-          (at/is (= (ac/hook obj :update :testing) nil) "hook- with two keys works for hooked object"))))
-    (t :close))
-  (as-sub [t "state serialization via instantiate"]
+           "partial state retrieval after state-"))))
+  (as-sub-closing [t "state serialization via instantiate"]
     (with-temp-objects :lit [obj]
       (ac/state+ obj :test state-1)
       (ac/state+ obj :test-2 state-2)
       (with-temp-objects [obj-2 (ac/instantiate obj)]
         (t (at/is (= (ac/state obj)
                      (ac/state obj-2))
-             "round-trip serialization"))))
-    (t :close))
-  (as-sub [t "hook+"]
-    (with-temp-objects :lit [obj-1]
-      (ac/state+ obj-1 :test state-1)
-      (ac/state+ obj-1 :test state-2)
-      (t (at/is (= (ac/state obj-1 :test) state-2)
-           "hook+ overwrites")))
+             "round-trip serialization")))))
+  (as-sub-closing [t "hook+"]
     ;; requires play mode
     ;; not throwing if not in play mode, though, because
     ;; we need to test both edit and play mode.
@@ -433,7 +439,15 @@
                 :close)))
           (ac/hook+ obj :update :test #'update-function-testable-example-1))
         ;; set timeout
-        (close-after-frames t 5 "var hook+ test didn't complete")))
+        (close-after-frames t 5 "var hook+ test didn't complete"))))
+  (as-sub t "hook-"
+    (let [f (fn [_ _])]
+      (with-temp-objects :lit [obj]
+        (t (at/is (do (ac/hook- obj :update :absent-key) true) "hook- runs for fresh object"))
+        (ac/hook+ obj :update :testing f)
+        (t
+          (at/is (do (ac/hook- obj :update :testing) true) "hook- with two keys runs for hooked object")
+          (at/is (= (ac/hook obj :update :testing) nil) "hook- with two keys works for hooked object"))))
     (t :close))
   (as-sub [t "role system"]
     (let [r1 {:update #'update-function-testable-example-1
@@ -518,5 +532,6 @@
                     (= (ac/roles obj) {}))
                 "`role-` works for fresh object")))))
       (t :close))
-    (t :close)))
+    (t :close))
+  )
 
