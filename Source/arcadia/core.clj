@@ -600,9 +600,6 @@
 ;; ============================================================
 ;; state
 
-(defn- ensure-state ^ArcadiaState [go]
-  (ensure-cmpt go ArcadiaState))
-
 (defn state
   "Returns the state of object `go` at key `k`."
   ([gobj]
