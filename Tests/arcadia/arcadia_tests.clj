@@ -311,48 +311,26 @@
             (catch Exception e
               (t (at/is false (str "throws: " (class e) "; Message: " (.Message e)))))))))
     )
-  ;; (as-sub-closing [t "cmpt-"]
-  ;;   ;; does cmpt- work with nil x?
-  ;;   ;; does cmpt- work with null x?
-  ;;   ;; does cmpt- work with non-GameObject, non-Componenet x?
-  ;;   ;; does cmpt- work with GameObject x?
-  ;;   ;; does cmpt- work with Component x?
-  ;;   (as-sub-closing [t "With nil `x`"]
-  ;;     (try
-  ;;       (ac/cmpt- nil UnityEngine.BoxCollider)
-  ;;       (t (at/is false "Didn't throw."))
-  ;;       (catch Exception e
-  ;;         (t (at/is (= (class e) InvalidOperationException)
-  ;;              "Throws InvalidOperationException.")))))
-  ;;   (as-sub-closing [t "With null x"]
-  ;;     (with-temp-objects :lit [obj]
-  ;;       (ac/destroy-immediate obj)
-  ;;       (try
-  ;;         (ac/cmpt- obj UnityEngine.BoxCollider)
-  ;;         (t (at/is false "Didn't throw."))
-  ;;         (catch Exception e
-  ;;           (t (at/is (= (class e) InvalidOperationException)
-  ;;                "Throws InvalidOperationException."))))))
-  ;;   (as-sub-closing [t "With non-GameObject, non-Component x."]
-  ;;     (try
-  ;;       (ac/cmpt- :not-a-unity-object UnityEngine.BoxCollider)
-  ;;       (t (at/is false "Didn't throw."))
-  ;;       (catch Exception e
-  ;;         (t (at/is (= (class e) InvalidOperationException)
-  ;;              "Throws InvalidOperationException.")))))
-  ;;   (with-temp-objects :lit [x]
-  ;;     (.AddComponent x UnityEngine.BoxCollider)
-  ;;     (.AddComponent x UnityEngine.BoxCollider)
-  ;;     (ac/cmpt- x UnityEngine.BoxCollider)
-  ;;     (t (at/is (= (seq (.GetComponents x UnityEngine.BoxCollider)) nil)
-  ;;          "Removes all attached Components of given type with GameObject `x`.")))
-  ;;   (with-temp-objects :lit [x]
-  ;;     (let [tr (.transform x)]
-  ;;       (.AddComponent x UnityEngine.BoxCollider)
-  ;;       (.AddComponent x UnityEngine.BoxCollider)
-  ;;       (ac/cmpt- tr UnityEngine.BoxCollider)
-  ;;       (t (at/is (= (seq (.GetComponents x UnityEngine.BoxCollider)) nil)
-  ;;            "Removes all attached Components of given type with Component `x`.")))))
+  (as-sub-closing [t "cmpt-"]
+    ;; does cmpt- work with nil x?
+    ;; does cmpt- work with null x?
+    ;; does cmpt- work with non-GameObject, non-Componenet x?
+    ;; does cmpt- work with GameObject x?
+    ;; does cmpt- work with Component x?
+    (nil-behavior t ac/cmpt-)
+    (as-sub [t "Removes all attached Components of given type with GameObject `x`."]
+      (with-temp-objects
+        :frames 4
+        :lit [x]
+        (dotimes [_ 3]
+          (.AddComponent x UnityEngine.BoxCollider))
+        (ac/cmpt- x UnityEngine.BoxCollider)
+        (pc/add-update-frame-timeout (unique-key)
+          (fn []
+            (t (at/is (= (seq (remove ac/null-obj? (.GetComponents x UnityEngine.BoxCollider))) nil))
+              :close))
+          2)
+        (close-after-frames t 5 "didn't complete"))))
   ;; (as-sub-closing [t "holistic"])
   )
 
