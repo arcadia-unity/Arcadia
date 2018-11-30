@@ -316,7 +316,7 @@
 ;; repercussions
 
 (defn ensure-cmpt
-  "If GameObject `x` has a component of type `t`, returns is. Otherwise, adds
+  "If GameObject `x` has a component of type `t`, returns it. Otherwise, adds
   a component of type `t` and returns the new instance."
   ^UnityEngine.Component [x ^Type t]
   (if-let [x (gobj x)]
@@ -324,7 +324,7 @@
     (gobj-arg-fail-exception x)))
 
 ;; ------------------------------------------------------------
-;; happy macros
+;; sugar macros
 
 (defn- meta-tag [x t]
   (vary-meta x assoc :tag t))
