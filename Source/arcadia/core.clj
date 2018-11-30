@@ -394,9 +394,8 @@
       (throw (ArgumentException. (str hook " is not a valid Arcadia hook")))))
 
 (s/def ::scenegraphable
-  any? ;; for now
-  ;; #(satisfies? ISceneGraph %)
-  )
+  #(or (instance? GameObject %)
+       (instance? Component %)))
 
 (s/def ::hook-kw
   #(contains? hook-types %))
