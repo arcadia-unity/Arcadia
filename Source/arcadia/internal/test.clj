@@ -371,25 +371,29 @@
 ;; as vector of labels. Can make this a multimethod later if we want the system
 ;; to be more extensible.
 
-(defn results [x]
-  (letfn [(step [results labels x]
-            (cond
-              (and (map? x) (= ::result (::type x)))
-              (conj results (assoc x ::labels labels)) ;; New key, just for this
-              
-              (and (map? x) (#{::tester-state ::result-group ::tester-exec} (::type x)))
-              (let [labels-2 (if-let [l (::label x)] (conj labels l) labels)
-                    children (case (::type x)
-                               ::tester-exec  (::children x)
-                               ::tester-state (::result-groups x)
-                               ::result-group (::results x))]
-                (reduce #(step %1 labels-2 %2) results children))
-              
-              :else
-              (throw
-                (InvalidOperationException.
-                  (str "Invalid data. Type of data: " (class x))))))]
-    (step [] [] (data-scuba x))))
+(defn results [x & opts]
+  (let [opts (into #{} opts)]
+    (letfn [(step [results labels x]
+              (cond
+                (and (map? x) (= ::result (::type x)))
+                (conj results (assoc x ::labels labels)) ;; New key, just for this
+                
+                (and (map? x) (#{::tester-state ::result-group ::tester-exec} (::type x)))
+                (let [labels-2 (if-let [l (::label x)] (conj labels l) labels)
+                      children (case (::type x)
+                                 ::tester-exec  (::children x)
+                                 ::tester-state (::result-groups x)
+                                 ::result-group (::results x))]
+                  (reduce #(step %1 labels-2 %2) results children))
+                
+                :else
+                (throw
+                  (InvalidOperationException.
+                    (str "Invalid data. Type of data: " (class x))))))]
+      (let [raw (step [] [] (data-scuba x))]
+        (if (contains? opts :non-passing)
+          (vec (remove #(= (::status %) :pass) raw))
+          raw)))))
 
 ;; 
 
