@@ -316,11 +316,12 @@
 ;; repercussions
 
 (defn ensure-cmpt
-  "If `obj` has a component of type `t`, returns is. Otherwise, adds
+  "If GameObject `x` has a component of type `t`, returns is. Otherwise, adds
   a component of type `t` and returns the new instance."
-  ^UnityEngine.Component [obj ^Type t]
-  (let [obj (gobj obj)]
-    (or (cmpt obj t) (cmpt+ obj t))))
+  ^UnityEngine.Component [x ^Type t]
+  (if-let [x (gobj x)]
+    (or (cmpt x t) (cmpt+ x t))
+    (gobj-arg-fail-exception x)))
 
 ;; ------------------------------------------------------------
 ;; happy macros
