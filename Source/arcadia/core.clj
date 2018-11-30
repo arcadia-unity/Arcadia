@@ -431,12 +431,7 @@
 
 (hook+ obj message-kw key)
 
-  If `key` is not supplied, `hook-` will use `:default` as the key.
-  This is the same as
-
-(hook- obj message-kw :default)."
-  ([obj message-kw]
-   (hook- obj message-kw :default))
+  Returns nil."
   ([obj message-kw key]
    (when-let [^ArcadiaBehaviour hook-cmpt (cmpt obj (ensure-hook-type message-kw))]
      (.RemoveFunction hook-cmpt key))
