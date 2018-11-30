@@ -214,8 +214,8 @@
            ~param-str))
        (throw
          (ArgumentNullException.
-           "Expects instance of UnityEngine.GameObject or UnityEngine.Component, instead received `nil`"
-           ~param-str)))))
+           ~param-str ; the message and the param are backwards in this subclass for some reason
+           "Expects instance of UnityEngine.GameObject or UnityEngine.Component, instead received nil")))))
 
 ;; Should this return the parent or the child?
 ;; child- should return either the gameobject or nil,
