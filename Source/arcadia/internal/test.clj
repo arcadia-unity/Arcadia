@@ -316,6 +316,31 @@
   ([test-expr message]
    (assert-expr test-expr message)))
 
+(defmacro throws
+  ([test-expr argument-type message]
+   `(let [expr# (quote ~test-expr)]
+      (try
+        (let [res# ~test-expr]
+            ;; TODO: should better differentiate in the printout between
+            ;; failing `is` and failing `throws`
+            {::type ::result 
+             ::status :fail
+             ::form expr#
+             ::result res#
+             ::message ~message})
+        (catch Exception e#
+          (if (instance? ~argument-type e#)
+            {::type ::result
+             ::status :pass
+             ::form expr#
+             ::error e#
+             ::message ~message}
+            {::type ::result
+             ::status :error
+             ::form expr#
+             ::error e#
+             ::message ~message}))))))
+
 ;; ------------------------------------------------------------
 ;; extract data
 
@@ -435,7 +460,8 @@
                                         ::error
                                         ::actual]
                                  :as r}]
-  (let [p (ind ctx)]
+  (let [p (ind ctx)
+        p2 (ind (update ctx :indent inc))]
     (case status
       :pass (p "PASS " message " Form: " form)
       :fail (p "FAIL " message " Expected: " form
@@ -443,10 +469,19 @@
                 (str " Actual: "
                      (binding [*print-level* 10 *print-length* 5] ; bit arbitrary
                        (pr-str actual)))))
-      :error (p (if message
-                  (str "ERROR: " (.Message ^Exception error) " in " message)
-                  (str "ERROR: " (.Message ^Exception error)))
-               " Form: " form))))
+      ;; really should go to the simpler thing that uses `results` directly
+      :error (let [[head & tail] (clojure.string/split-lines (.Message ^Exception error))
+                   msg (clojure.string/join "\n"
+                         (cons head
+                           (for [s tail]
+                             (with-out-str (p2 s)))))]
+               (p
+                 (if message
+                   (str "ERROR: " (class error) ": " msg
+                        (if (seq tail)
+                          (clojure.string/trimr (with-out-str (p2 (str "in: " message " Form: " form))))
+                          (str " in: " message)))
+                   (str "ERROR: " (class error) ": " msg " Form: " form)))))))
 
 (defmethod print-data ::tester-state [{:keys [:indent] :as ctx}
                                       {:keys [::result-groups ::label]}]
