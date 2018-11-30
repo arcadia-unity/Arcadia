@@ -423,16 +423,6 @@
      (.AddFunction hook-cmpt f k)
      obj)))
 
-(defn hook-var [obj message-kw var]
-  (if (var? var)
-    (hook+ obj message-kw var var)
-    (throw
-      (clojure.lang.ExceptionInfo.
-        (str "Expects var, instead got: " (class var))
-        {:obj obj
-         :message-kw message-kw
-         :var var}))))
-
 (defn hook-
   "Removes callback from GameObject `obj` on the Unity message
   corresponding to `message-kw` at `key`, if it exists. Reverse of
