@@ -497,38 +497,42 @@
 ;; nil. Should find a more elegant solution that doesn't gum up the
 ;; ITester protocol.
 
+(deftype ResultsWrapper [results]
+  Object
+  (ToString [this]
+    "results-wrapper"))
+
+(defn exec-wrapper [exec]
+  (ResultsWrapper. exec))
+
 ;; run tests
 (defn run-tests
   ([] (run-tests *ns*))
   ([& namespaces]
-   ;; hook up exec ref
-   ;; put in test for option that they're all complete right out of the gate
-   ;; think a bit more about error handling
    (let [reg @test-registry
          testers (->> namespaces
                       (map #(get reg %))
                       (mapcat vals)
-                      (map #(%)))]
+                      (map #(%)))
+         exec (ref {::type ::tester-exec
+                    ::children []
+                    ::closed true})
+         exec-wrapped (exec-wrapper exec)]
      (dosync
-       (let [exec (ref {::type ::tester-exec
-                        ::children []
-                        ::closed true})]
-         (doseq [t testers]
-           (add-child-ref exec (get-ref t)))
-         (check-complete exec)
-         (add-watch exec :complete-test-run
-           (let [out *out*] ;; maybe should do something with *test-out* here
-             (fn complete-test-run [k r old new]
-               (when (and (not (::complete old)) (::complete new))
-                 (binding [*out* out]
-                   (println
-                     (with-out-str
-                       (println)
-                       (print-data {:indent 0}
-                         (data-scuba new)))))))))
-         ;; this is kind of dumb, really just using it for get-ref
-         (reify ITester 
-           (get-ref [this] exec)))))))
+       (doseq [t testers]
+         (add-child-ref exec (get-ref t)))
+       (check-complete exec)
+       (add-watch exec :complete-test-run
+         (let [out *out*] ;; maybe should do something with *test-out* here
+           (fn complete-test-run [k r old new]
+             (when (and (not (::complete old)) (::complete new))
+               (binding [*out* out]
+                 (println
+                   (with-out-str
+                     (println)
+                     (print-data {:indent 0}
+                       (data-scuba new)))))))))
+       exec-wrapped))))
 
 (defmacro deftest [name tester-sym & body]
   (assert (symbol? name))
