@@ -63,20 +63,24 @@
 ;; ============================================================
 ;; null obj stuff
 
-(definline null-obj?
-  "Is `x` nil?
-  
-  This test is complicated by the fact that Unity uses
-  a custom null object that evaluates to `true` in normal circumstances.
-  `null-obj?` will return `true` if `x` is nil *or* Unity's null object."
-  [^UnityEngine.Object x]
-  `(UnityEngine.Object/op_Equality ~x nil))
+(defn null->nil
+  "Same as `identity`, except if x is a null UnityEngine.Object,
+  will return nil.
 
-
-(defn obj-nil
-  "Same as `identity`, except if x is a null UnityEngine.Object, will return nil."
+  For more details and rationale, see
+  https://github.com/arcadia-unity/Arcadia/wiki/Null,-Nil,-and-UnityEngine.Object."
   [x]
   (Util/TrueNil x))
+
+(defn null?
+  "Should `x` be considered nil? `(null? x)` will evalute to `true`
+  if `x` is in fact `nil`, or if `x` is a `UnityEngine.Object` instance
+  such that `(UnityEngine.Object/op_Equality x nil)` returns `true`.
+
+  For more details and rationale, see
+  https://github.com/arcadia-unity/Arcadia/wiki/Null,-Nil,-and-UnityEngine.Object."
+  [x]
+  (Util/IsNull x))
 
 ;; ============================================================
 ;; wrappers
@@ -187,158 +191,160 @@
   [^String t] `(UnityEngine.GameObject/FindGameObjectsWithTag ~t))
 
 ;; ------------------------------------------------------------
-;; IEntityComponent
+;; Scene graph traversal and manipulation
 
-(defprotocol IEntityComponent
-  "Common protocol for everything in Unity that supports attached
-  components."
-  (cmpt [this t]
-    "Returns the first component typed `t` attached to the object")
-  (cmpts [this t]
-    "Returns a vector of all components typed `t` attached to the object")
-  (cmpt+ [this t]
-    "Adds a component of type `t` to the object and returns the new instance")
-  (cmpt- [this t]
-    "Removes all components of type `t` from the object and returns the object"))
+(extend-protocol clojure.core.protocols/CollReduce
+  UnityEngine.GameObject
+  (coll-reduce [coll f]
+    (coll-reduce coll f (f)))
+  (coll-reduce [coll f val]
+    (let [^Transform tr (.transform ^GameObject coll)
+          e (.GetEnumerator tr)]      
+      (loop [ret val]
+        (if (.MoveNext e)
+          (let [^Transform tr2 (.Current e)
+                ret (f ret (.gameObject tr2))]
+            (if (reduced? ret)
+              @ret
+              (recur ret)))
+          ret)))))
 
-(defmacro ^:private do-reduce [[x coll] & body]
-  `(do
-     (reduce
-       (fn [_# ~x]
-         ~@body
-         nil)
-       ~coll)
-     nil))
-
-(defmacro ^:private do-components [[x access] & body]
-  `(let [^|UnityEngine.Component[]| ar# ~access
-         c# (int (count ar#))]
-     (loop [i# (int 0)]
-       (when (< i# c#)
-         (let [^Component ~x (aget ar# i#)]
-           (do ~@body)
-           (recur (inc i#)))))))
-
-(extend-protocol IEntityComponent
-  GameObject
-  (cmpt [this t]
-    (obj-nil (.GetComponent this t)))
-  (cmpts [this t]
-    (into [] (.GetComponents this t)))
-  (cmpt+ [this t]
-    (.AddComponent this t))
-  (cmpt- [this t]
-    (do-components [x (.GetComponents this t)]
-      (destroy x)))
-
-  ;; exactly the same:
-  Component
-  (cmpt [this t]
-    (obj-nil (.GetComponent this t)))
-  (cmpts [this t]
-    (into [] (.GetComponents this t)))
-  (cmpt+ [this t]
-    (.AddComponent this t))
-  (cmpt- [this t]
-    (do-components [x (.GetComponents this t)]
-      (destroy x))) 
+(defn gobj
+  "Coerces `x`, expected to be a GameObject or Component, to a
+  corresponding live (non-destroyed) GameObject instance or to nil by
+  the following policy:
   
-  clojure.lang.Var
-  (cmpt [this t]
-    (cmpt (var-get this) t))
-  (cmpts [this t]
-    (cmpts (var-get this) t))
-  (cmpt+ [this t]
-    (cmpt+ (var-get this) t))
-  (cmpt- [this t]
-    (cmpt- (var-get this) t)))
+  - If `x` is a live GameObject, returns it.
+  - If `x` is a destroyed GameObject, returns nil.
+  - If `x` is a live Component instance, returns its containing GameObject.
+  - If `x` is a destroyed Component instance, returns nil.
+  - If `x` is nil, returns nil.
+  - Otherwise throws an ArgumentException."
+  ^GameObject [x]
+  (Util/ToGameObject x))
+
+(defmacro ^:private gobj-arg-fail-exception [param]
+  (let [param-str (name param)]
+    `(if (some? ~param)
+       (throw
+         (ArgumentException.
+           (str
+             "Expects non-destroyed instance of UnityEngine.GameObject or UnityEngine.Component, instead received destroyed instance of "
+             (class ~param))
+           ~param-str))
+       (throw
+         (ArgumentNullException.
+           ~param-str ; the message and the param are backwards in this subclass for some reason
+           "Expects instance of UnityEngine.GameObject or UnityEngine.Component, instead received nil")))))
+
+;; Should this return the parent or the child?
+;; child- should return either the gameobject or nil,
+;; more consistent with that to return the parent,
+;; unless we want to change child- to return nil
+;; just to keep the api consistent.
+;; otoh cmpt+ returns the component (and HAS to).
+;; assoc returns the new map, of course.
+;; aset returns the val. and method chaining
+;; isn't a strong idiom in Clojure.
+(defn child+
+  (^GameObject [x child]
+   (child+ x child false))
+  (^GameObject [x child world-position-stays]
+   (if-let [x (gobj x)]
+     (if-let [child (gobj child)]
+       (.SetParent
+         (.transform (gobj child))
+         (.transform (gobj x))
+         ^Boolean world-position-stays)
+       (gobj-arg-fail-exception child))
+     (gobj-arg-fail-exception x))
+   child))
+
+(defn child-
+  ([x child]
+   (child- x child false))
+  ([x child world-position-stays]
+   (if-let [^GameObject x (gobj x)]
+     (if-let [^GameObject child (gobj child)]
+       (when (= (.parent child) x)
+         (.SetParent (.transform child) nil ^Boolean world-position-stays))
+       (gobj-arg-fail-exception child))
+     (gobj-arg-fail-exception x))
+   x))
+
+;; `nil` semantics of this one is a little tricky.
+;; It seems like a query function, which normally
+;; suggests nil should be supported, but we can't
+;; traverse the children of nulled game objects in
+;; unity, and in a sense it's incorrect to offer an
+;; empty vector for them either, since that asserts
+;; the nulled game object in fact has no children,
+;; rather than that the children are inaccessible.
+;; We could return nil for that and vectors for other things
+;; I suppose.
+(defn children [x]
+  (if-let [^GameObject x (gobj x)]
+    (persistent!
+      (reduce
+        (fn [acc ^UnityEngine.Transform x]
+          (conj! acc (.gameObject x)))
+        (transient [])
+        (.transform x)))
+    (gobj-arg-fail-exception x)))
 
 ;; ------------------------------------------------------------
-;; ISceneGraph
+;; IEntityComponent
 
-(defprotocol ISceneGraph
-  "Common protocol for everything in Unity that is part of the scene
-  graph hierarchy."
-  (gobj ^GameObject [this]
-        "")
-  (children [this]
-    "Returns all objects under `this` object in the hierarchy.")
-  (parent ^GameObject [this]
-          "Returns the object that contains `this` object, or `nil` if it is
-          at the top of the hierarchy.")
-  (child+ 
-    ^GameObject [this child]
-    ^GameObject [this child transform-to]
-    "Moves `child` to under `this` object in the hierarchy, optionally
-    recalculating its local transform.")
-  (child- ^GameObject [this child]
-          "Move `child` from under `this` object ti the top of the hierarchy"))
+;; TODO: get rid of this forward declaration by promoting ISceneGraph functions
+;; above this
 
-(extend-protocol ISceneGraph
-  GameObject
-  (gobj [this]
-    this)
-  (children [this]
-    (into []
-      (map (fn [^Transform tr] (.gameObject tr)))
-      (.transform this)))
-  (parent [this]
-    (when-let [p (.. this transform parent)]
-      (.gameObject p)))
-  (child+
-    ([this child]
-     (child+ this child false))
-    ([this child transform-to]
-     (let [^GameObject c (gobj child)]
-       (.SetParent (.transform c) (.transform this) transform-to)
-       this)))
-  (child- [this child]
-    (let [^GameObject c (gobj child)]
-      (.SetParent (.transform c) nil false)
-      this))
+(defn cmpt 
+  "Returns the first Component of type `t` attached to the GameObject `x`.
+  Returns `nil` if no such component is attached."
+  ^UnityEngine.Component [x ^Type t]
+  (if-let [x (gobj x)]
+    (null->nil (.GetComponent x t))
+    (gobj-arg-fail-exception x)))
 
-  Component
-  (gobj [^Component this]
-    (.gameObject this))
-  (children [^Component this]
-    (into [] (.. this gameObject transform)))
-  (parent [^Component this]
-    (.. this gameObject parent))
-  (child+
-    ([^Component this child]
-     (child+ (.gameObject this) child))
-    ([^Component this, child, transform-to]
-     (child+ (.gameObject this) child transform-to)))
-  (child- [^Component this, child]
-    (child- (.gameObject this) child))
+(defn cmpts
+  "Returns all Components of type `t` attached to the GameObject `x`
+  as a (possibly empty) array."
+  ^|UnityEngine.Component[]| [x ^Type t]
+  (if-let [x (gobj x)]
+    (.GetComponents x t)
+    (gobj-arg-fail-exception x)))
 
-  clojure.lang.Var
-  (gobj [this]
-    (gobj (var-get this)))
-  (children [this]
-    (children (var-get this)))
-  (parent [this]
-    (parent (var-get this)))
-  (child+
-    ([this child]
-     (child+ (var-get this) child))
-    ([this child transform-to]
-     (child+ (var-get this) child transform-to)))
-  (child- [this child]
-    (child- (var-get this) child)))
+(defn cmpt+
+  "Adds a new Component of type `t` to GameObject `x`. Returns the new Component."
+  ^UnityEngine.Component [x ^Type t]
+  (if-let [x (gobj x)]
+    (.AddComponent x t)
+    (gobj-arg-fail-exception x)))
+
+;; returns nil because returning x would be inconsistent with cmpt+,
+;; which must return the new component
+(defn cmpt- [x ^Type t]
+  (if-let [x (gobj x)]
+    (let [^|UnityEngine.Component[]| a (.GetComponents (gobj x) t)]
+      (loop [i (int 0)]
+        (when (< i (count a))
+          (retire (aget a i))
+          (recur (inc i)))))
+    (gobj-arg-fail-exception x)))
 
 ;; ------------------------------------------------------------
 ;; repercussions
 
 (defn ensure-cmpt
-  "If `obj` has a component of type `t`, returns is. Otherwise, adds
+  "If GameObject `x` has a component of type `t`, returns it. Otherwise, adds
   a component of type `t` and returns the new instance."
-  ^UnityEngine.Component [obj ^Type t]
-  (let [obj (gobj obj)]
-    (or (cmpt obj t) (cmpt+ obj t))))
+  ^UnityEngine.Component [x ^Type t]
+  (if-let [x (gobj x)]
+    (or (cmpt x t) (cmpt+ x t))
+    (gobj-arg-fail-exception x)))
 
 ;; ------------------------------------------------------------
-;; happy macros
+;; sugar macros
 
 (defn- meta-tag [x t]
   (vary-meta x assoc :tag t))
@@ -371,7 +377,7 @@
   [gob [cmpt-name cmpt-type] then & else]
   (let [gobsym (gentagged "gob__" 'UnityEngine.GameObject)]
     `(let [obj# ~gob]
-       (if (obj-nil obj#)
+       (if (null->nil obj#)
          (with-gobj [~gobsym obj#]
            (if-let [~(meta-tag cmpt-name cmpt-type) (cmpt ~gobsym ~cmpt-type)]
              ~then
@@ -381,9 +387,8 @@
 ;; ============================================================
 ;; traversal
 
-(defn gobj-seq [x]
+(defn descendents [x]
   (tree-seq identity children (gobj x)))
-
 
 ;; ============================================================
 ;; hooks
@@ -391,24 +396,26 @@
 (defn- clojurized-keyword [m]
   (-> m str camels-to-hyphens string/lower-case keyword))
 
-(defn- message-keyword [m]
-  (clojurized-keyword m))
-
-(def hook-types
-  "Map of keywords to hook component types"
+(def ^:private hook-types
+  "Map of keywords to hook component types. Unstable."
   (->> messages/all-messages
        keys
        (map name)
-       (mapcat #(vector (message-keyword %)
-                        (RT/classForName (str % "Hook"))))
-       (apply hash-map)))
+       (map #(do [(clojurized-keyword %), (RT/classForName (str % "Hook"))]))
+       (into {})))
+
+(defn available-hooks
+  "Returns a sorted seq of all permissible hook keywords."
+  []
+  (sort (keys hook-types)))
 
 (defn- ensure-hook-type [hook]
-  (or (hook-types hook)
+  (or (get hook-types hook)
       (throw (ArgumentException. (str hook " is not a valid Arcadia hook")))))
 
 (s/def ::scenegraphable
-  #(satisfies? ISceneGraph %))
+  #(or (instance? GameObject %)
+       (instance? Component %)))
 
 (s/def ::hook-kw
   #(contains? hook-types %))
@@ -430,22 +437,11 @@
   will be invoked every time the message identified by `message-kw` is sent by Unity. `f`
   must have the same arity as the expected Unity message. When called with a key `k`
   this key can be passed to `message-kw-` to remove the function."
-  ([obj message-kw f] (hook+ obj message-kw :default f)) ;; TODO: don't like this
   ([obj message-kw k f]
    (let [hook-type (ensure-hook-type message-kw)
          ^ArcadiaBehaviour hook-cmpt (ensure-cmpt obj hook-type)]
-     (.AddFunction hook-cmpt f k)
+     (.AddFunction hook-cmpt k f)
      obj)))
-
-(defn hook-var [obj message-kw var]
-  (if (var? var)
-    (hook+ obj message-kw var var)
-    (throw
-      (clojure.lang.ExceptionInfo.
-        (str "Expects var, instead got: " (class var))
-        {:obj obj
-         :message-kw message-kw
-         :var var}))))
 
 (defn hook-
   "Removes callback from GameObject `obj` on the Unity message
@@ -453,18 +449,13 @@
 
 (hook+ obj message-kw key)
 
-  If `key` is not supplied, `hook-` will use `:default` as the key.
-  This is the same as
-
-(hook- obj message-kw :default)."
-  ([obj message-kw]
-   (hook- obj message-kw :default))
+  Returns nil."
   ([obj message-kw key]
    (when-let [^ArcadiaBehaviour hook-cmpt (cmpt obj (ensure-hook-type message-kw))]
      (.RemoveFunction hook-cmpt key))
    nil))
 
-(defn clear-hook
+(defn clear-hooks
   "Removes all callbacks on the Unity message corresponding to
   `message-kw`, regardless of their keys."
   [obj message-kw]
@@ -490,25 +481,6 @@
   (when-let [^ArcadiaBehaviour hook-cmpt (cmpt obj (ensure-hook-type message-kw))]
     (.CallbackForKey hook-cmpt key)))
 
-;; are these necessary?
-
-;; (defn hook-fns
-;;   "Return the functions associated with `hook` on `obj`."
-;;   [obj message-kw]
-;;   (.fns (hook obj message-kw)))
-
-;; (defn hooks 
-;;   "Return all components for `hook` attached to `obj`"
-;;   [obj hook]
-;;   (let [hook-type (ensure-hook-type hook)]
-;;     (cmpts obj hook-type)))
-
-(defn hook?
-  ([t hook] (= (type t)
-               (ensure-hook-type hook)))
-  ([t] (isa? (type t)
-         ArcadiaBehaviour)))
-
 ;; ============================================================
 ;; ISnapShotable
 
@@ -521,9 +493,6 @@
 
 ;; ============================================================
 ;; state
-
-(defn- ensure-state ^ArcadiaState [go]
-  (ensure-cmpt go ArcadiaState))
 
 (defn state
   "Returns the state of object `go` at key `k`."
@@ -650,7 +619,7 @@
   obj)
 
 (s/fdef role+
-  :args (s/cat :obj #(satisfies? ISceneGraph %)
+  :args (s/cat :obj any? ;; for now #(satisfies? ISceneGraph %)
                :k any?
                :spec ::role)
   :ret any?
@@ -680,7 +649,7 @@
   (reduce role- obj ks))
 
 (s/fdef role
-  :args (s/cat :obj #(satisfies? ISceneGraph %)
+  :args (s/cat :obj any? ;; for now ;; #(satisfies? ISceneGraph %)
                :k any?)
   :ret ::role)
 

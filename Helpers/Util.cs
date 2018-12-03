@@ -299,12 +299,23 @@ namespace Arcadia
 		// ==================================================================
 		// nil
 
+		public static bool IsNull (object obj)
+		{
+			if (obj == null) {
+				return true;
+			}
+
+			UnityEngine.Object obj2 = obj as UnityEngine.Object;
+			return obj2 == null;
+		}
+
 		public static object TrueNil (object obj)
 		{
 			UnityEngine.Object obj2 = obj as UnityEngine.Object;
 			if (obj2 == null) {
 				return null;
 			}
+
 			return obj;
 		}
 
@@ -331,6 +342,28 @@ namespace Arcadia
 				return typeName.Substring(0, inx).Replace('_', '-');
 			}
 			throw new ArgumentException("No namespace string found for typeName " + typeName);
+		}
+
+		public static GameObject ToGameObject (object x)
+		{
+			
+			GameObject g = x as GameObject;
+			if (g != null) {
+				return g;
+			}
+
+			Component c = x as Component;
+			if (c != null) {
+				return c.gameObject;
+			}
+
+			if (x == null || g is GameObject || c is Component) {
+				return null;
+			}
+
+			throw new ArgumentException (
+				"Expects instance of UnityEngine.GameObject or UnityEngine.Component, instead received instance of " + x.GetType(), 
+				nameof(x));
 		}
 
 		// ==================================================================

@@ -316,6 +316,31 @@
   ([test-expr message]
    (assert-expr test-expr message)))
 
+(defmacro throws
+  ([test-expr argument-type message]
+   `(let [expr# (quote ~test-expr)]
+      (try
+        (let [res# ~test-expr]
+            ;; TODO: should better differentiate in the printout between
+            ;; failing `is` and failing `throws`
+            {::type ::result 
+             ::status :fail
+             ::form expr#
+             ::result res#
+             ::message ~message})
+        (catch Exception e#
+          (if (instance? ~argument-type e#)
+            {::type ::result
+             ::status :pass
+             ::form expr#
+             ::error e#
+             ::message ~message}
+            {::type ::result
+             ::status :error
+             ::form expr#
+             ::error e#
+             ::message ~message}))))))
+
 ;; ------------------------------------------------------------
 ;; extract data
 
@@ -371,25 +396,29 @@
 ;; as vector of labels. Can make this a multimethod later if we want the system
 ;; to be more extensible.
 
-(defn results [x]
-  (letfn [(step [results labels x]
-            (cond
-              (and (map? x) (= ::result (::type x)))
-              (conj results (assoc x ::labels labels)) ;; New key, just for this
-              
-              (and (map? x) (#{::tester-state ::result-group ::tester-exec} (::type x)))
-              (let [labels-2 (if-let [l (::label x)] (conj labels l) labels)
-                    children (case (::type x)
-                               ::tester-exec  (::children x)
-                               ::tester-state (::result-groups x)
-                               ::result-group (::results x))]
-                (reduce #(step %1 labels-2 %2) results children))
-              
-              :else
-              (throw
-                (InvalidOperationException.
-                  (str "Invalid data. Type of data: " (class x))))))]
-    (step [] [] (data-scuba x))))
+(defn results [x & opts]
+  (let [opts (into #{} opts)]
+    (letfn [(step [results labels x]
+              (cond
+                (and (map? x) (= ::result (::type x)))
+                (conj results (assoc x ::labels labels)) ;; New key, just for this
+                
+                (and (map? x) (#{::tester-state ::result-group ::tester-exec} (::type x)))
+                (let [labels-2 (if-let [l (::label x)] (conj labels l) labels)
+                      children (case (::type x)
+                                 ::tester-exec  (::children x)
+                                 ::tester-state (::result-groups x)
+                                 ::result-group (::results x))]
+                  (reduce #(step %1 labels-2 %2) results children))
+                
+                :else
+                (throw
+                  (InvalidOperationException.
+                    (str "Invalid data. Type of data: " (class x))))))]
+      (let [raw (step [] [] (data-scuba x))]
+        (if (contains? opts :non-passing)
+          (vec (remove #(= (::status %) :pass) raw))
+          raw)))))
 
 ;; 
 
@@ -431,7 +460,8 @@
                                         ::error
                                         ::actual]
                                  :as r}]
-  (let [p (ind ctx)]
+  (let [p (ind ctx)
+        p2 (ind (update ctx :indent inc))]
     (case status
       :pass (p "PASS " message " Form: " form)
       :fail (p "FAIL " message " Expected: " form
@@ -439,10 +469,19 @@
                 (str " Actual: "
                      (binding [*print-level* 10 *print-length* 5] ; bit arbitrary
                        (pr-str actual)))))
-      :error (p (if message
-                  (str "ERROR: " (.Message ^Exception error) " in " message)
-                  (str "ERROR: " (.Message ^Exception error)))
-               " Form: " form))))
+      ;; really should go to the simpler thing that uses `results` directly
+      :error (let [[head & tail] (clojure.string/split-lines (.Message ^Exception error))
+                   msg (clojure.string/join "\n"
+                         (cons head
+                           (for [s tail]
+                             (with-out-str (p2 s)))))]
+               (p
+                 (if message
+                   (str "ERROR: " (class error) ": " msg
+                        (if (seq tail)
+                          (clojure.string/trimr (with-out-str (p2 (str "in: " message " Form: " form))))
+                          (str " in: " message)))
+                   (str "ERROR: " (class error) ": " msg " Form: " form)))))))
 
 (defmethod print-data ::tester-state [{:keys [:indent] :as ctx}
                                       {:keys [::result-groups ::label]}]
@@ -497,38 +536,42 @@
 ;; nil. Should find a more elegant solution that doesn't gum up the
 ;; ITester protocol.
 
+(deftype ResultsWrapper [results]
+  Object
+  (ToString [this]
+    "results-wrapper"))
+
+(defn exec-wrapper [exec]
+  (ResultsWrapper. exec))
+
 ;; run tests
 (defn run-tests
   ([] (run-tests *ns*))
   ([& namespaces]
-   ;; hook up exec ref
-   ;; put in test for option that they're all complete right out of the gate
-   ;; think a bit more about error handling
    (let [reg @test-registry
          testers (->> namespaces
                       (map #(get reg %))
                       (mapcat vals)
-                      (map #(%)))]
+                      (map #(%)))
+         exec (ref {::type ::tester-exec
+                    ::children []
+                    ::closed true})
+         exec-wrapped (exec-wrapper exec)]
      (dosync
-       (let [exec (ref {::type ::tester-exec
-                        ::children []
-                        ::closed true})]
-         (doseq [t testers]
-           (add-child-ref exec (get-ref t)))
-         (check-complete exec)
-         (add-watch exec :complete-test-run
-           (let [out *out*] ;; maybe should do something with *test-out* here
-             (fn complete-test-run [k r old new]
-               (when (and (not (::complete old)) (::complete new))
-                 (binding [*out* out]
-                   (println
-                     (with-out-str
-                       (println)
-                       (print-data {:indent 0}
-                         (data-scuba new)))))))))
-         ;; this is kind of dumb, really just using it for get-ref
-         (reify ITester 
-           (get-ref [this] exec)))))))
+       (doseq [t testers]
+         (add-child-ref exec (get-ref t)))
+       (check-complete exec)
+       (add-watch exec :complete-test-run
+         (let [out *out*] ;; maybe should do something with *test-out* here
+           (fn complete-test-run [k r old new]
+             (when (and (not (::complete old)) (::complete new))
+               (binding [*out* out]
+                 (println
+                   (with-out-str
+                     (println)
+                     (print-data {:indent 0}
+                       (data-scuba new)))))))))
+       exec-wrapped))))
 
 (defmacro deftest [name tester-sym & body]
   (assert (symbol? name))

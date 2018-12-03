@@ -16,8 +16,6 @@
             [arcadia.internal.spec :as as]
             [arcadia.internal.map-utils :as mu]
             [arcadia.internal.array-utils :as au]
-            [clojure.test :as t]
-            [arcadia.internal.test :as at]
             [clojure.data :as d])
   (:import [Arcadia StringHelper ArrayHelper]
    [System.Collections Queue]
