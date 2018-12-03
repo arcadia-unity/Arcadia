@@ -201,6 +201,13 @@
 ;; ------------------------------------------------------------
 
 (at/deftest scene-graph-system t
+  (as-sub-closing [t "GameObject traversal"]
+    (with-temp-objects :lit [x y z]
+      (.SetParent (.transform y) (.transform x))
+      (.SetParent (.transform z) (.transform x))
+      (t
+        (at/is (= (reduce (fn [acc x] (conj acc x)) [] x) [y z]) "Can reduce on GameObjects")
+        (at/is (= (into [] x) [y z]) "Can transduce on GameObjects"))))  
   (as-sub-closing [t "gobj"]
     (with-temp-objects :lit [x]
       (t (at/is (= (ac/gobj x) x) "If argument is a live GameObject, returns it.")))

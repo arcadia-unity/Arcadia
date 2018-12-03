@@ -191,7 +191,23 @@
   [^String t] `(UnityEngine.GameObject/FindGameObjectsWithTag ~t))
 
 ;; ------------------------------------------------------------
-;; ISceneGraph
+;; Scene graph traversal and manipulation
+
+(extend-protocol clojure.core.protocols/CollReduce
+  UnityEngine.GameObject
+  (coll-reduce [coll f]
+    (coll-reduce coll f (f)))
+  (coll-reduce [coll f val]
+    (let [^Transform tr (.transform ^GameObject coll)
+          e (.GetEnumerator tr)]      
+      (loop [ret val]
+        (if (.MoveNext e)
+          (let [^Transform tr2 (.Current e)
+                ret (f ret (.gameObject tr2))]
+            (if (reduced? ret)
+              @ret
+              (recur ret)))
+          ret)))))
 
 (defn gobj
   "Coerces `x`, expected to be a GameObject or Component, to a
