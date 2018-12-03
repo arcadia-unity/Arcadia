@@ -63,20 +63,24 @@
 ;; ============================================================
 ;; null obj stuff
 
-(definline null-obj?
-  "Is `x` nil?
-  
-  This test is complicated by the fact that Unity uses
-  a custom null object that evaluates to `true` in normal circumstances.
-  `null-obj?` will return `true` if `x` is nil *or* Unity's null object."
-  [^UnityEngine.Object x]
-  `(UnityEngine.Object/op_Equality ~x nil))
+(defn null->nil
+  "Same as `identity`, except if x is a null UnityEngine.Object,
+  will return nil.
 
-
-(defn obj-nil
-  "Same as `identity`, except if x is a null UnityEngine.Object, will return nil."
+  For more details and rationale, see
+  https://github.com/arcadia-unity/Arcadia/wiki/Null,-Nil,-and-UnityEngine.Object."
   [x]
   (Util/TrueNil x))
+
+(defn null?
+  "Should `x` be considered nil? `(null? x)` will evalute to `true`
+  if `x` is in fact `nil`, or if `x` is a `UnityEngine.Object` instance
+  such that `(UnityEngine.Object/op_Equality x nil)` returns `true`.
+
+  For more details and rationale, see
+  https://github.com/arcadia-unity/Arcadia/wiki/Null,-Nil,-and-UnityEngine.Object."
+  [x]
+  (Util/IsNull x))
 
 ;; ============================================================
 ;; wrappers
@@ -283,7 +287,7 @@
   Returns `nil` if no such component is attached."
   ^UnityEngine.Component [x ^Type t]
   (if-let [x (gobj x)]
-    (obj-nil (.GetComponent x t))
+    (null->nil (.GetComponent x t))
     (gobj-arg-fail-exception x)))
 
 (defn cmpts
@@ -357,7 +361,7 @@
   [gob [cmpt-name cmpt-type] then & else]
   (let [gobsym (gentagged "gob__" 'UnityEngine.GameObject)]
     `(let [obj# ~gob]
-       (if (obj-nil obj#)
+       (if (null->nil obj#)
          (with-gobj [~gobsym obj#]
            (if-let [~(meta-tag cmpt-name cmpt-type) (cmpt ~gobsym ~cmpt-type)]
              ~then

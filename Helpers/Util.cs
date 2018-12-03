@@ -299,12 +299,23 @@ namespace Arcadia
 		// ==================================================================
 		// nil
 
+		public static bool IsNull (object obj)
+		{
+			if (obj == null) {
+				return true;
+			}
+
+			UnityEngine.Object obj2 = obj as UnityEngine.Object;
+			return obj2 == null;
+		}
+
 		public static object TrueNil (object obj)
 		{
 			UnityEngine.Object obj2 = obj as UnityEngine.Object;
 			if (obj2 == null) {
 				return null;
 			}
+
 			return obj;
 		}
 

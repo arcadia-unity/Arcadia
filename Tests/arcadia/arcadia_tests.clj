@@ -327,7 +327,7 @@
         (ac/cmpt- x UnityEngine.BoxCollider)
         (pc/add-update-frame-timeout (unique-key)
           (fn []
-            (t (at/is (= (seq (remove ac/null-obj? (.GetComponents x UnityEngine.BoxCollider))) nil))
+            (t (at/is (= (seq (remove ac/null? (.GetComponents x UnityEngine.BoxCollider))) nil))
               :close))
           2)
         (close-after-frames t 5 "didn't complete"))))
