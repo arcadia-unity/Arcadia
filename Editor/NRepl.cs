@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Text;
 using System.Threading;
 using BencodeNET.Exceptions;
 using BencodeNET.Objects;
@@ -42,6 +43,42 @@ namespace Arcadia
 {
     public class NRepl
     {
+        class Writer : TextWriter
+        {
+            private string _id;
+            private string _session;
+            private TcpClient _client;
+            private string _kind;
+            private StringBuilder _stringBuilder;
+
+            public Writer(string kind, BDictionary request, TcpClient client)
+            {
+                _id = request["id"].ToString();
+                _session = GetSession(request).ToString();
+                _client = client;
+                _kind = kind;
+                _stringBuilder = new StringBuilder();
+            }
+
+            public override Encoding Encoding => Encoding.UTF8;
+
+            public override void Write(char value)
+            {
+                _stringBuilder.Append(value);
+            }
+
+            public override void Flush()
+            {
+                SendMessage(new BDictionary
+                {
+                    {"id", _id},
+                    {_kind, _stringBuilder.ToString()},
+                    {"session", _session},
+                }, _client);
+                _stringBuilder.Clear();
+            }
+        }
+        
         private static Var readStringVar;
         private static Var evalVar;
         private static Var prStrVar;
@@ -76,8 +113,6 @@ namespace Arcadia
 
         private static Associative DefaultSessionBindings =>
             RT.map(
-                RT.OutVar, new StringWriter(),
-                RT.ErrVar, new StringWriter(),
                 RT.CurrentNSVar, Namespace.findOrCreate(Symbol.intern("user")),
                 RT.UncheckedMathVar, false,
                 RT.WarnOnReflectionVar, false,
@@ -133,20 +168,17 @@ namespace Arcadia
                 var session = GetSession(_request);
                 var code = _request["code"].ToString();
                 var sessionBindings = _sessions[session];
-
-                Var.pushThreadBindings(sessionBindings);
+                var outWriter = new Writer("out", _request, _client);
+                var errWriter = new Writer("err", _request, _client);
+                
+                Var.pushThreadBindings(sessionBindings
+                        .assoc(RT.OutVar, outWriter)
+                        .assoc(RT.ErrVar, errWriter));
                 try
                 {
-                    var outWriter = (StringWriter) sessionBindings.valAt(RT.OutVar);
-                    var errWriter = (StringWriter) sessionBindings.valAt(RT.ErrVar);
-                    outWriter.GetStringBuilder().Clear();
-                    errWriter.GetStringBuilder().Clear();
-
                     var form = readStringVar.invoke(code);
                     var result = evalVar.invoke(form);
                     var value = (string) prStrVar.invoke(result);
-                    outWriter.Flush();
-                    errWriter.Flush();
 
                     star3Var.set(star2Var.deref());
                     star2Var.set(star1Var.deref());
@@ -162,19 +194,8 @@ namespace Arcadia
                         {"session", session.ToString()},
                     }, _client);
 
-                    SendMessage(new BDictionary
-                    {
-                        {"id", _request["id"]},
-                        {"out", outWriter.ToString()},
-                        {"session", session.ToString()},
-                    }, _client);
-                    
-                    SendMessage(new BDictionary
-                    {
-                        {"id", _request["id"]},
-                        {"session", session.ToString()},
-                        {"err", errWriter.ToString()},
-                    }, _client);
+                    outWriter.Flush();
+                    errWriter.Flush();
 
                     SendMessage(new BDictionary
                     {
