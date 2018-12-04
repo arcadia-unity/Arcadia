@@ -94,11 +94,11 @@ _We are trying to automate this step, and it may disappear in the future_
 
 By default, Unity is configured in a way that does not allow Arcadia to run well.
 
-#### Mono Runtime
+#### Scripting Runtime Version
 
-Unity uses a subset of the .NET 2.0 framework by default, which prevents any Clojure code from running. To change this to the full framework, select from the main menu Edit → Project Settings → Player. This will open the Player inspector in your inspector tab. In the Player inspector, locate Other Settings → Optimization → Api Compatibility Level and set that to .NET 2.0
+Unity uses an older version of .NET by default that they call "3.5 Equivalent" which prevents any Clojure code from running. To change this to the more current "4.x Equivalent", select from the main menu Edit → Project Settings → Player. This will open the Player inspector in your inspector tab. In the Player inspector, locate Other Settings → Configuration → Scripting Runtime Version and set that to ".NET 4.x Equivalent"
 
-![](http://imgur.com/ixba13Y.png)
+![](https://camo.githubusercontent.com/dd695e772fac68554069c6f16bfc566adcc4eec3/68747470733a2f2f692e696d6775722e636f6d2f7a6e684f57457a2e706e67)
 
 #### Running in the Background
 
