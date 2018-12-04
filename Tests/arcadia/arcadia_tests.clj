@@ -1,5 +1,6 @@
 (ns arcadia.arcadia-tests
   (:require [arcadia.core :as ac]
+            [arcadia.linear :as al]
             [arcadia.internal.test :as at]
             [arcadia.internal.editor-callbacks :as ec]
             [arcadia.internal.player-callbacks :as pc]
@@ -345,6 +346,33 @@
 ;; ------------------------------------------------------------
 ;; hook-state-system
 
+(defn multiarg-test [t]
+  (as-sub [t "multiarg-test"]
+    (with-temp-objects
+      :frames 100
+      [x (ac/create-primitive :cube "x")
+       y (ac/create-primitive :cube "y")]
+      (ac/with-cmpt x [tr-x Transform
+                       rb-x UnityEngine.Rigidbody]
+        (ac/with-cmpt y [tr-y Transform
+                         rb-y UnityEngine.Rigidbody]
+          (set! (.position tr-x) (al/v3 2 0 0))
+          (set! (.position tr-y) (al/v3 -2 0 0))
+          (doseq [rb [rb-x rb-y]] ;; template stuff would work here if you want to avoid the alloc
+            (set! (.useGravity rb) false)
+            (set! (.isKinematic rb) false))
+          (.AddForce rb-x (v3 -100 0 0) UnityEngine.ForceMode/Force)
+          (.AddForce rb-y (v3 100 0 0) UnityEngine.ForceMode/Force)
+          (ac/hook+ x :on-collision-enter :test
+            (fn [a b c]
+              (t
+                (at/is (= a x) "first argument is the GameObject")
+                (at/is (= b :test) "second argument is the key")
+                (at/is (instance? UnityEngine.Collision c) "third argument is additional event parameter")
+                :close))))))
+    (close-after-frames t 100 "failed to collide")
+    t))
+
 ;; consider breaking this up
 (at/deftest hook-state-system t
   (as-sub-closing [t "basic state tests"]
@@ -434,6 +462,7 @@
           (at/is (do (ac/hook- obj :update :testing) true) "hook- with two keys runs for hooked object")
           (at/is (= (ac/hook obj :update :testing) nil) "hook- with two keys works for hooked object"))))
     (t :close))
+  (multiarg-test t)
   (as-sub [t "role system"]
     (let [r1 {:update #'update-function-testable-example-1
               :state state-1}

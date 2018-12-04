@@ -1,8 +1,8 @@
-(ns ^{:doc "Data structure for all unity messages. Must be manually maintained."}
-  arcadia.internal.messages)
+(ns ^{:doc "Data structure for all unity events. Must be manually maintained."}
+  arcadia.internal.events)
 
 ;; from http://docs.unity3d.com/ScriptReference/MonoBehaviour.html
-(def messages
+(def events
   '{Awake []
     FixedUpdate []
     LateUpdate []
@@ -61,7 +61,7 @@
     Update []})
 
 ;; http://docs.unity3d.com/ScriptReference/EventSystems.EventTrigger.html
-(def interface-messages
+(def interface-events
   '{OnBeginDrag [PointerEventData] 
     OnCancel [BaseEventData]
     OnDeselect [BaseEventData]
@@ -80,5 +80,5 @@
     OnSubmit [BaseEventData]
     OnUpdateSelected [BaseEventData]})
 
-(def all-messages
-  (merge messages interface-messages))
+(def all-events
+  (merge events interface-events))

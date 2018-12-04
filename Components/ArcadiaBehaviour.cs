@@ -445,7 +445,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		try {
 			for (; i < ifnInfos.Length; i++) {
 				HookStateSystem.ifnInfoIndex = i;
-				Arcadia.Util.AsIFn(ifnInfos[i].fn).invoke(_go, arg1, ifnInfos[i].key);
+				Arcadia.Util.AsIFn(ifnInfos[i].fn).invoke(_go, ifnInfos[i].key, arg1);
 			}
 		} catch (System.Exception) {
 			PrintContext(i);
@@ -464,7 +464,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		try {
 			for (; i < ifnInfos.Length; i++) {
 				HookStateSystem.ifnInfoIndex = i;
-				Arcadia.Util.AsIFn(ifnInfos[i].fn).invoke(_go, arg1, arg2, ifnInfos[i].key);
+				Arcadia.Util.AsIFn(ifnInfos[i].fn).invoke(_go, ifnInfos[i].key, arg1, arg2);
 			}
 		} catch (System.Exception) {
 			PrintContext(i);
@@ -483,7 +483,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		try {
 			for (; i < ifnInfos.Length; i++) {
 				HookStateSystem.ifnInfoIndex = i;
-				Arcadia.Util.AsIFn(ifnInfos[i].fn).invoke(_go, arg1, arg2, arg3, ifnInfos[i].key);
+				Arcadia.Util.AsIFn(ifnInfos[i].fn).invoke(_go, ifnInfos[i].key, arg1, arg2, arg3);
 			}
 		} catch (System.Exception) {
 			PrintContext(i);

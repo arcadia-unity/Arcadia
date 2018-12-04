@@ -2,7 +2,7 @@
   (:require [clojure.string :as string]
             [clojure.spec.alpha :as s]
             clojure.set
-            [arcadia.internal.messages :as messages]
+            [arcadia.internal.events :as events]
             [arcadia.internal.macro :as mac]
             [arcadia.internal.map-utils :as mu]
             [arcadia.internal.name-utils :refer [camels-to-hyphens]]
@@ -398,7 +398,7 @@
 
 (def ^:private hook-types
   "Map of keywords to hook component types. Unstable."
-  (->> messages/all-messages
+  (->> events/all-events
        keys
        (map name)
        (map #(do [(clojurized-keyword %), (RT/classForName (str % "Hook"))]))
@@ -433,52 +433,52 @@
                          :keys (s/? (s/nilable sequential?))))))
 
 (defn hook+
-  "Attach a Clojure function to a Unity message on `obj`. The function `f`
-  will be invoked every time the message identified by `message-kw` is sent by Unity. `f`
-  must have the same arity as the expected Unity message. When called with a key `k`
-  this key can be passed to `message-kw-` to remove the function."
-  ([obj message-kw k f]
-   (let [hook-type (ensure-hook-type message-kw)
+  "Attach a Clojure function to a Unity event on `obj`. The function `f`
+  will be invoked every time the event identified by `event-kw` is sent by Unity. `f`
+  must have the same arity as the expected Unity event. When called with a key `k`
+  this key can be passed to `event-kw-` to remove the function."
+  ([obj event-kw k f]
+   (let [hook-type (ensure-hook-type event-kw)
          ^ArcadiaBehaviour hook-cmpt (ensure-cmpt obj hook-type)]
      (.AddFunction hook-cmpt k f)
      obj)))
 
 (defn hook-
-  "Removes callback from GameObject `obj` on the Unity message
-  corresponding to `message-kw` at `key`, if it exists. Reverse of
+  "Removes callback from GameObject `obj` on the Unity event
+  corresponding to `event-kw` at `key`, if it exists. Reverse of
 
-(hook+ obj message-kw key)
+(hook+ obj event-kw key)
 
   Returns nil."
-  ([obj message-kw key]
-   (when-let [^ArcadiaBehaviour hook-cmpt (cmpt obj (ensure-hook-type message-kw))]
+  ([obj event-kw key]
+   (when-let [^ArcadiaBehaviour hook-cmpt (cmpt obj (ensure-hook-type event-kw))]
      (.RemoveFunction hook-cmpt key))
    nil))
 
 (defn clear-hooks
-  "Removes all callbacks on the Unity message corresponding to
-  `message-kw`, regardless of their keys."
-  [obj message-kw]
-  (when-let [^ArcadiaBehaviour hook-cmpt (cmpt obj (ensure-hook-type message-kw))]
+  "Removes all callbacks on the Unity event corresponding to
+  `event-kw`, regardless of their keys."
+  [obj event-kw]
+  (when-let [^ArcadiaBehaviour hook-cmpt (cmpt obj (ensure-hook-type event-kw))]
     (.RemoveAllFunctions hook-cmpt))
   nil)
 
 (defn hook
-  "Retrieves a callback from a GameObject `obj`. `message-kw` is a
-  keyword specifying the Unity message of the callback, and `key` is
+  "Retrieves a callback from a GameObject `obj`. `event-kw` is a
+  keyword specifying the Unity event of the callback, and `key` is
   the key of the callback.
   
   In other words, retrieves any callback function attached via
 
-(hook+ obj message-kw key callback)
+(hook+ obj event-kw key callback)
 
   or the equivalent.
 
   If `key` is not supplied, `hook` uses `:default` as key. This is the same as
 
-(hook obj message-kw :default)"
-  [obj message-kw key]
-  (when-let [^ArcadiaBehaviour hook-cmpt (cmpt obj (ensure-hook-type message-kw))]
+(hook obj event-kw :default)"
+  [obj event-kw key]
+  (when-let [^ArcadiaBehaviour hook-cmpt (cmpt obj (ensure-hook-type event-kw))]
     (.CallbackForKey hook-cmpt key)))
 
 ;; ============================================================
@@ -709,7 +709,7 @@
 ;; defrole
 
 (def ^:private hook->args
-  (-> messages/all-messages
+  (-> events/all-events
       (mu/map-keys clojurized-keyword)))
 
 (s/def ::defrole-impl
