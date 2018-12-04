@@ -66,7 +66,6 @@ namespace Arcadia
 		private static void InitializeLoadPathExtensions()
 		{
 			Util.require("arcadia.internal.leiningen");
-			Util.require("arcadia.internal.deps");
 		}
 
 		// workaround for spec issues
@@ -113,7 +112,7 @@ namespace Arcadia
 
 			Debug.Log("Load Path is " + Environment.GetEnvironmentVariable("CLOJURE_LOAD_PATH"));
 		}
-		
+
 		[MenuItem("Arcadia/Initialization/Update Clojure Load Path")]
 		public static void SetClojureLoadPath ()
 		{
@@ -128,7 +127,7 @@ namespace Arcadia
 
 			Debug.Log("Load Path is " + Environment.GetEnvironmentVariable("CLOJURE_LOAD_PATH"));
 		}
-		
+
 		static void LoadSocketREPL ()
 		{
             Util.require("arcadia.socket-repl");

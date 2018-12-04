@@ -284,18 +284,6 @@
 
 (defn ->package-map [path]
   (cond
-    (.EndsWith path "deps.edn")
-    (let [project-data (-> path
-                           (slurp :enc "utf8")
-                           edn/read-string)
-          project-dir (-> path
-                          Path/GetDirectoryName)]
-      {:dependencies
-       (:deps project-data)
-       :source (->> project-data
-                    :paths
-                    (map #(Path/Combine project-dir %))
-                    vec)})
     (.EndsWith path "project.clj")
     (let [project-data (-> path
                            Path/GetDirectoryName
