@@ -5,32 +5,34 @@
             [arcadia.internal.filewatcher :as fw]
             [arcadia.internal.file-system :as fs])
   (:import
-    [Arcadia Configuration]
     [System DateTime]
     [System.IO FileSystemInfo File Path]
     [UnityEngine Debug]
     [System.Text.RegularExpressions Regex]))
 
+(def default-config-file-path (Path/Combine "Assets" "Arcadia" "configuration.edn"))
+(def user-config-file-path (Path/Combine "Assets" "configuration.edn"))
+
 (defn config []
   (@state/state ::config))
 
-(defn default-config 
+(defn default-config
   "Built in Arcadia default configuration file. Never changes."
-  [] (if (File/Exists Configuration/defaultConfigFilePath)
-       (edn/read-string (slurp Configuration/defaultConfigFilePath
+  [] (if (File/Exists default-config-file-path)
+       (edn/read-string (slurp default-config-file-path
                                :encoding "utf8"))
        (throw (Exception. (str "Default Arcadia configuration file missing. "
-                               Configuration/defaultConfigFilePath
+                               default-config-file-path
                                " does not exist")))))
 
-(defn user-config-file 
+(defn user-config-file
   "Path to the user defined configuration file"
-  [] Configuration/userConfigFilePath)
+  [] user-config-file-path)
 
 (defn user-config
   "User supplied configuration file"
-  [] (if (File/Exists Configuration/userConfigFilePath)
-       (edn/read-string (slurp Configuration/userConfigFilePath
+  [] (if (File/Exists user-config-file-path)
+       (edn/read-string (slurp user-config-file-path
                                :encoding "utf8"))
        {}))
 
@@ -39,7 +41,7 @@
     (when-let [fsi (fs/info p)]
       (let [nm (.FullName (fs/info p))]
         (or
-          (= nm (fs/path Configuration/defaultConfigFilePath))
+          (= nm (fs/path default-config-file-path))
           (= nm (fs/path (user-config-file))))))))
 
 ;; TODO (merge-with into ... ) ?
