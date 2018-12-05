@@ -21,7 +21,6 @@ namespace Arcadia
             Util.require("arcadia.repl");
 		}
 
-		[MenuItem("Arcadia/REPL/Window...")]
 		public static void Init()
 		{
 			Repl window = (Repl)EditorWindow.GetWindow(typeof(Repl));
@@ -39,14 +38,12 @@ namespace Arcadia
 			}
 		}
 
-		[MenuItem("Arcadia/REPL/Start %#r")]
 		public static void StartREPL()
 		{
 			replSocket = (UdpClient)RT.var("arcadia.repl", "start-server").invoke(11211);
 			EditorApplication.update += Repl.Update;
 		}
 
-		[MenuItem("Arcadia/REPL/Stop &#r")]
 		public static void StopREPL()
 		{
 			RT.var("arcadia.repl", "stop-server").invoke(replSocket);

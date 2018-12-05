@@ -12,7 +12,6 @@ namespace Arcadia
             CheckSettings();
         }
 
-        [MenuItem("Arcadia/Initialization/Setup Player Settings")]
         public static void CheckSettings()
         {
 			Debug.Log("Checking Unity Settings...");

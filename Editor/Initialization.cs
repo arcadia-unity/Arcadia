@@ -43,7 +43,6 @@ namespace Arcadia
             Util.require("arcadia.data");
 		}
 
-		[MenuItem("Arcadia/Initialization/Rerun")]
 		public static void Initialize()
 		{
 			Debug.Log("Starting Arcadia...");
@@ -75,7 +74,6 @@ namespace Arcadia
         	Environment.SetEnvironmentVariable("clojure.spec.skip-macros", "true");
         }
 
-		[MenuItem("Arcadia/Initialization/Load Configuration")]
 		public static void LoadConfig()
 		{
 			Debug.Log("Loading configuration...");
@@ -113,7 +111,6 @@ namespace Arcadia
 			Debug.Log("Load Path is " + Environment.GetEnvironmentVariable("CLOJURE_LOAD_PATH"));
 		}
 
-		[MenuItem("Arcadia/Initialization/Update Clojure Load Path")]
 		public static void SetClojureLoadPath ()
 		{
 			Util.require("arcadia.compiler");
@@ -178,7 +175,6 @@ namespace Arcadia
 			}
 		}
 
-		[MenuItem("Arcadia/Clean")]
 		public static void Clean ()
 		{
 			PurgeAllCompiled();

@@ -17,19 +17,16 @@ namespace Arcadia
             Util.require("arcadia.packages");
         }
         
-        [MenuItem("Arcadia/Packages/Restore")]
         public static void Restore()
         {
             _restoreFromConfigVar.invoke();
         }
         
-        [MenuItem("Arcadia/Packages/Clean Libraries")]
         public static void CleanLibraries()
         {
             _cleanLibraiesVar.invoke();
         }
         
-        [MenuItem("Arcadia/Packages/Clean Cache")]
         public static void CleanCache()
         {
             _cleanCacheVar.invoke();

@@ -61,13 +61,11 @@ namespace Arcadia
 			RT.var("arcadia.compiler", "import-changed-files").invoke();
 		}
 
-		[MenuItem("Arcadia/Compiler/Reload Assets")]
 		public static void ReloadAssets()
 		{
 			AssetDatabase.Refresh();
 		}
 
-		[MenuItem("Arcadia/Compiler/Force Reload Assets")]
 		public static void ForceReloadAssets()
 		{
 			AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
