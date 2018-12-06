@@ -142,13 +142,16 @@
            (Thread/Sleep 100) ; yeah it's a spinlock
            (recur)))))))
 
+;; separate function from repl-caught because this is used by NRepl.cs
+(defn error-string [e]
+  (let [error-opts (merge stacktrace/default-opts (:error-options (config/config)))]
+    (stacktrace/exception-str e, error-opts)))
+
 ;; Our seemingly less broken variant of clojure.main/repl-caught,
 ;; which oddly throws away the trace
 (defn repl-caught [e]
-  (let [error-opts (merge stacktrace/default-opts (:error-options (config/config)))]
-    (binding [*out* *err*]
-      (println
-        (stacktrace/exception-str e, error-opts)))))
+  (binding [*out* *err*]
+    (println (error-string e))))
 
 (defn repl []
   (m/repl
