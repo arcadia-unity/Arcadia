@@ -334,6 +334,8 @@ namespace Arcadia
             }
         }
 
+        private const int Port = 3722;
+
         public static void StopServer()
         {
             running = false;
@@ -346,9 +348,9 @@ namespace Arcadia
             {
                 // TODO timeout and respond to StopServer
                 // TODO make IPAddress.Loopback configurable to allow remote connections
-                var listener = new TcpListener(IPAddress.Loopback, 9999);
+                var listener = new TcpListener(IPAddress.Loopback, Port);
                 listener.Start();
-                Debug.LogFormat("nrepl: listening on port {0}", 9999);
+                Debug.LogFormat("nrepl: listening on port {0}", Port);
                 while (running)
                 {
                     // TODO timeout and respond to StopServer
