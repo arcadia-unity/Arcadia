@@ -145,9 +145,10 @@
 ;; Our seemingly less broken variant of clojure.main/repl-caught,
 ;; which oddly throws away the trace
 (defn repl-caught [e]
-  (binding [*out* *err*]
-    (println
-      (stacktrace/exception-str e, stacktrace/default-opts))))
+  (let [error-opts (merge stacktrace/default-opts (:error-options (config/config)))]
+    (binding [*out* *err*]
+      (println
+        (stacktrace/exception-str e, error-opts)))))
 
 (defn repl []
   (m/repl

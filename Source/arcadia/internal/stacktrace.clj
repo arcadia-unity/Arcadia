@@ -1,14 +1,21 @@
 (ns arcadia.internal.stacktrace
   (:import [System.Diagnostics StackFrame StackTrace]
-           [System.Reflection MethodInfo]))
-
+           [System.Reflection MethodInfo ParameterInfo]))
 
 (def default-opts
-  {:demunge-classnames true
-   :collapse-invocations true
-   :ditto-classnames true
+  {:hide-parameters false
+   :hide-outer-exceptions false
+
+   :ditto-classnames false
+   :demunge-classnames true
    :star-ifn true
-   :quiet-invocations true
+   ;; If collapsing invocations, should also hide ifn parameters.
+   ;; Otherwise, show parameters unless EITHER
+   ;; :hide-parameters OR :hide-ifn-parameters is flipped on.
+   :collapse-invocations true 
+   :quiet-invocations false
+   :hide-ifn-parameters false
+   
    ;; if false, all other flags are moot and we print the
    ;; raw exception
    :format true})
@@ -24,10 +31,10 @@
     (if-let [method (.GetMethod frame)]
       (assoc analysis
         :method-name (.Name method)
-        :methodname-str (.Name method)
         :method-declaring-class (.DeclaringType method)
-        :classname-str (.ToString (.DeclaringType method))
-        :ifn (isa? (.DeclaringType method) clojure.lang.IFn))
+        :classname-str (when-let [t (.DeclaringType method)] (.ToString t))
+        :ifn (isa? (.DeclaringType method) clojure.lang.IFn)
+        :parameters (.GetParameters method))
       analysis)))
 
 (defn ditto-index [^String s1, ^String s2, opts]
@@ -103,6 +110,26 @@
   (when (and file line column)
     (str (relative-file-path file) " (" line ":" column ")")))
 
+(defn parameters-string [{:keys [collapse-invocations
+                                 ifn
+                                 parameters]},
+                         {:keys [hide-parameters
+                                 collapse-invocations
+                                 hide-ifn-parameters]
+                          :as opts}]
+  (when parameters
+    ;; see comment in default-opts for explanation of this boolean test
+    (let [hide? (or hide-parameters
+                    (and hide-ifn-parameters ifn)
+                    (and collapse-invocations ifn))]
+      (when-not hide?
+        (let [pstrs (for [^ParameterInfo pinf parameters]
+                      (let [t (.ParameterType pinf)]
+                        (if (= t System.Object)
+                          "object"
+                          t)))]
+          (str "(" (clojure.string/join ", " pstrs) ")"))))))
+
 (defn trace-str [^StackTrace st, opts]
   (let [{:keys [star-ifn quiet-invocations]} opts
         analysis (->> (map #(frame-analysis % opts) (.GetFrames st))
@@ -110,24 +137,30 @@
                       (demunge-classnames opts)
                       (ditto-classnames opts))]
     (clojure.string/join "\n"
-      (for [{:keys [classname-str, methodname-str, ifn] :as frame-analysis} analysis]
+      (for [{:keys [classname-str, method-name, ifn,
+                    hide-parameters] :as frame-analysis} analysis]
         (clojure.string/join " "
           (remove nil?
             [(when star-ifn (if ifn "*", " "))
              (str
-               classname-str
-               (when-not (and quiet-invocations (invocation? frame-analysis))
-                 (str "." methodname-str)))
+               (or classname-str "NO_CLASS")
+               (if method-name
+                 (when-not (and (or (:collapse-invocations opts) quiet-invocations)
+                                (invocation? frame-analysis))
+                   (str "." method-name))
+                 (str ".NO_METHOD")))
+             (parameters-string frame-analysis opts)
              (file-data-string frame-analysis opts)]))))))
 
 (defn exception-layers [e]
   (take-while some? (iterate #(.InnerException ^Exception %) e)))
 
 (defn exception-str ^String [^Exception e, opts]
-  (let [es (reverse (exception-layers e))]
-    (clojure.string/join "\nvia\n"
-      (if (:format opts)
-        (for [^Exception e es]
+  (if (:format opts)
+    (let [es (reverse (exception-layers e))]
+      (clojure.string/join "\nvia\n"
+        (for [^Exception e (if (:hide-outer-exceptions opts) es (take 1 es))]
           (str (class e) ": " (.Message e) "\n"
-               (trace-str (StackTrace. e true) opts))) ; important that this is type-hinted, changes behavior
-        es))))
+               ;; important that this is type-hinted, changes behavior:
+               (trace-str (StackTrace. e true) opts)))))
+    (str e)))
