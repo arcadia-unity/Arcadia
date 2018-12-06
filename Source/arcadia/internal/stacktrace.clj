@@ -2,9 +2,11 @@
   (:import [System.Diagnostics StackFrame StackTrace]
            [System.Reflection MethodInfo ParameterInfo]))
 
+;; see https://github.com/arcadia-unity/Arcadia/wiki/Stacktraces-and-Error-Reporting
+
 (def default-opts
   {:hide-parameters false
-   :hide-outer-exceptions false
+   :hide-outer-exceptions true
 
    :ditto-classnames false
    :demunge-classnames true
@@ -159,7 +161,7 @@
   (if (:format opts)
     (let [es (reverse (exception-layers e))]
       (clojure.string/join "\nvia\n"
-        (for [^Exception e (if (:hide-outer-exceptions opts) es (take 1 es))]
+        (for [^Exception e (if (:hide-outer-exceptions opts) (take 1 es) es)]
           (str (class e) ": " (.Message e) "\n"
                ;; important that this is type-hinted, changes behavior:
                (trace-str (StackTrace. e true) opts)))))
