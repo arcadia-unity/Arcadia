@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using clojure.lang;
 using Arcadia;
 using System;
+using UnityEngine.Serialization;
 
 [ExecuteInEditMode]
 public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
@@ -11,7 +12,9 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 	// TODO Figure out stylistic best practices for this sort of thing, bit of a mess right now
 
 	// TODO sorted maps?
-	public string edn = "{}";
+	[FormerlySerializedAs("edn")]
+	public string serializedData = "{}";
+	public string serializedFormat = "edn";
 	public JumpMap state = new JumpMap();
 
 	public string[] conversionKeys;
@@ -159,7 +162,7 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 		WipeDatabase();
 		Var.pushThreadBindings(RT.map(objectDbVar, objectDatabase, serializeVar, true, printReadablyVar, false));
 		try {
-			edn = (string)prStrVar.invoke(state.ToPersistentMap());
+			serializedData = (string)prStrVar.invoke(state.ToPersistentMap());
 			// TODO optimize this
 			var map = (PersistentHashMap)objectDatabase.deref();
 			objectDatabaseIds = (int[])RT.seqToTypedArray(typeof(int), RT.keys(map));
