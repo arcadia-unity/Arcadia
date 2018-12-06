@@ -46,5 +46,9 @@
  ;; servers are running).
  
  ;; :socket-repl true
+
+ ;; see https://github.com/arcadia-unity/Arcadia/wiki/Stacktraces-and-Error-Reporting
+ ;; for options on formatting thrown Exceptions
+ ;; :error-options {:format true}
  }
 
