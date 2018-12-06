@@ -29,10 +29,6 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 	public int[] objectDatabaseIds = new int[0];
 	public UnityEngine.Object[] objectDatabaseObjects = new UnityEngine.Object[0];
 
-	private static IFn prStr = null;
-	private static IFn readString = null;
-	private static IFn requireFn = null;
-
 	[System.NonSerialized]
 	public bool fullyInitialized = false;
 
