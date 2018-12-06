@@ -22,7 +22,9 @@
         (let [^JumpMap jm (.state as)]
           (.Clear jm)
           (.AddAll jm
-            (edn/read-string {:readers *data-readers*} (.edn as))))
+            ;; in the future, switch on (.serializedFormat as)
+            ;; assuming edn for now
+            (edn/read-string {:readers *data-readers*} (.serializedData as))))
         (catch Exception e
           (Debug/Log "Exception encountered in arcadia.internal.state-help/deserialize:")
           (Debug/Log e)
