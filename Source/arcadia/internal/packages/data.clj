@@ -1,4 +1,4 @@
-(ns arcadia.packages.data
+(ns arcadia.internal.packages.data
   (:require [clojure.spec.alpha :as s]
             [arcadia.internal.spec :as as]))
 

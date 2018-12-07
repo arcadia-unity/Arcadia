@@ -254,7 +254,7 @@
         (SetValue obj field-value))))
 
 (def internal-namespaces
-  '[arcadia.core arcadia.repl arcadia.packages arcadia.linear
+  '[arcadia.core arcadia.repl arcadia.internal.packages arcadia.linear
     arcadia.data arcadia.internal.config arcadia.internal.compiler
     arcadia.internal.tracker arcadia.internal.thread arcadia.internal.test
     arcadia.internal.state arcadia.internal.spec arcadia.internal.nudge
@@ -262,4 +262,4 @@
     arcadia.internal.macro arcadia.internal.leiningen arcadia.internal.functions
     arcadia.internal.filewatcher-dummy arcadia.internal.file-system arcadia.internal.editor-interop
     arcadia.internal.components arcadia.internal.benchmarking arcadia.internal.asset-watcher
-    arcadia.internal.array-utils arcadia.packages.data arcadia.internal.socket-repl])
+    arcadia.internal.array-utils arcadia.internal.packages.data arcadia.internal.socket-repl])

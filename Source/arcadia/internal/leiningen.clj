@@ -3,7 +3,7 @@
             [arcadia.internal.asset-watcher :as aw]
             [arcadia.internal.state :as state]
             [arcadia.internal.file-system :as fs]
-            [arcadia.packages.data :as pd]
+            [arcadia.internal.packages.data :as pd]
             [clojure.spec.alpha :as s]
             [arcadia.internal.spec :as as]
             [arcadia.internal.compiler :as compiler]

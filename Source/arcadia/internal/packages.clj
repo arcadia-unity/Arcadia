@@ -1,4 +1,4 @@
-(ns arcadia.packages
+(ns arcadia.internal.packages
   (:require [clojure.string :as s]
             [clojure.edn :as edn]
             [arcadia.internal.leiningen :as lein]
@@ -84,7 +84,7 @@
   ([coords] (restore coords (fn [])))
   ([coords donefn]
    (let [csproj-xml (coords->csproj coords)
-         csproj-file (Path/Combine external-packages-folder  (str (gensym "arcadia-packages" ) ".csproj"))]
+         csproj-file (Path/Combine external-packages-folder  (str (gensym "arcadia.internal.packages" ) ".csproj"))]
      (Directory/CreateDirectory external-packages-folder)
      (spit csproj-file csproj-xml)
      (ProgressBar/Start {:title "Restoring Packages" :info "" :progress 0})
