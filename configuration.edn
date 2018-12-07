@@ -35,7 +35,7 @@
  ;;
  ;; `true`: make default socket-repl (localhost, port 5555)
  ;; `false`: stop ALL socket repls 
- ;; a map: opts for `arcadia.socket-repl/server-socket`. Means at
+ ;; a map: opts for `arcadia.internal.socket-repl/server-socket`. Means at
  ;; least the specified server is running.
  ;; 
  ;; In the future, a non-map collection of maps (eg, a sequence of

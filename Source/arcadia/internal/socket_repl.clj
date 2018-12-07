@@ -1,4 +1,4 @@
-(ns arcadia.socket-repl
+(ns arcadia.internal.socket-repl
   (:require [clojure.core.server :as s]
             [arcadia.internal.editor-callbacks :as cb]
             [arcadia.internal.config :as config]

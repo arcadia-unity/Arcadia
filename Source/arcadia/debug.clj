@@ -3,7 +3,7 @@
             [arcadia.internal.state :as state]
             [clojure.main :as m]
             [clojure.spec.alpha :as s]
-            [arcadia.socket-repl :as socket-repl]
+            [arcadia.internal.socket-repl :as socket-repl]
             [arcadia.internal.thread :as thread]
             [arcadia.internal.map-utils :as mu])
   (:import [System.Diagnostics StackFrame StackTrace]))

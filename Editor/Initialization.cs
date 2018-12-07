@@ -123,8 +123,8 @@ namespace Arcadia
 
 		static void LoadSocketREPL ()
 		{
-			Util.require("arcadia.socket-repl");
-			RT.var("arcadia.socket-repl", "server-reactive").invoke();
+			Util.require("arcadia.internal.socket-repl");
+			RT.var("arcadia.internal.socket-repl", "server-reactive").invoke();
 		}
 
 		// old mono...
