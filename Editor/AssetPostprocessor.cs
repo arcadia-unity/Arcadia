@@ -16,7 +16,7 @@ namespace Arcadia
 
 		static AssetPostprocessor()
 		{
-            Util.require("arcadia.compiler");
+            Util.require("arcadia.internal.compiler");
 			// kill repl when exiting unity
 			AppDomain.CurrentDomain.ProcessExit += (object sender, EventArgs e) => { StopWatchingFiles(); };
 
@@ -46,19 +46,19 @@ namespace Arcadia
 
 		static public void StartWatchingFiles()
 		{
-			RT.var("arcadia.compiler", "start-watching-files").invoke();
+			RT.var("arcadia.internal.compiler", "start-watching-files").invoke();
 			EditorApplication.update += AssetPostprocessor.ImportChangedFiles;
 		}
 
 		static public void StopWatchingFiles()
 		{
-			RT.var("arcadia.compiler", "stop-watching-files").invoke();
+			RT.var("arcadia.internal.compiler", "stop-watching-files").invoke();
 			EditorApplication.update -= AssetPostprocessor.ImportChangedFiles;
 		}
 
 		static public void ImportChangedFiles()
 		{
-			RT.var("arcadia.compiler", "import-changed-files").invoke();
+			RT.var("arcadia.internal.compiler", "import-changed-files").invoke();
 		}
 
 		public static void ReloadAssets()

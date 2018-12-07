@@ -93,7 +93,7 @@ namespace Arcadia
 			return path;
 		}
 
-		// need this to set things up so we can get rest of loadpath after loading arcadia.compiler
+		// need this to set things up so we can get rest of loadpath after loading arcadia.internal.compiler
 		public static void SetInitialClojureLoadPath ()
 		{
 			try {
@@ -109,13 +109,13 @@ namespace Arcadia
 
 		public static void SetClojureLoadPath ()
 		{
-			Util.require("arcadia.compiler");
+			Util.require("arcadia.internal.compiler");
 			Debug.Log("Setting Load Path...");
 			string clojureDllFolder = GetClojureDllFolder();
 
 			Environment.SetEnvironmentVariable("CLOJURE_LOAD_PATH",
 				InitialClojureLoadPath() + Path.PathSeparator +
-				RT.var("arcadia.compiler", "loadpath-extension-string").invoke() + Path.PathSeparator +
+				RT.var("arcadia.internal.compiler", "loadpath-extension-string").invoke() + Path.PathSeparator +
 				Path.GetFullPath(VariadicPathCombine(clojureDllFolder, "..", "Libraries")));
 
 			Debug.Log("Load Path is " + Environment.GetEnvironmentVariable("CLOJURE_LOAD_PATH"));
