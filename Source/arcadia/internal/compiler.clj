@@ -2,7 +2,7 @@
            Arcadia users will not need to use this namespace,
            but the machinery is exposed for those who do."
       :author "Tims Gardner and Ramsey Nasser"}
-    arcadia.compiler
+    arcadia.internal.compiler
   (:require [arcadia.internal.config :as config]
             [clojure.spec.alpha :as s]
             [clojure.string :as str]
@@ -172,7 +172,7 @@
    (let [loaded-libs' (binding [*compiler-options* (get (config/config) :compiler-options {})
                                 *compile-path* path
                                 *compile-files* true
-                                arcadia.compiler/*exporting?* true
+                                arcadia.internal.compiler/*exporting?* true
                                 clojure.core/*loaded-libs* (ref #{})]
                         (doseq [ns nss]
                           (require ns)
@@ -258,7 +258,7 @@
 
 (defn configuration-extensions []
   (map #(System.IO.Path/GetFullPath %)
-    (get-in @state/state [::config/config :arcadia.compiler/loadpaths])))
+    (get-in @state/state [::config/config :arcadia.internal.compiler/loadpaths])))
 
 (defn loadpath-extension-string
   ([] (loadpath-extension-string nil))

@@ -1,7 +1,7 @@
 (ns arcadia.internal.editor-interop
   (:use clojure.pprint)
   (:require [clojure.string :as string]
-            [arcadia.compiler :refer [aot-namespaces asset->ns]]
+            [arcadia.internal.compiler :refer [aot-namespaces asset->ns]]
             [arcadia.internal.name-utils :refer [title-case]]
             [arcadia.internal.state-help :as sh]
             [arcadia.internal.config :as config])
@@ -255,7 +255,7 @@
 
 (def internal-namespaces
   '[arcadia.core arcadia.repl arcadia.packages arcadia.linear
-    arcadia.data arcadia.internal.config arcadia.compiler
+    arcadia.data arcadia.internal.config arcadia.internal.compiler
     arcadia.internal.tracker arcadia.internal.thread arcadia.internal.test
     arcadia.internal.state arcadia.internal.spec arcadia.internal.nudge
     arcadia.internal.name-utils arcadia.internal.events arcadia.internal.map-utils
