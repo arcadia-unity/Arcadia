@@ -18,17 +18,17 @@ namespace Arcadia
 
 		public static string PathToCompiledForExport = Path.GetFullPath(VariadicPathCombine(Application.dataPath, "Arcadia", "Export"));
 
-		static Initialization()
+		static Initialization ()
 		{
 			Initialize();
 		}
 
-		public static String GetClojureDllFolder()
+		public static String GetClojureDllFolder ()
 		{
 			return Path.GetDirectoryName(typeof(clojure.lang.RT).Assembly.Location).Substring(Directory.GetCurrentDirectory().Length + 1);
 		}
 
-		public static void StartWatching()
+		public static void StartWatching ()
 		{
 			//AssetPostprocessor.StartWatchingFiles();
 			Var config = RT.var("arcadia.internal.config", "config");
@@ -36,23 +36,23 @@ namespace Arcadia
 			startAssetWatcher.invoke(config.invoke());
 		}
 
-		public static void LoadLiterals()
+		public static void LoadLiterals ()
 		{
 			// this has to happen here becasue the repl
 			// binds a thread local *data-readers*
-            Util.require("arcadia.data");
+			Util.require("arcadia.data");
 		}
 
-		public static void Initialize()
+		public static void Initialize ()
 		{
 			Debug.Log("Starting Arcadia...");
-            DisableSpecChecking();
+			DisableSpecChecking();
 			SetInitialClojureLoadPath();
 			LoadConfig();
 			LoadLiterals();
 			InitializeLoadPathExtensions();
 			SetClojureLoadPath();
-            BuildPipeline.EnsureCompiledFolders();
+			BuildPipeline.EnsureCompiledFolders();
 			StartEditorCallbacks();
 			StartWatching();
 			LoadSocketREPL();
@@ -61,28 +61,28 @@ namespace Arcadia
 			Debug.Log("Arcadia Started!");
 		}
 
-		private static void InitializeLoadPathExtensions()
+		private static void InitializeLoadPathExtensions ()
 		{
 			Util.require("arcadia.internal.leiningen");
 		}
 
 		// workaround for spec issues
-        static void DisableSpecChecking()
-        {
-        	Environment.SetEnvironmentVariable("clojure.spec.check-asserts", "false");
-        	Environment.SetEnvironmentVariable("clojure.spec.skip-macros", "true");
-        }
+		static void DisableSpecChecking ()
+		{
+			Environment.SetEnvironmentVariable("clojure.spec.check-asserts", "false");
+			Environment.SetEnvironmentVariable("clojure.spec.skip-macros", "true");
+		}
 
-		public static void LoadConfig()
+		public static void LoadConfig ()
 		{
 			Debug.Log("Loading configuration...");
-            Util.require("arcadia.internal.config");
+			Util.require("arcadia.internal.config");
 			RT.var("arcadia.internal.config", "update!").invoke();
 		}
 
-		public static void StartNudge()
+		public static void StartNudge ()
 		{
-            Util.require("arcadia.internal.nudge");
+			Util.require("arcadia.internal.nudge");
 		}
 
 		public static string InitialClojureLoadPath ()
@@ -94,16 +94,13 @@ namespace Arcadia
 		}
 
 		// need this to set things up so we can get rest of loadpath after loading arcadia.compiler
-		public static void SetInitialClojureLoadPath()
+		public static void SetInitialClojureLoadPath ()
 		{
-			try
-			{
+			try {
 				Debug.Log("Setting Initial Load Path...");
 				Environment.SetEnvironmentVariable("CLOJURE_LOAD_PATH", InitialClojureLoadPath());
 
-			}
-			catch (InvalidOperationException e)
-			{
+			} catch (InvalidOperationException e) {
 				throw new SystemException("Error Loading Arcadia! Arcadia expects exactly one Arcadia folder (a folder with Clojure.dll in it)");
 			}
 
@@ -126,23 +123,23 @@ namespace Arcadia
 
 		static void LoadSocketREPL ()
 		{
-            Util.require("arcadia.socket-repl");
+			Util.require("arcadia.socket-repl");
 			RT.var("arcadia.socket-repl", "server-reactive").invoke();
 		}
 
 		// old mono...
-		public static string VariadicPathCombine(params string[] paths)
+		public static string VariadicPathCombine (params string[] paths)
 		{
 			string path = "";
-			foreach (string p in paths)
-			{
+			foreach (string p in paths) {
 				path = Path.Combine(path, p);
 			}
 			return path;
 		}
 
-		public static void StartEditorCallbacks(){
-            Util.require("arcadia.internal.editor-callbacks");
+		public static void StartEditorCallbacks ()
+		{
+			Util.require("arcadia.internal.editor-callbacks");
 			EditorCallbacks.Initialize();
 		}
 
