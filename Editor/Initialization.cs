@@ -31,7 +31,7 @@ namespace Arcadia
 		public static void StartWatching()
 		{
 			//AssetPostprocessor.StartWatchingFiles();
-			Var config = RT.var("arcadia.config", "config");
+			Var config = RT.var("arcadia.internal.config", "config");
 			Var startAssetWatcher = RT.var("arcadia.internal.asset-watcher", "start-asset-watcher");
 			startAssetWatcher.invoke(config.invoke());
 		}
@@ -77,8 +77,8 @@ namespace Arcadia
 		public static void LoadConfig()
 		{
 			Debug.Log("Loading configuration...");
-            Util.require("arcadia.config");
-			RT.var("arcadia.config", "update!").invoke();
+            Util.require("arcadia.internal.config");
+			RT.var("arcadia.internal.config", "update!").invoke();
 		}
 
 		public static void StartNudge()

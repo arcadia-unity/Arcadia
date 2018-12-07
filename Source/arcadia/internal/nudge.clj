@@ -1,7 +1,7 @@
 (ns arcadia.internal.nudge
   (:require [arcadia.internal.editor-callbacks :as ec]
             [arcadia.internal.state :as state]
-            [arcadia.config :as config]
+            [arcadia.internal.config :as config]
             [arcadia.internal.asset-watcher :as aw])
   (:import [UnityEditor EditorApplication]))
 

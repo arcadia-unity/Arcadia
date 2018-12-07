@@ -7,7 +7,7 @@
             [clojure.spec.alpha :as s]
             [arcadia.internal.spec :as as]
             [arcadia.compiler :as compiler]
-            [arcadia.config :as config])
+            [arcadia.internal.config :as config])
   (:import [System.Text.RegularExpressions Regex]
            [System.IO FileSystemInfo DirectoryInfo Path]))
 

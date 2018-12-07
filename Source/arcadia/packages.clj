@@ -2,7 +2,7 @@
   (:require [clojure.string :as s]
             [clojure.edn :as edn]
             [arcadia.internal.leiningen :as lein]
-            [arcadia.config :as config])
+            [arcadia.internal.config :as config])
   (:import [Arcadia ProgressBar Shell]
            UnityEditor.EditorUtility
            UnityEngine.Debug
