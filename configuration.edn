@@ -25,7 +25,7 @@
  ;; organization. Note that this is purely additive and the default is empty.
  ;; If you wanted your sources as Assets/src/kittens/core.clj, rather than
  ;; the default Assets/kittens/core.clj, you could use the following.
- ;; :arcadia.internal.compiler/loadpaths ["Assets/src"]
+ ;; :source-paths ["Assets/src"]
 
  :nudge true
 

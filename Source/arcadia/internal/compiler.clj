@@ -258,7 +258,7 @@
 
 (defn configuration-extensions []
   (map #(System.IO.Path/GetFullPath %)
-    (get-in @state/state [::config/config :arcadia.internal.compiler/loadpaths])))
+    (get-in @state/state [::config/config :source-paths])))
 
 (defn loadpath-extension-string
   ([] (loadpath-extension-string nil))
