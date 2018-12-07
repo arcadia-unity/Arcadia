@@ -342,61 +342,82 @@ namespace Arcadia
 
 		public static void StartServer ()
 		{
+			Debug.Log("nrepl: starting");
+			
 			running = true;
 			new Thread(() => {
-				// TODO timeout and respond to StopServer
-				// TODO make IPAddress.Loopback configurable to allow remote connections
-				var listener = new TcpListener(IPAddress.Loopback, Port);
-				listener.Start();
-				Debug.LogFormat("nrepl: listening on port {0}", Port);
-				while (running) {
+				try
+				{
 					// TODO timeout and respond to StopServer
-					var client = listener.AcceptTcpClient();
-					new Thread(() => {
-						Debug.LogFormat("nrepl: connected to client {0}", client.Client.RemoteEndPoint);
-						var parser = new BencodeNET.Parsing.BencodeParser();
-						var buffer = new byte[1024 * 8]; // 8k buffer
-						while (running) {
-							// bencode needs a seekable stream to parse, so each
-							// message gets its own MemoryStream (MemoryStreams are
-							// seekable, NetworkStreams e.g. client.GetStream() are not)
-							using (var ms = new MemoryStream()) {
-								// message might be bigger than our buffer
-								// loop till we have the whole thing
-								var parsedMessage = false;
-								while (!parsedMessage) {
-									// copy from network stream into memory stream
-									var total = client.GetStream().Read(buffer, 0, buffer.Length);
-									ms.Write(buffer, 0, total);
-									// bencode parsing expects stream position to be 0
-									ms.Position = 0;
-									try {
-										// try and parse the message and handle it
-										var obj = parser.Parse(ms);
-										parsedMessage = true;
-										var message = obj as BDictionary;
-										if (message != null) {
-											try {
-												HandleMessage(message, client);
-											} catch (Exception e) {
-												Debug.LogException(e);
+					// TODO make IPAddress.Loopback configurable to allow remote connections
+					var listener = new TcpListener(IPAddress.Loopback, Port);
+					listener.Start();
+					Debug.LogFormat("nrepl: listening on port {0}", Port);
+					while (running)
+					{
+						// TODO timeout and respond to StopServer
+						var client = listener.AcceptTcpClient();
+						new Thread(() =>
+						{
+							Debug.LogFormat("nrepl: connected to client {0}", client.Client.RemoteEndPoint);
+							var parser = new BencodeNET.Parsing.BencodeParser();
+							var buffer = new byte[1024 * 8]; // 8k buffer
+							while (running)
+							{
+								// bencode needs a seekable stream to parse, so each
+								// message gets its own MemoryStream (MemoryStreams are
+								// seekable, NetworkStreams e.g. client.GetStream() are not)
+								using (var ms = new MemoryStream())
+								{
+									// message might be bigger than our buffer
+									// loop till we have the whole thing
+									var parsedMessage = false;
+									while (!parsedMessage)
+									{
+										// copy from network stream into memory stream
+										var total = client.GetStream().Read(buffer, 0, buffer.Length);
+										ms.Write(buffer, 0, total);
+										// bencode parsing expects stream position to be 0
+										ms.Position = 0;
+										try
+										{
+											// try and parse the message and handle it
+											var obj = parser.Parse(ms);
+											parsedMessage = true;
+											var message = obj as BDictionary;
+											if (message != null)
+											{
+												try
+												{
+													HandleMessage(message, client);
+												}
+												catch (Exception e)
+												{
+													Debug.LogException(e);
+												}
 											}
 										}
-									} catch (InvalidBencodeException<BDictionary> e) {
-										// most likely an incomplete message. i kind
-										// of wish this was an EOF exception... we cannot
-										// actually tell the difference between an incomplete
-										// message and an invalid one as it stands
+										catch (InvalidBencodeException<BDictionary> e)
+										{
+											// most likely an incomplete message. i kind
+											// of wish this was an EOF exception... we cannot
+											// actually tell the difference between an incomplete
+											// message and an invalid one as it stands
 
-										// seek to the end of the MemoryStream to take on more bytes
-										ms.Seek(0, SeekOrigin.End);
+											// seek to the end of the MemoryStream to take on more bytes
+											ms.Seek(0, SeekOrigin.End);
+										}
 									}
 								}
 							}
-						}
 
-						Debug.LogFormat("nrepl: disconnected from client {0}", client.GetHashCode());
-					}).Start();
+							Debug.LogFormat("nrepl: disconnected from client {0}", client.GetHashCode());
+						}).Start();
+					}
+				}
+				catch (Exception e)
+				{
+					Debug.LogException(e);
 				}
 
 				Debug.LogFormat("nrepl: closing port {0}", 9999);
