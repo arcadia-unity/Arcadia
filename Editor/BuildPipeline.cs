@@ -124,7 +124,7 @@ namespace Arcadia
 
 			ResetProgress(userNameSpaces.Cast<object>().Count());
 			try {
-				string compilerNs = "arcadia.compiler";
+				string compilerNs = "arcadia.internal.compiler";
 				Arcadia.Util.require(compilerNs);
 				Arcadia.Util.getVar(ref aotNamespacesVar, compilerNs, "aot-namespaces");
 				Arcadia.Util.Invoke(

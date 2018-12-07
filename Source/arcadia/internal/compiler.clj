@@ -2,8 +2,8 @@
            Arcadia users will not need to use this namespace,
            but the machinery is exposed for those who do."
       :author "Tims Gardner and Ramsey Nasser"}
-    arcadia.compiler
-  (:require [arcadia.config :as config]
+    arcadia.internal.compiler
+  (:require [arcadia.internal.config :as config]
             [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [arcadia.internal.state :as state]
@@ -169,10 +169,10 @@
    ;; will not do a deep walk over already-loaded namespaces. So
    ;; instead we rebind the *loaded-libs* var to a ref with an empty
    ;; set and call normal `require`, which gives the desired behavior.
-   (let [loaded-libs' (binding [*compiler-options* (get (arcadia.config/config) :compiler-options {})
+   (let [loaded-libs' (binding [*compiler-options* (get (config/config) :compiler-options {})
                                 *compile-path* path
                                 *compile-files* true
-                                arcadia.compiler/*exporting?* true
+                                arcadia.internal.compiler/*exporting?* true
                                 clojure.core/*loaded-libs* (ref #{})]
                         (doseq [ns nss]
                           (require ns)
@@ -258,7 +258,7 @@
 
 (defn configuration-extensions []
   (map #(System.IO.Path/GetFullPath %)
-    (get-in @state/state [::config/config :arcadia.compiler/loadpaths])))
+    (get-in @state/state [::config/config :source-paths])))
 
 (defn loadpath-extension-string
   ([] (loadpath-extension-string nil))

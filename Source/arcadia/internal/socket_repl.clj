@@ -1,7 +1,7 @@
-(ns arcadia.socket-repl
+(ns arcadia.internal.socket-repl
   (:require [clojure.core.server :as s]
             [arcadia.internal.editor-callbacks :as cb]
-            [arcadia.config :as config]
+            [arcadia.internal.config :as config]
             [clojure.main :as m]
             [arcadia.internal.state :as state]
             [arcadia.internal.stacktrace :as stacktrace]

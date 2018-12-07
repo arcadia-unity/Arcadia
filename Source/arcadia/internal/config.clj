@@ -1,4 +1,4 @@
-(ns arcadia.config
+(ns arcadia.internal.config
   (:require [clojure.edn :as edn]
             [arcadia.internal.state :as state]
             [arcadia.internal.asset-watcher :as aw]

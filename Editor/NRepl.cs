@@ -94,7 +94,7 @@ namespace Arcadia
 
 		static NRepl ()
 		{
-			string socketReplNsName = "arcadia.socket-repl";
+			string socketReplNsName = "arcadia.internal.socket-repl";
 			Util.require(socketReplNsName);
 			Util.getVar(ref errorStringVar, socketReplNsName, "error-string");
 

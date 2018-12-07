@@ -1,10 +1,10 @@
 (ns arcadia.internal.editor-interop
   (:use clojure.pprint)
   (:require [clojure.string :as string]
-            [arcadia.compiler :refer [aot-namespaces asset->ns]]
+            [arcadia.internal.compiler :refer [aot-namespaces asset->ns]]
             [arcadia.internal.name-utils :refer [title-case]]
             [arcadia.internal.state-help :as sh]
-            [arcadia.config :as config])
+            [arcadia.internal.config :as config])
   (:import [System.IO Directory File]
            [Arcadia AssetPostprocessor]
            [System.Reflection FieldInfo]
@@ -254,12 +254,12 @@
         (SetValue obj field-value))))
 
 (def internal-namespaces
-  '[arcadia.core arcadia.repl arcadia.packages arcadia.linear
-    arcadia.data arcadia.config arcadia.compiler
+  '[arcadia.core arcadia.internal.repl arcadia.internal.packages arcadia.linear
+    arcadia.data arcadia.internal.config arcadia.internal.compiler
     arcadia.internal.tracker arcadia.internal.thread arcadia.internal.test
     arcadia.internal.state arcadia.internal.spec arcadia.internal.nudge
     arcadia.internal.name-utils arcadia.internal.events arcadia.internal.map-utils
     arcadia.internal.macro arcadia.internal.leiningen arcadia.internal.functions
     arcadia.internal.filewatcher-dummy arcadia.internal.file-system arcadia.internal.editor-interop
     arcadia.internal.components arcadia.internal.benchmarking arcadia.internal.asset-watcher
-    arcadia.internal.array-utils arcadia.packages.data arcadia.socket-repl])
+    arcadia.internal.array-utils arcadia.internal.packages.data arcadia.internal.socket-repl])

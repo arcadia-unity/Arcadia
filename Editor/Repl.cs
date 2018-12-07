@@ -18,7 +18,7 @@ namespace Arcadia
 
 		static Repl()
 		{
-            Util.require("arcadia.repl");
+            Util.require("arcadia.internal.repl");
 		}
 
 		public static void Init()
@@ -34,26 +34,26 @@ namespace Arcadia
 				StopREPL();
 			}
 			else {
-				RT.var("arcadia.repl", "eval-queue").invoke();
+				RT.var("arcadia.internal.repl", "eval-queue").invoke();
 			}
 		}
 
 		public static void StartREPL()
 		{
-			replSocket = (UdpClient)RT.var("arcadia.repl", "start-server").invoke(11211);
+			replSocket = (UdpClient)RT.var("arcadia.internal.repl", "start-server").invoke(11211);
 			EditorApplication.update += Repl.Update;
 		}
 
 		public static void StopREPL()
 		{
-			RT.var("arcadia.repl", "stop-server").invoke(replSocket);
+			RT.var("arcadia.internal.repl", "stop-server").invoke(replSocket);
 			replSocket = null;
 			EditorApplication.update -= Repl.Update;
 		}
 
 		void OnGUI()
 		{
-			bool serverRunning = RT.booleanCast(((Atom)RT.var("arcadia.repl", "server-running").deref()).deref());
+			bool serverRunning = RT.booleanCast(((Atom)RT.var("arcadia.internal.repl", "server-running").deref()).deref());
 			Color oldColor = GUI.color;
 			if (serverRunning)
 			{
