@@ -254,7 +254,7 @@
         (SetValue obj field-value))))
 
 (def internal-namespaces
-  '[arcadia.core arcadia.repl arcadia.internal.packages arcadia.linear
+  '[arcadia.core arcadia.internal.repl arcadia.internal.packages arcadia.linear
     arcadia.data arcadia.internal.config arcadia.internal.compiler
     arcadia.internal.tracker arcadia.internal.thread arcadia.internal.test
     arcadia.internal.state arcadia.internal.spec arcadia.internal.nudge

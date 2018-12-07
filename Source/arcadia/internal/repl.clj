@@ -1,4 +1,4 @@
-(ns arcadia.repl
+(ns arcadia.internal.repl
   (:refer-clojure :exclude [with-bindings])
   (:require [clojure.main :as main]
             [clojure.string :as str]
@@ -22,7 +22,7 @@
 ;; been evaluated in current session
 
 (ns user)
-(ns arcadia.repl)
+(ns arcadia.internal.repl)
 
 ;; ============================================================
 ;; macros
