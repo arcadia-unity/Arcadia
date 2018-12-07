@@ -2,9 +2,9 @@
 using System;
 using UnityEngine;
 using clojure.lang;
+using System.Collections.Generic;
 #if UNITY_EDITOR
 using UnityEditor;
-using System.Collections.Generic;
 using UnityEditor.SceneManagement;
 #endif
 

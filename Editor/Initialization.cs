@@ -57,7 +57,6 @@ namespace Arcadia
 			StartWatching();
 			LoadSocketREPL();
 			NRepl.StartServer();
-			StartREPL();
 			StartNudge();
 			Debug.Log("Arcadia Started!");
 		}
@@ -129,11 +128,6 @@ namespace Arcadia
 		{
             Util.require("arcadia.socket-repl");
 			RT.var("arcadia.socket-repl", "server-reactive").invoke();
-		}
-
-		static void StartREPL()
-		{
-			Repl.StartREPL();
 		}
 
 		// old mono...
