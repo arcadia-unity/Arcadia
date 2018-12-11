@@ -3,8 +3,7 @@
   (:refer-clojure :exclude [methods])
   (:require [clojure.pprint :as pprint])
   (:import [System.Reflection
-            BindingFlags MonoMethod MonoProperty MonoField
-            FieldInfo]))
+            BindingFlags MethodInfo PropertyInfo FieldInfo]))
 
 (def inclusive-binding-flag
   (enum-or
@@ -32,11 +31,11 @@
 
 (defn methods
   ([^Type t]
-   (letfn [(nf [^MonoMethod m] (.Name m))]
+   (letfn [(nf [^MethodInfo m] (.Name m))]
      (sort-by nf
        (.GetMethods t inclusive-binding-flag))))
   ([^Type t, sr]
-   (letfn [(nf [^MonoMethod m] (.Name m))]
+   (letfn [(nf [^MethodInfo m] (.Name m))]
      (sort-by nf
        ((fuzzy-finder-fn
           nf
@@ -45,11 +44,11 @@
 
 (defn properties
   ([^Type t]
-   (letfn [(nf [^MonoProperty p] (.Name p))]
+   (letfn [(nf [^PropertyInfo p] (.Name p))]
      (sort-by nf
        (.GetProperties t inclusive-binding-flag))))
   ([^Type t, sr]
-   (letfn [(nf [^MonoProperty p] (.Name p))]
+   (letfn [(nf [^PropertyInfo p] (.Name p))]
      (sort-by nf
        ((fuzzy-finder-fn
           nf
@@ -58,11 +57,11 @@
 
 (defn fields
   ([^Type t]
-   (letfn [(nf [^MonoField f] (.Name f))]
+   (letfn [(nf [^FieldInfo f] (.Name f))]
      (sort-by nf
        (.GetFields t inclusive-binding-flag))))
   ([^Type t, sr]
-   (letfn [(nf [^MonoField f] (.Name f))]
+   (letfn [(nf [^FieldInfo f] (.Name f))]
      (sort-by nf
        ((fuzzy-finder-fn
           nf
@@ -99,14 +98,14 @@
     (fn [obj]
       (merge
         (zipmap
-          (map (fn [^MonoField mf] (.Name mf))
+          (map (fn [^FieldInfo mf] (.Name mf))
             fields)
-          (map (fn [^MonoField mf] (.GetValue mf obj))
+          (map (fn [^FieldInfo mf] (.GetValue mf obj))
             fields))
         (zipmap
-          (map (fn [^MonoProperty mp] (.Name mp))
+          (map (fn [^PropertyInfo mp] (.Name mp))
             props)
-          (map (fn [^MonoProperty mp] (.GetValue mp obj nil))
+          (map (fn [^PropertyInfo mp] (.GetValue mp obj nil))
             props))))))
 
 (defn methods-report
