@@ -471,16 +471,6 @@ If called with zero arguments, returns `Vector4/one`. If called with one argumen
 
 Calls to this function will be inlined if possible."})
 
-;; ------------------------------------------------------------
-;; more rotation
-
-(definline point-pivot ^UnityEngine.Vector3
-  ;;[^UnityEngine.Vector3 pt, ^UnityEngine.Vector3 piv, ^UnityEngine.Quaternion rot]
-  [pt, piv, rot]
-  `(let [piv# ~piv]
-     (v3+ (qv* ~rot (v3- ~pt piv#))
-       piv#)))
-
 ;; ============================================================
 ;; Matrix4x4
 
