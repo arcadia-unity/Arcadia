@@ -26,14 +26,25 @@ namespace Arcadia
 
 		public static Var requireVar;
 
-		public static void require (string s)
+		public static void EnsureRequireVar ()
 		{
 			if (requireVar == null) {
-				Invoke(RT.var("clojure.core", "require"),
+                Invoke (RT.var("clojure.core", "require"),
 					   Symbol.intern("arcadia.internal.namespace"));
 				requireVar = RT.var("arcadia.internal.namespace", "quickquire");
 			}
+		}
+
+		public static void require (string s)
+		{
+			EnsureRequireVar();
 			Invoke(requireVar, Symbol.intern(s));
+		}
+
+		public static void require (Symbol s)
+		{
+			EnsureRequireVar();
+			Invoke (requireVar, s);
 		}
 
 		public static void getVar (ref Var v, string ns, string name)
