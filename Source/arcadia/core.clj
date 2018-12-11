@@ -277,7 +277,8 @@
     (persistent!
       (reduce
         (fn [acc ^UnityEngine.Transform x]
-          (conj! acc (.gameObject x)))
+          (when-let [g (gobj (.gameObject x))]
+            (conj! acc g)))
         (transient [])
         (.transform x)))
     (gobj-arg-fail-exception x)))
