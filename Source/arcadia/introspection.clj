@@ -104,22 +104,6 @@
 ;; ============================================================
 ;;
 
-(defn snapshot-data-fn [type]
-  (let [fields (fields type)
-        props  (properties type)]
-    (fn [obj]
-      (merge
-        (zipmap
-          (map (fn [^FieldInfo mf] (.Name mf))
-            fields)
-          (map (fn [^FieldInfo mf] (.GetValue mf obj))
-            fields))
-        (zipmap
-          (map (fn [^PropertyInfo mp] (.Name mp))
-            props)
-          (map (fn [^PropertyInfo mp] (.GetValue mp obj nil))
-            props))))))
-
 (defn methods-report
   ([type] (methods-report type nil))
   ([type pat]
