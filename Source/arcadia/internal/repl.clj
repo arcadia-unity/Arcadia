@@ -244,7 +244,7 @@
       (set! (.. socket Client ReceiveBufferSize) (* 1024 5000)) ;; 5Mb
       (.Start (Thread. (gen-delegate ThreadStart []
                                      (if ((config/config) :verbose)
-                                       (Debug/Log "Starting REPL..."))
+                                       (Debug/Log "Starting REPL"))
                                      (while @server-running
                                        (try (listen-and-block socket)
                                         (catch SocketException ex
@@ -257,7 +257,7 @@
 
 (defn stop-server [^UdpClient socket]
   (if ((config/config) :verbose)
-    (Debug/Log "Stopping REPL..."))
+    (Debug/Log "Stopping REPL"))
   (locking server-running
     (when @server-running
       (reset! server-running false)

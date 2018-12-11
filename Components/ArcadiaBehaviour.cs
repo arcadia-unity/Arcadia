@@ -190,7 +190,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		for (int i = 0; i < ifnInfos.Length; i++) {
 			var inf = ifnInfos[i];
 			Keyword k = (Keyword)inf.key;
-			keyNames[i] = k != null ? k.Namespace + "/" + k.Name : k.Name;
+			keyNames[i] = k.Namespace != null ? k.Namespace + "/" + k.Name : k.Name;
 			Var v = inf.fn as Var;
 			if (v != null) {
 				// TODO: come back to this after Var rewrite
@@ -203,7 +203,7 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 	void ISerializationCallbackReceiver.OnAfterDeserialize ()
 	{
-
+		RealizeVars();
 	}
 
 	// ============================================================
@@ -345,12 +345,16 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		}
 	}
 
-
 	// ============================================================
 	// setup
 
+	[System.NonSerialized]
+	public bool varsRealized = false;
+
 	public void RealizeVars ()
 	{
+		if (varsRealized)
+			return;
 		// keyNames won't be there yet for fresh object
 		// TODO: might want to clear them out after realizing vars
 		if (keyNames != null) {
@@ -366,13 +370,14 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 				ifnInfos[i] = new IFnInfo(k, v);
 			}
 		}
+		varsRealized = true;
 	}
 
 	public void FullInit ()
 	{
 		if (_fullyInitialized)
 			return;
-
+		
 		RealizeVars();
 		arcadiaState = GetComponent<ArcadiaState>(); // not sure this should be here
 		arcadiaState.Initialize();

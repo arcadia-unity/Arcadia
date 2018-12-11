@@ -1281,7 +1281,8 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
              (defmethod arcadia.data/parse-user-type (quote ~type-name) [~dict-param]
                (mutable ~dict-param))
 
-             ;; serialize via print-method
+             ;; Serialize via print-method; arcadia.data/*serialize* should be `true` for this to
+             ;; work recursively.
              (defmethod print-method ~type-name [~this-sym ^System.IO.TextWriter stream#]
                (.Write stream#
                  (str "#arcadia.data/data " (pr-str (snapshot ~this-sym)))))
