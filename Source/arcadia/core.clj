@@ -38,28 +38,6 @@
   [& args]
   (Debug/Log (clojure.string/join " " args)))
 
-; (defonce ^:private editor-available
-;   (boolean
-;     (try
-;       (import 'UnityEditor.EditorApplication)
-;       (catch NullReferenceException e
-;         nil))))
-
-;; can't use the obvious macro, because we want this logic to avoid
-;; being expanded away at AOT
-;; however we end up dealing with eval will have to at least allow it
-;; to show up in code
-; (def ^:private in-editor
-;   (if editor-available
-;     (eval `(UnityEditor.EditorApplication/isPlaying))
-;     false))
-
-; (defn editor? 
-;   "Returns true if called from within the editor. Notably, calls
-;   from the REPL are considered to be form within the editor"
-;   []
-;   in-editor)
-
 ;; ============================================================
 ;; null obj stuff
 
