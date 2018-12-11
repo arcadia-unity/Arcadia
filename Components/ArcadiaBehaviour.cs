@@ -357,8 +357,6 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 			return;
 		// keyNames won't be there yet for fresh object
 		// TODO: might want to clear them out after realizing vars
-		Debug.Log("Running RealizeVars!");
-
 		if (keyNames != null) {
 			ifnInfos = new IFnInfo[keyNames.Length];
 
@@ -380,8 +378,6 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 		if (_fullyInitialized)
 			return;
 		
-		Debug.Log("Running FullInit!");
-
 		RealizeVars();
 		arcadiaState = GetComponent<ArcadiaState>(); // not sure this should be here
 		arcadiaState.Initialize();
