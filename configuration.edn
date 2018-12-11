@@ -27,6 +27,13 @@
  ;; the default Assets/kittens/core.clj, you could use the following.
  ;; :source-paths ["Assets/src"]
 
+ ;; set to :error to throw an exception whenever a non-serializable hook is
+ ;; attached to a gameObject
+ ;; set to :allow to silently allow non-serializable hooks
+ ;; set to :warning to issue a warning to the Unity console whenever a
+ ;; non-serializable is attached to a gameObject
+ :non-serializable-hooks :warning
+
  :nudge true
 
  ;; Partially controls the socket-repl.

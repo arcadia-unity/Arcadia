@@ -10,6 +10,12 @@ using Arcadia;
 [RequireComponent(typeof(ArcadiaState))]
 public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 {
+	private static Keyword NonSerializableHooksKeyword = Keyword.intern("non-serializable-hooks");
+	private static Keyword AllowKeyword = Keyword.intern("allow");
+	private static Keyword WarningKeyword = Keyword.intern("warning");
+	private static Keyword ErrorKeyword = Keyword.intern("error");
+	private static Var GetConfigVar = RT.var("arcadia.internal.config", "config");
+	
 	[SerializeField]
 	public string[] keyNames;
 
@@ -328,6 +334,30 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 	public void AddFunction (Keyword key, IFn f)
 	{
+		if (!(f is Var))
+		{
+			// TODO this can be optimized
+			var configMap = (IPersistentMap)GetConfigVar.invoke();
+			var policy = configMap.valAt(NonSerializableHooksKeyword) as Keyword;
+			if (policy == null || policy == WarningKeyword)
+			{
+				Debug.LogWarningFormat("Non-serializable hook {2} attached to object {0} at key {1}.\n" +
+				                       "This GameObject will throw an exception if cloned, saved into " +
+				                       "a scene or prefab, or viewed in the inspector.\n" +
+				                       "This warning can be disabled or turned into an error in your configuration.edn " +
+				                       "file.", gameObject, key, f);
+			}
+			else if (policy == ErrorKeyword)
+			{
+				throw new InvalidOperationException(string.Format("Non-serializable hook {2} attached to object {0} at key {1}", gameObject, key, f));
+			}
+			else if (policy != AllowKeyword)
+			{
+				// TODO what is a better place for this validation?
+				throw new InvalidOperationException(string.Format("Unrecognized value {0} for configuration key {1}", policy, NonSerializableHooksKeyword));
+			}
+			
+		}
 		FullInit();
 		if (isBuilding) {
 			buildingIfnInfos.Add(key, f);
