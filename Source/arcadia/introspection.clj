@@ -30,48 +30,60 @@
 ;;     #(Resources/FindObjectsOfTypeAll Material)))
 
 (defn methods
+  "Returns a sequence of `MethodInfo`s sorted by name of all the methods in `t`.
+  If a string or regular expression is provided as `pattern` it is used to narrow
+  the results to methods with names that contain or match `pattern`."
   ([^Type t]
    (letfn [(nf [^MethodInfo m] (.Name m))]
      (sort-by nf
        (.GetMethods t inclusive-binding-flag))))
-  ([^Type t, sr]
+  ([^Type t, pattern]
    (letfn [(nf [^MethodInfo m] (.Name m))]
      (sort-by nf
        ((fuzzy-finder-fn
           nf
           #(.GetMethods t inclusive-binding-flag))
-        sr)))))
+        pattern)))))
 
 (defn properties
+  "Returns a sequence of `PropertyInfo`s sorted by name of all the properties in `t`.
+  If a string or regular expression is provided as `pattern` it is used to narrow
+  the results to methods with names that contain or match `pattern`."
   ([^Type t]
    (letfn [(nf [^PropertyInfo p] (.Name p))]
      (sort-by nf
        (.GetProperties t inclusive-binding-flag))))
-  ([^Type t, sr]
+  ([^Type t, pattern]
    (letfn [(nf [^PropertyInfo p] (.Name p))]
      (sort-by nf
        ((fuzzy-finder-fn
           nf
           #(.GetProperties t inclusive-binding-flag))
-        sr)))))
+        pattern)))))
 
 (defn fields
+  "Returns a sequence of `FieldInfo`s sorted by name of all the fields in `t`.
+  If a string or regular expression is provided as `pattern` it is used to narrow
+  the results to methods with names that contain or match `pattern`."
   ([^Type t]
    (letfn [(nf [^FieldInfo f] (.Name f))]
      (sort-by nf
        (.GetFields t inclusive-binding-flag))))
-  ([^Type t, sr]
+  ([^Type t, pattern]
    (letfn [(nf [^FieldInfo f] (.Name f))]
      (sort-by nf
        ((fuzzy-finder-fn
           nf
           #(.GetFields t inclusive-binding-flag))
-        sr)))))
+        pattern)))))
 
-(defn constructors [^Type t]
-  (.GetConstructors t))
+(defn constructors
+  "Returns an array of all the constructors in `t`"
+  [^Type t]
+  (seq (.GetConstructors t)))
 
 (defn members
+  "Returns a sequence of all the methods, properties, and fields in `t`"
   ([^Type t]
    (sort-by
      #(.Name %)
