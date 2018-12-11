@@ -346,16 +346,20 @@ namespace Arcadia
 			
 			running = true;
 			new Thread(() => {
+				var listener = new TcpListener(IPAddress.Loopback, Port);
 				try
 				{
-					// TODO timeout and respond to StopServer
 					// TODO make IPAddress.Loopback configurable to allow remote connections
-					var listener = new TcpListener(IPAddress.Loopback, Port);
 					listener.Start();
 					Debug.LogFormat("nrepl: listening on port {0}", Port);
 					while (running)
 					{
-						// TODO timeout and respond to StopServer
+						if (!listener.Pending())
+						{
+							Thread.Sleep(500);
+							continue;
+						}
+
 						var client = listener.AcceptTcpClient();
 						new Thread(() =>
 						{
@@ -415,12 +419,21 @@ namespace Arcadia
 						}).Start();
 					}
 				}
+				catch (ThreadAbortException)
+				{
+					// do nothing. this probably means the VM is being reset.
+				}
 				catch (Exception e)
 				{
 					Debug.LogException(e);
 				}
+				finally
+				{
+					Debug.LogFormat("nrepl: closing port {0}", Port);
+					listener.Stop();
+				}
+				
 
-				Debug.LogFormat("nrepl: closing port {0}", 9999);
 			}).Start();
 		}
 	}
