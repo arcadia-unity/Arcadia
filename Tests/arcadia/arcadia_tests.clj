@@ -361,8 +361,8 @@
           (doseq [rb [rb-x rb-y]] ;; template stuff would work here if you want to avoid the alloc
             (set! (.useGravity rb) false)
             (set! (.isKinematic rb) false))
-          (.AddForce rb-x (v3 -100 0 0) UnityEngine.ForceMode/Force)
-          (.AddForce rb-y (v3 100 0 0) UnityEngine.ForceMode/Force)
+          (.AddForce rb-x (al/v3 -100 0 0) UnityEngine.ForceMode/Force)
+          (.AddForce rb-y (al/v3 100 0 0) UnityEngine.ForceMode/Force)
           (ac/hook+ x :on-collision-enter :test
             (fn [a b c]
               (t
