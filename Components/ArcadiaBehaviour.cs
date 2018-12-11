@@ -174,6 +174,29 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 			return false;
 		}
 
+		public bool IsSerializable ()
+		{
+			return key is Keyword && fn is Var;
+		}
+
+		public String KeyString ()
+		{
+			Keyword k = key as Keyword;
+			if (k != null) {
+				return k.Namespace != null ? k.Namespace + "/" + k.Name : k.Name;
+			}
+			return null;
+		}
+
+		public String FnString ()
+		{
+			Var v = fn as Var;
+			if (v != null) {
+				return v.Namespace.Name + "/" + v.Symbol.Name;
+			}
+			return null;
+		}
+
 	}
 
 	// ============================================================
@@ -184,20 +207,17 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 	void ISerializationCallbackReceiver.OnBeforeSerialize ()
 	{
-		keyNames = new string[ifnInfos.Length];
-		varNames = new string[ifnInfos.Length];
 
-		for (int i = 0; i < ifnInfos.Length; i++) {
-			var inf = ifnInfos[i];
-			Keyword k = (Keyword)inf.key;
-			keyNames[i] = k.Namespace != null ? k.Namespace + "/" + k.Name : k.Name;
-			Var v = inf.fn as Var;
-			if (v != null) {
-				// TODO: come back to this after Var rewrite
-				varNames[i] = v.Namespace.Name + "/" + v.Symbol.Name;
-			} else {
-				throw new InvalidOperationException("Attempting to serialize non-Var function in ArcadiaBehaviour. Key: " + inf.key);
+		var serializableHooks = ifnInfos.Where(x => x.IsSerializable());
+		keyNames = serializableHooks.Select(x => x.KeyString()).ToArray();
+		varNames = serializableHooks.Select(x => x.FnString()).ToArray();
+
+		if (keyNames.Length < ifnInfos.Length) {
+			String errorMessage = "Attempting to serialize unserializable hooks:";
+			foreach (var inf in ifnInfos.Where(x => !x.IsSerializable())) {
+				errorMessage += "\n  Key: " + inf.key + "; Hook Function: " + inf.fn;
 			}
+			throw new InvalidOperationException(errorMessage);
 		}
 	}
 
@@ -357,18 +377,29 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 			return;
 		// keyNames won't be there yet for fresh object
 		// TODO: might want to clear them out after realizing vars
+
 		if (keyNames != null) {
 			ifnInfos = new IFnInfo[keyNames.Length];
 
+			// create vars
 			for (int i = 0; i < keyNames.Length; i++) {
 				var kn = keyNames[i];
 				var vn = varNames[i];
 				Keyword k = Keyword.intern(kn);
 				Symbol vsym = Symbol.intern(vn);
-				Arcadia.Util.require(vsym.Namespace);
 				Var v = RT.var(vsym.Namespace, vsym.Name);
 				ifnInfos[i] = new IFnInfo(k, v);
 			}
+
+			varsRealized = true;
+
+			// require namespaces for vars in a second pass
+			for (int i = 0; i < ifnInfos.Length; i++) {
+				Var v = (Var) ifnInfos[i].fn;
+				Arcadia.Util.require(v.Namespace.getName());
+			}
+			
+			return;
 		}
 		varsRealized = true;
 	}

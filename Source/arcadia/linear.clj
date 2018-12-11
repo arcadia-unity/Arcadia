@@ -634,17 +634,17 @@ Calls to this function will be inlined if possible."})
          (v4 1 2 3 4))
       (v4 3.0, 6.0, 9.0, 12.0))))
 
-(test/deftest- test-rotation
-  (test/is
-    (close-enough-v3
-      (point-pivot
-        (v3 1 0 0)
-        (v3 0)
-        (aa 90 1 0 0))
-      (v3 0 0 1))
-    (close-enough-v3
-      (point-pivot
-        (v3 11 0 0)
-        (v3 10 0 0)
-        (aa 90 1 0 0))
-      (v3 10 0 1))))
+;; (test/deftest- test-rotation
+;;   (test/is
+;;     (close-enough-v3
+;;       (point-pivot
+;;         (v3 1 0 0)
+;;         (v3 0)
+;;         (aa 90 1 0 0))
+;;       (v3 0 0 1))
+;;     (close-enough-v3
+;;       (point-pivot
+;;         (v3 11 0 0)
+;;         (v3 10 0 0)
+;;         (aa 90 1 0 0))
+;;       (v3 10 0 1))))
