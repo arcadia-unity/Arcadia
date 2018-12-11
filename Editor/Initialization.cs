@@ -45,7 +45,6 @@ namespace Arcadia
 
 		public static void Initialize ()
 		{
-			Debug.Log("Starting Arcadia...");
 			DisableSpecChecking();
 			SetInitialClojureLoadPath();
 			LoadConfig();
@@ -75,7 +74,6 @@ namespace Arcadia
 
 		public static void LoadConfig ()
 		{
-			Debug.Log("Loading configuration...");
 			Util.require("arcadia.internal.config");
 			RT.var("arcadia.internal.config", "update!").invoke();
 		}
@@ -97,20 +95,17 @@ namespace Arcadia
 		public static void SetInitialClojureLoadPath ()
 		{
 			try {
-				Debug.Log("Setting Initial Load Path...");
 				Environment.SetEnvironmentVariable("CLOJURE_LOAD_PATH", InitialClojureLoadPath());
 
 			} catch (InvalidOperationException e) {
 				throw new SystemException("Error Loading Arcadia! Arcadia expects exactly one Arcadia folder (a folder with Clojure.dll in it)");
 			}
 
-			Debug.Log("Load Path is " + Environment.GetEnvironmentVariable("CLOJURE_LOAD_PATH"));
 		}
 
 		public static void SetClojureLoadPath ()
 		{
 			Util.require("arcadia.internal.compiler");
-			Debug.Log("Setting Load Path...");
 			string clojureDllFolder = GetClojureDllFolder();
 
 			Environment.SetEnvironmentVariable("CLOJURE_LOAD_PATH",
