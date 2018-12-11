@@ -42,21 +42,19 @@
 ;; null obj stuff
 
 (defn null->nil
-  "Same as `identity`, except if x is a null UnityEngine.Object,
-  will return nil.
+  "Same as `identity`, except if `x` is a null `UnityEngine.Object`,
+  will return `nil`.
 
-  For more details and rationale, see
-  https://github.com/arcadia-unity/Arcadia/wiki/Null,-Nil,-and-UnityEngine.Object."
+  More details and rationale are available in [the wiki](https://github.com/arcadia-unity/Arcadia/wiki/Null,-Nil,-and-UnityEngine.Object)."
   [x]
   (Util/TrueNil x))
 
 (defn null?
-  "Should `x` be considered nil? `(null? x)` will evalute to `true`
+  "Should `x` be considered `nil`? `(null? x)` will evalute to `true`
   if `x` is in fact `nil`, or if `x` is a `UnityEngine.Object` instance
   such that `(UnityEngine.Object/op_Equality x nil)` returns `true`.
 
-  For more details and rationale, see
-  https://github.com/arcadia-unity/Arcadia/wiki/Null,-Nil,-and-UnityEngine.Object."
+  More details and rationale are available in [the wiki](https://github.com/arcadia-unity/Arcadia/wiki/Null,-Nil,-and-UnityEngine.Object)."
   [x]
   (Util/IsNull x))
 
@@ -64,11 +62,12 @@
 ;; wrappers
 ;; ============================================================
 
-;; definline does not support arity overloaded functions... 
+;; definline does not support arity overloaded functions...
 (defn instantiate
   "Clones the original object and returns the clone. The clone can
-  optionally be given a new position or rotation as well. Wraps
-  UnityEngine.Object/Instantiate."
+  optionally be given a new position or rotation as well.
+
+ Wraps `Object/Instantiate`."
   {:inline (fn
              ([^UnityEngine.Object original]
               `(UnityEngine.Object/Instantiate ~original))
@@ -85,8 +84,8 @@
 
 (defn create-primitive
   "Creates a game object with a primitive mesh renderer and appropriate
-  collider. `prim` can be a PrimitiveType or one of :sphere :capsule
-  :cylinder :cube :plane :quad. Wraps GameObject/CreatePrimitive."
+  collider. `prim` can be a `PrimitiveType` or one of `:sphere` `:capsule`
+  `:cylinder` `:cube` `:plane` `:quad`. Wraps `GameObject/CreatePrimitive`."
   (^GameObject [prim] (create-primitive prim nil))
   (^GameObject [prim name]
    (let [prim' (if (instance? PrimitiveType prim)
@@ -103,69 +102,66 @@
        (set! (.name obj) name))
      obj)))
 
-(defn destroy 
-  "Removes a gameobject, component or asset. When called with `t`, the removal
-  happens after `t` seconds. Wraps UnityEngine.Object/Destroy.
-  
-  The difference between destroy and destroy-immediate is still being worked out."
+(defn destroy
+  "Removes a GameObject, component or asset. When called with `t`, the removal
+  happens after `t` seconds. Wraps `Object/Destroy`."
   ([^UnityEngine.Object obj]
    (UnityEngine.Object/Destroy obj))
   ([^UnityEngine.Object obj ^double t]
    (UnityEngine.Object/Destroy obj t)))
 
 (defn destroy-immediate
-  "Wraps UnityEngine.Object/DestroyImmediate.
-  
-  The difference between destroy and destroy-immediate is still being worked out."
+  "Removes a GameObject, component or asset immediately.
+   Wraps `Object/DestroyImmediate`."
   [^UnityEngine.Object obj]
   (UnityEngine.Object/DestroyImmediate obj))
 
 (defn retire
-  "If in Play mode, calls Destroy, otherwise calls DestroyImmediate."
+  "If in Play mode, calls `Object/Destroy`, otherwise calls `Object/DestroyImmediate`."
   ([^UnityEngine.Object obj]
    (if UnityStatusHelper/IsInPlayMode
      (UnityEngine.Object/Destroy obj)
      (UnityEngine.Object/DestroyImmediate obj))))
 
 (definline object-typed
-  "Returns one object of Type `type`. The object selected seems to be
-  the first object in the array returned by objects-typed.
-  Wraps UnityEngine.Object/FindObjectOfType."
+  "Returns one object of Type `t`. The object selected seems to be
+  the first object in the array returned by `objects-typed`.
+  Wraps `Object/FindObjectOfType`."
   [^Type t] `(UnityEngine.Object/FindObjectOfType ~t))
 
 (definline objects-typed
-  "Returns an array of all active loaded objects of Type `type`. The order is consistent
-  but undefined. UnityEngine.Object/FindObjectsOfType."
+  "Returns an array of all active loaded objects of Type `t`. The order is consistent
+  but undefined. Wraps `Object/FindObjectsOfType`."
   [^Type t] `(UnityEngine.Object/FindObjectsOfType ~t))
 
 (definline object-named
-  "Returns one GameObject named `name`. Wraps UnityEngine.GameObject/Find."
+  "Returns one `GameObject` named `name`. Wraps `GameObject/Find`."
   [^String name] `(UnityEngine.GameObject/Find ~name))
 
 (defn objects-named
-  "Returns a sequence of all GameObjects named `name`."
+  "Returns a sequence of all `GameObject`s named `name`. `name` can be a string or a regular expression."
   [name]
   (cond (= (type name) System.String)
         (for [^GameObject obj (objects-typed GameObject)
               :when (= (.name obj) name)]
           obj)
-        
+
         (= (type name) System.Text.RegularExpressions.Regex)
         (for [^GameObject obj (objects-typed GameObject)
               :when (re-matches name (.name obj))]
           obj)))
 
 (definline object-tagged
-  "Returns one active GameObject tagged `tag`. Tags are managed from the
+  "Returns one active `GameObject` tagged `t`. Tags are managed from the
   [Unity Tag Manager](https://docs.unity3d.com/Manual/class-TagManager.html).
-  Wraps UnityEngine.GameObject/FindWithTag."
+  Wraps `GameObject/FindWithTag`."
   [^String t] `(UnityEngine.GameObject/FindWithTag ~t))
 
 (definline objects-tagged
-  "Returns an array of active GameObjects tagged tag. Returns empty
-  array if no GameObject was found. Tags are managed from the
+  "Returns an array of active `GameObject`s tagged tag. Returns empty
+  array if no `GameObject` was found. Tags are managed from the
   [Unity Tag Manager](https://docs.unity3d.com/Manual/class-TagManager.html).
-  Wraps UnityEngine.GameObject/FindGameObjectsWithTag."
+  Wraps `GameObject/FindGameObjectsWithTag`."
   [^String t] `(UnityEngine.GameObject/FindGameObjectsWithTag ~t))
 
 ;; ------------------------------------------------------------
@@ -188,15 +184,15 @@
           ret)))))
 
 (defn gobj
-  "Coerces `x`, expected to be a GameObject or Component, to a
-  corresponding live (non-destroyed) GameObject instance or to nil by
+  "Coerces `x`, expected to be a `GameObject` or `Component`, to a
+  corresponding live (non-destroyed) `GameObject` instance or to nil by
   the following policy:
-  
+
   - If `x` is a live GameObject, returns it.
   - If `x` is a destroyed GameObject, returns nil.
   - If `x` is a live Component instance, returns its containing GameObject.
   - If `x` is a destroyed Component instance, returns nil.
-  - If `x` is nil, returns nil.
+  - If `x` is nil, returns `nil`.
   - Otherwise throws an ArgumentException."
   ^GameObject [x]
   (Util/ToGameObject x))
@@ -225,6 +221,11 @@
 ;; aset returns the val. and method chaining
 ;; isn't a strong idiom in Clojure.
 (defn child+
+  "Makes `x` the new parent of `child`. `x` and `child` can be `GameObject`s or
+  `Component`s.
+
+  If `world-position-stays` is true then `child` retains its world position after
+  being reparented."
   (^GameObject [x child]
    (child+ x child false))
   (^GameObject [x child world-position-stays]
@@ -239,6 +240,14 @@
    child))
 
 (defn child-
+  "Removes `x` as the parent of `child`. `x` and `child` can be `GameObject`s or
+  `Component`s.
+
+  The new parent of `child` becomes  `nil` and it is moved to the top level of
+  the scene hierarchy.
+
+  If `world-position-stays` is true then `child` retains its world position after
+  being reparented."
   ([x child]
    (child- x child false))
   ([x child world-position-stays]
@@ -260,7 +269,10 @@
 ;; rather than that the children are inaccessible.
 ;; We could return nil for that and vectors for other things
 ;; I suppose.
-(defn children [x]
+(defn children
+  "Gets the children of `x` as a persistent vector. `x` can be a `GameObject` or
+  a `Component`."
+  [x]
   (if-let [^GameObject x (gobj x)]
     (persistent!
       (reduce
@@ -276,24 +288,25 @@
 ;; TODO: get rid of this forward declaration by promoting ISceneGraph functions
 ;; above this
 
-(defn cmpt 
-  "Returns the first Component of type `t` attached to the GameObject `x`.
-  Returns `nil` if no such component is attached."
+(defn cmpt
+  "Returns the first `Component` of type `t` attached to `x`. Returns `nil` if no
+  such component is attached. `x` can be a `GameObject` or `Component`."
   ^UnityEngine.Component [x ^Type t]
   (if-let [x (gobj x)]
     (null->nil (.GetComponent x t))
     (gobj-arg-fail-exception x)))
 
 (defn cmpts
-  "Returns all Components of type `t` attached to the GameObject `x`
-  as a (possibly empty) array."
+  "Returns all `Component`s of type `t` attached to `x`
+  as a (possibly empty) array. `x` can be a `GameObject` or `Component`."
   ^|UnityEngine.Component[]| [x ^Type t]
   (if-let [x (gobj x)]
     (.GetComponents x t)
     (gobj-arg-fail-exception x)))
 
 (defn cmpt+
-  "Adds a new Component of type `t` to GameObject `x`. Returns the new Component."
+  "Adds a new `Component` of type `t` from `x`. `x` can be a `GameObject` or
+  Component. Returns the new `Component`."
   ^UnityEngine.Component [x ^Type t]
   (if-let [x (gobj x)]
     (.AddComponent x t)
@@ -301,7 +314,10 @@
 
 ;; returns nil because returning x would be inconsistent with cmpt+,
 ;; which must return the new component
-(defn cmpt- [x ^Type t]
+(defn cmpt-
+  "Removes *every* `Component` of type `t` from `x`. `x` can be a `GameObject` or
+  Component. Returns `nil`."
+  [x ^Type t]
   (if-let [x (gobj x)]
     (let [^|UnityEngine.Component[]| a (.GetComponents (gobj x) t)]
       (loop [i (int 0)]
@@ -314,7 +330,7 @@
 ;; repercussions
 
 (defn ensure-cmpt
-  "If GameObject `x` has a component of type `t`, returns it. Otherwise, adds
+  "If `GameObject` `x` has a component of type `t`, returns it. Otherwise, adds
   a component of type `t` and returns the new instance."
   ^UnityEngine.Component [x ^Type t]
   (if-let [x (gobj x)]
@@ -333,16 +349,24 @@
   ([s t]
    (meta-tag (gensym s) t)))
 
-(defmacro with-gobj [[gob-name x] & body]
+(defmacro with-gobj
+  "Bind the `GameObject` `x` to the name `gob-name` in `body`. If `x` is a
+  Component its attached `GameObject` is used."
+  [[gob-name x] & body]
   `(let [~gob-name (gobj ~x)]
      ~@body))
 
 (defmacro with-cmpt
-  ([gob cmpt-name-types & body]
-   (assert (vector? cmpt-name-types))
-   (assert (even? (count cmpt-name-types)))
+  "`binding => name component-type`
+
+  For each binding, looks up `component-type` on `gob` and binds it to `name`. If
+  Component does not exist, it is created and bound to `name`. Evalutes `body`
+  in the lexical context of all `name`s."
+  ([gob bindings & body]
+   (assert (vector? bindings))
+   (assert (even? (count bindings)))
    (let [gobsym (gentagged "gob__" 'UnityEngine.GameObject)
-         dcls  (->> cmpt-name-types
+         dcls  (->> bindings
                  (partition 2)
                  (mapcat (fn [[n t]]
                            [(meta-tag n t) `(ensure-cmpt ~gobsym ~t)])))]
@@ -365,7 +389,9 @@
 ;; ============================================================
 ;; traversal
 
-(defn descendents [x]
+(defn descendents
+  "Returns a sequence of `x`'s children. `x` can be a `GameObject` or a `Component`."
+  [x]
   (tree-seq identity children (gobj x)))
 
 ;; ============================================================
@@ -422,12 +448,14 @@
      obj)))
 
 (defn hook-
-  "Removes callback from GameObject `obj` on the Unity event
+  "Removes callback from `GameObject` `obj` on the Unity event
   corresponding to `event-kw` at `key`, if it exists. Reverse of
 
+```clj
 (hook+ obj event-kw key)
+```
 
-  Returns nil."
+  Returns `nil`."
   ([obj event-kw key]
    (when-let [^ArcadiaBehaviour hook-cmpt (cmpt obj (ensure-hook-type event-kw))]
      (.RemoveFunction hook-cmpt key))
@@ -442,13 +470,15 @@
   nil)
 
 (defn hook
-  "Retrieves a callback from a GameObject `obj`. `event-kw` is a
+  "Retrieves a callback from a `GameObject` `obj`. `event-kw` is a
   keyword specifying the Unity event of the callback, and `key` is
   the key of the callback.
-  
+
   In other words, retrieves any callback function attached via
 
+```clj
 (hook+ obj event-kw key callback)
+```
 
   or the equivalent.
 
@@ -514,7 +544,7 @@
      go)))
 
 (defn clear-state
-  "Removes all state from the GameObject `go`."
+  "Removes all state from the `GameObject` `go`."
   [go]
   (with-cmpt go [arcs ArcadiaState]
     (.Clear arcs)
@@ -643,7 +673,10 @@
 (defn- inner-role-step [bldg, ^ArcadiaBehaviour+IFnInfo inf, hook-type-key]
   (assoc bldg hook-type-key (.fn inf)))
 
-(defn role [obj k]
+(defn role
+  "Returns a hashmap of the state and hooks associates with role `k` on
+  `GameObject` `obj`."
+  [obj k]
   (let [step (fn [bldg ^ArcadiaBehaviour ab]
                (let [hook-type-key (hook->hook-type-key ab)]
                  (reduce
@@ -673,7 +706,10 @@
       (.ifnInfos ab))))
 
 ;; map from hook, state keys to role specs
-(defn roles [obj]
+(defn roles
+  "Returns a map of roke keys to role specification maps that include state and
+  hook keys."
+  [obj]
   (let [init (if-let [^ArcadiaState arcs (cmpt obj ArcadiaState)]
                (reduce-kv
                  (fn [bldg k v]
@@ -728,54 +764,60 @@
                        :key key
                        :value val}))))
 
-;; add documentation string 
-(defmacro defrole
-  "Macro for defining roles quickly.
-Syntax:
-(defrole name entry*)
+;; add documentation string
+(defmacro ^:doc/no-syntax
+  defrole
+  "`(defrole name entry*)`
 
+Macro for defining roles quickly.
 Each entry can be either a key-value pair with a keyword key, such as would normally occur
   in a map intended as an Arcadia role, or an inlined function definition.
 
 Normal key-value pairs get inserted into the generated map. For example,
 
+```clj
 (defrole movement
   :state {:speed 3}
   :update #'movement-update)
+```
 
 will expand into
 
+```clj
 (def movement
   {:state {:speed 3}
    :update #'movement-update})
+```
 
 Inlined function definitions have the following syntax:
 
-(name [args*] body)
+`(name [args*] body)`
 
 name must be the symbol form of an Arcadia hook keyword. A function
   intended for the `:update` hook, for example, should have the name
   `update`:
 
+```clj
 (defrole movement
   :state {:speed 3}
   (update [obj k] ...))
+```
 
-Each inlined function definition will **generate a var**, with a name
-  constructed as follows:
-
-<name of role>-<name of hook>
+Each inlined function definition will *generate a var*, with a name
+  constructed as follows: `<name of role>-<name of hook>`
 
 For example, the `movement` role above will generate a var named
   `movement-update` bound to a function with the provided arguments
   and body, and include that var in the generated role map, expanding
   into something like:
 
+```clj
 (do
   (defn movement-update [obj k] ...)
   (def movement
     {:state {:speed 3}
      :update #'movement-update}))
+```
 
 Note that generating vars is usually a bad idea because it messes with
   tooling and legibility. This macro does it anyway because the hook
@@ -847,10 +889,13 @@ Note that generating vars is usually a bad idea because it messes with
 (defmulti mutable
   "Given a persistent representation of a mutable datatype defined via
   `defmutable`, constructs and returns a matching instance of that
-  datatype. 
+  datatype.
 
 Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via `defmutable`,
-(= (snapshot x) (snapshot (mutable (snapshot x))))"
+
+```clj
+(= (snapshot x) (snapshot (mutable (snapshot x))))
+```"
   #'mutable-dispatch)
 
 (defprotocol IMutable
@@ -997,9 +1042,11 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
     `(new ~type-name ~@processed-field-vals ~dict-form)))
 
 
-(defmacro  ^{:arglists '([name [fields*]])}
+(defmacro ^:doc/no-syntax
   defmutable
-  "Defines a new serializable, type-hinted, mutable datatype, intended
+  "`(defmutable [name [fields*] other*])`
+
+  Defines a new serializable, type-hinted, mutable datatype, intended
   for particularly performance or allocation sensitive operations on a
   single thread (such as Unity's main game thread). These datatypes
   support snapshotting to persistent data via `snapshot`, and
@@ -1011,7 +1058,9 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
   representations and back via `snapshot` and `mutable`. This
   roundtrips, so if `x` is such an instance:
 
-  (= (snapshot x) (snapshot (mutable (snapshot x))))
+```clj
+(= (snapshot x) (snapshot (mutable (snapshot x))))
+```
 
   If a persistent snapshot is specified as the state argument of
   `set-state`, or as the `:state` value in the map argument of
