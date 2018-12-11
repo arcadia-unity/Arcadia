@@ -354,7 +354,12 @@ namespace Arcadia
 					Debug.LogFormat("nrepl: listening on port {0}", Port);
 					while (running)
 					{
-						// TODO timeout and respond to StopServer
+						if (!listener.Pending())
+						{
+							Thread.Sleep(500);
+							continue;
+						}
+
 						var client = listener.AcceptTcpClient();
 						new Thread(() =>
 						{
