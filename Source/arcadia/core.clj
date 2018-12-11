@@ -301,7 +301,7 @@
   as a (possibly empty) array. `x` can be a `GameObject` or `Component`."
   ^|UnityEngine.Component[]| [x ^Type t]
   (if-let [x (gobj x)]
-    (.GetComponents x t)
+    (Util/WithoutNullObjects (.GetComponents x t))
     (gobj-arg-fail-exception x)))
 
 (defn cmpt+

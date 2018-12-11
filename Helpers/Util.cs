@@ -294,6 +294,27 @@ namespace Arcadia
 
 			return new Tuple<string[], string[]>(keysAr, valsAr);
 		}
+		
+		// ------------------------------------------------------------------
+		// object array filtering
+
+		public static UnityEngine.Object[] WithoutNullObjects(UnityEngine.Object[] objects)
+		{
+			foreach (var o in objects)
+				if (o == null)
+					return RemoveNullObjects(objects);
+			return objects;
+		}
+
+		private static UnityEngine.Object[] RemoveNullObjects(UnityEngine.Object[] objects)
+		{
+			var list = new List<UnityEngine.Object>();
+			foreach (var o in objects)
+				if (o != null)
+					list.Add(o);
+
+			return list.ToArray();
+		}
 
 		// ------------------------------------------------------------------
 		// deserialization thereof
