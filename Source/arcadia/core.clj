@@ -398,9 +398,12 @@
 ;; traversal
 
 (defn descendents
-  "Returns a sequence of `x`'s children. `x` can be a `GameObject` or a `Component`."
+  "Returns a sequence containing all descendents of GameObject `x` in
+  depth-first order. The descendents of `x` are all GameObjects
+  attached as children to `x` in the Unity hierarchy; all of those
+  GameObject's children; and so on."
   [x]
-  (tree-seq identity children (gobj x)))
+  (tree-seq identity children x))
 
 ;; ============================================================
 ;; hooks
