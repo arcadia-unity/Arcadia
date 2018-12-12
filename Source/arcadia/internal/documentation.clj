@@ -1,6 +1,6 @@
 (ns arcadia.internal.documentation
   (:require [clojure.string :as s])
-  (:import [System.IO Path Directory]))
+  (:import [System.IO Path Directory FileMode]))
 
 (defn- methods-named [t name]
   (->> t
@@ -37,7 +37,7 @@
                    (map meta)
                    (filter #(not (:private %)))
                    (filter #(:doc %)))]
-    (doseq [{:keys [file line name arglists macro doc/no-syntax doc/syntax doc]}
+    (doseq [{:keys [file line name arglists macro doc/see-also doc/no-syntax doc/syntax doc]}
             (sort-by :line metas)]
       (let [url (when file
                   (str "https://github.com/arcadia-unity/Arcadia/blob/beta/Source/"
@@ -59,12 +59,16 @@
             (println (str "`" (pr-str (concat [(symbol name)] a)) "`  "))))
         (println "#### Description")
         (println (unity-linkify doc))
+        (when see-also
+          (println "#### See Also")
+          (doseq [[name url] see-also]
+            (println (str "* [" name "](" url ")"))))
         (println "\n---\n")))))
 
 (defn write-docs [file ns]
   (let [txt (with-out-str
-              (print-docs 'arcadia.linear))]
-    (spit file txt :encoding "utf8")))
+              (print-docs ns))]
+    (spit file txt :encoding "utf8" :file-mode FileMode/Create)))
 
 (def public-namespaces
   '[arcadia.core
@@ -77,5 +81,3 @@
   (doseq [ns public-namespaces]
     (write-docs (Path/Combine "docs" (str ns ".md"))
                 ns)))
-
-(write-public-docs)

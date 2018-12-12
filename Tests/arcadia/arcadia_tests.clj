@@ -549,3 +549,18 @@
     (t :close))
   )
 
+
+;; ------------------------------------------------------------
+;; linear-namespace
+
+(at/deftest linear-namespace t
+  (as-sub-closing [t "vector addition"]
+    (t (at/is (= (al/v2+ (al/v2 1 2) (al/v2 1 2) (al/v2 1 2))
+                 (al/v2 3.0, 6.0))
+              "`v2+` works as expected"))
+    (t (at/is (= (al/v3+ (al/v3 1 2 3) (al/v3 1 2 3) (al/v3 1 2 3))
+                 (al/v3 3.0, 6.0, 9.0))
+              "`v3+` works as expected"))
+    (t (at/is (= (al/v4+ (al/v4 1 2 3 4) (al/v4 1 2 3 4) (al/v4 1 2 3 4))
+                 (al/v4 3.0, 6.0, 9.0, 12.0))
+              "`v4+` works as expected"))))
