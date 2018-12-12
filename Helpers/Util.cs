@@ -398,8 +398,10 @@ namespace Arcadia
 				nameof(x));
 		}
 
-		// we want a more informative error than that normally thrown
-		// by CLR miscasts
+		// We want a more informative error than that normally thrown
+		// by CLR miscasts. Not checking for liveness here because
+		// Unity will do that for us in all cases where we use this 
+		// method in arcadia.core.
 		public static GameObject CastToGameObject (object x)
 		{
 			GameObject g = x as GameObject;
