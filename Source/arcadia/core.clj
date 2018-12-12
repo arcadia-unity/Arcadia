@@ -85,8 +85,10 @@
 
 (defn create-primitive
   "Creates a game object with a primitive mesh renderer and appropriate
-  collider. `prim` can be a `PrimitiveType` or one of `:sphere` `:capsule`
-  `:cylinder` `:cube` `:plane` `:quad`. Wraps `GameObject/CreatePrimitive`."
+  collider. `prim` can be a `PrimitiveType` or one of `:sphere`
+  `:capsule` `:cylinder` `:cube` `:plane` `:quad`. If supplied, the
+  third argument should be a string, and will be set as the name of
+  the newly created GameObject. Wraps `GameObject/CreatePrimitive`."
   (^GameObject [prim] (create-primitive prim nil))
   (^GameObject [prim name]
    (let [prim' (if (instance? PrimitiveType prim)
