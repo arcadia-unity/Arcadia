@@ -548,14 +548,11 @@
      v)))
 
 (defn state-
-  "Removes the state of object `go` at key `k`. If no key is provided,
-  removes state at key `default`."
-  ([go]
-   (state- go :default))
+  "Removes the state of object `go` at key `k`."
   ([go k]
    (with-cmpt go [arcs ArcadiaState]
      (.Remove arcs k)
-     go)))
+     nil)))
 
 (defn clear-state
   "Removes all state from the `GameObject` `go`."
