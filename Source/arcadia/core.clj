@@ -277,24 +277,19 @@
      child)))
 
 (defn child-
-  "Removes `x` as the parent of `child`. `x` and `child` can be `GameObject`s or
-  `Component`s.
+  "Removes GameObject `x` as the parent of GameObject `child`, 
+  moving `child` to the top of the scene graph hierarchy.
 
-  The new parent of `child` becomes  `nil` and it is moved to the top level of
-  the scene hierarchy.
-
-  If `world-position-stays` is true then `child` retains its world position after
-  being reparented."
+  If `world-position-stays` is `true`, `child` retains its world
+  position after being reparented."
   ([x child]
    (child- x child false))
   ([x child world-position-stays]
-   (if-let [^GameObject x (gobj x)]
-     (if-let [^GameObject child (gobj child)]
-       (when (= (.parent child) x)
-         (.SetParent (.transform child) nil ^Boolean world-position-stays))
-       (gobj-arg-fail-exception child))
-     (gobj-arg-fail-exception x))
-   x))
+   (let [x (Util/CastToGameObject x)
+         child (Util/CastToGameObject child)]
+     (when (= (.. child transform parent) (.transform x))
+       (.SetParent (.transform child) nil ^Boolean world-position-stays)))
+   nil))
 
 ;; `nil` semantics of this one is a little tricky.
 ;; It seems like a query function, which normally
