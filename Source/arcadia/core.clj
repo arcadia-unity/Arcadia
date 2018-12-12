@@ -301,8 +301,8 @@
 ;; We could return nil for that and vectors for other things
 ;; I suppose.
 (defn children
-  "Gets the live children of `x` as a persistent vector of
-  GameObjects. `x` can be a `GameObject` or a `Component`."
+  "Gets the live children of GameObject `x` as a persistent vector of
+  GameObjects."
   [x]
   (let [x (Util/CastToGameObject x)]
     (persistent!
