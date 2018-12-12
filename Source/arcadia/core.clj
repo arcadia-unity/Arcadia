@@ -11,6 +11,7 @@
   (:import ArcadiaBehaviour
            ArcadiaBehaviour+IFnInfo
            ArcadiaState
+           System.Text.RegularExpressions.Regex
            [Arcadia UnityStatusHelper
             Util
             HookStateSystem JumpMap
@@ -126,46 +127,82 @@
      (UnityEngine.Object/Destroy obj)
      (UnityEngine.Object/DestroyImmediate obj))))
 
-(definline object-typed
-  "Returns one object of Type `t`. The object selected seems to be
-  the first object in the array returned by `objects-typed`.
-  Wraps `Object/FindObjectOfType`."
-  [^Type t] `(UnityEngine.Object/FindObjectOfType ~t))
+(defn object-typed
+  "Returns one live instance of UnityEngine.Object subclass type `t`
+  from the scene graph, or `nil` if no such object can be found. Wraps
+  `Object/FindObjectOfType`."
+  [^Type t]
+  (null->nil (UnityEngine.Object/FindObjectOfType t)))
 
-(definline objects-typed
-  "Returns an array of all active loaded objects of Type `t`. The order is consistent
-  but undefined. Wraps `Object/FindObjectsOfType`."
-  [^Type t] `(UnityEngine.Object/FindObjectsOfType ~t))
+(defn objects-typed
+  "Returns a sequence of all live instances of UnityEngine.Object subclass
+  type `t` in the scene graph. Wraps `Object/FindObjectsOfType`."
+  [^Type t]
+  (remove null? (UnityEngine.Object/FindObjectsOfType t)))
 
-(definline object-named
-  "Returns one `GameObject` named `name`. Wraps `GameObject/Find`."
-  [^String name] `(UnityEngine.GameObject/Find ~name))
+(defn object-named
+  "Returns one live `GameObject` from the scene graph, the name of which
+  matches `name-or-regex`. `name-or-regex` may be a string or a
+  regular expression object."
+  ^GameObject [name-or-regex]
+  (cond
+    (string? name-or-regex)
+    (UnityEngine.GameObject/Find name)
+
+    (instance? Regex name-or-regex)
+    (let [objs (UnityEngine.Object/FindObjectsOfType GameObject)]
+      (loop [i (int 0)]
+        (when (< i (count objs))
+          (let [obj (aget objs i)]
+            (if (and (not (null? obj))
+                     (re-matches name-or-regex (.name obj)))
+              obj
+              (recur (inc i)))))))
+
+    :else
+    (throw
+      (ArgumentException.
+        (str "Expects string or Regex, instead got instance of "
+             (class name-or-regex))
+        "name-or-regex"))))
 
 (defn objects-named
-  "Returns a sequence of all `GameObject`s named `name`. `name` can be a string or a regular expression."
-  [name]
-  (cond (= (type name) System.String)
-        (for [^GameObject obj (objects-typed GameObject)
-              :when (= (.name obj) name)]
-          obj)
+  "Returns a sequence of all live `GameObject`s in the scene graph, the
+  name of which match `name-or-regex`. `name-or-regex` may be a string
+  or a regular expression object."
+  [name-or-regex]
+  (cond
+    (string? name-or-regex)
+    (for [^GameObject obj (objects-typed GameObject)
+          :when (= (.name obj) name-or-regex)]
+      obj)
 
-        (= (type name) System.Text.RegularExpressions.Regex)
-        (for [^GameObject obj (objects-typed GameObject)
-              :when (re-matches name (.name obj))]
-          obj)))
+    (instance? Regex name-or-regex)
+    (for [^GameObject obj (objects-typed GameObject)
+          :when (re-matches name-or-regex (.name obj))]
+      obj)
 
-(definline object-tagged
-  "Returns one active `GameObject` tagged `t`. Tags are managed from the
-  [Unity Tag Manager](https://docs.unity3d.com/Manual/class-TagManager.html).
+    :else
+    (throw
+      (ArgumentException.
+        (str "Expects string or Regex, instead got instance of "
+             (class name-or-regex))
+        "name-or-regex"))))
+
+(defn object-tagged
+  "Returns one live `GameObject` tagged `t` from the scene graph,
+  or `nil` if no such GameObjects exist.
+
   Wraps `GameObject/FindWithTag`."
-  [^String t] `(UnityEngine.GameObject/FindWithTag ~t))
+  ^GameObject [^String t]
+  (null->nil (UnityEngine.GameObject/FindWithTag t)))
 
-(definline objects-tagged
-  "Returns an array of active `GameObject`s tagged tag. Returns empty
-  array if no `GameObject` was found. Tags are managed from the
-  [Unity Tag Manager](https://docs.unity3d.com/Manual/class-TagManager.html).
+(defn objects-tagged
+  "Returns a sequence of live `GameObject`s tagged tag. Returns empty
+  array if no `GameObject` was found.
   Wraps `GameObject/FindGameObjectsWithTag`."
-  [^String t] `(UnityEngine.GameObject/FindGameObjectsWithTag ~t))
+  [^String t]
+  (remove null? (UnityEngine.GameObject/FindGameObjectsWithTag t)))
 
 ;; ------------------------------------------------------------
 ;; Scene graph traversal and manipulation
