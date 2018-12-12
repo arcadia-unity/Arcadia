@@ -447,16 +447,25 @@
                          :f ifn?
                          :keys (s/? (s/nilable sequential?))))))
 
-(defn hook+
-  "Attach a Clojure function to a Unity event on `obj`. The function `f`
-  will be invoked every time the event identified by `event-kw` is sent by Unity. `f`
-  must have the same arity as the expected Unity event. When called with a key `k`
-  this key can be passed to `event-kw-` to remove the function."
+(defn
+  ^{:doc/see-also {"Unity Event Functions" "https://docs.unity3d.com/Manual/EventFunctions.html"}}
+  hook+
+  "Attach a Clojure function, which may be a Var instance, to GameObject
+  `obj`. The function `f` will be invoked every time the event
+  identified by `event-kw` is triggered by Unity.
+
+  `f` must be a function of 2 arguments, plus however many arguments
+  the corresponding Unity event function takes. The first argument is
+  the GameObject `obj` that `f` is attached to. The second argument is
+  the key `k` it was attached with. The remaining arguments are the
+  arguments normally passed to the corresponding Unity event function.
+
+  Returns `nil`."
   ([obj event-kw k f]
    (let [hook-type (ensure-hook-type event-kw)
          ^ArcadiaBehaviour hook-cmpt (ensure-cmpt obj hook-type)]
      (.AddFunction hook-cmpt k f)
-     obj)))
+     nil)))
 
 (defn hook-
   "Removes callback from `GameObject` `obj` on the Unity event
