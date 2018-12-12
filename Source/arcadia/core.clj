@@ -690,8 +690,18 @@
   (assoc bldg hook-type-key (.fn inf)))
 
 (defn role
-  "Returns a hashmap of the state and hooks associates with role `k` on
-  `GameObject` `obj`."
+  "Returns a map of all hooks and state attached to GameObject `obj` on key `k`. Within the returned map, keys will be either hook event keywords such as `:update`, `:on-collision-enter`, etc, or `:state`.
+
+```clj
+(hook+ obj :update :test #'on-update)
+
+(state+ obj :test {:speed 3, :mass 4})
+
+(role obj :test)
+;; returns:
+;; {:state {:speed 3, :mass 4},
+;;  :update #'on-update}
+```"
   [obj k]
   (let [step (fn [bldg ^ArcadiaBehaviour ab]
                (let [hook-type-key (hook->hook-type-key ab)]
