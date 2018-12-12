@@ -278,7 +278,7 @@
 
 (defn child-
   "Removes GameObject `x` as the parent of GameObject `child`, 
-  moving `child` to the top of the scene graph hierarchy.
+  moving `child` to the top of the scene graph hierarchy. Returns `nil`.
 
   If `world-position-stays` is `true`, `child` retains its world
   position after being reparented."
@@ -288,8 +288,7 @@
    (let [x (Util/CastToGameObject x)
          child (Util/CastToGameObject child)]
      (when (= (.. child transform parent) (.transform x))
-       (.SetParent (.transform child) nil ^Boolean world-position-stays)))
-   nil))
+       (.SetParent (.transform child) nil ^Boolean world-position-stays)))))
 
 ;; `nil` semantics of this one is a little tricky.
 ;; It seems like a query function, which normally
