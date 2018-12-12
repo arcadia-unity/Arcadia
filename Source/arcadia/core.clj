@@ -468,7 +468,7 @@
      nil)))
 
 (defn hook-
-  "Removes callback from `GameObject` `obj` on the Unity event
+  "Removes hook function from GameObject `obj` on the Unity event
   corresponding to `event-kw` at `key`, if it exists. Reverse of
 
 ```clj
