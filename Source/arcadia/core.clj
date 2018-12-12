@@ -372,9 +372,11 @@
 (defmacro with-cmpt
   "`binding => name component-type`
 
-  For each binding, looks up `component-type` on `gob` and binds it to `name`. If
-  Component does not exist, it is created and bound to `name`. Evalutes `body`
-  in the lexical context of all `name`s."
+  For each binding, binds `name` to an instance of class
+  `component-type` attached to GameObject `gob`. If no such instance
+  is currently attached to `x`, a new instance of `component-type`
+  will be created, attached to `x`, and bound to `name`. `body` is
+  then evaluated in the lexical context of all bindings."
   ([gob bindings & body]
    (assert (vector? bindings))
    (assert (even? (count bindings)))
@@ -383,7 +385,7 @@
                  (partition 2)
                  (mapcat (fn [[n t]]
                            [(meta-tag n t) `(ensure-cmpt ~gobsym ~t)])))]
-     `(with-gobj [~gobsym ~gob]
+     `(let [~gobsym (Util/CastToGameObject ~gob)]
         (let [~@dcls]
           ~@body)))))
 
