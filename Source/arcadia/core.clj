@@ -362,13 +362,6 @@
   ([s t]
    (meta-tag (gensym s) t)))
 
-(defmacro with-gobj
-  "Bind the `GameObject` `x` to the name `gob-name` in `body`. If `x` is a
-  Component its attached `GameObject` is used."
-  [[gob-name x] & body]
-  `(let [~gob-name (gobj ~x)]
-     ~@body))
-
 (defmacro with-cmpt
   "`binding => name component-type`
 
