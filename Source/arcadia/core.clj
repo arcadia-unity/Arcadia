@@ -290,16 +290,6 @@
      (when (= (.. child transform parent) (.transform x))
        (.SetParent (.transform child) nil ^Boolean world-position-stays)))))
 
-;; `nil` semantics of this one is a little tricky.
-;; It seems like a query function, which normally
-;; suggests nil should be supported, but we can't
-;; traverse the children of nulled game objects in
-;; unity, and in a sense it's incorrect to offer an
-;; empty vector for them either, since that asserts
-;; the nulled game object in fact has no children,
-;; rather than that the children are inaccessible.
-;; We could return nil for that and vectors for other things
-;; I suppose.
 (defn children
   "Gets the live children of GameObject `x` as a persistent vector of
   GameObjects."
