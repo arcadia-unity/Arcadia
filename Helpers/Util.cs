@@ -393,8 +393,28 @@ namespace Arcadia
 				return null;
 			}
 
-			throw new ArgumentException (
-				"Expects instance of UnityEngine.GameObject or UnityEngine.Component, instead received instance of " + x.GetType(), 
+			throw new ArgumentException(
+				"Expects instance of UnityEngine.GameObject or UnityEngine.Component, instead received instance of " + x.GetType(),
+				nameof(x));
+		}
+
+		// we want a more informative error than that normally thrown
+		// by CLR miscasts
+		public static GameObject CastToGameObject (object x)
+		{
+			GameObject g = x as GameObject;
+			if (g != null) {
+				return g;
+			}
+
+			if (x == null) {
+				throw new ArgumentNullException(
+					nameof(x), 
+					"Expects UnityEngine.GameObject instance, instead got null");
+			}
+
+			throw new ArgumentException(
+				"Expects instance of UnityEngine.GameObject, instead received instance of " + x.GetType(), 
 				nameof(x));
 		}
 
