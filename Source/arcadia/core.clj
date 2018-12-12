@@ -317,12 +317,10 @@
   (null->nil (.GetComponent (Util/CastToGameObject x) t)))
 
 (defn cmpts
-  "Returns all `Component`s of type `t` attached to `x`
-  as a (possibly empty) array. `x` can be a `GameObject` or `Component`."
+  "Returns all live Components of type `t` attached to GameObject `x`
+  as a (possibly empty) array."
   ^|UnityEngine.Component[]| [x ^Type t]
-  (if-let [x (gobj x)]
-    (Util/WithoutNullObjects (.GetComponents x t))
-    (gobj-arg-fail-exception x)))
+  (Util/WithoutNullObjects (.GetComponents (Util/CastToGameObject x) t)))
 
 (defn cmpt+
   "Adds a new `Component` of type `t` from `x`. `x` can be a `GameObject` or

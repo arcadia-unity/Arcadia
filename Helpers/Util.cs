@@ -298,6 +298,30 @@ namespace Arcadia
 		// ------------------------------------------------------------------
 		// object array filtering
 
+		public static UnityEngine.Component[] WithoutNullObjects (Component[] objects)
+		{
+			int nulls = 0;
+			foreach (Component obj in objects) {
+				if (obj == null) {
+					nulls++;
+				}
+			}
+
+			if (nulls == 0)
+				return objects;
+
+			Component[] arr = new Component[objects.Length - nulls];
+			int end = 0;
+			for (int i = 0; i < objects.Length; i++) {
+				if (objects[i] != null) {
+					arr[end] = objects[i];
+					end++;
+				}
+			}
+
+			return arr;
+		}
+
 		public static UnityEngine.Object[] WithoutNullObjects (UnityEngine.Object[] objects)
 		{
 			foreach (var o in objects)
