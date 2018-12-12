@@ -330,16 +330,13 @@
 ;; returns nil because returning x would be inconsistent with cmpt+,
 ;; which must return the new component
 (defn cmpt-
-  "Removes *every* `Component` of type `t` from `x`. `x` can be a `GameObject` or
-  Component. Returns `nil`."
-  [x ^Type t]
-  (if-let [x (gobj x)]
-    (let [^|UnityEngine.Component[]| a (.GetComponents (gobj x) t)]
-      (loop [i (int 0)]
-        (when (< i (count a))
-          (retire (aget a i))
-          (recur (inc i)))))
-    (gobj-arg-fail-exception x)))
+  "Removes *every* Component of type `t` from GameObject `x`. Returns `nil`."
+  [x ^Type t]  
+  (let [^|UnityEngine.Component[]| a (.GetComponents (Util/CastToGameObject x) t)]
+    (loop [i (int 0)]
+      (when (< i (count a))
+        (retire (aget a i))
+        (recur (inc i))))))
 
 ;; ------------------------------------------------------------
 ;; repercussions
