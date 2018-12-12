@@ -261,7 +261,7 @@
 ;; aset returns the val. and method chaining
 ;; isn't a strong idiom in Clojure.
 (defn child+
-  "Makes GameObject `x` the new parent of GameObject `child`.
+  "Makes GameObject `x` the new parent of GameObject `child`. Returns `child`.
 
   If `world-position-stays` is true, `child` retains its world position after
   being reparented."
