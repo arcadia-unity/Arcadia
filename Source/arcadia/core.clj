@@ -269,15 +269,13 @@
   (^GameObject [x child]
    (child+ x child false))
   (^GameObject [x child world-position-stays]
-   (if-let [x (gobj x)]
-     (if-let [child (gobj child)]
-       (.SetParent
-         (.transform (gobj child))
-         (.transform (gobj x))
-         ^Boolean world-position-stays)
-       (gobj-arg-fail-exception child))
-     (gobj-arg-fail-exception x))
-   child))
+   (let [x (Util/CastToGameObject x)
+         child (Util/CastToGameObject child)]
+     (.SetParent
+       (.transform child)
+       (.transform x)
+       ^Boolean world-position-stays)
+     child)))
 
 (defn child-
   "Removes `x` as the parent of `child`. `x` and `child` can be `GameObject`s or
