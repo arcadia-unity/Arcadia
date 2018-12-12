@@ -490,21 +490,17 @@
   nil)
 
 (defn hook
-  "Retrieves a callback from a `GameObject` `obj`. `event-kw` is a
-  keyword specifying the Unity event of the callback, and `key` is
-  the key of the callback.
+  "Retrieves an attached hook function from GameObject
+  `obj`. `event-kw` is a keyword specifying the Unity event of the
+  hook function, and `key` is the key of the hook function.
 
-  In other words, retrieves any callback function attached via
+  In other words, retrieves any hook function attached via
 
 ```clj
-(hook+ obj event-kw key callback)
+  (hook+ obj event-kw key hook-function)
 ```
 
-  or the equivalent.
-
-  If `key` is not supplied, `hook` uses `:default` as key. This is the same as
-
-(hook obj event-kw :default)"
+  or the equivalent."
   [obj event-kw key]
   (when-let [^ArcadiaBehaviour hook-cmpt (cmpt obj (ensure-hook-type event-kw))]
     (.CallbackForKey hook-cmpt key)))
