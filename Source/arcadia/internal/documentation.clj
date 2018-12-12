@@ -1,6 +1,6 @@
 (ns arcadia.internal.documentation
   (:require [clojure.string :as s])
-  (:import [System.IO Path Directory]))
+  (:import [System.IO Path Directory FileMode]))
 
 (defn- methods-named [t name]
   (->> t
@@ -67,8 +67,8 @@
 
 (defn write-docs [file ns]
   (let [txt (with-out-str
-              (print-docs 'arcadia.linear))]
-    (spit file txt :encoding "utf8")))
+              (print-docs ns))]
+    (spit file txt :encoding "utf8" :file-mode FileMode/Create)))
 
 (def public-namespaces
   '[arcadia.core
