@@ -519,7 +519,7 @@
 ;; state
 
 (defn state
-  "Returns the state of object `go` at key `k`."
+  "Returns the state of GameObject `go` at key `k`."
   ([gobj]
    (when-let [^ArcadiaState s (cmpt gobj ArcadiaState)]
      (let [m (persistent!
