@@ -420,7 +420,7 @@
        (into {})))
 
 (defn available-hooks
-  "Returns a sorted seq of all permissible hook keywords."
+  "Returns a sorted seq of all permissible hook event keywords."
   []
   (sort (keys hook-types)))
 
