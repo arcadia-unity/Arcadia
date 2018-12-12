@@ -29,7 +29,7 @@ namespace Arcadia
 		public static void EnsureRequireVar ()
 		{
 			if (requireVar == null) {
-                Invoke (RT.var("clojure.core", "require"),
+				Invoke(RT.var("clojure.core", "require"),
 					   Symbol.intern("arcadia.internal.namespace"));
 				requireVar = RT.var("arcadia.internal.namespace", "quickquire");
 			}
@@ -44,7 +44,7 @@ namespace Arcadia
 		public static void require (Symbol s)
 		{
 			EnsureRequireVar();
-			Invoke (requireVar, s);
+			Invoke(requireVar, s);
 		}
 
 		public static void getVar (ref Var v, string ns, string name)
@@ -294,11 +294,11 @@ namespace Arcadia
 
 			return new Tuple<string[], string[]>(keysAr, valsAr);
 		}
-		
+
 		// ------------------------------------------------------------------
 		// object array filtering
 
-		public static UnityEngine.Object[] WithoutNullObjects(UnityEngine.Object[] objects)
+		public static UnityEngine.Object[] WithoutNullObjects (UnityEngine.Object[] objects)
 		{
 			foreach (var o in objects)
 				if (o == null)
@@ -306,7 +306,7 @@ namespace Arcadia
 			return objects;
 		}
 
-		private static UnityEngine.Object[] RemoveNullObjects(UnityEngine.Object[] objects)
+		private static UnityEngine.Object[] RemoveNullObjects (UnityEngine.Object[] objects)
 		{
 			var list = new List<UnityEngine.Object>();
 			foreach (var o in objects)
@@ -378,7 +378,7 @@ namespace Arcadia
 
 		public static GameObject ToGameObject (object x)
 		{
-			
+
 			GameObject g = x as GameObject;
 			if (g != null) {
 				return g;
