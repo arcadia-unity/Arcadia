@@ -141,7 +141,7 @@
   (remove null? (UnityEngine.Object/FindObjectsOfType t)))
 
 (defn object-named
-  "Returns one live `GameObject` from the scene graph, the name of which
+  "Returns one live GameObject from the scene graph, the name of which
   matches `name-or-regex`. `name-or-regex` may be a string or a
   regular expression object."
   ^GameObject [name-or-regex]
