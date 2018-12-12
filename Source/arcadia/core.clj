@@ -50,9 +50,10 @@
   (Util/TrueNil x))
 
 (defn null?
-  "Should `x` be considered `nil`? `(null? x)` will evalute to `true`
-  if `x` is in fact `nil`, or if `x` is a `UnityEngine.Object` instance
-  such that `(UnityEngine.Object/op_Equality x nil)` returns `true`.
+  "Should `x` be considered `nil`? `(null? x)` will evalute to `true` if
+  `x` is in fact `nil`, or if `x` is a `UnityEngine.Object` instance
+  such that `(UnityEngine.Object/op_Equality x nil)` returns
+  `true`. Otherwise will return `false`.
 
   More details and rationale are available in [the wiki](https://github.com/arcadia-unity/Arcadia/wiki/Null,-Nil,-and-UnityEngine.Object)."
   [x]
