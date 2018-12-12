@@ -77,5 +77,3 @@
   (doseq [ns public-namespaces]
     (write-docs (Path/Combine "docs" (str ns ".md"))
                 ns)))
-
-(write-public-docs)
