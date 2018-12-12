@@ -555,11 +555,11 @@
      nil)))
 
 (defn clear-state
-  "Removes all state from the `GameObject` `go`."
+  "Removes all state from the GameObject `go`."
   [go]
   (with-cmpt go [arcs ArcadiaState]
     (.Clear arcs)
-    go))
+    nil))
 
 (defn update-state
   "Updates the state of object `go` with function `f` and additional
