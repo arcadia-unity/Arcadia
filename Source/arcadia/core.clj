@@ -33,8 +33,10 @@
 ;; application
 ;; ============================================================
 
-(defn log
-  "Log message to the [Unity console](https://docs.unity3d.com/Manual/Console.html). Arguments are combined into a string."
+(defn
+  ^{:doc/see-also {"Unity Console" "https://docs.unity3d.com/Manual/Console.html"}}
+  log
+  "Log message to the Unity console. Arguments are combined into a string."
   [& args]
   (Debug/Log (clojure.string/join " " args)))
 

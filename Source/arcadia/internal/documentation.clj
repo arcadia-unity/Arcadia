@@ -37,7 +37,7 @@
                    (map meta)
                    (filter #(not (:private %)))
                    (filter #(:doc %)))]
-    (doseq [{:keys [file line name arglists macro doc/no-syntax doc/syntax doc]}
+    (doseq [{:keys [file line name arglists macro doc/see-also doc/no-syntax doc/syntax doc]}
             (sort-by :line metas)]
       (let [url (when file
                   (str "https://github.com/arcadia-unity/Arcadia/blob/beta/Source/"
@@ -59,6 +59,10 @@
             (println (str "`" (pr-str (concat [(symbol name)] a)) "`  "))))
         (println "#### Description")
         (println (unity-linkify doc))
+        (when see-also
+          (println "#### See Also")
+          (doseq [[name url] see-also]
+            (println (str "* [" name "](" url ")"))))
         (println "\n---\n")))))
 
 (defn write-docs [file ns]
