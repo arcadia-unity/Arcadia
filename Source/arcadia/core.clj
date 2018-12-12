@@ -482,7 +482,7 @@
    nil))
 
 (defn clear-hooks
-  "Removes all callbacks on the Unity event corresponding to
+  "Removes all hook functions on the Unity event corresponding to
   `event-kw`, regardless of their keys."
   [obj event-kw]
   (when-let [^ArcadiaBehaviour hook-cmpt (cmpt obj (ensure-hook-type event-kw))]
