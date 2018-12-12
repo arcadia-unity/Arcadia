@@ -311,12 +311,10 @@
 ;; above this
 
 (defn cmpt
-  "Returns the first `Component` of type `t` attached to `x`. Returns `nil` if no
-  such component is attached. `x` can be a `GameObject` or `Component`."
-  ^UnityEngine.Component [x ^Type t]
-  (if-let [x (gobj x)]
-    (null->nil (.GetComponent x t))
-    (gobj-arg-fail-exception x)))
+  "Returns the first live Component of type `t` attached to GameObject
+  `x`. Returns `nil` if no such Component is attached."
+  ^UnityEngine.Component [^GameObject x ^Type t]
+  (null->nil (.GetComponent (Util/CastToGameObject x) t)))
 
 (defn cmpts
   "Returns all `Component`s of type `t` attached to `x`
