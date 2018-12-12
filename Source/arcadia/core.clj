@@ -301,18 +301,18 @@
 ;; We could return nil for that and vectors for other things
 ;; I suppose.
 (defn children
-  "Gets the children of `x` as a persistent vector. `x` can be a `GameObject` or
-  a `Component`."
+  "Gets the live children of `x` as a persistent vector of
+  GameObjects. `x` can be a `GameObject` or a `Component`."
   [x]
-  (if-let [^GameObject x (gobj x)]
+  (let [x (Util/CastToGameObject x)]
     (persistent!
       (reduce
         (fn [acc ^UnityEngine.Transform x]
-          (when-let [g (gobj (.gameObject x))]
-            (conj! acc g)))
+          (if-let [g (null->nil (.gameObject x))]
+            (conj! acc g)
+            acc))
         (transient [])
-        (.transform x)))
-    (gobj-arg-fail-exception x)))
+        (.transform x)))))
 
 ;; ------------------------------------------------------------
 ;; IEntityComponent
