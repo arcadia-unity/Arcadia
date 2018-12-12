@@ -472,7 +472,7 @@
   corresponding to `event-kw` at `key`, if it exists. Reverse of
 
 ```clj
-(hook+ obj event-kw key)
+  (hook+ obj event-kw key hook-function)
 ```
 
   Returns `nil`."
