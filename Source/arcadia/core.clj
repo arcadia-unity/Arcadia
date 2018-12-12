@@ -147,7 +147,7 @@
   ^GameObject [name-or-regex]
   (cond
     (string? name-or-regex)
-    (UnityEngine.GameObject/Find name)
+    (UnityEngine.GameObject/Find ^String name-or-regex)
 
     (instance? Regex name-or-regex)
     (let [objs (UnityEngine.Object/FindObjectsOfType GameObject)]
