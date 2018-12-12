@@ -541,13 +541,11 @@
     x))
 
 (defn state+
-  "Sets the state of object `go` to value `v` at key `k`. If no key is provided, "
-  ([go v]
-   (state+ go :default v))
+  "Sets the state of GameObject `go` to value `v` at key `k`. Returns `v`."
   ([go k v]
    (with-cmpt go [arcs ArcadiaState]
      (.Add arcs k (maybe-mutable v))
-     go)))
+     v)))
 
 (defn state-
   "Removes the state of object `go` at key `k`. If no key is provided,
