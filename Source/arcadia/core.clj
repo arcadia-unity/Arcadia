@@ -390,15 +390,15 @@
           ~@body)))))
 
 (defmacro if-cmpt
-  "Execute body of code if `gob` has a component of type `cmpt-type`"
+  "If a component of type `cmpt-type` is attached to GameObject `gob`,
+  binds it to `cmpt-name`, then evaluates and returns `then` in the
+  lexical scope of that binding. Otherwise evaluates and returns
+  `else`, if provided, or returns `nil` if `else` is not provided."
   [gob [cmpt-name cmpt-type] then & else]
   (let [gobsym (gentagged "gob__" 'UnityEngine.GameObject)]
-    `(let [obj# ~gob]
-       (if (null->nil obj#)
-         (with-gobj [~gobsym obj#]
-           (if-let [~(meta-tag cmpt-name cmpt-type) (cmpt ~gobsym ~cmpt-type)]
-             ~then
-             ~@else))
+    `(let [~gobsym ~gob]
+       (if-let [~cmpt-name (cmpt ~cmpt-type)]
+         ~then
          ~@else))))
 
 ;; ============================================================
