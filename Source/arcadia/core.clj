@@ -323,12 +323,9 @@
   (Util/WithoutNullObjects (.GetComponents (Util/CastToGameObject x) t)))
 
 (defn cmpt+
-  "Adds a new `Component` of type `t` from `x`. `x` can be a `GameObject` or
-  Component. Returns the new `Component`."
+  "Adds a new Component of type `t` to GameObject `x`. Returns the new Component."
   ^UnityEngine.Component [x ^Type t]
-  (if-let [x (gobj x)]
-    (.AddComponent x t)
-    (gobj-arg-fail-exception x)))
+  (.AddComponent (Util/CastToGameObject x) t))
 
 ;; returns nil because returning x would be inconsistent with cmpt+,
 ;; which must return the new component
