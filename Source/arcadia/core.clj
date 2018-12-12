@@ -230,8 +230,8 @@
 
   - If `x` is a live GameObject, returns it.
   - If `x` is a destroyed GameObject, returns `nil`.
-  - If `x` is a live component, returns its containing GameObject.
-  - If `x` is a destroyed component, returns `nil`.
+  - If `x` is a live Component, returns its containing GameObject.
+  - If `x` is a destroyed Component, returns `nil`.
   - If `x` is `nil`, returns `nil`.
   - Otherwise throws an ArgumentException."
   ^GameObject [x]
