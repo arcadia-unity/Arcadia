@@ -428,10 +428,10 @@ Calls to this function will be inlined if possible."})
               `(qlookat ~here ~there UnityEngine.Vector3/up))
              ([here there up]
               `(UnityEngine.Quaternion/LookRotation (v3- ~there ~here) ~up)))
-   :inline-arities #{2 3}}
-  "Returns a `Quaternion` that faces `there` from `here`, both `Vector3`s. An
-  additional `up` `Vector3` can be provided to specify which direction is 'up'.
-  `up` defaults to `Vector3/up`."
+   :inline-arities #{2 3}
+   :doc "Returns a `Quaternion` that faces `there` from `here`, both `Vector3`s. An
+   additional `up` `Vector3` can be provided to specify which direction is 'up'.
+   `up` defaults to `Vector3/up`."}
   ([^UnityEngine.Vector3 here, ^UnityEngine.Vector3 there]
      (qlookat here there UnityEngine.Vector3/up))
   ([^UnityEngine.Vector3 here, ^UnityEngine.Vector3 there, ^UnityEngine.Vector3 up]
