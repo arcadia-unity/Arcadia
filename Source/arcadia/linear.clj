@@ -429,6 +429,9 @@ Calls to this function will be inlined if possible."})
              ([here there up]
               `(UnityEngine.Quaternion/LookRotation (v3- ~there ~here) ~up)))
    :inline-arities #{2 3}}
+  "Returns a `Quaternion` that faces `there` from `here`, both `Vector3`s. An
+  additional `up` `Vector3` can be provided to specify which direction is 'up'.
+  `up` defaults to `Vector3/up`."
   ([^UnityEngine.Vector3 here, ^UnityEngine.Vector3 there]
      (qlookat here there UnityEngine.Vector3/up))
   ([^UnityEngine.Vector3 here, ^UnityEngine.Vector3 there, ^UnityEngine.Vector3 up]
@@ -526,7 +529,11 @@ Calls to this function will be inlined if possible."})
      m n o p)))
 
 (defn m*
-  "Multiplies `Matrix4x4`s"
+  "Multiplies one or more `Matrix4x4`s.
+
+If called with zero arguments, returns `Matrix4x4/identity`. If called with one argument, returns that argument.
+
+Calls to this function will be inlined if possible."
   {:inline (fn
              ([] Matrix4x4/identity)
              ([x] x)
@@ -560,10 +567,14 @@ Calls to this function will be inlined if possible."})
   [^Matrix4x4 m, row-inx]
   `(.GetRow ~m ~row-inx))
 
-(definline put-column [^Matrix4x4 m, col-inx, col]
+(definline put-column 
+  "Sets column number `col-inx` of `Matrix4x4` `m` to the `Vector4` `col`"
+  [^Matrix4x4 m, col-inx, col]
   `(Arcadia.LinearHelper/matrixPutColumn ~m ~col-inx ~col))
 
-(definline put-row [^Matrix4x4 m, row-inx, row]
+(definline put-row
+  "Sets row number `row-inx` of `Matrix4x4` `m` to the `Vector4` `row`"
+  [^Matrix4x4 m, row-inx, row]
   `(Arcadia.LinearHelper/matrixPutRow ~m ~row-inx ~row))
 
 (definline ortho
