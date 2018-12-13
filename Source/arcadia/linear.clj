@@ -548,9 +548,9 @@ Calls to this function will be inlined if possible."
    (reduce m* (m* a b) args)))
 
 (definline determinant
-  "Wraps `Matrix4x4/Determinant`"
-  [^Matrix4x4 m]
-  `(Matrix4x4/Determinant ~m))
+  "Wraps `Matrix4x4/determinant`"
+  [^UnityEngine.Matrix4x4 m]
+  `(. ~m determinant))
 
 (definline transpose
   "Wraps `Matrix4x4/transpose`"
@@ -588,9 +588,9 @@ Calls to this function will be inlined if possible."
   `(UnityEngine.Matrix4x4/Perspective ~fov ~aspect ~znear ~zfar))
 
 (definline inverse
-  "Wraps `Matrix4x4/Inverse`"
-  [^Matrix4x4 m]
-  `(Matrix4x4/Inverse ~m))
+  "Wraps `Matrix4x4/inverse`"
+  [^UnityEngine.Matrix4x4 m]
+  `(. ~m inverse))
 
 (definline trs
   "Wraps `Matrix4x4/TRS`"
