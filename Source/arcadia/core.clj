@@ -11,6 +11,7 @@
   (:import ArcadiaBehaviour
            ArcadiaBehaviour+IFnInfo
            ArcadiaState
+           System.Text.RegularExpressions.Regex
            [Arcadia UnityStatusHelper
             Util
             HookStateSystem JumpMap
@@ -52,9 +53,10 @@
   (Util/TrueNil x))
 
 (defn null?
-  "Should `x` be considered `nil`? `(null? x)` will evalute to `true`
-  if `x` is in fact `nil`, or if `x` is a `UnityEngine.Object` instance
-  such that `(UnityEngine.Object/op_Equality x nil)` returns `true`.
+  "Should `x` be considered `nil`? `(null? x)` will evalute to `true` if
+  `x` is in fact `nil`, or if `x` is a `UnityEngine.Object` instance
+  such that `(UnityEngine.Object/op_Equality x nil)` returns
+  `true`. Otherwise will return `false`.
 
   More details and rationale are available in [the wiki](https://github.com/arcadia-unity/Arcadia/wiki/Null,-Nil,-and-UnityEngine.Object)."
   [x]
@@ -86,8 +88,10 @@
 
 (defn create-primitive
   "Creates a game object with a primitive mesh renderer and appropriate
-  collider. `prim` can be a `PrimitiveType` or one of `:sphere` `:capsule`
-  `:cylinder` `:cube` `:plane` `:quad`. Wraps `GameObject/CreatePrimitive`."
+  collider. `prim` can be a `PrimitiveType` or one of `:sphere`
+  `:capsule` `:cylinder` `:cube` `:plane` `:quad`. If supplied, the
+  third argument should be a string, and will be set as the name of
+  the newly created GameObject. Wraps `GameObject/CreatePrimitive`."
   (^GameObject [prim] (create-primitive prim nil))
   (^GameObject [prim name]
    (let [prim' (if (instance? PrimitiveType prim)
@@ -125,46 +129,82 @@
      (UnityEngine.Object/Destroy obj)
      (UnityEngine.Object/DestroyImmediate obj))))
 
-(definline object-typed
-  "Returns one object of Type `t`. The object selected seems to be
-  the first object in the array returned by `objects-typed`.
-  Wraps `Object/FindObjectOfType`."
-  [^Type t] `(UnityEngine.Object/FindObjectOfType ~t))
+(defn object-typed
+  "Returns one live instance of UnityEngine.Object subclass type `t`
+  from the scene graph, or `nil` if no such object can be found. Wraps
+  `Object/FindObjectOfType`."
+  [^Type t]
+  (null->nil (UnityEngine.Object/FindObjectOfType t)))
 
-(definline objects-typed
-  "Returns an array of all active loaded objects of Type `t`. The order is consistent
-  but undefined. Wraps `Object/FindObjectsOfType`."
-  [^Type t] `(UnityEngine.Object/FindObjectsOfType ~t))
+(defn objects-typed
+  "Returns a sequence of all live instances of UnityEngine.Object subclass
+  type `t` in the scene graph. Wraps `Object/FindObjectsOfType`."
+  [^Type t]
+  (remove null? (UnityEngine.Object/FindObjectsOfType t)))
 
-(definline object-named
-  "Returns one `GameObject` named `name`. Wraps `GameObject/Find`."
-  [^String name] `(UnityEngine.GameObject/Find ~name))
+(defn object-named
+  "Returns one live GameObject from the scene graph, the name of which
+  matches `name-or-regex`. `name-or-regex` may be a string or a
+  regular expression object."
+  ^GameObject [name-or-regex]
+  (cond
+    (string? name-or-regex)
+    (UnityEngine.GameObject/Find ^String name-or-regex)
+
+    (instance? Regex name-or-regex)
+    (let [objs (UnityEngine.Object/FindObjectsOfType GameObject)]
+      (loop [i (int 0)]
+        (when (< i (count objs))
+          (let [obj (aget objs i)]
+            (if (and (not (null? obj))
+                     (re-matches name-or-regex (.name obj)))
+              obj
+              (recur (inc i)))))))
+
+    :else
+    (throw
+      (ArgumentException.
+        (str "Expects string or Regex, instead got instance of "
+             (class name-or-regex))
+        "name-or-regex"))))
 
 (defn objects-named
-  "Returns a sequence of all `GameObject`s named `name`. `name` can be a string or a regular expression."
-  [name]
-  (cond (= (type name) System.String)
-        (for [^GameObject obj (objects-typed GameObject)
-              :when (= (.name obj) name)]
-          obj)
+  "Returns a sequence of all live `GameObject`s in the scene graph, the
+  name of which match `name-or-regex`. `name-or-regex` may be a string
+  or a regular expression object."
+  [name-or-regex]
+  (cond
+    (string? name-or-regex)
+    (for [^GameObject obj (objects-typed GameObject)
+          :when (= (.name obj) name-or-regex)]
+      obj)
 
-        (= (type name) System.Text.RegularExpressions.Regex)
-        (for [^GameObject obj (objects-typed GameObject)
-              :when (re-matches name (.name obj))]
-          obj)))
+    (instance? Regex name-or-regex)
+    (for [^GameObject obj (objects-typed GameObject)
+          :when (re-matches name-or-regex (.name obj))]
+      obj)
 
-(definline object-tagged
-  "Returns one active `GameObject` tagged `t`. Tags are managed from the
-  [Unity Tag Manager](https://docs.unity3d.com/Manual/class-TagManager.html).
+    :else
+    (throw
+      (ArgumentException.
+        (str "Expects string or Regex, instead got instance of "
+             (class name-or-regex))
+        "name-or-regex"))))
+
+(defn object-tagged
+  "Returns one live `GameObject` tagged `t` from the scene graph,
+  or `nil` if no such GameObjects exist.
+
   Wraps `GameObject/FindWithTag`."
-  [^String t] `(UnityEngine.GameObject/FindWithTag ~t))
+  ^GameObject [^String t]
+  (null->nil (UnityEngine.GameObject/FindWithTag t)))
 
-(definline objects-tagged
-  "Returns an array of active `GameObject`s tagged tag. Returns empty
-  array if no `GameObject` was found. Tags are managed from the
-  [Unity Tag Manager](https://docs.unity3d.com/Manual/class-TagManager.html).
+(defn objects-tagged
+  "Returns a sequence of live `GameObject`s tagged tag. Returns empty
+  array if no `GameObject` was found.
   Wraps `GameObject/FindGameObjectsWithTag`."
-  [^String t] `(UnityEngine.GameObject/FindGameObjectsWithTag ~t))
+  [^String t]
+  (remove null? (UnityEngine.GameObject/FindGameObjectsWithTag t)))
 
 ;; ------------------------------------------------------------
 ;; Scene graph traversal and manipulation
@@ -186,15 +226,15 @@
           ret)))))
 
 (defn gobj
-  "Coerces `x`, expected to be a `GameObject` or `Component`, to a
-  corresponding live (non-destroyed) `GameObject` instance or to nil by
+  "Coerces `x`, expected to be a GameObject or Component, to a
+  corresponding live (non-destroyed) GameObject instance or to `nil` by
   the following policy:
 
   - If `x` is a live GameObject, returns it.
-  - If `x` is a destroyed GameObject, returns nil.
-  - If `x` is a live Component instance, returns its containing GameObject.
-  - If `x` is a destroyed Component instance, returns nil.
-  - If `x` is nil, returns `nil`.
+  - If `x` is a destroyed GameObject, returns `nil`.
+  - If `x` is a live Component, returns its containing GameObject.
+  - If `x` is a destroyed Component, returns `nil`.
+  - If `x` is `nil`, returns `nil`.
   - Otherwise throws an ArgumentException."
   ^GameObject [x]
   (Util/ToGameObject x))
@@ -223,67 +263,48 @@
 ;; aset returns the val. and method chaining
 ;; isn't a strong idiom in Clojure.
 (defn child+
-  "Makes `x` the new parent of `child`. `x` and `child` can be `GameObject`s or
-  `Component`s.
+  "Makes GameObject `x` the new parent of GameObject `child`. Returns `child`.
 
-  If `world-position-stays` is true then `child` retains its world position after
+  If `world-position-stays` is true, `child` retains its world position after
   being reparented."
   (^GameObject [x child]
    (child+ x child false))
   (^GameObject [x child world-position-stays]
-   (if-let [x (gobj x)]
-     (if-let [child (gobj child)]
-       (.SetParent
-         (.transform (gobj child))
-         (.transform (gobj x))
-         ^Boolean world-position-stays)
-       (gobj-arg-fail-exception child))
-     (gobj-arg-fail-exception x))
-   child))
+   (let [x (Util/CastToGameObject x)
+         child (Util/CastToGameObject child)]
+     (.SetParent
+       (.transform child)
+       (.transform x)
+       ^Boolean world-position-stays)
+     child)))
 
 (defn child-
-  "Removes `x` as the parent of `child`. `x` and `child` can be `GameObject`s or
-  `Component`s.
+  "Removes GameObject `x` as the parent of GameObject `child`, 
+  moving `child` to the top of the scene graph hierarchy. Returns `nil`.
 
-  The new parent of `child` becomes  `nil` and it is moved to the top level of
-  the scene hierarchy.
-
-  If `world-position-stays` is true then `child` retains its world position after
-  being reparented."
+  If `world-position-stays` is `true`, `child` retains its world
+  position after being reparented."
   ([x child]
    (child- x child false))
   ([x child world-position-stays]
-   (if-let [^GameObject x (gobj x)]
-     (if-let [^GameObject child (gobj child)]
-       (when (= (.parent child) x)
-         (.SetParent (.transform child) nil ^Boolean world-position-stays))
-       (gobj-arg-fail-exception child))
-     (gobj-arg-fail-exception x))
-   x))
+   (let [x (Util/CastToGameObject x)
+         child (Util/CastToGameObject child)]
+     (when (= (.. child transform parent) (.transform x))
+       (.SetParent (.transform child) nil ^Boolean world-position-stays)))))
 
-;; `nil` semantics of this one is a little tricky.
-;; It seems like a query function, which normally
-;; suggests nil should be supported, but we can't
-;; traverse the children of nulled game objects in
-;; unity, and in a sense it's incorrect to offer an
-;; empty vector for them either, since that asserts
-;; the nulled game object in fact has no children,
-;; rather than that the children are inaccessible.
-;; We could return nil for that and vectors for other things
-;; I suppose.
 (defn children
-  "Gets the children of `x` as a persistent vector. `x` can be a `GameObject` or
-  a `Component`."
+  "Gets the live children of GameObject `x` as a persistent vector of
+  GameObjects."
   [x]
-  (if-let [^GameObject x (gobj x)]
+  (let [x (Util/CastToGameObject x)]
     (persistent!
       (reduce
         (fn [acc ^UnityEngine.Transform x]
-          (when-let [g (gobj (.gameObject x))]
-            (conj! acc g)))
+          (if-let [g (null->nil (.gameObject x))]
+            (conj! acc g)
+            acc))
         (transient [])
-        (.transform x)))
-    (gobj-arg-fail-exception x)))
+        (.transform x)))))
 
 ;; ------------------------------------------------------------
 ;; IEntityComponent
@@ -292,53 +313,42 @@
 ;; above this
 
 (defn cmpt
-  "Returns the first `Component` of type `t` attached to `x`. Returns `nil` if no
-  such component is attached. `x` can be a `GameObject` or `Component`."
-  ^UnityEngine.Component [x ^Type t]
-  (if-let [x (gobj x)]
-    (null->nil (.GetComponent x t))
-    (gobj-arg-fail-exception x)))
+  "Returns the first live Component of type `t` attached to GameObject
+  `x`. Returns `nil` if no such Component is attached."
+  ^UnityEngine.Component [^GameObject x ^Type t]
+  (null->nil (.GetComponent (Util/CastToGameObject x) t)))
 
 (defn cmpts
-  "Returns all `Component`s of type `t` attached to `x`
-  as a (possibly empty) array. `x` can be a `GameObject` or `Component`."
+  "Returns all live Components of type `t` attached to GameObject `x`
+  as a (possibly empty) array."
   ^|UnityEngine.Component[]| [x ^Type t]
-  (if-let [x (gobj x)]
-    (Util/WithoutNullObjects (.GetComponents x t))
-    (gobj-arg-fail-exception x)))
+  (Util/WithoutNullObjects (.GetComponents (Util/CastToGameObject x) t)))
 
 (defn cmpt+
-  "Adds a new `Component` of type `t` from `x`. `x` can be a `GameObject` or
-  Component. Returns the new `Component`."
+  "Adds a new Component of type `t` to GameObject `x`. Returns the new Component."
   ^UnityEngine.Component [x ^Type t]
-  (if-let [x (gobj x)]
-    (.AddComponent x t)
-    (gobj-arg-fail-exception x)))
+  (.AddComponent (Util/CastToGameObject x) t))
 
 ;; returns nil because returning x would be inconsistent with cmpt+,
 ;; which must return the new component
 (defn cmpt-
-  "Removes *every* `Component` of type `t` from `x`. `x` can be a `GameObject` or
-  Component. Returns `nil`."
-  [x ^Type t]
-  (if-let [x (gobj x)]
-    (let [^|UnityEngine.Component[]| a (.GetComponents (gobj x) t)]
-      (loop [i (int 0)]
-        (when (< i (count a))
-          (retire (aget a i))
-          (recur (inc i)))))
-    (gobj-arg-fail-exception x)))
+  "Removes *every* Component of type `t` from GameObject `x`. Returns `nil`."
+  [x ^Type t]  
+  (let [^|UnityEngine.Component[]| a (.GetComponents (Util/CastToGameObject x) t)]
+    (loop [i (int 0)]
+      (when (< i (count a))
+        (retire (aget a i))
+        (recur (inc i))))))
 
 ;; ------------------------------------------------------------
 ;; repercussions
 
 (defn ensure-cmpt
-  "If `GameObject` `x` has a component of type `t`, returns it. Otherwise, adds
+  "If GameObject `x` has a component of type `t`, returns it. Otherwise, adds
   a component of type `t` and returns the new instance."
   ^UnityEngine.Component [x ^Type t]
-  (if-let [x (gobj x)]
-    (or (cmpt x t) (cmpt+ x t))
-    (gobj-arg-fail-exception x)))
+  (let [x (Util/CastToGameObject x)]
+    (or (cmpt x t) (cmpt+ x t))))
 
 ;; ------------------------------------------------------------
 ;; sugar macros
@@ -352,19 +362,14 @@
   ([s t]
    (meta-tag (gensym s) t)))
 
-(defmacro with-gobj
-  "Bind the `GameObject` `x` to the name `gob-name` in `body`. If `x` is a
-  Component its attached `GameObject` is used."
-  [[gob-name x] & body]
-  `(let [~gob-name (gobj ~x)]
-     ~@body))
-
 (defmacro with-cmpt
   "`binding => name component-type`
 
-  For each binding, looks up `component-type` on `gob` and binds it to `name`. If
-  Component does not exist, it is created and bound to `name`. Evalutes `body`
-  in the lexical context of all `name`s."
+  For each binding, binds `name` to an instance of class
+  `component-type` attached to GameObject `gob`. If no such instance
+  is currently attached to `x`, a new instance of `component-type`
+  will be created, attached to `x`, and bound to `name`. `body` is
+  then evaluated in the lexical context of all bindings."
   ([gob bindings & body]
    (assert (vector? bindings))
    (assert (even? (count bindings)))
@@ -373,29 +378,32 @@
                  (partition 2)
                  (mapcat (fn [[n t]]
                            [(meta-tag n t) `(ensure-cmpt ~gobsym ~t)])))]
-     `(with-gobj [~gobsym ~gob]
+     `(let [~gobsym (Util/CastToGameObject ~gob)]
         (let [~@dcls]
           ~@body)))))
 
 (defmacro if-cmpt
-  "Execute body of code if `gob` has a component of type `cmpt-type`"
+  "If a component of type `cmpt-type` is attached to GameObject `gob`,
+  binds it to `cmpt-name`, then evaluates and returns `then` in the
+  lexical scope of that binding. Otherwise evaluates and returns
+  `else`, if provided, or returns `nil` if `else` is not provided."
   [gob [cmpt-name cmpt-type] then & else]
   (let [gobsym (gentagged "gob__" 'UnityEngine.GameObject)]
-    `(let [obj# ~gob]
-       (if (null->nil obj#)
-         (with-gobj [~gobsym obj#]
-           (if-let [~(meta-tag cmpt-name cmpt-type) (cmpt ~gobsym ~cmpt-type)]
-             ~then
-             ~@else))
+    `(let [~gobsym ~gob]
+       (if-let [~cmpt-name (cmpt ~cmpt-type)]
+         ~then
          ~@else))))
 
 ;; ============================================================
 ;; traversal
 
 (defn descendents
-  "Returns a sequence of `x`'s children. `x` can be a `GameObject` or a `Component`."
+  "Returns a sequence containing all descendents of GameObject `x` in
+  depth-first order. The descendents of `x` are all GameObjects
+  attached as children to `x` in the Unity hierarchy; all of those
+  GameObject's children; and so on."
   [x]
-  (tree-seq identity children (gobj x)))
+  (tree-seq identity children x))
 
 ;; ============================================================
 ;; hooks
@@ -412,7 +420,7 @@
        (into {})))
 
 (defn available-hooks
-  "Returns a sorted seq of all permissible hook keywords."
+  "Returns a sorted seq of all permissible hook event keywords."
   []
   (sort (keys hook-types)))
 
@@ -439,23 +447,32 @@
                          :f ifn?
                          :keys (s/? (s/nilable sequential?))))))
 
-(defn hook+
-  "Attach a Clojure function to a Unity event on `obj`. The function `f`
-  will be invoked every time the event identified by `event-kw` is sent by Unity. `f`
-  must have the same arity as the expected Unity event. When called with a key `k`
-  this key can be passed to `event-kw-` to remove the function."
+(defn
+  ^{:doc/see-also {"Unity Event Functions" "https://docs.unity3d.com/Manual/EventFunctions.html"}}
+  hook+
+  "Attach a Clojure function, which may be a Var instance, to GameObject
+  `obj`. The function `f` will be invoked every time the event
+  identified by `event-kw` is triggered by Unity.
+
+  `f` must be a function of 2 arguments, plus however many arguments
+  the corresponding Unity event function takes. The first argument is
+  the GameObject `obj` that `f` is attached to. The second argument is
+  the key `k` it was attached with. The remaining arguments are the
+  arguments normally passed to the corresponding Unity event function.
+
+  Returns `nil`."
   ([obj event-kw k f]
    (let [hook-type (ensure-hook-type event-kw)
          ^ArcadiaBehaviour hook-cmpt (ensure-cmpt obj hook-type)]
      (.AddFunction hook-cmpt k f)
-     obj)))
+     nil)))
 
 (defn hook-
-  "Removes callback from `GameObject` `obj` on the Unity event
+  "Removes hook function from GameObject `obj` on the Unity event
   corresponding to `event-kw` at `key`, if it exists. Reverse of
 
 ```clj
-(hook+ obj event-kw key)
+  (hook+ obj event-kw key hook-function)
 ```
 
   Returns `nil`."
@@ -465,7 +482,7 @@
    nil))
 
 (defn clear-hooks
-  "Removes all callbacks on the Unity event corresponding to
+  "Removes all hook functions on the Unity event corresponding to
   `event-kw`, regardless of their keys."
   [obj event-kw]
   (when-let [^ArcadiaBehaviour hook-cmpt (cmpt obj (ensure-hook-type event-kw))]
@@ -473,21 +490,17 @@
   nil)
 
 (defn hook
-  "Retrieves a callback from a `GameObject` `obj`. `event-kw` is a
-  keyword specifying the Unity event of the callback, and `key` is
-  the key of the callback.
+  "Retrieves an attached hook function from GameObject
+  `obj`. `event-kw` is a keyword specifying the Unity event of the
+  hook function, and `key` is the key of the hook function.
 
-  In other words, retrieves any callback function attached via
+  In other words, retrieves any hook function attached via
 
 ```clj
-(hook+ obj event-kw key callback)
+  (hook+ obj event-kw key hook-function)
 ```
 
-  or the equivalent.
-
-  If `key` is not supplied, `hook` uses `:default` as key. This is the same as
-
-(hook obj event-kw :default)"
+  or the equivalent."
   [obj event-kw key]
   (when-let [^ArcadiaBehaviour hook-cmpt (cmpt obj (ensure-hook-type event-kw))]
     (.CallbackForKey hook-cmpt key)))
@@ -506,7 +519,7 @@
 ;; state
 
 (defn state
-  "Returns the state of object `go` at key `k`."
+  "Returns the state of GameObject `go` at key `k`."
   ([gobj]
    (when-let [^ArcadiaState s (cmpt gobj ArcadiaState)]
      (let [m (persistent!
@@ -528,55 +541,55 @@
     x))
 
 (defn state+
-  "Sets the state of object `go` to value `v` at key `k`. If no key is provided, "
-  ([go v]
-   (state+ go :default v))
+  "Sets the state of GameObject `go` to value `v` at key `k`. Returns `v`."
   ([go k v]
    (with-cmpt go [arcs ArcadiaState]
      (.Add arcs k (maybe-mutable v))
-     go)))
+     v)))
 
 (defn state-
-  "Removes the state of object `go` at key `k`. If no key is provided,
-  removes state at key `default`."
-  ([go]
-   (state- go :default))
+  "Removes the state of object `go` at key `k`."
   ([go k]
    (with-cmpt go [arcs ArcadiaState]
      (.Remove arcs k)
-     go)))
+     nil)))
 
 (defn clear-state
-  "Removes all state from the `GameObject` `go`."
+  "Removes all state from the GameObject `go`."
   [go]
   (with-cmpt go [arcs ArcadiaState]
     (.Clear arcs)
-    go))
+    nil))
 
 (defn update-state
-  "Updates the state of object `go` with function `f` and additional
-  arguments `args` at key `k`. Args are applied in the same order as
-  `clojure.core/update`."
+  "Updates the state of GameObject `go` at key `k` with function `f` and
+  additional arguments `args`. Args are applied in the same order as
+  `clojure.core/update`. Returns the new value of the state at `k`."
   ([go k f]
    (with-cmpt go [arcs ArcadiaState]
-     (.Add arcs k (f (.ValueAtKey arcs k)))
-     go))
+     (let [v (f (.ValueAtKey arcs k))]
+       (.Add arcs k v)
+       v)))
   ([go k f x]
    (with-cmpt go [arcs ArcadiaState]
-     (.Add arcs k (f (.ValueAtKey arcs k) x))
-     go))
+     (let [v (f (.ValueAtKey arcs k) x)]
+       (.Add arcs k v)
+       v)))
   ([go k f x y]
    (with-cmpt go [arcs ArcadiaState]
-     (.Add arcs k (f (.ValueAtKey arcs k) x y))
-     go))
+     (let [v (f (.ValueAtKey arcs k) x y)]
+       (.Add arcs k v)
+       v)))
   ([go k f x y z]
    (with-cmpt go [arcs ArcadiaState]
-     (.Add arcs k (f (.ValueAtKey arcs k) x y z))
-     go))
+     (let [v (f (.ValueAtKey arcs k) x y z)]
+       (.Add arcs k v)
+       v)))
   ([go k f x y z & args]
    (with-cmpt go [arcs ArcadiaState]
-     (.Add arcs k (apply f (.ValueAtKey arcs k) x y z args))
-     go)))
+     (let [v (apply f (.ValueAtKey arcs k) x y z args)]
+       (.Add arcs k v)
+       v))))
 
 ;; ============================================================
 ;; roles 
@@ -677,8 +690,17 @@
   (assoc bldg hook-type-key (.fn inf)))
 
 (defn role
-  "Returns a hashmap of the state and hooks associates with role `k` on
-  `GameObject` `obj`."
+  "Returns a map of all hooks and state attached to GameObject `obj` on key `k`. Within the returned map, keys will be either hook event keywords such as `:update`, `:on-collision-enter`, etc, or `:state`.
+
+```clj
+(hook+ obj :update :test #'on-update)
+(state+ obj :test {:speed 3, :mass 4})
+
+(role obj :test)
+;; returns:
+;; {:state {:speed 3, :mass 4},
+;;  :update #'on-update}
+```"
   [obj k]
   (let [step (fn [bldg ^ArcadiaBehaviour ab]
                (let [hook-type-key (hook->hook-type-key ab)]
@@ -710,8 +732,26 @@
 
 ;; map from hook, state keys to role specs
 (defn roles
-  "Returns a map of roke keys to role specification maps that include state and
-  hook keys."
+  "Returns a map containing all the roles attached to GameObject
+  `obj`. For each entry in this map, the key is the key of some hooks
+  or state attached to `obj`, and the value is the map one would get
+  by calling `(role obj k)` for that key `k`. For example:
+
+  ```clj
+(hook+ obj :update :key-a #'on-update)
+(state+ obj :key-a {:speed 3, :mass 4})
+
+(hook+ obj :update :key-b #'other-on-update)
+(state+ obj :key-b {:name \"bob\", :health 5})
+
+(roles obj)
+;; returns:
+;; {:key-a {:state {:speed 3, :mass 4},
+;;          :update #'on-update},
+;;  :key-b {:state {:name \"bob\", :health 5},
+;;          :update #'other-on-update}}
+  ```
+  Roundtrips with `roles+`."
   [obj]
   (let [init (if-let [^ArcadiaState arcs (cmpt obj ArcadiaState)]
                (reduce-kv
