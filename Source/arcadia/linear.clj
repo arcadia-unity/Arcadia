@@ -538,12 +538,12 @@ Calls to this function will be inlined if possible."
              ([] Matrix4x4/identity)
              ([x] x)
              ([x & args]
-              (nestl 'Matrix4x4/op_Multiply (cons x args))))
+              (nestl 'UnityEngine.Matrix4x4/op_Multiply (cons x args))))
    :inline-arities >1?}
   ([] Matrix4x4/identity)
   ([a] a)
   ([a b]
-   (Matrix4x4/op_Multiply a b))
+   (UnityEngine.Matrix4x4/op_Multiply a b))
   ([a b & args]
    (reduce m* (m* a b) args)))
 
@@ -554,38 +554,38 @@ Calls to this function will be inlined if possible."
 
 (definline transpose
   "Wraps `Matrix4x4/transpose`"
-  [^Matrix4x4 m]
+  [^UnityEngine.Matrix4x4 m]
   `(. ~m transpose))
 
 (definline column
   "Wraps `Matrix4x4/GetColumn`"
-  [^Matrix4x4 m, col-inx]
+  [^UnityEngine.Matrix4x4 m, col-inx]
   `(.GetColumn ~m ~col-inx))
 
 (definline row
   "Wraps `Matrix4x4/GetRow`"
-  [^Matrix4x4 m, row-inx]
+  [^UnityEngine.Matrix4x4 m, row-inx]
   `(.GetRow ~m ~row-inx))
 
 (definline put-column 
   "Sets column number `col-inx` of `Matrix4x4` `m` to the `Vector4` `col`"
-  [^Matrix4x4 m, col-inx, col]
+  [^UnityEngine.Matrix4x4 m, col-inx, col]
   `(Arcadia.LinearHelper/matrixPutColumn ~m ~col-inx ~col))
 
 (definline put-row
   "Sets row number `row-inx` of `Matrix4x4` `m` to the `Vector4` `row`"
-  [^Matrix4x4 m, row-inx, row]
+  [^UnityEngine.Matrix4x4 m, row-inx, row]
   `(Arcadia.LinearHelper/matrixPutRow ~m ~row-inx ~row))
 
 (definline ortho
   "Wraps `Matrix4x4/Ortho`"
-  ^Matrix4x4 [left right bottom top znear zfar]
-  `(Matrix4x4/Ortho ~left ~right ~bottom ~top ~znear ~zfar))
+  ^UnityEngine.Matrix4x4 [left right bottom top znear zfar]
+  `(UnityEngine.Matrix4x4/Ortho ~left ~right ~bottom ~top ~znear ~zfar))
 
 (definline perspective
   "Wraps `Matrix4x4/Perspective`"
-  ^Matrix4x4 [fov aspect znear zfar]
-  `(Matrix4x4/Perspective ~fov ~aspect ~znear ~zfar))
+  ^UnityEngine.Matrix4x4 [fov aspect znear zfar]
+  `(UnityEngine.Matrix4x4/Perspective ~fov ~aspect ~znear ~zfar))
 
 (definline inverse
   "Wraps `Matrix4x4/Inverse`"
@@ -595,4 +595,4 @@ Calls to this function will be inlined if possible."
 (definline trs
   "Wraps `Matrix4x4/TRS`"
   [^UnityEngine.Vector3 t, ^UnityEngine.Quaternion r, ^UnityEngine.Vector3 s]
-  `(Matrix4x4/TRS ~t ~r ~s))
+  `(UnityEngine.Matrix4x4/TRS ~t ~r ~s))
