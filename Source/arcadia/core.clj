@@ -694,7 +694,6 @@
 
 ```clj
 (hook+ obj :update :test #'on-update)
-
 (state+ obj :test {:speed 3, :mass 4})
 
 (role obj :test)
@@ -733,8 +732,26 @@
 
 ;; map from hook, state keys to role specs
 (defn roles
-  "Returns a map of roke keys to role specification maps that include state and
-  hook keys."
+  "Returns a map containing all the roles attached to GameObject
+  `obj`. For each entry in this map, the key is the key of some hooks
+  or state attached to `obj`, and the value is the map one would get
+  by calling `(role obj k)` for that key `k`. For example:
+
+  ```clj
+(hook+ obj :update :key-a #'on-update)
+(state+ obj :key-a {:speed 3, :mass 4})
+
+(hook+ obj :update :key-b #'other-on-update)
+(state+ obj :key-b {:name \"bob\", :health 5})
+
+(roles obj)
+;; returns:
+;; {:key-a {:state {:speed 3, :mass 4},
+;;          :update #'on-update},
+;;  :key-b {:state {:name \"bob\", :health 5},
+;;          :update #'other-on-update}}
+  ```
+  Roundtrips with `roles+`."
   [obj]
   (let [init (if-let [^ArcadiaState arcs (cmpt obj ArcadiaState)]
                (reduce-kv
