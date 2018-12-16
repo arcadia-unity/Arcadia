@@ -420,6 +420,41 @@
     `(let [~osym ~o]
        ~@asgns)))
 
+(defmacro set-with!
+  "Access and set a field or property `prop` on object instance
+  `obj`. The new value at `(. obj prop)` will be set to the value of
+  `body`, evaluated in an implicit `do`, with `name` bound to the
+  preexisting value of `(. obj prop)`.  This operation is not atomic,
+  and should be used with caution in concurrent contexts.
+
+  As an example,
+
+  ```clj
+(set-with! (.transform some-game-object) [pos position]
+  (arcadia.linear/v3+ pos (arcadia.linear/v3 1 0 0)))
+  ```
+
+  is equivalent to
+
+  ```
+(let [tr (.transform some-game-object)
+      pos (.position tr)]
+  (set!
+    (.position tr)
+    (arcadia.linear/v3+ (.position tr) (arcadia.linear/v3 1 0 0))))
+  ```
+
+  Since the object is the first argument, multiple such assignments on
+  an object may be chained using `doto`. Returns the new value of the
+  field or property."
+  [obj [name prop :as bindings] & body]
+  (assert (vector? bindings))
+  (assert (symbol? name))
+  (assert (symbol? prop))
+  `(let [obj# ~obj
+         ~name (. obj# ~prop)]
+     (set! (. obj# ~prop) (do ~@body))))
+
 ;; ============================================================
 ;; traversal
 
