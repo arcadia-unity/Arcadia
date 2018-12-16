@@ -717,7 +717,8 @@
   (role- obj k)
   ```
 
-(defn roles- [obj ks]
+  Returns `nil`."
+  [obj ks]
   (reduce role- obj ks)
   nil)
 
