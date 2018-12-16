@@ -596,7 +596,13 @@
 (defn update-state
   "Updates the state of GameObject `go` at key `k` with function `f` and
   additional arguments `args`. Args are applied in the same order as
-  `clojure.core/update`. Returns the new value of the state at `k`."
+  `clojure.core/update`. Returns the new value of the state at `k`.
+
+  In the special case that the value in state is a defmutable
+  instance, `f` will be applied to the persistent representation of
+  that value, which will then be converted to a mutable instance
+  again, and inserted into state at `k`. The returned value will be
+  `f` applied to the persistent representation."
   ([go k f]
    (update-state-impl-form go k f))
   ([go k f x]
