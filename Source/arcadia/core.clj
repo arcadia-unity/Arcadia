@@ -698,11 +698,12 @@
   "Removes a role from GameObject `obj` on key `k`. Any hook or state
   attached to `obj` on key `k` will be removed. Returns `nil`."
   [obj k]
-  (reduce-kv
-    (fn [_ ht _]
-      (hook- obj ht k))
-    nil
-    hook-types)
+  (let [abs (cmpts obj ArcadiaBehaviour)]
+    (loop [i (int 0)]
+      (when (< i (count abs))
+        (let [^ArcadiaBehaviour ab (aget abs i)]
+          (.RemoveFunction ab k)
+          (recur (inc i))))))
   (state- obj k)
   nil)
 
