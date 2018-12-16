@@ -451,7 +451,7 @@
   ^{:doc/see-also {"Unity Event Functions" "https://docs.unity3d.com/Manual/EventFunctions.html"}}
   hook+
   "Attach a Clojure function, which may be a Var instance, to GameObject
-  `obj`. The function `f` will be invoked every time the event
+  `obj` on key `k`. The function `f` will be invoked every time the event
   identified by `event-kw` is triggered by Unity.
 
   `f` must be a function of 2 arguments, plus however many arguments
@@ -460,12 +460,12 @@
   the key `k` it was attached with. The remaining arguments are the
   arguments normally passed to the corresponding Unity event function.
 
-  Returns `nil`."
+  Returns `f`."
   ([obj event-kw k f]
    (let [hook-type (ensure-hook-type event-kw)
          ^ArcadiaBehaviour hook-cmpt (ensure-cmpt obj hook-type)]
      (.AddFunction hook-cmpt k f)
-     nil)))
+     f)))
 
 (defn hook-
   "Removes hook function from GameObject `obj` on the Unity event
@@ -644,9 +644,36 @@
   :fn (fn [{:keys [obj]} ret]
         (= obj ret)))
 
-(defn role+ [obj k spec]
-  ;; unfortunately we need to blow away previous hooks
-  ;; in addition to overriding existing things
+(defn role+
+  "Adds a role `r` to GameObject `obj` on key `k`, replacing any
+previous role on `k`. Keys in `r` corresponding to Unity event
+functions, such as `:update`, `:on-collision-enter`, etc, are
+expected to have values meeting the criteria for hook functions
+described in the docstring for `hook+`. For such a key `event-kw`,
+values will be attached to `obj` as though by `(hook+ obj event-kw
+k (get r event-kw))`.
+
+If present, the value of the key `:state` in `r` will be attached to
+`obj` as though by `(state+ obj k (get r :state))`.
+
+For example,
+
+```clj
+(role+
+  obj,
+  :example-role,
+  {:state 45, {:update #'on-update, :on-collision-enter #'on-collision-enter}})
+```
+
+has the same effect as
+
+```clj
+(role- obj :example-role)
+(state+ obj :example-role 45)
+(hook+ obj :update :example-role #'on-update)
+(hook+ obj :on-collision-enter :example-role #'on-collision-enter)
+```"
+  [obj k r]
   (role- obj k)
   (reduce-kv
     (fn [_ k2 v]
@@ -657,14 +684,16 @@
         (= :state k2)
         (state+ obj k (maybe-mutable v))))
     nil
-    spec)
-  obj)
+    r)
+  r)
 
 (defn roles+ [obj spec]
-  (reduce-kv role+ obj spec))
+  (reduce-kv role+ obj spec)
+  spec)
 
 (defn roles- [obj ks]
-  (reduce role- obj ks))
+  (reduce role- obj ks)
+  nil)
 
 (s/fdef role
   :args (s/cat :obj any? ;; for now ;; #(satisfies? ISceneGraph %)
@@ -684,7 +713,9 @@
   (assoc bldg hook-type-key (.fn inf)))
 
 (defn role
-  "Returns a map of all hooks and state attached to GameObject `obj` on key `k`. Within the returned map, keys will be either hook event keywords such as `:update`, `:on-collision-enter`, etc, or `:state`.
+  "Returns a map of all hooks and state attached to GameObject `obj` on
+key `k`. Within the returned map, keys will be either hook event
+keywords such as `:update`, `:on-collision-enter`, etc, or `:state`.
 
 ```clj
 (hook+ obj :update :test #'on-update)
