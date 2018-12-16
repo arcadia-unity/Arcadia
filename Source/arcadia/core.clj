@@ -695,9 +695,27 @@
     r)
   r)
 
-(defn roles+ [obj spec]
-  (reduce-kv role+ obj spec)
-  spec)
+(defn roles+
+  "Takes a GameObject `obj` and map `rs` containing role keys and role
+  maps as entries.  For each entry in `rs` with key `k` and value `r`,
+  adds `r` to `obj` on key `k` as though calling
+  
+  ```clj
+  (role+ obj k r)
+  ```
+  
+  Returns `rs`."
+  [obj rs]  
+  (reduce-kv role+ obj rs)
+  rs)
+
+(defn roles-
+  "Takes a GameObject `obj` and collection of keys `ks`. For each key
+  `k` in `ks`, will remove `k` from `obj`, as if calling
+
+  ```clj
+  (role- obj k)
+  ```
 
 (defn roles- [obj ks]
   (reduce role- obj ks)
