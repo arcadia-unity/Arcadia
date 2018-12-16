@@ -790,18 +790,18 @@
   by calling `(role obj k)` for that key `k`. For example:
 
   ```clj
-(hook+ obj :update :key-a #'on-update)
-(state+ obj :key-a {:speed 3, :mass 4})
+  (hook+ obj :update :key-a #'on-update)
+  (state+ obj :key-a {:speed 3, :mass 4})
 
-(hook+ obj :update :key-b #'other-on-update)
-(state+ obj :key-b {:name \"bob\", :health 5})
+  (hook+ obj :update :key-b #'other-on-update)
+  (state+ obj :key-b {:name \"bob\", :health 5})
 
-(roles obj)
-;; returns:
-;; {:key-a {:state {:speed 3, :mass 4},
-;;          :update #'on-update},
-;;  :key-b {:state {:name \"bob\", :health 5},
-;;          :update #'other-on-update}}
+  (roles obj)
+  ;; returns:
+  ;; {:key-a {:state {:speed 3, :mass 4},
+  ;;          :update #'on-update},
+  ;;  :key-b {:state {:name \"bob\", :health 5},
+  ;;          :update #'other-on-update}}
   ```
   Roundtrips with `roles+`."
   [obj]
