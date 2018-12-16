@@ -741,18 +741,18 @@
 
 (defn role
   "Returns a map of all hooks and state attached to GameObject `obj` on
-key `k`. Within the returned map, keys will be either hook event
-keywords such as `:update`, `:on-collision-enter`, etc, or `:state`.
+  key `k`. Within the returned map, keys will be either hook event
+  keywords such as `:update`, `:on-collision-enter`, etc, or `:state`.
 
-```clj
-(hook+ obj :update :test #'on-update)
-(state+ obj :test {:speed 3, :mass 4})
+  ```clj
+  (hook+ obj :update :test #'on-update)
+  (state+ obj :test {:speed 3, :mass 4})
 
-(role obj :test)
-;; returns:
-;; {:state {:speed 3, :mass 4},
-;;  :update #'on-update}
-```"
+  (role obj :test)
+  ;; returns:
+  ;; {:state {:speed 3, :mass 4},
+  ;;  :update #'on-update}
+  ```"
   [obj k]
   (let [step (fn [bldg ^ArcadiaBehaviour ab]
                (let [hook-type-key (hook->hook-type-key ab)]
