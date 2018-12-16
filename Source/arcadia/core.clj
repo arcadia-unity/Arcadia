@@ -561,34 +561,28 @@
     (.Clear arcs)
     nil))
 
+(defmacro ^:private update-state-impl-form [go k & args]
+  `(with-cmpt ~go [arcs# ArcadiaState]
+     (let [v# (~f (snapshot (.ValueAtKey arcs#)) ~@args)]
+       (.Add arcs# ~k (maybe-mutable v#))
+       v#)))
+
 (defn update-state
   "Updates the state of GameObject `go` at key `k` with function `f` and
   additional arguments `args`. Args are applied in the same order as
   `clojure.core/update`. Returns the new value of the state at `k`."
   ([go k f]
-   (with-cmpt go [arcs ArcadiaState]
-     (let [v (f (.ValueAtKey arcs k))]
-       (.Add arcs k v)
-       v)))
+   (update-state-impl-form go k f))
   ([go k f x]
-   (with-cmpt go [arcs ArcadiaState]
-     (let [v (f (.ValueAtKey arcs k) x)]
-       (.Add arcs k v)
-       v)))
+   (update-state-impl-form go k f x))
   ([go k f x y]
-   (with-cmpt go [arcs ArcadiaState]
-     (let [v (f (.ValueAtKey arcs k) x y)]
-       (.Add arcs k v)
-       v)))
+   (update-state-impl-form go k f x y))
   ([go k f x y z]
-   (with-cmpt go [arcs ArcadiaState]
-     (let [v (f (.ValueAtKey arcs k) x y z)]
-       (.Add arcs k v)
-       v)))
+   (update-state-impl-form go k f x y z))
   ([go k f x y z & args]
    (with-cmpt go [arcs ArcadiaState]
-     (let [v (apply f (.ValueAtKey arcs k) x y z args)]
-       (.Add arcs k v)
+     (let [v (apply f (snapshot (.ValueAtKey arcs k)) x y z args)]
+       (.Add arcs k (maybe-mutable v))
        v))))
 
 ;; ============================================================
