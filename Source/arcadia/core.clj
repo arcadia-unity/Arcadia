@@ -627,14 +627,17 @@
           (sequential? v)
           true)))))
 
-(defn role- [obj k]
+(defn role-
+  "Removes a role from GameObject `obj` on key `k`. Any hook or state
+  attached to `obj` on key `k` will be removed. Returns `nil`."
+  [obj k]
   (reduce-kv
     (fn [_ ht _]
       (hook- obj ht k))
     nil
     hook-types)
   (state- obj k)
-  obj)
+  nil)
 
 (s/fdef role+
   :args (s/cat :obj any? ;; for now #(satisfies? ISceneGraph %)
