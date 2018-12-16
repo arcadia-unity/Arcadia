@@ -649,33 +649,38 @@
 
 (defn role+
   "Adds a role `r` to GameObject `obj` on key `k`, replacing any
-previous role on `k`. Keys in `r` corresponding to Unity event
-functions, such as `:update`, `:on-collision-enter`, etc, are
-expected to have values meeting the criteria for hook functions
-described in the docstring for `hook+`. For such a key `event-kw`,
-values will be attached to `obj` as though by `(hook+ obj event-kw
-k (get r event-kw))`.
+  previous role on `k`. Keys in `r` corresponding to Unity event
+  functions, such as `:update`, `:on-collision-enter`, etc, are
+  expected to have values meeting the criteria for hook functions
+  described in the docstring for `hook+`. For such a key `event-kw`,
+  values will be attached to `obj` as though by `(hook+ obj event-kw
+  k (get r event-kw))`.
 
-If present, the value of the key `:state` in `r` will be attached to
-`obj` as though by `(state+ obj k (get r :state))`.
+  If present, the value of the key `:state` in `r` will be attached to
+  `obj` as though by `(state+ obj k (get r :state))`.
 
-For example,
+  For example,
 
-```clj
-(role+
+  ```clj
+  (role+
   obj,
   :example-role,
   {:state 45, {:update #'on-update, :on-collision-enter #'on-collision-enter}})
-```
+  ```
 
-has the same effect as
+  has the same effect as
 
-```clj
-(role- obj :example-role)
-(state+ obj :example-role 45)
-(hook+ obj :update :example-role #'on-update)
-(hook+ obj :on-collision-enter :example-role #'on-collision-enter)
-```"
+  ```clj
+  (role- obj :example-role)
+  (state+ obj :example-role 45)
+  (hook+ obj :update :example-role #'on-update)
+  (hook+ obj :on-collision-enter :example-role #'on-collision-enter)
+  ```
+
+  As with `state+`, persistent reprsentations `defmutable` data as
+  values in `:state` will be converted to mutable instances.
+
+  Returns `r`."
   [obj k r]
   (role- obj k)
   (reduce-kv
