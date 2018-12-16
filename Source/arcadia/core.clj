@@ -561,7 +561,7 @@
     (.Clear arcs)
     nil))
 
-(defmacro ^:private update-state-impl-form [go k & args]
+(defmacro ^:private update-state-impl-form [go k f & args]
   `(with-cmpt ~go [arcs# ArcadiaState]
      (let [v# (~f (snapshot (.ValueAtKey arcs#)) ~@args)]
        (.Add arcs# ~k (maybe-mutable v#))
