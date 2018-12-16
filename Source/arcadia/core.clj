@@ -408,9 +408,9 @@
   Returns the final set value.
 
   ```clj
-(set! (.transform some-game-object)
+(sets! (.transform some-game-object)
   position (arcadia.linear/v3 1 2 3)
-  scale (arcadia.linear/v3 1 2 3))
+  localScale (arcadia.linear/v3 1 2 3))
   ```"
   [o & assignments]
   (let [osym (gensym "obj__")
