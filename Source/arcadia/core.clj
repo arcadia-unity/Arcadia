@@ -476,7 +476,7 @@
 (defn
   ^{:doc/see-also {"Unity Event Functions" "https://docs.unity3d.com/Manual/EventFunctions.html"}}
   hook+
-  "Attach a Clojure function, which may be a Var instance, to GameObject
+  "Attach a Clojure function, preferrably a Var instance, to GameObject
   `obj` on key `k`. The function `f` will be invoked every time the event
   identified by `event-kw` is triggered by Unity.
 
