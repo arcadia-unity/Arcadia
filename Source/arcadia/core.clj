@@ -395,6 +395,32 @@
          ~@else))))
 
 ;; ============================================================
+;; sugar for imperative programming
+
+(defmacro sets!
+  "Set multiple fields or properties on an object instance `o` simultaneously.
+
+  assignment => field-name value 
+
+  For each assignment, field-name is the name of a field or property
+  of `o`, and `value` is the new value it will be set to.
+
+  Returns the final set value.
+
+  ```clj
+(set! (.transform some-game-object)
+  position (arcadia.linear/v3 1 2 3)
+  scale (arcadia.linear/v3 1 2 3))
+  ```"
+  [o & assignments]
+  (let [osym (gensym "obj__")
+        asgns (->> (partition 2 assignments)
+                   (map (fn [[lhs rhs]]
+                          `(set! (. ~osym ~lhs) ~rhs))))]
+    `(let [~osym ~o]
+       ~@asgns)))
+
+;; ============================================================
 ;; traversal
 
 (defn descendents
