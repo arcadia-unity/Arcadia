@@ -78,3 +78,4 @@ These changes are relative to [83e0931a](https://github.com/arcadia-unity/Arcadi
 - Fixed namespace qualification bugs in `arcadia.linear` Matrix functions.
 - Dropped `:compiler/verbose` and `:compiler/warn-on-reflection` configuration options.
 - Renamed `:compiler/options` to `:compiler-options` in configuration file.
+- Added `arcadia.core/parent`.
