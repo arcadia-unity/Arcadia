@@ -378,7 +378,7 @@
                  (partition 2)
                  (mapcat (fn [[n t]]
                            [(meta-tag n t) `(ensure-cmpt ~gobsym ~t)])))]
-     `(let [~gobsym (Util/CastToGameObject ~gob)]
+     `(let [~gobsym (Arcadia.Util/CastToGameObject ~gob)]
         (let [~@dcls]
           ~@body)))))
 
