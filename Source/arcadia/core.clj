@@ -635,7 +635,7 @@
 
 (defmacro ^:private update-state-impl-form [go k f & args]
   `(with-cmpt ~go [arcs# ArcadiaState]
-     (let [v# (~f (snapshot (.ValueAtKey arcs# k)) ~@args)]
+     (let [v# (~f (snapshot (.ValueAtKey arcs# ~k)) ~@args)]
        (.Add arcs# ~k (maybe-mutable v#))
        v#)))
 
