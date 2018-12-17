@@ -311,7 +311,10 @@
 
   GameObjects at the top of the hierarchy do not have parents."
   [x]
-  (when-let [parent (null->nil (.. x transform parent))]
+  (when-let [parent (-> x
+                        Util/CastToGameObject
+                        (.. transform parent)
+                        null->nil)]
     (.gameObject parent)))
 
 ;; ------------------------------------------------------------
