@@ -14,8 +14,7 @@
  :compiler-options {}
 
  ;; declare specific compilation targets, will also compile their dependencies
- ;; when not declared every user clj file in Assets will be compiled
- ;; :build-namespaces [foo.core]
+ ;; :export-namespaces [foo.core]
 
  ;; set to true in user configuration.edn to enable automatic code
  ;; reloading when a clojure file is saved
