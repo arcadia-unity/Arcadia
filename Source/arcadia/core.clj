@@ -306,6 +306,17 @@
         (transient [])
         (.transform x)))))
 
+(defn parent
+  "Returns the live parent of GameObject `x` or `nil` if it has none.
+
+  GameObjects at the top of the hierarchy do not have parents."
+  [x]
+  (when-let [parent (-> x
+                        Util/CastToGameObject
+                        (.. transform parent)
+                        null->nil)]
+    (.gameObject parent)))
+
 ;; ------------------------------------------------------------
 ;; IEntityComponent
 
@@ -378,7 +389,7 @@
                  (partition 2)
                  (mapcat (fn [[n t]]
                            [(meta-tag n t) `(ensure-cmpt ~gobsym ~t)])))]
-     `(let [~gobsym (Util/CastToGameObject ~gob)]
+     `(let [~gobsym (Arcadia.Util/CastToGameObject ~gob)]
         (let [~@dcls]
           ~@body)))))
 
@@ -624,7 +635,7 @@
 
 (defmacro ^:private update-state-impl-form [go k f & args]
   `(with-cmpt ~go [arcs# ArcadiaState]
-     (let [v# (~f (snapshot (.ValueAtKey arcs#)) ~@args)]
+     (let [v# (~f (snapshot (.ValueAtKey arcs# k)) ~@args)]
        (.Add arcs# ~k (maybe-mutable v#))
        v#)))
 

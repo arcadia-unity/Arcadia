@@ -68,6 +68,8 @@ namespace Arcadia
 		// workaround for spec issues
 		static void DisableSpecChecking ()
 		{
+			Environment.SetEnvironmentVariable("CLOJURE_SPEC_CHECK_ASSERTS", "false");
+			Environment.SetEnvironmentVariable("CLOJURE_SPEC_SKIP_MACROS", "true");
 			Environment.SetEnvironmentVariable("clojure.spec.check-asserts", "false");
 			Environment.SetEnvironmentVariable("clojure.spec.skip-macros", "true");
 		}
