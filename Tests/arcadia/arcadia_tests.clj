@@ -276,8 +276,10 @@
              "Retrieves present component with GameObject `x`."))))
     (with-temp-objects :lit [x]
       (let [bc (.AddComponent x UnityEngine.BoxCollider)]
-        (t (at/is (= (ac/cmpt (.transform x) UnityEngine.BoxCollider) bc)
-             "Retrieves present component with Component `x`.")))))
+        (at/throws
+          (ac/cmpt (.transform x) UnityEngine.BoxCollider)
+          ArgumentException
+          "Throws ArgumentException with Component `x`."))))
   (as-sub-closing [t "cmpts"] ;; should this return nil or an empty array under various conditions?
     ;; does cmpts work with nil x?
     ;; does cmpts work with null x?
@@ -294,8 +296,10 @@
             "Retrieves correct Components with GameObject `x` and present Component."))))
     (with-temp-objects :lit [x]
       (let [bc (.AddComponent x UnityEngine.BoxCollider)]
-        (t (at/is (= (first (ac/cmpts (.transform x) UnityEngine.BoxCollider)) bc)
-             "Retrieves correct components with Component `x` and present Component.")))))
+        (t (at/throws
+             (first (ac/cmpts (.transform x) UnityEngine.BoxCollider))
+             ArgumentException
+             "Throws ArgumentException with Component `x`.")))))
   (as-sub-closing [t "cmpt+"]
     ;; does cmpt+ work with nil x?
     ;; does cmpt+ work with null x?
@@ -311,14 +315,10 @@
              "Attaches and returns new Component instance with GameObject `x`."))))
     (with-temp-objects :lit [x]
       (as-sub-closing [t "Attaching new Component instance with Component `x`."]
-        (let [tr (.transform x)]
-          (try
-            (let [bc (ac/cmpt+ tr UnityEngine.BoxCollider)]
-              (t (at/is (= (.GetComponent x UnityEngine.BoxCollider) bc)
-                   "works")))
-            (catch Exception e
-              (t (at/is false (str "throws: " (class e) "; Message: " (.Message e)))))))))
-    )
+        (t (at/throws
+             (ac/cmpt+ (.GetComponent x UnityEngine.Transform) UnityEngine.BoxCollider)
+             ArgumentException
+             "Throws ArgumentException.")))))
   (as-sub-closing [t "cmpt-"]
     ;; does cmpt- work with nil x?
     ;; does cmpt- work with null x?
