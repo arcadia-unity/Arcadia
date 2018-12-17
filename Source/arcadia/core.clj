@@ -785,7 +785,7 @@
   
   Returns `rs`."
   [obj rs]  
-  (reduce-kv role+ obj rs)
+  (reduce-kv #(role+ obj %2 %3) nil rs)
   rs)
 
 (defn roles-
