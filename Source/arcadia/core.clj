@@ -1215,7 +1215,7 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
   support snapshotting to persistent data via `snapshot`, and
   reconstruction from snapshots via `mutable`; snapshotting and
   reconstructing are also integrated into `role+`, `state+`,
-  `role`, and `roles`.
+  `update-state`, `role`, and `roles`.
 
   Instances of these types may be converted into persistent
   representations and back via `snapshot` and `mutable`. This
