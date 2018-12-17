@@ -102,17 +102,17 @@ For non-Clojure fns, :scope and :local-fn will be absent."
 
 (defn- stacktrace-relevant-to-instrument
   "Takes a coll of stack trace elements (as returned by
-StackTraceElement->vec) and returns a coll of maps as per
-interpret-stack-trace-element that are relevant to a
-failure in instrument."
+  StackTraceElement->vec) and returns a coll of maps as per
+  interpret-stack-trace-element that are relevant to a
+  failure in instrument."
   [elems]
   (let [plumbing? (fn [{:keys [var-scope]}]
                     (contains? '#{clojure.spec.alpha.test/spec-checking-fn} var-scope))]
-    (sequence (comp (map StackTraceElement->vec)
-                    (map interpret-stack-trace-element)
-                    (filter :var-scope)
-                    (drop-while plumbing?))
-              elems)))
+    (->> (.. elems GetFrames)
+         (map StackTraceElement->vec)
+         (map interpret-stack-trace-element)
+         (filter :var-scope)
+         (drop-while plumbing?))))
 
 (defn- spec-checking-fn
   [v f fn-spec]
