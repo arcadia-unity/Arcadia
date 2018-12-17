@@ -306,6 +306,14 @@
         (transient [])
         (.transform x)))))
 
+(defn parent
+  "Returns the live parent of GameObject `x` or `nil` if it has none.
+
+  GameObjects at the top of the hierarchy do not have parents."
+  [x]
+  (when-let [parent (null->nil (.. x transform parent))]
+    (.gameObject parent)))
+
 ;; ------------------------------------------------------------
 ;; IEntityComponent
 
