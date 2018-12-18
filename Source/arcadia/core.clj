@@ -1239,9 +1239,9 @@ Note that generating vars is usually a bad idea because it messes with
   representations and back via `snapshot` and `mutable`. This
   roundtrips, so if `x` is such an instance:
 
-```clj
-(= (snapshot x) (snapshot (mutable (snapshot x))))
-```
+  ```clj
+  (= (snapshot x) (snapshot (mutable (snapshot x))))
+  ```
 
   If a persistent snapshot is specified as the state argument of
   `set-state`, or as the `:state` value in the map argument of
