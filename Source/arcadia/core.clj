@@ -1246,6 +1246,12 @@ Note that generating vars is usually a bad idea because it messes with
   reconstructing are also integrated into `role+`, `state+`,
   `update-state`, `role`, and `roles`.
 
+  `defmutable` instances may be mutated in two ways. Their fields may
+  be mutated directly using `set!` and dot syntax. Fields may also be
+  dynamically set using `(mut! obj k v)`. Here, `obj` is the
+  `defmutable` instance, `k` is the keyword key for an entry, and `v`
+  is the new value of that entry to set on the defmutable instance.
+
   Instances of these types may be converted into persistent
   representations and back via `snapshot` and `mutable`. This
   roundtrips, so if `x` is such an instance:
