@@ -634,9 +634,11 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
   (Arcadia.HookStateSystem/Lookup go k))
 
 (defn state
-  "Returns the state of GameObject `go` at key `k`. If this state is a
-  `defmutable` instance, will return a persistent represntation
-  instead. To avoid this behavior use `lookup`."
+  "With one argument, returns the state of GameObject `go` on all keys
+  as a map. With two arguments, returns the state of GameObject `go`
+  at key `k`. If this state is a `defmutable` instance, will return a
+  persistent represntation instead. To avoid this behavior use
+  `lookup`."
   ([go]
    (when-let [^ArcadiaState s (cmpt go ArcadiaState)]
      (let [m (persistent!
