@@ -92,6 +92,22 @@ namespace Arcadia
 			}
 			return PersistentHashMap.create(kvs);
 		}
+
+		// for serialization of defmutable types as edn
+		public void PrintEntries (IFn printfn, System.IO.TextWriter w)
+		{
+			bool first = true;
+			foreach (var e in dict) {
+				if (first) {
+					first = false;
+				} else {
+					w.Write(", ");
+				}
+				printfn.invoke(e.Key, w);
+				w.Write(" ");
+				printfn.invoke(e.Value, w);
+			}
+		}
 	}
 }
 #endif

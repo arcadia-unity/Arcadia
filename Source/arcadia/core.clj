@@ -1251,8 +1251,62 @@ Note that generating vars is usually a bad idea because it messes with
   any mutable instances that would otherwise be the values of `:state`
   in the returned map(s) to persistent snapshots.
 
-  `defmutable` serialization, via either `snapshot` or Unity scene-graph
-  serialization, does *not* currently preserve reference
+  `defmutable` supports four special options to help define custom
+  `snapshot` and `mutable` implementations:
+
+  `:snapshot`          
+  `:mutable`
+  `:snapshot-elements`
+  `:mutable-elements`
+
+  `:snapshot` and `:mutable` expect their values to be in the
+  following form:
+
+  `([this-param key-param value-param] body*)`
+
+  When calling `snapshot` or `mutable`, the function defined by
+  `:snapshot` or `:mutable` will be called on each entry in the
+  `defmutable` instance (in the case of `snapshot`) or the persistent
+  map representation (in the case of `mutable`). When these functions
+  run, `this-param` will be assigned to the original `defmutable`
+  instance for `snapshot`, or to the original persistent map
+  representation for `mutable`; `key-param` will be assigned to the
+  keyword key of this entry; and `val-param` will be assigned to its
+  incoming value. For `:snapshot`, the return will be the value of the
+  corresponding entry in the persistent map representation. For
+  `:mutable`, the return will be the value of the corresponding entry
+  in the `defmutable` instance representation. `:snapshot` and
+  `:mutable` should invert each other.
+
+  `:snapshot-elements` and `:mutable-elements` support finer
+  specialization of `snapshot` and `mutable` behavior. They expect
+  their values to be maps from keyword names of possible entries, to
+  the same sort of function specifications taken by `:snapshot` and
+  `:mutable`.  Specifications made with `:snapshot-elements` or
+  `:mutable-elements` take priority over those made with `:snapshot`
+  or `:mutable`.
+
+  See the online documentation for examples.
+
+  `defmutable` will automatically generate a constructor function. As
+  with `deftype`, the name of its var will be `->` followed by the
+  name of the type, and its expected arguments will be the initial
+  values of `fields`, in order.
+
+  For example, given the followind `defmutable` definition:
+
+  ```clj
+  (defmutable Sheep [wooliness bouyancy])
+  ```
+
+  an instance of `Sheep` could be constructed using
+
+  ```clj
+  (->Sheep 3 4)
+  ```
+  
+  `defmutable` serialization, via either `snapshot` or Unity
+  scene-graph serialization, does *not* currently preserve reference
   identity. Calling `mutable` on the same snapshot twice will result
   in two distinct instances. It is therefore important to store any
   given `defmutable` instance in just one place in the scene graph.
@@ -1277,7 +1331,6 @@ Note that generating vars is usually a bad idea because it messes with
             param-sym (-> (gensym (str name "_"))
                           (with-meta {:tag type-name}))
             field-kws (map clojurized-keyword fields)
-            datavec [type-name (zipmap field-kws fields)]
             dict-param (gensym "dict_")
             data-param (gensym "data_")            
             mut-cases-form-fn (fn [this-sym [k v]]
@@ -1319,7 +1372,8 @@ Note that generating vars is usually a bad idea because it messes with
                                   (for [{:keys [protocol-name method-impls]} protocol-impls]
                                     (cons protocol-name
                                       (for [{:keys [name args body]} method-impls]
-                                        (list* name args body)))))]
+                                        (list* name args body)))))
+            stream-sym (with-meta (gensym "stream__") {:tag 'System.IO.TextWriter})]
         `(do (deftype ~name ~(-> (->> fields (mapv #(vary-meta % assoc :unsynchronized-mutable true)))
                                  (conj
                                    (with-meta
@@ -1439,14 +1493,39 @@ Note that generating vars is usually a bad idea because it messes with
                ~(mutable-impl-form (mu/lit-assoc parse field-kws type-name data-param)))
 
              ;; register with our general deserialization
-             (defmethod arcadia.data/parse-user-type (quote ~type-name) [~dict-param]
-               (mutable ~dict-param))
+             (defmethod arcadia.data/read-user-type (quote ~type-name) [~dict-param]
+               ~(let [field-access (for [field-kw field-kws]
+                                     `(get ~dict-param ~field-kw))]
+                  `(let [inst# (~ctr ~@field-access)]
+                     (reduce-kv
+                       (fn [_# k# v#]
+                         (when-not (#{~@field-kws :arcadia.data/type} k#)
+                           (mut! inst# k# v#)))
+                       nil
+                       ~dict-param)
+                     inst#)))
 
              ;; Serialize via print-method; arcadia.data/*serialize* should be `true` for this to
              ;; work recursively.
-             (defmethod print-method ~type-name [~this-sym ^System.IO.TextWriter stream#]
-               (.Write stream#
-                 (str "#arcadia.data/data " (pr-str (snapshot ~this-sym)))))
+             (defmethod print-method ~type-name [~this-sym ~stream-sym]
+               ~(let [dict-sym (gensym "dict__")
+                      field-writes (interpose
+                                     `(.Write ~stream-sym ", ")
+                                     (for [[field field-kw] (map list fields field-kws)]
+                                       `(do (print-method ~field-kw ~stream-sym)
+                                            (.Write ~stream-sym " ")
+                                            (print-method (. ~this-sym ~field) ~stream-sym))))
+                      dynamic-writes `(.PrintEntries ~dict-sym print-method ~stream-sym)]
+                  `(let [~dict-sym (. ~this-sym ~'defmutable-internal-dictionary)]
+                     (.Write ~stream-sym "#arcadia.data/data{:arcadia.data/type ")
+                     (.Write ~stream-sym ~(str type-name))
+                     ~(when (seq fields)
+                        `(.Write ~stream-sym ", "))
+                     ~@field-writes
+                     (when (< 0 (.Count ~dict-sym))
+                       (.Write ~stream-sym ", "))
+                     ~dynamic-writes
+                     (.Write ~stream-sym "}"))))
              
              ~type-name)))))
 
