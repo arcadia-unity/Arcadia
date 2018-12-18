@@ -1250,10 +1250,10 @@ Note that generating vars is usually a bad idea because it messes with
   `defmutable` supports four special options to help define custom
   `snapshot` and `mutable` implementations:
 
-  `:snapshot`          
-  `:mutable`
-  `:snapshot-elements`
-  `:mutable-elements`
+  - `:snapshot`
+  - `:mutable`
+  - `:snapshot-elements`
+  - `:mutable-elements`
 
   `:snapshot` and `:mutable` expect their values to be in the
   following form:
@@ -1333,7 +1333,6 @@ Note that generating vars is usually a bad idea because it messes with
                                 `(case ~k
                                    ~@(mapcat
                                        (fn [field-kw, field]
-
                                          `[~field-kw (set! (. ~this-sym ~field) ~v)])
                                        field-kws
                                        fields)
