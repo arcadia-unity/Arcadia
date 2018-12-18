@@ -1289,7 +1289,7 @@ Note that generating vars is usually a bad idea because it messes with
   name of the type, and its expected arguments will be the initial
   values of `fields`, in order.
 
-  For example, given the followind `defmutable` definition:
+  For example, given the following `defmutable` definition:
 
   ```clj
   (defmutable Sheep [wooliness bouyancy])
