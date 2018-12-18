@@ -1,6 +1,7 @@
 (ns arcadia.core
   (:require [clojure.string :as string]
             [clojure.spec.alpha :as s]
+            arcadia.internal.protocols
             clojure.set
             [arcadia.internal.events :as events]
             [arcadia.internal.macro :as mac]
@@ -1122,10 +1123,10 @@ Note that generating vars is usually a bad idea because it messes with
     [_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _]
     [_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _]))
 
-
-;; consider expanding this to more variadic protocol
-(defprotocol IDeleteableElements
-  (delete! [this key]))
+(defn delete!
+  "Removes dynamic entry `k` from `defmutable` instance `x`."
+  [x k]
+  (arcadia.internal.protocols/delete! x k))
 
 (defn- expand-type-sym [type-sym]
   (symbol
@@ -1435,14 +1436,16 @@ Note that generating vars is usually a bad idea because it messes with
                
                ~@mut-impl
 
-               IDeleteableElements
+               ;; ------------------------------------------------------------
+               arcadia.internal.protocols/IDeleteableElements
+               
                ~(let [key-sym (gensym "key_")
                       key-cases (apply concat
                                   (for [k field-kws]
                                     [k `(throw
                                           (System.NotSupportedException.
                                             (str "Attempting to delete field key " ~k ". Deleting fields on types defined via `arcadia.core/defmutable` is currently not supported.")))]))]
-                  `(delete! [this# ~key-sym]
+                  `(arcadia.internal.protocols/delete! [this# ~key-sym]
                      (case ~key-sym
                        ~@key-cases
                        (.Remove ~'defmutable-internal-dictionary ~key-sym))))
