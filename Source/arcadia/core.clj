@@ -627,10 +627,18 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
 ;; ============================================================
 ;; state
 
+(defn lookup
+  "Returns the state of GameObject `go` at key `k`. Does not convert
+  defmutable instances to persistent representations."
+  [go k]
+  (Arcadia.HookStateSystem/Lookup go k))
+
 (defn state
-  "Returns the state of GameObject `go` at key `k`."
-  ([gobj]
-   (when-let [^ArcadiaState s (cmpt gobj ArcadiaState)]
+  "Returns the state of GameObject `go` at key `k`. If this state is a
+  `defmutable` instance, will return a persistent represntation
+  instead. To avoid this behavibor use `lookup`."
+  ([go]
+   (when-let [^ArcadiaState s (cmpt go ArcadiaState)]
      (let [m (persistent!
                (reduce (fn [m, ^Arcadia.JumpMap+KeyVal kv]
                          (assoc! m (.key kv) (maybe-snapshot (.val kv))))
@@ -638,12 +646,15 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
                  (.. s state KeyVals)))]
        (when-not (zero? (count m))
          m))))
-  ([gobj k]
-   (Arcadia.HookStateSystem/Lookup gobj k)))
-
+  ([go k]
+   (maybe-snapshot
+     (Arcadia.HookStateSystem/Lookup go k))))
 
 (defn state+
-  "Sets the state of GameObject `go` to value `v` at key `k`. Returns `v`."
+  "Sets the state of GameObject `go` to value `v` at key `k`. Returns
+  `v`. If `v` is a persistent representation of a `defmutable`
+  instance, will convert it to a mutable instance before inserting in
+  the scene graph."
   ([go k v]
    (with-cmpt go [arcs ArcadiaState]
      (.Add arcs k (maybe-mutable v))
