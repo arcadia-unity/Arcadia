@@ -17,3 +17,6 @@
   
   nil
   (snapshotable? [self] false))
+
+(defmulti mutable
+  (fn mutable-dispatch [{t :arcadia.core/mutable-type}] t))

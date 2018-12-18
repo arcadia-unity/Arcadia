@@ -595,19 +595,18 @@
     (snapshot x)
     x))
 
-;; constructor (no instance), so this has to be a multimethod
-;; if we're sticking to clojure stuff
-(defmulti mutable
+(defn mutable
   "Given a persistent representation of a mutable datatype defined via
   `defmutable`, constructs and returns a matching instance of that
   datatype.
 
-Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via `defmutable`,
+  Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via `defmutable`,
 
-```clj
-(= (snapshot x) (snapshot (mutable (snapshot x))))
-```"
-  (fn mutable-dispatch [{t ::mutable-type}] t))
+  ```clj
+  (= (snapshot x) (snapshot (mutable (snapshot x))))
+  ```"
+  [x]
+  (arcadia.internal.protocols/mutable x))
 
 ;; public for macros
 (defn maybe-mutable
@@ -1504,7 +1503,7 @@ Note that generating vars is usually a bad idea because it messes with
                        (mu/mdissoc ~map-sym :arcadia.data/type ::mutable-type ~@field-kws)))))
              
              ;; convert from generic persistent map to mutable type instance
-             (defmethod mutable (quote ~type-name) [~data-param]
+             (defmethod arcadia.internal.protocols/mutable (quote ~type-name) [~data-param]
                ~(mutable-impl-form (mu/lit-assoc parse field-kws type-name data-param)))
 
              ;; register with our general deserialization
