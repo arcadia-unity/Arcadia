@@ -31,6 +31,10 @@ These changes are relative to [83e0931a](https://github.com/arcadia-unity/Arcadi
   This change effects the following vars:
   - `arcadia.core`:
     `child+`, `child-`, `children`, `cmpt`, `cmpts`, `cmpt+`, `cmpt-`, `ensure-cmpt`, `with-cmpt`, `if-cmpt`, `hook+`, `hook-`, `clear-hooks`, `hook`, `state`, `state+`, `state-`, `clear-state`, `update-state`, `role`, `role-`, `role+`, `role-`, `roles+`, `roles-`, `roles`
+- Changed `arcadia.core/state` to convert `defmutable` instances to persistent representations.
+- Changed `arcadia.core/state+` to convert persistent representations of `defmutable` data to `defmutable` instances.
+- Added `arcadia.core/lookup`.
+- Moved some `defmutable` implementation details into `arcadia.internal.protocols`.
 - Changed `arcadia.core/cmpts` to filter out null Components.
 - Changed `arcadia.core/children` to filter out null GameObjects.
 - Made `(arcadia.core/child- x y)` only remove parent of `y` if `y` is a child of `x`.
