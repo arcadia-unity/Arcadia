@@ -1,9 +1,16 @@
 # =============== #
 #  Clojure Unity  #
 # =============== #
-*.mdb
+*.mdb*
+**/Compiled.meta
 **/Compiled/*.exe*
 **/Compiled/*.dll*
+**/Compiled/Editor*.dll*
+**/Export.meta
+**/Export/*.dll*
+Source/clojure/**/*.meta
+**/*.clj.meta
+**/*.clj.dll.meta
 
 # =============== #
 # Unity generated #
@@ -39,3 +46,10 @@ Icon?
 ehthumbs.db
 Thumbs.db
 
+/Libraries.meta
+/Libraries/
+/Helpers/TimeSnap.cs.meta
+/Source/arcadia/debug.clj.meta
+/Helpers/Garden.cs.meta
+/Tests.meta
+/Tests/arcadia.meta

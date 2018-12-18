@@ -1,0 +1,60 @@
+{;; This specifies a form that the repl will evaluate before
+ ;; evaluating every input:
+ 
+ ;; :repl/injections (use 'clojure.repl)
+
+ ;; set :reactive to false in user configuration file to disable file
+ ;; watching, and everything that depends on it, such as automaic file
+ ;; loading on change (see :reload-on-change below) and responding to
+ ;; changes in configuration.edn without a restart
+ :reactive true
+ 
+ ;; map of https://clojuredocs.org/clojure.core/*compiler-options* 
+ ;; Example: {:elide-meta [:doc :file :line :added :column :arglists]}
+ :compiler-options {}
+
+ ;; declare specific compilation targets, will also compile their dependencies
+ ;; :export-namespaces [foo.core]
+
+ ;; set to true in user configuration.edn to enable automatic code
+ ;; reloading when a clojure file is saved
+ :reload-on-change false
+
+ ;; You can add custom load paths, for more control over your source
+ ;; organization. Note that this is purely additive and the default is empty.
+ ;; If you wanted your sources as Assets/src/kittens/core.clj, rather than
+ ;; the default Assets/kittens/core.clj, you could use the following.
+ ;; :source-paths ["Assets/src"]
+
+ ;; set to :error to throw an exception whenever a non-serializable hook is
+ ;; attached to a gameObject
+ ;; set to :allow to silently allow non-serializable hooks
+ ;; set to :warning to issue a warning to the Unity console whenever a
+ ;; non-serializable is attached to a gameObject
+ :non-serializable-hooks :warning
+
+ :nudge true
+
+ ;; Partially controls the socket-repl.
+ ;;
+ ;; Value means:
+ ;;
+ ;; `true`: make default socket-repl (localhost, port 5555)
+ ;; `false`: stop ALL socket repls 
+ ;; a map: opts for `arcadia.internal.socket-repl/server-socket`. Means at
+ ;; least the specified server is running.
+ ;; 
+ ;; In the future, a non-map collection of maps (eg, a sequence of
+ ;; maps) should specify several servers that should at least be
+ ;; running. `true` as element should be default socket-repl.
+ ;;
+ ;; Only `false` stops servers; `nil` is ignored (means _at least_ no
+ ;; servers are running).
+ 
+ ;; :socket-repl true
+
+ ;; see https://github.com/arcadia-unity/Arcadia/wiki/Stacktraces-and-Error-Reporting
+ ;; for options on formatting thrown Exceptions
+ ;; :error-options {:format true}
+ }
+
