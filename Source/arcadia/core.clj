@@ -1222,8 +1222,8 @@ Note that generating vars is usually a bad idea because it messes with
   single thread (such as Unity's main game thread). These datatypes
   support snapshotting to persistent data via `snapshot`, and
   reconstruction from snapshots via `mutable`; snapshotting and
-  reconstructing are also integrated into `role+`, `state+`,
-  `update-state`, `role`, and `roles`.
+  reconstructing are also integrated into `state`, `state+`,
+  `update-state`, `role`, `role+`, and `roles`.
 
   `defmutable` instances may be mutated in two ways. Their fields may
   be mutated directly using `set!` and dot syntax. Fields may also be
