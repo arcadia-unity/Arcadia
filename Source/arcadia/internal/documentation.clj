@@ -8,26 +8,29 @@
        (filter #(= name (.Name %)))))
 
 (defn unity-linkify-fn [[_ string]]
-  (cond
-    (.Contains string "/")
-    (let [[type-name member] (s/split string #"/")]
-      (if-let [type (clojure.lang.RT/classForName (str "UnityEngine." type-name))]
-        (cond
-          (.GetField type member)
-          (str "[`" string "`](https://docs.unity3d.com/ScriptReference/" type-name "-" member ".html)")
-          (.GetProperty type member)
-          (str "[`" string "`](https://docs.unity3d.com/ScriptReference/" type-name "-" member ".html)")
-          (> (count (methods-named type member)) 0)
-          (str "[`" string "`](https://docs.unity3d.com/ScriptReference/" type-name "." member ".html)")
-          :else
-          (str "`" string "`"))))
-    :else
-    (if (clojure.lang.RT/classForName (str "UnityEngine." string))
-      (str "[`" string "`](https://docs.unity3d.com/ScriptReference/" string ".html)")
+  (try
+    (cond
+      (.Contains string "/")
+      (let [[type-name member] (s/split string #"/")]
+        (if-let [type (clojure.lang.RT/classForName (str "UnityEngine." type-name))]
+          (cond
+            (.GetField type member)
+            (str "[`" string "`](https://docs.unity3d.com/ScriptReference/" type-name "-" member ".html)")
+            (.GetProperty type member)
+            (str "[`" string "`](https://docs.unity3d.com/ScriptReference/" type-name "-" member ".html)")
+            (> (count (methods-named type member)) 0)
+            (str "[`" string "`](https://docs.unity3d.com/ScriptReference/" type-name "." member ".html)")
+            :else
+            (str "`" string "`"))))
+      :else
+      (if (clojure.lang.RT/classForName (str "UnityEngine." string))
+        (str "[`" string "`](https://docs.unity3d.com/ScriptReference/" string ".html)")
+        (str "`" string "`")))
+    (catch System.IO.FileLoadException e ;; not sure why this happens
       (str "`" string "`"))))
 
 (defn unity-linkify [s]
-  (s/replace s #"`([^`]*)`" #'unity-linkify-fn))
+  (s/replace s #"`([^`\s]+)`" #'unity-linkify-fn))
 
 (defn print-docs [ns]
   (require ns :reload)
@@ -40,7 +43,7 @@
     (doseq [{:keys [file line name arglists macro doc/see-also doc/no-syntax doc/syntax doc]}
             (sort-by :line metas)]
       (let [url (when file
-                  (str "https://github.com/arcadia-unity/Arcadia/blob/beta/Source/"
+                  (str "https://github.com/arcadia-unity/Arcadia/blob/master/Source/"
                        (let [idx (s/last-index-of file "Assets/Arcadia/Source/")
                              file (if (not (nil? idx))
                                     (-> file (.Substring idx) (s/replace "Assets/Arcadia/Source/" ""))
