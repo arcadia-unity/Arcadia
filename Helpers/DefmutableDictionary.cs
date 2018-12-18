@@ -7,19 +7,41 @@ namespace Arcadia
 {
 	public class DefmutableDictionary
 	{
-		public Dictionary<clojure.lang.Keyword, System.Object> dict;
+		public Dictionary<object, object> dict;
+
+		public System.Collections.ICollection Keys {
+			get {
+				return dict.Keys;
+			}
+		}
+
+		public System.Collections.ICollection Values {
+			get {
+				return dict.Values;
+			}
+		}
+
+		public int Count { 
+			get { return dict.Count; }
+		}
+
+		public bool Contains (object key) {
+			return dict.ContainsKey(key);
+		}
+
+		public void Remove (object key)
+		{
+			dict.Remove(key);
+		}
 
 		public DefmutableDictionary ()
 		{
-			dict = new Dictionary<Keyword, object>();
+			dict = new Dictionary<object, object>();
 		}
 
-		public DefmutableDictionary (clojure.lang.IPersistentMap map)
+		public DefmutableDictionary (IDictionary<object,object> map)
 		{
-			dict = new Dictionary<Keyword, object>();
-			foreach (var entry in map) {
-				dict.Add((clojure.lang.Keyword)entry.key(), entry.val());
-			}
+			dict = new Dictionary<object, object>(map);
 		}
 
 		// not trying to implement clojure interfaces yet, this is all internal stuff
@@ -69,6 +91,22 @@ namespace Arcadia
 				i+=2;
 			}
 			return PersistentHashMap.create(kvs);
+		}
+
+		// for serialization of defmutable types as edn
+		public void PrintEntries (IFn printfn, System.IO.TextWriter w)
+		{
+			bool first = true;
+			foreach (var e in dict) {
+				if (first) {
+					first = false;
+				} else {
+					w.Write(", ");
+				}
+				printfn.invoke(e.Key, w);
+				w.Write(" ");
+				printfn.invoke(e.Value, w);
+			}
 		}
 	}
 }

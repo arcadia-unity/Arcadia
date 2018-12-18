@@ -115,6 +115,10 @@
 ;; constructors
 
 (defn v2
+  "Constructs a `Vector2`.
+
+  If called with zero arguments, returns `Vector2/one`. If called with one argument
+  `x` returns, a `Vector2` with all its coordinates set to `x`."
   {:inline-arities #{0 1 2}
    :inline (fn
              ([] `UnityEngine.Vector2/one)
@@ -131,6 +135,10 @@
    (UnityEngine.Vector2. x y)))
 
 (defn v3
+  "Constructs a `Vector3`.
+
+  If called with zero arguments, returns `Vector3/one`. If called with one argument
+  `x` returns, a `Vector3` with all its coordinates set to `x`."
   {:inline-arities #{0 1 3}
    :inline (fn
              ([] `UnityEngine.Vector3/one)
@@ -147,6 +155,10 @@
    (UnityEngine.Vector3. x y z)))
 
 (defn v4
+  "Constructs a `Vector4`.
+
+  If called with zero arguments, returns `Vector4/one`. If called with one argument
+  `x` returns, a `Vector4` with all its coordinates set to `x`."
   {:inline-arities #{0 1 4}
    :inline (fn
              ([] `UnityEngine.Vector4/one)
@@ -163,6 +175,9 @@
    (UnityEngine.Vector4. x y z w)))
 
 (defn qt
+  "Constructs a `Quaternion`.
+
+  If called with zero arguments, returns `Quaternion/identity`."
   {:inline-arities #{0 4}
    :inline (fn
              ([] `UnityEngine.Quaternion/identity)
@@ -182,9 +197,9 @@
    :nullary-expr UnityEngine.Vector2/zero
    :unary-expr a
    :doc
-   "Adds UnityEngine.Vector2s.
+   "Adds `Vector2`s.
 
-If called with zero arguments, returns the zero vector. If called with one argument, that argument is returned, as with `identity`.
+If called with zero arguments, returns `Vector2/zero`. If called with one argument, that argument is returned, as with `identity`.
 
 Calls to this function will be inlined if possible."})
 
@@ -194,9 +209,9 @@ Calls to this function will be inlined if possible."})
    :nullary-expr UnityEngine.Vector3/zero
    :unary-expr a
    :doc
-   "Adds UnityEngine.Vector3s.
+   "Adds `Vector3`s.
 
-If called with zero arguments, returns the zero vector. If called with one argument, that argument is returned, as with `identity`.
+If called with zero arguments, returns `Vector3/zero`. If called with one argument, that argument is returned, as with `identity`.
 
 Calls to this function will be inlined if possible."})
 
@@ -206,9 +221,9 @@ Calls to this function will be inlined if possible."})
    :nullary-expr UnityEngine.Vector4/zero
    :unary-expr a
    :doc
-   "Adds UnityEngine.Vector4s.
+   "Adds `Vector4`s.
 
-If called with zero arguments, returns the zero vector. If called with one argument, that argument is returned, as with `identity`.
+If called with zero arguments, returns `Vector4/zero`. If called with one argument, that argument is returned, as with `identity`.
 
 Calls to this function will be inlined if possible."})
 
@@ -220,9 +235,9 @@ Calls to this function will be inlined if possible."})
    :return-type UnityEngine.Vector2
    :unary-op UnityEngine.Vector2/op_UnaryNegation
    :doc
-   "Subtracts UnityEngine.Vector2s.
+   "Subtracts `Vector2`s.
 
-If called with one argument, the negation of that argument is returned; that is, the Vector2 that results from multiplying all the components of the input Vector2 by -1.
+If called with one argument, the negation of that argument is returned; that is, the `Vector2` that results from multiplying all the components of the input `Vector2` by -1.
 
 Calls to this function will be inlined if possible."})
 
@@ -231,19 +246,19 @@ Calls to this function will be inlined if possible."})
    :return-type UnityEngine.Vector3
    :unary-op UnityEngine.Vector3/op_UnaryNegation
    :doc
-   "Subtracts UnityEngine.Vector3s.
+   "Subtracts `Vector3`s.
 
-If called with one argument, the negation of that argument is returned; that is, the Vector3 that results from multiplying all the components of the input Vector3 by -1.
+If called with one argument, the negation of that argument is returned; that is, the `Vector3` that results from multiplying all the components of the input `Vector3` by -1.
 
 Calls to this function will be inlined if possible."})
 
-(def-vop-lower v4- 
+(def-vop-lower v4-
   {:op UnityEngine.Vector4/op_Subtraction
    :return-type UnityEngine.Vector4
    :unary-op UnityEngine.Vector4/op_UnaryNegation
-   :doc "Subtracts UnityEngine.Vector4s.
+   :doc "Subtracts `Vector4`s.
 
-If called with one argument, the negation of that argument is returned; that is, the Vector4 that results from multiplying all the components of the input Vector4 by -1.
+If called with one argument, the negation of that argument is returned; that is, the `Vector4` that results from multiplying all the components of the input `Vector4` by -1.
 
 Calls to this function will be inlined if possible."})
 
@@ -256,9 +271,9 @@ Calls to this function will be inlined if possible."})
    :param-type [UnityEngine.Vector2, System.Single]
    :nullary-expr UnityEngine.Vector2/one
    :unary-expr a
-   :doc "Multiplies a UnityEngine.Vector2 by one or more floats. The UnityEngine.Vector2 must be the first argument (so the arguments of this function do not commute).
+   :doc "Multiplies a `Vector2` by one or more floats. The `Vector2` must be the first argument (so the arguments of this function do not commute).
 
-If called with zero arguments, returns UnityEngine.Vector2/one. If called with one argument, returns that argument, as with `identity`.
+If called with zero arguments, returns `Vector2/one`. If called with one argument, returns that argument, as with `identity`.
 
 Calls to this function will be inlined if possible."})
 
@@ -268,9 +283,9 @@ Calls to this function will be inlined if possible."})
    :param-type [UnityEngine.Vector3, System.Single]
    :nullary-expr UnityEngine.Vector3/one
    :unary-expr a
-   :doc "Multiplies a UnityEngine.Vector3 by one or more floats. The UnityEngine.Vector3 must be the first argument (so the arguments of this function do not commute).
+   :doc "Multiplies a `Vector3` by one or more floats. The `Vector3` must be the first argument (so the arguments of this function do not commute).
 
-If called with zero arguments, returns UnityEngine.Vector3/one. If called with one argument, returns that argument, as with `identity`.
+If called with zero arguments, returns `Vector3/one`. If called with one argument, returns that argument, as with `identity`.
 
 Calls to this function will be inlined if possible."})
 
@@ -280,9 +295,9 @@ Calls to this function will be inlined if possible."})
    :param-type [UnityEngine.Vector4, System.Single]
    :nullary-expr UnityEngine.Vector4/one
    :unary-expr a
-   :doc "Multiplies a UnityEngine.Vector4 by one or more floats. The UnityEngine.Vector4 must be the first argument (so the arguments of this function do not commute).
+   :doc "Multiplies a `Vector4` by one or more floats. The `Vector4` must be the first argument (so the arguments of this function do not commute).
 
-If called with zero arguments, returns UnityEngine.Vector4/one. If called with one argument, returns that argument, as with `identity`.
+If called with zero arguments, returns `Vector4/one`. If called with one argument, returns that argument, as with `identity`.
 
 Calls to this function will be inlined if possible."})
 
@@ -294,9 +309,9 @@ Calls to this function will be inlined if possible."})
    :return-type UnityEngine.Vector2
    :param-type [UnityEngine.Vector2 System.Single]
    :unary-expr (Arcadia.LinearHelper/invertV2 a)
-   :doc "Divides a UnityEngine.Vector2 by one or more floats. The UnityEngine.Vector2 must be the first argument (so the arguments of this function do not commute).
+   :doc "Divides a `Vector2` by one or more floats. The `Vector2` must be the first argument (so the arguments of this function do not commute).
 
-If called with one UnityEngine.Vector2, returns that Vector2 with its components inverted.
+If called with one `Vector2`, returns that Vector2 with its components inverted.
 
 Calls to this function will be inlined if possible."})
 
@@ -305,9 +320,9 @@ Calls to this function will be inlined if possible."})
    :return-type UnityEngine.Vector3
    :param-type [UnityEngine.Vector3 System.Single]
    :unary-expr (Arcadia.LinearHelper/invertV3 a)
-   :doc "Divides a UnityEngine.Vector3 by one or more floats. The UnityEngine.Vector3 must be the first argument (so the arguments of this function do not commute).
+   :doc "Divides a `Vector3` by one or more floats. The `Vector3` must be the first argument (so the arguments of this function do not commute).
 
-If called with one UnityEngine.Vector3, returns that Vector3 with its components inverted.
+If called with one `Vector3`, returns that Vector3 with its components inverted.
 
 Calls to this function will be inlined if possible."})
 
@@ -316,9 +331,9 @@ Calls to this function will be inlined if possible."})
    :return-type UnityEngine.Vector4
    :param-type [UnityEngine.Vector4 System.Single]
    :unary-expr (Arcadia.LinearHelper/invertV4 a)
-   :doc "Divides a UnityEngine.Vector4 by one or more floats. The UnityEngine.Vector4 must be the first argument (so the arguments of this function do not commute).
+   :doc "Divides a `Vector4` by one or more floats. The `Vector4` must be the first argument (so the arguments of this function do not commute).
 
-If called with one UnityEngine.Vector4, returns that Vector4 with its components inverted.
+If called with one `Vector4`, returns that Vector4 with its components inverted.
 
 Calls to this function will be inlined if possible."})
 
@@ -339,9 +354,9 @@ Calls to this function will be inlined if possible."})
    :return-type UnityEngine.Quaternion
    :nullary-expr UnityEngine.Quaternion/identity
    :unary-expr a
-   :doc "Multiplies one or more UnityEngine.Quaternions.
+   :doc "Multiplies one or more `Quaternions`.
 
-If called with zero arguments, returns UnityEngine.Quaternion/identity. If called with one argument, returns that argument.
+If called with zero arguments, returns `Quaternion/identity`. If called with one argument, returns that argument.
 
 Calls to this function will be inlined if possible."})
 
@@ -353,7 +368,7 @@ Calls to this function will be inlined if possible."})
    :param-type [UnityEngine.Quaternion UnityEngine.Vector3]
    :nullary-expr (throw (clojure.lang.ArityException. "qv* requires at least two arguments, got zero."))
    :unary-expr (throw (clojure.lang.ArityException. "qv* requires at least two arguments, got one."))
-   :doc "Multiplies a UnityEngine.Quaternion by one or more UnityEngine.Vector3s. The first argument must be a Quaternion, and the remaining arguments must be Vector3s.
+   :doc "Multiplies a `Quaternion` by one or more `Vector3`s. The first argument must be a `Quaternion`, and the remaining arguments must be `Vector3`s.
 
 Calls to this function will be inlined if possible."})
 
@@ -361,47 +376,47 @@ Calls to this function will be inlined if possible."})
   {:op UnityEngine.Quaternion/op_Multiply
    :nullary-expr (throw (clojure.lang.ArityException. "q* requires at least two arguments, got zero."))
    :unary-expr (throw (clojure.lang.ArityException. "q* requires at least two arguments, got one."))
-   :doc "Multiplies a UnityEngine.Quaternion by one or more UnityEngine.Vector3s or Quaternions. 
+   :doc "Multiplies a `Quaternion` by one or more `Vector3`s or `Quaternion`s.
 
 Calls to this function will be inlined if possible."})
 
-(definline euler 
-  "Wraps UnityEngine.Quaternion/Euler.
+(definline euler
+  "Wraps `Quaternion/Euler`.
 
   Calls to this function will be inlined if possible."
   ^UnityEngine.Quaternion [^UnityEngine.Vector3 v]
   `(UnityEngine.Quaternion/Euler ~v))
 
-(definline euler-angles 
-  "Wraps the eulerAngles method of UnityEngine.Quaternion.
+(definline euler-angles
+  "Wraps the `Quaternion/eulerAngles`.
 
   Calls to this function will be inlined if possible."
   ^UnityEngine.Vector3 [^UnityEngine.Quaternion q]
   `(.eulerAngles ~q))
 
 (definline to-angle-axis
-  "Given a Quaternion q, returns a collection containing the angle (float) and axis (Vector3) that represents that Quaternion, as set by the ToAngleAxis method of Quaternions. 
+  "Given a `Quaternion` `q`, returns a collection containing the angle (float) and axis (`Vector3`) that represents that `Quaternion`, as set by the `Quaternions/ToAngleAxis`.
 
   Calls to this function will be inlined if possible."
   [^UnityEngine.Quaternion q]
   `(Arcadia.LinearHelper/toAngleAxis ~q))
 
-(definline angle-axis 
-  "Given an angle (float) and an axis (Vector3), constructs a Quarternion, as per UnityEngine.Quaternion/AngleAxis.
+(definline angle-axis
+  "Given an angle (float) and an axis (`Vector3`), constructs a `Quarternion`, as per `Quaternion/AngleAxis`.
 
   Calls to this function will be inlined if possible."
   ^UnityEngine.Quaternion [angle, axis]
   `(UnityEngine.Quaternion/AngleAxis ~angle, ~axis))
 
-(definline qforward 
-  "Given a Quaternion q, returns the Vector3 derived by multiplying q by UnityEngine.Vector3/forward.
+(definline qforward
+  "Given a `Quaternion` `q`, returns the Vector3 derived by multiplying `q` by `Vector3/forward`.
 
   Calls to this function will be inlined if possible."
   ^UnityEngine.Vector3 [^UnityEngine.Quaternion q]
   `(q* ~q UnityEngine.Vector3/forward))
 
-(definline aa 
-  "Shortcut for angle-axis. (aa a x y z) is the same as (angle-axis a (v3 x y z)).
+(definline aa
+  "Shortcut for angle-axis. `(aa a x y z)` is the same as `(angle-axis a (v3 x y z))`.
 
   Calls to this function will be inlined if possible."
   ^UnityEngine.Quaternion [ang x y z]
@@ -413,7 +428,10 @@ Calls to this function will be inlined if possible."})
               `(qlookat ~here ~there UnityEngine.Vector3/up))
              ([here there up]
               `(UnityEngine.Quaternion/LookRotation (v3- ~there ~here) ~up)))
-   :inline-arities #{2 3}}
+   :inline-arities #{2 3}
+   :doc "Returns a `Quaternion` that faces `there` from `here`, both `Vector3`s. An
+   additional `up` `Vector3` can be provided to specify which direction is 'up'.
+   `up` defaults to `Vector3/up`."}
   ([^UnityEngine.Vector3 here, ^UnityEngine.Vector3 there]
      (qlookat here there UnityEngine.Vector3/up))
   ([^UnityEngine.Vector3 here, ^UnityEngine.Vector3 there, ^UnityEngine.Vector3 up]
@@ -428,9 +446,9 @@ Calls to this function will be inlined if possible."})
    :return-type UnityEngine.Vector2
    :nullary-expr UnityEngine.Vector2/one
    :unary-expr a
-   :doc "Scales one or more UnityEngine.Vector2s, as per UnityEngine.Vector2/Scale.
+   :doc "Scales one or more `Vector2`s, as per `Vector2/Scale`.
 
-If called with zero arguments, returns UnityEngine.Vector2/one. If called with one argument, that argument is returned, as with `identity`.
+If called with zero arguments, returns `Vector2/one`. If called with one argument, that argument is returned, as with `identity`.
 
 Calls to this function will be inlined if possible."})
 
@@ -439,9 +457,9 @@ Calls to this function will be inlined if possible."})
    :return-type UnityEngine.Vector3
    :nullary-expr UnityEngine.Vector3/one
    :unary-expr a
-   :doc "Scales one or more UnityEngine.Vector3s, as per UnityEngine.Vector3/Scale.
+   :doc "Scales one or more `Vector3`s, as per `Vector3/Scale`.
 
-If called with zero arguments, returns UnityEngine.Vector3/one. If called with one argument, that argument is returned, as with `identity`.
+If called with zero arguments, returns `Vector3/one`. If called with one argument, that argument is returned, as with `identity`.
 
 Calls to this function will be inlined if possible."})
 
@@ -450,21 +468,11 @@ Calls to this function will be inlined if possible."})
    :return-type UnityEngine.Vector4
    :nullary-expr UnityEngine.Vector4/one
    :unary-expr a
-   :doc "Scales one or more UnityEngine.Vector4s, as per UnityEngine.Vector4/Scale.
+   :doc "Scales one or more `Vector4`s, as per `Vector4/Scale`.
 
-If called with zero arguments, returns UnityEngine.Vector4/one. If called with one argument, that argument is returned, as with `identity`.
+If called with zero arguments, returns `Vector4/one`. If called with one argument, that argument is returned, as with `identity`.
 
 Calls to this function will be inlined if possible."})
-
-;; ------------------------------------------------------------
-;; more rotation
-
-(definline point-pivot ^UnityEngine.Vector3
-  ;;[^UnityEngine.Vector3 pt, ^UnityEngine.Vector3 piv, ^UnityEngine.Quaternion rot]
-  [pt, piv, rot]
-  `(let [piv# ~piv]
-     (v3+ (qv* ~rot (v3- ~pt piv#))
-       piv#)))
 
 ;; ============================================================
 ;; Matrix4x4
@@ -496,6 +504,7 @@ Calls to this function will be inlined if possible."})
           ~@(take-nth 2 bndgs))))))
 
 (defn matrix4x4
+  "Constructs a `Matrix4x4`"
   {:inline (fn [& args]
              (apply matrix4x4-inline args))
    :inline-arities #{0 1 4 16}}
@@ -520,108 +529,70 @@ Calls to this function will be inlined if possible."})
      m n o p)))
 
 (defn m*
+  "Multiplies one or more `Matrix4x4`s.
+
+If called with zero arguments, returns `Matrix4x4/identity`. If called with one argument, returns that argument.
+
+Calls to this function will be inlined if possible."
   {:inline (fn
              ([] Matrix4x4/identity)
              ([x] x)
              ([x & args]
-              (nestl 'Matrix4x4/op_Multiply (cons x args))))
+              (nestl 'UnityEngine.Matrix4x4/op_Multiply (cons x args))))
    :inline-arities >1?}
   ([] Matrix4x4/identity)
   ([a] a)
   ([a b]
-   (Matrix4x4/op_Multiply a b))
+   (UnityEngine.Matrix4x4/op_Multiply a b))
   ([a b & args]
    (reduce m* (m* a b) args)))
 
-(definline determinant [^Matrix4x4 m]
-  `(Matrix4x4/Determinant ~m))
+(definline determinant
+  "Wraps `Matrix4x4/determinant`"
+  [^UnityEngine.Matrix4x4 m]
+  `(. ~m determinant))
 
-(definline transpose [^Matrix4x4 m]
+(definline transpose
+  "Wraps `Matrix4x4/transpose`"
+  [^UnityEngine.Matrix4x4 m]
   `(. ~m transpose))
 
-(definline column [^Matrix4x4 m, col-inx]
+(definline column
+  "Wraps `Matrix4x4/GetColumn`"
+  [^UnityEngine.Matrix4x4 m, col-inx]
   `(.GetColumn ~m ~col-inx))
 
-(definline row [^Matrix4x4 m, row-inx]
+(definline row
+  "Wraps `Matrix4x4/GetRow`"
+  [^UnityEngine.Matrix4x4 m, row-inx]
   `(.GetRow ~m ~row-inx))
 
-(definline put-column [^Matrix4x4 m, col-inx, col]
+(definline put-column 
+  "Sets column number `col-inx` of `Matrix4x4` `m` to the `Vector4` `col`"
+  [^UnityEngine.Matrix4x4 m, col-inx, col]
   `(Arcadia.LinearHelper/matrixPutColumn ~m ~col-inx ~col))
 
-(definline put-row [^Matrix4x4 m, row-inx, row]
+(definline put-row
+  "Sets row number `row-inx` of `Matrix4x4` `m` to the `Vector4` `row`"
+  [^UnityEngine.Matrix4x4 m, row-inx, row]
   `(Arcadia.LinearHelper/matrixPutRow ~m ~row-inx ~row))
 
-(definline ortho ^Matrix4x4 [left right bottom top znear zfar]
-  `(Matrix4x4/Ortho ~left ~right ~bottom ~top ~znear ~zfar))
+(definline ortho
+  "Wraps `Matrix4x4/Ortho`"
+  ^UnityEngine.Matrix4x4 [left right bottom top znear zfar]
+  `(UnityEngine.Matrix4x4/Ortho ~left ~right ~bottom ~top ~znear ~zfar))
 
-(definline perspective ^Matrix4x4 [fov aspect znear zfar]
-  `(Matrix4x4/Perspective ~fov ~aspect ~znear ~zfar))
+(definline perspective
+  "Wraps `Matrix4x4/Perspective`"
+  ^UnityEngine.Matrix4x4 [fov aspect znear zfar]
+  `(UnityEngine.Matrix4x4/Perspective ~fov ~aspect ~znear ~zfar))
 
-(definline inverse [^Matrix4x4 m]
-  `(Matrix4x4/Inverse ~m))
+(definline inverse
+  "Wraps `Matrix4x4/inverse`"
+  [^UnityEngine.Matrix4x4 m]
+  `(. ~m inverse))
 
-(definline trs [^UnityEngine.Vector3 t, ^UnityEngine.Quaternion r, ^UnityEngine.Vector3 s]
-  `(Matrix4x4/TRS ~t ~r ~s))
-
-;; ============================================================
-;; tests, until I find a better place to put them
-
-(defn- run-tests []
-  (binding [test/*test-out* *out*]
-    (test/run-tests)))
-
-;; we work with what we're given
-(def ^:private default-epsilon 8E-8)
-
-(defn- close-enough-v2
-  ([a b]
-   (close-enough-v2 default-epsilon))
-  ([a b epsilon]
-   (< (UnityEngine.Vector2/Distance a b) epsilon)))
-
-(defn- close-enough-v3
-  ([a b]
-   (close-enough-v3 default-epsilon))
-  ([a b epsilon]
-   (< (UnityEngine.Vector3/Distance a b) epsilon)))
-
-(defn- close-enough-v4
-  ([a b]
-   (close-enough-v4 default-epsilon))
-  ([a b epsilon]
-   (< (UnityEngine.Vector4/Distance a b) epsilon)))
-
-(test/deftest- test-addition
-  (test/is
-    (= (v2+
-         (v2 1 2)
-         (v2 1 2)
-         (v2 1 2))
-      (v2 3.0, 6.0)))
-  (test/is
-    (= (v3+
-         (v3 1 2 3)
-         (v3 1 2 3)
-         (v3 1 2 3))
-      (v3 3.0, 6.0, 9.0)))
-  (test/is
-    (= (v4+
-         (v4 1 2 3 4)
-         (v4 1 2 3 4)
-         (v4 1 2 3 4))
-      (v4 3.0, 6.0, 9.0, 12.0))))
-
-(test/deftest- test-rotation
-  (test/is
-    (close-enough-v3
-      (point-pivot
-        (v3 1 0 0)
-        (v3 0)
-        (aa 90 1 0 0))
-      (v3 0 0 1))
-    (close-enough-v3
-      (point-pivot
-        (v3 11 0 0)
-        (v3 10 0 0)
-        (aa 90 1 0 0))
-      (v3 10 0 1))))
+(definline trs
+  "Wraps `Matrix4x4/TRS`"
+  [^UnityEngine.Vector3 t, ^UnityEngine.Quaternion r, ^UnityEngine.Vector3 s]
+  `(UnityEngine.Matrix4x4/TRS ~t ~r ~s))

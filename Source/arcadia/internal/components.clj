@@ -2,17 +2,17 @@
   ^{:doc "Generates the C# implementation of the Arcadia hooks"}
   arcadia.internal.components
   (:require [clojure.string :as string]
-            [arcadia.internal.messages :as messages])
+            [arcadia.internal.events :as events])
   (:import [clojure.lang RT]))
 
 ;; TODO path seperators
 (def path "Assets/Arcadia/Components/")
 
-(defn component-name [message]
-  (str message "Hook"))
+(defn component-name [event]
+  (str event "Hook"))
 
-(defn component-file [message]
-  (str path (component-name message) ".cs"))
+(defn component-file [event]
+  (str path (component-name event) ".cs"))
 
 (def alphabet
   (->> (range \a \z)
@@ -27,8 +27,8 @@
   '{Awake true})
 
 (defn component-source
-  ([message args] (component-source message args nil))
-  ([message args interface]
+  ([event args] (component-source event args nil))
+  ([event args interface]
   (let [arg-names (take (count args) alphabet)]
     (str
 "#if NET_4_6
@@ -37,32 +37,32 @@ using UnityEngine;
     (str "using " (.Namespace (RT/classForName interface)) ";\n"))
 "using clojure.lang;
 
-public class " (component-name message) " : ArcadiaBehaviour" (if interface (str ", " interface))
+public class " (component-name event) " : ArcadiaBehaviour" (if interface (str ", " interface))
 "
 {
-  " (string/join " " (filter some? ['public (overrides message) 'void])) " "
-      message "(" (string/join ", " (map #(str %1 " " %2) args arg-names)) ")
+  " (string/join " " (filter some? ['public (overrides event) 'void])) " "
+      event "(" (string/join ", " (map #(str %1 " " %2) args arg-names)) ")
   {
-" (if (call-base message)
-    (str "      base." message "(" (string/join ", " arg-names) ");\n"))
+" (if (call-base event)
+    (str "      base." event "(" (string/join ", " arg-names) ");\n"))
 "      RunFunctions(" (string/join ", " arg-names) ");
   }
 }
 #endif"))))
 
 (defn write-component!
-  ([message args] (write-component! message args nil))
-  ([message args interface]
-   (spit (component-file message)
-         (component-source message args interface)
+  ([event args] (write-component! event args nil))
+  ([event args interface]
+   (spit (component-file event)
+         (component-source event args interface)
          :encoding "UTF-8"
          :write true)))
 
 (defn write-components! []
-  (doseq [[message args] messages/messages]
-    (write-component! message args))
+  (doseq [[event args] events/events]
+    (write-component! event args))
 
-  (doseq [[message args] messages/interface-messages]
-    (let [interface (namespace message)
-          message (name message)]
-      (write-component! message args interface))))
+  (doseq [[event args] events/interface-events]
+    (let [interface (namespace event)
+          event (name event)]
+      (write-component! event args interface))))

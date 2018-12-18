@@ -1,23 +1,33 @@
 ﻿#if NET_4_6
 using UnityEngine;
-using System.Collections;
+using System.Collections.Generic;
 using clojure.lang;
 using Arcadia;
+using System;
+using UnityEngine.Serialization;
 
 [ExecuteInEditMode]
 public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 {
+	// TODO Figure out stylistic best practices for this sort of thing, bit of a mess right now
+
 	// TODO sorted maps?
-	public string edn = "{}";
+	[FormerlySerializedAs("edn")]
+	public string serializedData = "{}";
+	public string serializedFormat = "edn";
 	public JumpMap state = new JumpMap();
+
+	public string[] conversionKeys;
+	public string[] conversionVars;
+	public IPersistentMap conversions;
+
+	// copy control
+	public enum CopyStatus { Normal, Source, Receiver };
+	public CopyStatus copyStatus = CopyStatus.Normal;
 
 	public Atom objectDatabase = null;
 	public int[] objectDatabaseIds = new int[0];
-	public Object[] objectDatabaseObjects = new Object[0];
-
-	private static IFn prStr = null;
-	private static IFn readString = null;
-	private static IFn requireFn = null;
+	public UnityEngine.Object[] objectDatabaseObjects = new UnityEngine.Object[0];
 
 	[System.NonSerialized]
 	public bool fullyInitialized = false;
@@ -57,6 +67,20 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 
 	public static Var deserializeVar;
 
+	public static Var objectDbVar;
+
+	public static Var serializeVar;
+
+	public static Var printReadablyVar;
+
+	public static Var prStrVar;
+
+	public static Var readStringVar;
+
+	public static Var dataReadersVar;
+
+	public static Var defaultConversion;
+
 	public static bool varsInitialized = false;
 
 	// =====================================================
@@ -66,17 +90,43 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 		if (varsInitialized)
 			return;
 
-		string literalsNs = "arcadia.literals";
-		Arcadia.Util.require(literalsNs);
-		Arcadia.Util.getVar(ref dataReaders, literalsNs, "*data-readers*");
+		Arcadia.Util.require("arcadia.data"); // side-effects clojure.core/*data-readers*
+		Arcadia.Util.getVar(ref dataReaders, "clojure.core", "*data-readers*");
 
 		string stateHelpNs = "arcadia.internal.state-help";
 		Arcadia.Util.require(stateHelpNs);
 		Arcadia.Util.getVar(ref awakeFn, stateHelpNs, "awake");
 		Arcadia.Util.getVar(ref jumpMapToMapVar, stateHelpNs, "jumpmap-to-map");
 		Arcadia.Util.getVar(ref deserializeVar, stateHelpNs, "deserialize");
+		Arcadia.Util.getVar(ref defaultConversion, stateHelpNs, "default-conversion");
+
+		var arcadiaLiteralsNs = "arcadia.data";
+		Arcadia.Util.require(arcadiaLiteralsNs);
+		Arcadia.Util.getVar(ref serializeVar, arcadiaLiteralsNs, "*serialize*");
+		Arcadia.Util.getVar(ref objectDbVar, arcadiaLiteralsNs, "*object-db*");
+
+		var coreNs = "clojure.core";
+		Arcadia.Util.getVar(ref printReadablyVar, coreNs, "*print-readably*");
+		Arcadia.Util.getVar(ref prStrVar, coreNs, "pr-str");
+
+		Arcadia.Util.getVar(ref readStringVar, "clojure.edn", "read-string");
+		Arcadia.Util.getVar(ref dataReadersVar, "clojure.core", "data-readers");
 
 		varsInitialized = true;
+	}
+
+
+
+	public void DeserializeState ()
+	{
+		deserializeVar.invoke(this);
+	}
+
+	public void DeserializeConversions ()
+	{
+		if (conversionKeys != null && conversionKeys.Length > 0) {
+			conversions = Arcadia.Util.DeserializeKeyVarMap(conversionKeys, conversionVars);
+		}
 	}
 
 
@@ -88,9 +138,11 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 		if (fullyInitialized)
 			return;
 
+		// TODO: cache component access
+
 		InitializeOwnVars();
-		deserializeVar.invoke(this);
-		RefreshAll();
+		DeserializeState();
+		DeserializeConversions();
 		fullyInitialized = true;
 	}
 
@@ -101,28 +153,32 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 
 	public void OnBeforeSerialize ()
 	{
-		// experimental:
 		Initialize();
 
-		if (prStr == null) prStr = (IFn)RT.var("clojure.core", "pr-str");
-		Arcadia.Util.require("arcadia.literals");
-		Namespace ArcadiaLiteralsNamespace = Namespace.findOrCreate(Symbol.intern("arcadia.literals"));
-		Var ObjectDbVar = Var.intern(ArcadiaLiteralsNamespace, Symbol.intern("*object-db*")).setDynamic();
-
-		InitializeOwnVars();
-
 		WipeDatabase();
-		Var.pushThreadBindings(RT.map(ObjectDbVar, objectDatabase));
+		Var.pushThreadBindings(RT.map(objectDbVar, objectDatabase, serializeVar, true, printReadablyVar, false));
 		try {
-			edn = (string)prStr.invoke(jumpMapToMapVar.invoke(state)); // side effects, updating objectDatabase
+			serializedData = (string)prStrVar.invoke(state.ToPersistentMap());
+			// TODO optimize this
 			var map = (PersistentHashMap)objectDatabase.deref();
 			objectDatabaseIds = (int[])RT.seqToTypedArray(typeof(int), RT.keys(map));
-			objectDatabaseObjects = (Object[])RT.seqToTypedArray(typeof(Object), RT.vals(map));
+			objectDatabaseObjects = (UnityEngine.Object[])RT.seqToTypedArray(typeof(UnityEngine.Object), RT.vals(map));
 		} finally {
 			Var.popThreadBindings();
 		}
+
+		// serialize conversions
+		if (conversions != null) {
+			var ss = Arcadia.Util.SerializeKeyVarMap((IKVReduce)conversions, conversionKeys, conversionVars);
+			conversionKeys = ss.Item1;
+			conversionVars = ss.Item2;
+		} else {
+			conversionKeys = (conversionKeys != null && conversionKeys.Length == 0) ? conversionKeys : new string[0];
+			conversionVars = (conversionVars != null && conversionVars.Length == 0) ? conversionVars : new string[0];
+		}
 	}
 
+	// need for ISerializationCallbackReceiver interface
 	public void OnAfterDeserialize ()
 	{
 
@@ -131,52 +187,73 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 	void OnDestroy ()
 	{
 		if (ReferenceEquals(HookStateSystem.arcadiaState, this)) {
-			HookStateSystem.hasState = false;
+			HookStateSystem.Clear();
 		}
 	}
 
 	// ============================================================
 	// retrieval
 
-	public object[] Keys ()
-	{
-		return state.Keys();
-	}
-
-	public object[] Vals ()
-	{
-		return state.Vals();
-	}
-
 	public clojure.lang.IPersistentMap ToPersistentMap ()
 	{
-		return Arcadia.Util.Zipmap(Keys(), Vals());
+		return state.ToPersistentMap();
 	}
 
 	// ============================================================
 	// modification
-	public void RefreshAll ()
+	// I suppose
+	public void Refresh (object k)
 	{
-		var arcadiaBehaviours = gameObject.GetComponents<ArcadiaBehaviour>();
-		for (var i = 0; i < arcadiaBehaviours.Length; i++) {
-			arcadiaBehaviours[i].RefreshPamvs();
-		}
+
+	}
+
+	//public void RefreshAll ()
+	//{
+	//	var arcadiaBehaviours = gameObject.GetComponents<ArcadiaBehaviour>();
+	//	for (var i = 0; i < arcadiaBehaviours.Length; i++) {
+	//		arcadiaBehaviours[i].RefreshPamvs();
+	//	}
+	//}
+
+	public bool ContainsKey (object k)
+	{
+		return state.ContainsKey(k);
 	}
 
 	public void Add (object k, object v)
 	{
-		bool hadKey = state.ContainsKey(k);
-		state.Add(k, v);
-		// determine if this warrants refreshing the pamv's
-		if (!hadKey) {
-			RefreshAll();
-		}
+		state.Add((Keyword)k, v);
 	}
 
+	// Strategies for removing keys in the presence of a lookup
+	// system distributed as cached views. Reference type KeyVals 
+	// means the caches immediately reflect new vals, but make 
+	// removal of values trickier.
+	// One approach is to flag the KeyVals as obsolete or evacuated,
+	// then check this flag on every cached lookup, falling back to
+	// a lookup against the backing dictionary which may be accompanied
+	// by replacing the evacuated KeyVal. This has the advantage of laziness
+	// and avoiding scans or maintaining an index of the location of KeyVals
+	// so they can be efficiently removed on their actual removal from the
+	// dictionary, but incurs an extra boolean check for every lookup,
+	// which may be a bit expensive at this level where we're counting every op,
+	// and you'd still have to do a bit of dancing around for an evacuated KeyVal.
+	// We're close to having the infrastructure for that though, so it might be
+	// a path to explore more in the future.
+	// Another approach is to maintain an index of where all the keyvals are.
+	// This would make finding and updating them faster, but incur all the overhead,
+	// in terms of speed, memory, and code complexity, of maintaining the index itself.
+	// We don't want to do that right now.
+	// The approach we're going with for the moment is to just scan everything
+	// and remove matching KeyVals as soon as their key is deleted, on the premise
+	// that it's the simplest thing to do and key deletions are probably pretty rare.
 	public void Remove (object k)
 	{
-		state.Remove(k);
-		// don't need to refresh anything
+		state.Remove((Keyword)k);
+		// TODO: consider caching this
+		foreach (var x in GetComponents<ArcadiaBehaviour>()) {
+			x.RemoveCachedKey(k);
+		}
 	}
 
 	public void Clear ()
@@ -184,15 +261,29 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 		state.Clear();
 	}
 
+	// TODO add arity with default value
 	public object ValueAtKey (object k)
 	{
-		return state.ValueAtKey(k);
+		object v;
+		if (state.TryGetValue((Keyword)k, out v)) {
+			return v;
+		}
+		return null;
 	}
 
-	public JumpMap.PartialArrayMapView pamv (object[] ks)
+	// ============================================================
+	// copying
+
+	// TODO presumably can make this a lot faster though more
+	// structure sharing, for now main objective is to outperform
+	// edn serialization and deserialization
+
+
+	public void CopyTo (ArcadiaState target)
 	{
-		Debug.Log("In ArcadiaState.pamv. ks.Length:" + ks.Length);
-		return state.pamv(ks);
+		state.CopyTo(target.state, defaultConversion, conversions, gameObject, target.gameObject);
+		target.conversions = conversions;
 	}
+	
 }
 #endif

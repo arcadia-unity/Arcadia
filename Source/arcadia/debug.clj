@@ -3,7 +3,7 @@
             [arcadia.internal.state :as state]
             [clojure.main :as m]
             [clojure.spec.alpha :as s]
-            [arcadia.socket-repl :as socket-repl]
+            [arcadia.internal.socket-repl :as socket-repl]
             [arcadia.internal.thread :as thread]
             [arcadia.internal.map-utils :as mu])
   (:import [System.Diagnostics StackFrame StackTrace]))
@@ -21,7 +21,7 @@
 ;;   such as `:a` and `[:c 0]`. These are only meaningful from within a breakpoint.
 ;; - supports interrupts for contingency that a breakpoint is hit on the
 ;;   main repl's eval thread, but not during a main repl eval. Breakpoints
-;;   encountered during execution of Unity messages are examples of this.
+;;   encountered during execution of Unity events are examples of this.
 
 ;; Caveats
 ;; - The main repl thread is currently hard-coded to be Unity's main thread.

@@ -1,11 +1,9 @@
 (ns ^{:doc "C# Introspection functionality, useful for hacking the Unity API."}
   arcadia.introspection
   (:refer-clojure :exclude [methods])
-  (:require [clojure.pprint :as pprint]
-            [clojure.test :as test])
+  (:require [clojure.pprint :as pprint])
   (:import [System.Reflection
-            BindingFlags MonoMethod MonoProperty MonoField
-            FieldInfo]))
+            BindingFlags MethodInfo PropertyInfo FieldInfo]))
 
 (def inclusive-binding-flag
   (enum-or
@@ -32,48 +30,60 @@
 ;;     #(Resources/FindObjectsOfTypeAll Material)))
 
 (defn methods
+  "Returns a sequence of `MethodInfo`s sorted by name of all the methods in `t`.
+  If a string or regular expression is provided as `pattern` it is used to narrow
+  the results to methods with names that contain or match `pattern`."
   ([^Type t]
-   (letfn [(nf [^MonoMethod m] (.Name m))]
+   (letfn [(nf [^MethodInfo m] (.Name m))]
      (sort-by nf
        (.GetMethods t inclusive-binding-flag))))
-  ([^Type t, sr]
-   (letfn [(nf [^MonoMethod m] (.Name m))]
+  ([^Type t, pattern]
+   (letfn [(nf [^MethodInfo m] (.Name m))]
      (sort-by nf
        ((fuzzy-finder-fn
           nf
           #(.GetMethods t inclusive-binding-flag))
-        sr)))))
+        pattern)))))
 
 (defn properties
+  "Returns a sequence of `PropertyInfo`s sorted by name of all the properties in `t`.
+  If a string or regular expression is provided as `pattern` it is used to narrow
+  the results to methods with names that contain or match `pattern`."
   ([^Type t]
-   (letfn [(nf [^MonoProperty p] (.Name p))]
+   (letfn [(nf [^PropertyInfo p] (.Name p))]
      (sort-by nf
        (.GetProperties t inclusive-binding-flag))))
-  ([^Type t, sr]
-   (letfn [(nf [^MonoProperty p] (.Name p))]
+  ([^Type t, pattern]
+   (letfn [(nf [^PropertyInfo p] (.Name p))]
      (sort-by nf
        ((fuzzy-finder-fn
           nf
           #(.GetProperties t inclusive-binding-flag))
-        sr)))))
+        pattern)))))
 
 (defn fields
+  "Returns a sequence of `FieldInfo`s sorted by name of all the fields in `t`.
+  If a string or regular expression is provided as `pattern` it is used to narrow
+  the results to methods with names that contain or match `pattern`."
   ([^Type t]
-   (letfn [(nf [^MonoField f] (.Name f))]
+   (letfn [(nf [^FieldInfo f] (.Name f))]
      (sort-by nf
        (.GetFields t inclusive-binding-flag))))
-  ([^Type t, sr]
-   (letfn [(nf [^MonoField f] (.Name f))]
+  ([^Type t, pattern]
+   (letfn [(nf [^FieldInfo f] (.Name f))]
      (sort-by nf
        ((fuzzy-finder-fn
           nf
           #(.GetFields t inclusive-binding-flag))
-        sr)))))
+        pattern)))))
 
-(defn constructors [^Type t]
-  (.GetConstructors t))
+(defn constructors
+  "Returns an array of all the constructors in `t`"
+  [^Type t]
+  (seq (.GetConstructors t)))
 
 (defn members
+  "Returns a sequence of all the methods, properties, and fields in `t`"
   ([^Type t]
    (sort-by
      #(.Name %)
@@ -93,22 +103,6 @@
 
 ;; ============================================================
 ;;
-
-(defn snapshot-data-fn [type]
-  (let [fields (fields type)
-        props  (properties type)]
-    (fn [obj]
-      (merge
-        (zipmap
-          (map (fn [^MonoField mf] (.Name mf))
-            fields)
-          (map (fn [^MonoField mf] (.GetValue mf obj))
-            fields))
-        (zipmap
-          (map (fn [^MonoProperty mp] (.Name mp))
-            props)
-          (map (fn [^MonoProperty mp] (.GetValue mp obj nil))
-            props))))))
 
 (defn methods-report
   ([type] (methods-report type nil))

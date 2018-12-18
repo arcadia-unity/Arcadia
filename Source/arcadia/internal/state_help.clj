@@ -1,7 +1,8 @@
 (ns arcadia.internal.state-help
-  (:require arcadia.literals
+  (:require arcadia.data
             ;; just for deserialized-var-form?, var-form->var
-            [arcadia.internal.hook-help :as hh])
+            [arcadia.internal.hook-help :as hh]
+            [clojure.edn :as edn])
   (:import [UnityEngine Debug]
            [Arcadia JumpMap JumpMap+KeyVal JumpMap+PartialArrayMapView]
            ArcadiaState))
@@ -16,22 +17,26 @@
 (defn deserialize [^ArcadiaState as]
   (.BuildDatabaseAtom as true)
   (let [objdb (.objectDatabase as)]
-    (binding [arcadia.literals/*object-db* objdb
-              *data-readers* (if-not (empty? *data-readers*)
-                               (merge *data-readers* arcadia.literals/the-bucket)
-                               arcadia.literals/the-bucket)]
+    (binding [arcadia.data/*object-db* objdb]
       (try
         (let [^JumpMap jm (.state as)]
           (.Clear jm)
           (.AddAll jm
-            (read-string (.edn as))))
+            ;; in the future, switch on (.serializedFormat as)
+            ;; assuming edn for now
+            (edn/read-string {:readers *data-readers*} (.serializedData as))))
         (catch Exception e
           (Debug/Log "Exception encountered in arcadia.internal.state-help/deserialize:")
           (Debug/Log e)
-          (Debug/Log "arcadia.literals/*object-db*:")
-          (Debug/Log arcadia.literals/*object-db*)
-          (throw e))))))
+          (Debug/Log "arcadia.data/*object-db*:")
+          (Debug/Log arcadia.data/*object-db*)
+          (throw (Exception. "wrapper" e)))))))
+
+;; TODO: change this up for defmutable
+(defn default-conversion [k v source target]
+  v)
 
 (defn initialize [^ArcadiaState as]
   (deserialize as)
-  (.RefreshAll as))
+  ;;(.RefreshAll as)
+  )

@@ -1,16 +1,18 @@
 (ns arcadia.core
   (:require [clojure.string :as string]
             [clojure.spec.alpha :as s]
+            arcadia.internal.protocols
             clojure.set
-            [arcadia.internal.messages :as messages]
+            [arcadia.internal.events :as events]
             [arcadia.internal.macro :as mac]
             [arcadia.internal.map-utils :as mu]
             [arcadia.internal.name-utils :refer [camels-to-hyphens]]
             [arcadia.internal.state-help :as sh]
-            arcadia.literals)
+            arcadia.data)
   (:import ArcadiaBehaviour
            ArcadiaBehaviour+IFnInfo
            ArcadiaState
+           System.Text.RegularExpressions.Regex
            [Arcadia UnityStatusHelper
             Util
             HookStateSystem JumpMap
@@ -33,60 +35,44 @@
 ;; application
 ;; ============================================================
 
-(defn log
-  "Log message to the [Unity console](https://docs.unity3d.com/Manual/Console.html). Arguments are combined into a string."
+(defn
+  ^{:doc/see-also {"Unity Console" "https://docs.unity3d.com/Manual/Console.html"}}
+  log
+  "Log message to the Unity console. Arguments are combined into a string."
   [& args]
   (Debug/Log (clojure.string/join " " args)))
-
-; (defonce ^:private editor-available
-;   (boolean
-;     (try
-;       (import 'UnityEditor.EditorApplication)
-;       (catch NullReferenceException e
-;         nil))))
-
-;; can't use the obvious macro, because we want this logic to avoid
-;; being expanded away at AOT
-;; however we end up dealing with eval will have to at least allow it
-;; to show up in code
-; (def ^:private in-editor
-;   (if editor-available
-;     (eval `(UnityEditor.EditorApplication/isPlaying))
-;     false))
-
-; (defn editor? 
-;   "Returns true if called from within the editor. Notably, calls
-;   from the REPL are considered to be form within the editor"
-;   []
-;   in-editor)
 
 ;; ============================================================
 ;; null obj stuff
 
-(definline null-obj?
-  "Is `x` nil?
-  
-  This test is complicated by the fact that Unity uses
-  a custom null object that evaluates to `true` in normal circumstances.
-  `null-obj?` will return `true` if `x` is nil *or* Unity's null object."
-  [^UnityEngine.Object x]
-  `(UnityEngine.Object/op_Equality ~x nil))
+(defn null->nil
+  "Same as `identity`, except if `x` is a null `UnityEngine.Object`,
+  will return `nil`.
 
-
-(defn obj-nil
-  "Same as `identity`, except if x is a null UnityEngine.Object, will return nil."
+  More details and rationale are available in [the wiki](https://github.com/arcadia-unity/Arcadia/wiki/Null,-Nil,-and-UnityEngine.Object)."
   [x]
   (Util/TrueNil x))
+
+(defn null?
+  "Should `x` be considered `nil`? `(null? x)` will evalute to `true` if
+  `x` is in fact `nil`, or if `x` is a `UnityEngine.Object` instance
+  such that `(UnityEngine.Object/op_Equality x nil)` returns
+  `true`. Otherwise will return `false`.
+
+  More details and rationale are available in [the wiki](https://github.com/arcadia-unity/Arcadia/wiki/Null,-Nil,-and-UnityEngine.Object)."
+  [x]
+  (Util/IsNull x))
 
 ;; ============================================================
 ;; wrappers
 ;; ============================================================
 
-;; definline does not support arity overloaded functions... 
+;; definline does not support arity overloaded functions...
 (defn instantiate
   "Clones the original object and returns the clone. The clone can
-  optionally be given a new position or rotation as well. Wraps
-  UnityEngine.Object/Instantiate."
+  optionally be given a new position or rotation as well.
+
+ Wraps `Object/Instantiate`."
   {:inline (fn
              ([^UnityEngine.Object original]
               `(UnityEngine.Object/Instantiate ~original))
@@ -103,8 +89,10 @@
 
 (defn create-primitive
   "Creates a game object with a primitive mesh renderer and appropriate
-  collider. `prim` can be a PrimitiveType or one of :sphere :capsule
-  :cylinder :cube :plane :quad. Wraps GameObject/CreatePrimitive."
+  collider. `prim` can be a `PrimitiveType` or one of `:sphere`
+  `:capsule` `:cylinder` `:cube` `:plane` `:quad`. If supplied, the
+  third argument should be a string, and will be set as the name of
+  the newly created GameObject. Wraps `GameObject/CreatePrimitive`."
   (^GameObject [prim] (create-primitive prim nil))
   (^GameObject [prim name]
    (let [prim' (if (instance? PrimitiveType prim)
@@ -121,224 +109,261 @@
        (set! (.name obj) name))
      obj)))
 
-(defn destroy 
-  "Removes a gameobject, component or asset. When called with `t`, the removal
-  happens after `t` seconds. Wraps UnityEngine.Object/Destroy.
-  
-  The difference between destroy and destroy-immediate is still being worked out."
+(defn destroy
+  "Removes a GameObject, component or asset. When called with `t`, the removal
+  happens after `t` seconds. Wraps `Object/Destroy`."
   ([^UnityEngine.Object obj]
    (UnityEngine.Object/Destroy obj))
   ([^UnityEngine.Object obj ^double t]
    (UnityEngine.Object/Destroy obj t)))
 
 (defn destroy-immediate
-  "Wraps UnityEngine.Object/DestroyImmediate.
-  
-  The difference between destroy and destroy-immediate is still being worked out."
+  "Removes a GameObject, component or asset immediately.
+   Wraps `Object/DestroyImmediate`."
   [^UnityEngine.Object obj]
   (UnityEngine.Object/DestroyImmediate obj))
 
 (defn retire
-  "If in Play mode, calls Destroy, otherwise calls DestroyImmediate."
+  "If in Play mode, calls `Object/Destroy`, otherwise calls `Object/DestroyImmediate`."
   ([^UnityEngine.Object obj]
    (if UnityStatusHelper/IsInPlayMode
      (UnityEngine.Object/Destroy obj)
      (UnityEngine.Object/DestroyImmediate obj))))
 
-(definline object-typed
-  "Returns one object of Type `type`. The object selected seems to be
-  the first object in the array returned by objects-typed.
-  Wraps UnityEngine.Object/FindObjectOfType."
-  [^Type t] `(UnityEngine.Object/FindObjectOfType ~t))
+(defn object-typed
+  "Returns one live instance of UnityEngine.Object subclass type `t`
+  from the scene graph, or `nil` if no such object can be found. Wraps
+  `Object/FindObjectOfType`."
+  [^Type t]
+  (null->nil (UnityEngine.Object/FindObjectOfType t)))
 
-(definline objects-typed
-  "Returns an array of all active loaded objects of Type `type`. The order is consistent
-  but undefined. UnityEngine.Object/FindObjectsOfType."
-  [^Type t] `(UnityEngine.Object/FindObjectsOfType ~t))
+(defn objects-typed
+  "Returns a sequence of all live instances of UnityEngine.Object subclass
+  type `t` in the scene graph. Wraps `Object/FindObjectsOfType`."
+  [^Type t]
+  (remove null? (UnityEngine.Object/FindObjectsOfType t)))
 
-(definline object-named
-  "Returns one GameObject named `name`. Wraps UnityEngine.GameObject/Find."
-  [^String name] `(UnityEngine.GameObject/Find ~name))
+(defn object-named
+  "Returns one live GameObject from the scene graph, the name of which
+  matches `name-or-regex`. `name-or-regex` may be a string or a
+  regular expression object."
+  ^GameObject [name-or-regex]
+  (cond
+    (string? name-or-regex)
+    (UnityEngine.GameObject/Find ^String name-or-regex)
+
+    (instance? Regex name-or-regex)
+    (let [objs (UnityEngine.Object/FindObjectsOfType GameObject)]
+      (loop [i (int 0)]
+        (when (< i (count objs))
+          (let [obj (aget objs i)]
+            (if (and (not (null? obj))
+                     (re-matches name-or-regex (.name obj)))
+              obj
+              (recur (inc i)))))))
+
+    :else
+    (throw
+      (ArgumentException.
+        (str "Expects string or Regex, instead got instance of "
+             (class name-or-regex))
+        "name-or-regex"))))
 
 (defn objects-named
-  "Returns a sequence of all GameObjects named `name`."
-  [name]
-  (cond (= (type name) System.String)
-        (for [^GameObject obj (objects-typed GameObject)
-              :when (= (.name obj) name)]
-          obj)
-        
-        (= (type name) System.Text.RegularExpressions.Regex)
-        (for [^GameObject obj (objects-typed GameObject)
-              :when (re-matches name (.name obj))]
-          obj)))
+  "Returns a sequence of all live `GameObject`s in the scene graph, the
+  name of which match `name-or-regex`. `name-or-regex` may be a string
+  or a regular expression object."
+  [name-or-regex]
+  (cond
+    (string? name-or-regex)
+    (for [^GameObject obj (objects-typed GameObject)
+          :when (= (.name obj) name-or-regex)]
+      obj)
 
-(definline object-tagged
-  "Returns one active GameObject tagged `tag`. Tags are managed from the
-  [Unity Tag Manager](https://docs.unity3d.com/Manual/class-TagManager.html).
-  Wraps UnityEngine.GameObject/FindWithTag."
-  [^String t] `(UnityEngine.GameObject/FindWithTag ~t))
+    (instance? Regex name-or-regex)
+    (for [^GameObject obj (objects-typed GameObject)
+          :when (re-matches name-or-regex (.name obj))]
+      obj)
 
-(definline objects-tagged
-  "Returns an array of active GameObjects tagged tag. Returns empty
-  array if no GameObject was found. Tags are managed from the
-  [Unity Tag Manager](https://docs.unity3d.com/Manual/class-TagManager.html).
-  Wraps UnityEngine.GameObject/FindGameObjectsWithTag."
-  [^String t] `(UnityEngine.GameObject/FindGameObjectsWithTag ~t))
+    :else
+    (throw
+      (ArgumentException.
+        (str "Expects string or Regex, instead got instance of "
+             (class name-or-regex))
+        "name-or-regex"))))
+
+(defn object-tagged
+  "Returns one live `GameObject` tagged `t` from the scene graph,
+  or `nil` if no such GameObjects exist.
+
+  Wraps `GameObject/FindWithTag`."
+  ^GameObject [^String t]
+  (null->nil (UnityEngine.GameObject/FindWithTag t)))
+
+(defn objects-tagged
+  "Returns a sequence of live `GameObject`s tagged tag. Returns empty
+  array if no `GameObject` was found.
+  Wraps `GameObject/FindGameObjectsWithTag`."
+  [^String t]
+  (remove null? (UnityEngine.GameObject/FindGameObjectsWithTag t)))
+
+;; ------------------------------------------------------------
+;; Scene graph traversal and manipulation
+
+(extend-protocol clojure.core.protocols/CollReduce
+  UnityEngine.GameObject
+  (coll-reduce [coll f]
+    (coll-reduce coll f (f)))
+  (coll-reduce [coll f val]
+    (let [^Transform tr (.transform ^GameObject coll)
+          e (.GetEnumerator tr)]      
+      (loop [ret val]
+        (if (.MoveNext e)
+          (let [^Transform tr2 (.Current e)
+                ret (f ret (.gameObject tr2))]
+            (if (reduced? ret)
+              @ret
+              (recur ret)))
+          ret)))))
+
+(defn gobj
+  "Coerces `x`, expected to be a GameObject or Component, to a
+  corresponding live (non-destroyed) GameObject instance or to `nil` by
+  the following policy:
+
+  - If `x` is a live GameObject, returns it.
+  - If `x` is a destroyed GameObject, returns `nil`.
+  - If `x` is a live Component, returns its containing GameObject.
+  - If `x` is a destroyed Component, returns `nil`.
+  - If `x` is `nil`, returns `nil`.
+  - Otherwise throws an ArgumentException."
+  ^GameObject [x]
+  (Util/ToGameObject x))
+
+(defmacro ^:private gobj-arg-fail-exception [param]
+  (let [param-str (name param)]
+    `(if (some? ~param)
+       (throw
+         (ArgumentException.
+           (str
+             "Expects non-destroyed instance of UnityEngine.GameObject or UnityEngine.Component, instead received destroyed instance of "
+             (class ~param))
+           ~param-str))
+       (throw
+         (ArgumentNullException.
+           ~param-str ; the message and the param are backwards in this subclass for some reason
+           "Expects instance of UnityEngine.GameObject or UnityEngine.Component, instead received nil")))))
+
+;; Should this return the parent or the child?
+;; child- should return either the gameobject or nil,
+;; more consistent with that to return the parent,
+;; unless we want to change child- to return nil
+;; just to keep the api consistent.
+;; otoh cmpt+ returns the component (and HAS to).
+;; assoc returns the new map, of course.
+;; aset returns the val. and method chaining
+;; isn't a strong idiom in Clojure.
+(defn child+
+  "Makes GameObject `x` the new parent of GameObject `child`. Returns `child`.
+
+  If `world-position-stays` is true, `child` retains its world position after
+  being reparented."
+  (^GameObject [x child]
+   (child+ x child false))
+  (^GameObject [x child world-position-stays]
+   (let [x (Util/CastToGameObject x)
+         child (Util/CastToGameObject child)]
+     (.SetParent
+       (.transform child)
+       (.transform x)
+       ^Boolean world-position-stays)
+     child)))
+
+(defn child-
+  "Removes GameObject `x` as the parent of GameObject `child`, 
+  moving `child` to the top of the scene graph hierarchy. Returns `nil`.
+
+  If `world-position-stays` is `true`, `child` retains its world
+  position after being reparented."
+  ([x child]
+   (child- x child false))
+  ([x child world-position-stays]
+   (let [x (Util/CastToGameObject x)
+         child (Util/CastToGameObject child)]
+     (when (= (.. child transform parent) (.transform x))
+       (.SetParent (.transform child) nil ^Boolean world-position-stays)))))
+
+(defn children
+  "Gets the live children of GameObject `x` as a persistent vector of
+  GameObjects."
+  [x]
+  (let [x (Util/CastToGameObject x)]
+    (persistent!
+      (reduce
+        (fn [acc ^UnityEngine.Transform x]
+          (if-let [g (null->nil (.gameObject x))]
+            (conj! acc g)
+            acc))
+        (transient [])
+        (.transform x)))))
+
+(defn parent
+  "Returns the live parent of GameObject `x` or `nil` if it has none.
+
+  GameObjects at the top of the hierarchy do not have parents."
+  [x]
+  (when-let [^Transform parent (-> x
+                                   Util/CastToGameObject
+                                   (.. transform parent)
+                                   null->nil)]
+    (.gameObject parent)))
 
 ;; ------------------------------------------------------------
 ;; IEntityComponent
 
-(defprotocol IEntityComponent
-  "Common protocol for everything in Unity that supports attached
-  components."
-  (cmpt [this t]
-    "Returns the first component typed `t` attached to the object")
-  (cmpts [this t]
-    "Returns a vector of all components typed `t` attached to the object")
-  (cmpt+ [this t]
-    "Adds a component of type `t` to the object and returns the new instance")
-  (cmpt- [this t]
-    "Removes all components of type `t` from the object and returns the object"))
+;; TODO: get rid of this forward declaration by promoting ISceneGraph functions
+;; above this
 
-(defmacro ^:private do-reduce [[x coll] & body]
-  `(do
-     (reduce
-       (fn [_# ~x]
-         ~@body
-         nil)
-       ~coll)
-     nil))
+(defn cmpt
+  "Returns the first live Component of type `t` attached to GameObject
+  `x`. Returns `nil` if no such Component is attached."
+  ^UnityEngine.Component [^GameObject x ^Type t]
+  (null->nil (.GetComponent (Util/CastToGameObject x) t)))
 
-(defmacro ^:private do-components [[x access] & body]
-  `(let [^|UnityEngine.Component[]| ar# ~access
-         c# (int (count ar#))]
-     (loop [i# (int 0)]
-       (when (< i# c#)
-         (let [^Component ~x (aget ar# i#)]
-           (do ~@body)
-           (recur (inc i#)))))))
+(defn cmpts
+  "Returns all live Components of type `t` attached to GameObject `x`
+  as a (possibly empty) array."
+  ^|UnityEngine.Component[]| [x ^Type t]
+  (Util/WithoutNullObjects (.GetComponents (Util/CastToGameObject x) t)))
 
-(extend-protocol IEntityComponent
-  GameObject
-  (cmpt [this t]
-    (obj-nil (.GetComponent this t)))
-  (cmpts [this t]
-    (into [] (.GetComponents this t)))
-  (cmpt+ [this t]
-    (.AddComponent this t))
-  (cmpt- [this t]
-    (do-components [x (.GetComponents this t)]
-      (destroy x)))
+(defn cmpt+
+  "Adds a new Component of type `t` to GameObject `x`. Returns the new Component."
+  ^UnityEngine.Component [x ^Type t]
+  (.AddComponent (Util/CastToGameObject x) t))
 
-  ;; exactly the same:
-  Component
-  (cmpt [this t]
-    (obj-nil (.GetComponent this t)))
-  (cmpts [this t]
-    (into [] (.GetComponents this t)))
-  (cmpt+ [this t]
-    (.AddComponent this t))
-  (cmpt- [this t]
-    (do-components [x (.GetComponents this t)]
-      (destroy x))) 
-  
-  clojure.lang.Var
-  (cmpt [this t]
-    (cmpt (var-get this) t))
-  (cmpts [this t]
-    (cmpts (var-get this) t))
-  (cmpt+ [this t]
-    (cmpt+ (var-get this) t))
-  (cmpt- [this t]
-    (cmpt- (var-get this) t)))
-
-;; ------------------------------------------------------------
-;; ISceneGraph
-
-(defprotocol ISceneGraph
-  "Common protocol for everything in Unity that is part of the scene
-  graph hierarchy."
-  (gobj ^GameObject [this]
-        "")
-  (children [this]
-    "Returns all objects under `this` object in the hierarchy.")
-  (parent ^GameObject [this]
-          "Returns the object that contains `this` object, or `nil` if it is
-          at the top of the hierarchy.")
-  (child+ 
-    ^GameObject [this child]
-    ^GameObject [this child transform-to]
-    "Moves `child` to under `this` object in the hierarchy, optionally
-    recalculating its local transform.")
-  (child- ^GameObject [this child]
-          "Move `child` from under `this` object ti the top of the hierarchy"))
-
-(extend-protocol ISceneGraph
-  GameObject
-  (gobj [this]
-    this)
-  (children [this]
-    (into []
-      (map (fn [^Transform tr] (.gameObject tr)))
-      (.transform this)))
-  (parent [this]
-    (when-let [p (.. this transform parent)]
-      (.gameObject p)))
-  (child+
-    ([this child]
-     (child+ this child false))
-    ([this child transform-to]
-     (let [^GameObject c (gobj child)]
-       (.SetParent (.transform c) (.transform this) transform-to)
-       this)))
-  (child- [this child]
-    (let [^GameObject c (gobj child)]
-      (.SetParent (.transform c) nil false)
-      this))
-
-  Component
-  (gobj [^Component this]
-    (.gameObject this))
-  (children [^Component this]
-    (into [] (.. this gameObject transform)))
-  (parent [^Component this]
-    (.. this gameObject parent))
-  (child+
-    ([^Component this child]
-     (child+ (.gameObject this) child))
-    ([^Component this, child, transform-to]
-     (child+ (.gameObject this) child transform-to)))
-  (child- [^Component this, child]
-    (child- (.gameObject this) child))
-
-  clojure.lang.Var
-  (gobj [this]
-    (gobj (var-get this)))
-  (children [this]
-    (children (var-get this)))
-  (parent [this]
-    (parent (var-get this)))
-  (child+
-    ([this child]
-     (child+ (var-get this) child))
-    ([this child transform-to]
-     (child+ (var-get this) child transform-to)))
-  (child- [this child]
-    (child- (var-get this) child)))
+;; returns nil because returning x would be inconsistent with cmpt+,
+;; which must return the new component
+(defn cmpt-
+  "Removes *every* Component of type `t` from GameObject `x`. Returns `nil`."
+  [x ^Type t]  
+  (let [^|UnityEngine.Component[]| a (.GetComponents (Util/CastToGameObject x) t)]
+    (loop [i (int 0)]
+      (when (< i (count a))
+        (retire (aget a i))
+        (recur (inc i))))))
 
 ;; ------------------------------------------------------------
 ;; repercussions
 
 (defn ensure-cmpt
-  "If `obj` has a component of type `t`, returns is. Otherwise, adds
+  "If GameObject `x` has a component of type `t`, returns it. Otherwise, adds
   a component of type `t` and returns the new instance."
-  ^UnityEngine.Component [obj ^Type t]
-  (let [obj (gobj obj)]
-    (or (cmpt obj t) (cmpt+ obj t))))
+  ^UnityEngine.Component [x ^Type t]
+  (let [x (Util/CastToGameObject x)]
+    (or (cmpt x t) (cmpt+ x t))))
 
 ;; ------------------------------------------------------------
-;; happy macros
+;; sugar macros
 
 (defn- meta-tag [x t]
   (vary-meta x assoc :tag t))
@@ -349,41 +374,109 @@
   ([s t]
    (meta-tag (gensym s) t)))
 
-(defmacro with-gobj [[gob-name x] & body]
-  `(let [~gob-name (gobj ~x)]
-     ~@body))
-
 (defmacro with-cmpt
-  ([gob cmpt-name-types & body]
-   (assert (vector? cmpt-name-types))
-   (assert (even? (count cmpt-name-types)))
+  "`binding => name component-type`
+
+  For each binding, binds `name` to an instance of class
+  `component-type` attached to GameObject `gob`. If no such instance
+  is currently attached to `x`, a new instance of `component-type`
+  will be created, attached to `x`, and bound to `name`. `body` is
+  then evaluated in the lexical context of all bindings."
+  ([gob bindings & body]
+   (assert (vector? bindings))
+   (assert (even? (count bindings)))
    (let [gobsym (gentagged "gob__" 'UnityEngine.GameObject)
-         dcls  (->> cmpt-name-types
+         dcls  (->> bindings
                  (partition 2)
                  (mapcat (fn [[n t]]
                            [(meta-tag n t) `(ensure-cmpt ~gobsym ~t)])))]
-     `(with-gobj [~gobsym ~gob]
+     `(let [~gobsym (Arcadia.Util/CastToGameObject ~gob)]
         (let [~@dcls]
           ~@body)))))
 
 (defmacro if-cmpt
-  "Execute body of code if `gob` has a component of type `cmpt-type`"
+  "If a component of type `cmpt-type` is attached to GameObject `gob`,
+  binds it to `cmpt-name`, then evaluates and returns `then` in the
+  lexical scope of that binding. Otherwise evaluates and returns
+  `else`, if provided, or returns `nil` if `else` is not provided."
   [gob [cmpt-name cmpt-type] then & else]
   (let [gobsym (gentagged "gob__" 'UnityEngine.GameObject)]
-    `(let [obj# ~gob]
-       (if (obj-nil obj#)
-         (with-gobj [~gobsym obj#]
-           (if-let [~(meta-tag cmpt-name cmpt-type) (cmpt ~gobsym ~cmpt-type)]
-             ~then
-             ~@else))
+    `(let [~gobsym ~gob]
+       (if-let [~cmpt-name (cmpt ~cmpt-type)]
+         ~then
          ~@else))))
+
+;; ============================================================
+;; sugar for imperative programming
+
+(defmacro sets!
+  "Set multiple fields or properties on an object instance `o` simultaneously.
+
+  assignment => field-name value 
+
+  For each assignment, field-name is the name of a field or property
+  of `o`, and `value` is the new value it will be set to.
+
+  Returns the final set value.
+
+  ```clj
+(sets! (.transform some-game-object)
+  position (arcadia.linear/v3 1 2 3)
+  localScale (arcadia.linear/v3 1 2 3))
+  ```"
+  [o & assignments]
+  (let [osym (gensym "obj__")
+        asgns (->> (partition 2 assignments)
+                   (map (fn [[lhs rhs]]
+                          `(set! (. ~osym ~lhs) ~rhs))))]
+    `(let [~osym ~o]
+       ~@asgns)))
+
+(defmacro set-with!
+  "Access and set a field or property `prop` on object instance
+  `obj`. The new value at `(. obj prop)` will be set to the value of
+  `body`, evaluated in an implicit `do`, with `name` bound to the
+  preexisting value of `(. obj prop)`.  This operation is not atomic,
+  and should be used with caution in concurrent contexts.
+
+  As an example,
+
+  ```clj
+(set-with! (.transform some-game-object) [pos position]
+  (arcadia.linear/v3+ pos (arcadia.linear/v3 1 0 0)))
+  ```
+
+  is equivalent to
+
+  ```
+(let [tr (.transform some-game-object)
+      pos (.position tr)]
+  (set!
+    (.position tr)
+    (arcadia.linear/v3+ (.position tr) (arcadia.linear/v3 1 0 0))))
+  ```
+
+  Since the object is the first argument, multiple such assignments on
+  an object may be chained using `doto`. Returns the new value of the
+  field or property."
+  [obj [name prop :as bindings] & body]
+  (assert (vector? bindings))
+  (assert (symbol? name))
+  (assert (symbol? prop))
+  `(let [obj# ~obj
+         ~name (. obj# ~prop)]
+     (set! (. obj# ~prop) (do ~@body))))
 
 ;; ============================================================
 ;; traversal
 
-(defn gobj-seq [x]
-  (tree-seq identity children (gobj x)))
-
+(defn descendents
+  "Returns a sequence containing all descendents of GameObject `x` in
+  depth-first order. The descendents of `x` are all GameObjects
+  attached as children to `x` in the Unity hierarchy; all of those
+  GameObject's children; and so on."
+  [x]
+  (tree-seq identity children x))
 
 ;; ============================================================
 ;; hooks
@@ -391,24 +484,26 @@
 (defn- clojurized-keyword [m]
   (-> m str camels-to-hyphens string/lower-case keyword))
 
-(defn- message-keyword [m]
-  (clojurized-keyword m))
-
-(def hook-types
-  "Map of keywords to hook component types"
-  (->> messages/all-messages
+(def ^:private hook-types
+  "Map of keywords to hook component types. Unstable."
+  (->> events/all-events
        keys
        (map name)
-       (mapcat #(vector (message-keyword %)
-                        (RT/classForName (str % "Hook"))))
-       (apply hash-map)))
+       (map #(do [(clojurized-keyword %), (RT/classForName (str % "Hook"))]))
+       (into {})))
+
+(defn available-hooks
+  "Returns a sorted seq of all permissible hook event keywords."
+  []
+  (sort (keys hook-types)))
 
 (defn- ensure-hook-type [hook]
-  (or (hook-types hook)
+  (or (get hook-types hook)
       (throw (ArgumentException. (str hook " is not a valid Arcadia hook")))))
 
 (s/def ::scenegraphable
-  #(satisfies? ISceneGraph %))
+  #(or (instance? GameObject %)
+       (instance? Component %)))
 
 (s/def ::hook-kw
   #(contains? hook-types %))
@@ -425,183 +520,184 @@
                          :f ifn?
                          :keys (s/? (s/nilable sequential?))))))
 
-(defn hook+
-  "Attach a Clojure function to a Unity message on `obj`. The function `f`
-  will be invoked every time the message identified by `message-kw` is sent by Unity. `f`
-  must have the same arity as the expected Unity message. When called with a key `k`
-  this key can be passed to `message-kw-` to remove the function."
-  ([obj message-kw f] (hook+ obj message-kw :default f))
-  ([obj message-kw k f]
-   (hook+ obj message-kw k f nil))
-  ([obj message-kw k f {:keys [fast-keys]}]
-   (let [fast-keys (or fast-keys
-                       (when (instance? clojure.lang.IMeta f)
-                         (::keys (meta f))))]
-     ;; need to actually do something here
-     ;; (when-not (empty? fast-keys) (println "fast-keys: " fast-keys))
-     (let [hook-type (ensure-hook-type message-kw)
-           ^ArcadiaBehaviour hook-cmpt (ensure-cmpt obj hook-type)]
-       (.AddFunction hook-cmpt f k (into-array System.Object (cons k fast-keys)))
-       obj))))
+(defn
+  ^{:doc/see-also {"Unity Event Functions" "https://docs.unity3d.com/Manual/EventFunctions.html"}}
+  hook+
+  "Attach a Clojure function, preferrably a Var instance, to GameObject
+  `obj` on key `k`. The function `f` will be invoked every time the event
+  identified by `event-kw` is triggered by Unity.
 
-(defn hook-var [obj message-kw var]
-  (if (var? var)
-    (hook+ obj message-kw var var)
-    (throw
-      (clojure.lang.ExceptionInfo.
-        (str "Expects var, instead got: " (class var))
-        {:obj obj
-         :message-kw message-kw
-         :var var}))))
+  `f` must be a function of 2 arguments, plus however many arguments
+  the corresponding Unity event function takes. The first argument is
+  the GameObject `obj` that `f` is attached to. The second argument is
+  the key `k` it was attached with. The remaining arguments are the
+  arguments normally passed to the corresponding Unity event function.
+
+  Returns `f`."
+  ([obj event-kw k f]
+   (let [hook-type (ensure-hook-type event-kw)
+         ^ArcadiaBehaviour hook-cmpt (ensure-cmpt obj hook-type)]
+     (.AddFunction hook-cmpt k f)
+     f)))
 
 (defn hook-
-  "Removes callback from GameObject `obj` on the Unity message
-  corresponding to `message-kw` at `key`, if it exists. Reverse of
+  "Removes hook function from GameObject `obj` on the Unity event
+  corresponding to `event-kw` at `key`, if it exists. Reverse of
 
-(hook+ obj message-kw key)
+```clj
+  (hook+ obj event-kw key hook-function)
+```
 
-  If `key` is not supplied, `hook-` will use `:default` as the key.
-  This is the same as
-
-(hook- obj message-kw :default)."
-  ([obj message-kw]
-   (hook- obj message-kw :default))
-  ([obj message-kw key]
-   (when-let [^ArcadiaBehaviour hook-cmpt (cmpt obj (ensure-hook-type message-kw))]
+  Returns `nil`."
+  ([obj event-kw key]
+   (when-let [^ArcadiaBehaviour hook-cmpt (cmpt obj (ensure-hook-type event-kw))]
      (.RemoveFunction hook-cmpt key))
    nil))
 
-(defn clear-hook
-  "Removes all callbacks on the Unity message corresponding to
-  `message-kw`, regardless of their keys."
-  [obj message-kw]
-  (when-let [^ArcadiaBehaviour hook-cmpt (cmpt obj (ensure-hook-type message-kw))]
+(defn clear-hooks
+  "Removes all hook functions on the Unity event corresponding to
+  `event-kw`, regardless of their keys."
+  [obj event-kw]
+  (when-let [^ArcadiaBehaviour hook-cmpt (cmpt obj (ensure-hook-type event-kw))]
     (.RemoveAllFunctions hook-cmpt))
   nil)
 
 (defn hook
-  "Retrieves a callback from a GameObject `obj`. `message-kw` is a
-  keyword specifying the Unity message of the callback, and `key` is
-  the key of the callback.
-  
-  In other words, retrieves any callback function attached via
+  "Retrieves an attached hook function from GameObject
+  `obj`. `event-kw` is a keyword specifying the Unity event of the
+  hook function, and `key` is the key of the hook function.
 
-(hook+ obj message-kw key callback)
+  In other words, retrieves any hook function attached via
 
-  or the equivalent.
+```clj
+  (hook+ obj event-kw key hook-function)
+```
 
-  If `key` is not supplied, `hook` uses `:default` as key. This is the same as
+  or the equivalent."
+  [obj event-kw key]
+  (when-let [^ArcadiaBehaviour hook-cmpt (cmpt obj (ensure-hook-type event-kw))]
+    (.CallbackForKey hook-cmpt key)))
 
-(hook obj message-kw :default)"
-  [obj message-kw key]
-  (when-let [^ArcadiaBehaviour hook-cmpt (cmpt obj (ensure-hook-type message-kw))]
-    (get (.indexes hook-cmpt) key)))
-
-;; are these necessary?
-
-;; (defn hook-fns
-;;   "Return the functions associated with `hook` on `obj`."
-;;   [obj message-kw]
-;;   (.fns (hook obj message-kw)))
-
-;; (defn hooks 
-;;   "Return all components for `hook` attached to `obj`"
-;;   [obj hook]
-;;   (let [hook-type (ensure-hook-type hook)]
-;;     (cmpts obj hook-type)))
-
-(defn hook?
-  ([t hook] (= (type t)
-               (ensure-hook-type hook)))
-  ([t] (isa? (type t)
-         ArcadiaBehaviour)))
 
 ;; ============================================================
-;; ISnapShotable
+;; defmutable support methods
 
-;; see `defmutable` below
-;; This protocol should be considered an internal, unstable
-;; implementation detail of `snapshot` for now. Please refrain from
-;; extending it.
-(defprotocol ISnapshotable
-  (snapshot [self]))
+(defn snapshot
+  "Converts `defmutable` instance `x` to a persistent representation."
+  [x]
+  (arcadia.internal.protocols/snapshot x))
 
-;; ============================================================
-;; state
+;; public for macros
+(defn maybe-snapshot
+  "Unstable implementation detail, please don't use."
+  [x]
+  (if (arcadia.internal.protocols/snapshotable? x)
+    (snapshot x)
+    x))
 
-(defn- ensure-state ^ArcadiaState [go]
-  (ensure-cmpt go ArcadiaState))
+(defn mutable
+  "Given a persistent representation of a mutable datatype defined via
+  `defmutable`, constructs and returns a matching instance of that
+  datatype.
 
-(defn state
-  "Returns the state of object `go` at key `k`."
-  ([gobj]
-   (when-let [^ArcadiaState s (cmpt gobj ArcadiaState)]
-     (persistent!
-       (reduce (fn [m, ^Arcadia.JumpMap+KeyVal kv]
-                 (assoc! m (.key kv) (.val kv)))
-         (transient {})
-         (.. s state KeyVals)))))
-  ([gobj k]
-   (Arcadia.HookStateSystem/Lookup gobj k)))
+  Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via `defmutable`,
 
-(declare mutable)
+  ```clj
+  (= (snapshot x) (snapshot (mutable (snapshot x))))
+  ```"
+  [x]
+  (arcadia.internal.protocols/mutable x))
 
-(defn- maybe-mutable [x]
+;; public for macros
+(defn maybe-mutable
+  "Unstable implementation detail, please don't use."
+  [x]
   (if (and (map? x)
            (contains? x ::mutable-type))
     (mutable x)
     x))
 
+;; ============================================================
+;; state
+
+(defn lookup
+  "Returns the state of GameObject `go` at key `k`. Does not convert
+  defmutable instances to persistent representations."
+  [go k]
+  (Arcadia.HookStateSystem/Lookup go k))
+
+(defn state
+  "With one argument, returns the state of GameObject `go` on all keys
+  as a map. With two arguments, returns the state of GameObject `go`
+  at key `k`. If this state is a `defmutable` instance, will return a
+  persistent representation instead. To avoid this behavior use
+  `lookup`."
+  ([go]
+   (when-let [^ArcadiaState s (cmpt go ArcadiaState)]
+     (let [m (persistent!
+               (reduce (fn [m, ^Arcadia.JumpMap+KeyVal kv]
+                         (assoc! m (.key kv) (maybe-snapshot (.val kv))))
+                 (transient {})
+                 (.. s state KeyVals)))]
+       (when-not (zero? (count m))
+         m))))
+  ([go k]
+   (maybe-snapshot
+     (Arcadia.HookStateSystem/Lookup go k))))
+
 (defn state+
-  "Sets the state of object `go` to value `v` at key `k`. If no key is provided, "
-  ([go v]
-   (state+ go :default v))
+  "Sets the state of GameObject `go` to value `v` at key `k`. Returns
+  `v`. If `v` is a persistent representation of a `defmutable`
+  instance, will convert it to a mutable instance before inserting in
+  the scene graph."
   ([go k v]
    (with-cmpt go [arcs ArcadiaState]
      (.Add arcs k (maybe-mutable v))
-     go)))
+     v)))
 
 (defn state-
-  "Removes the state of object `go` at key `k`. If no key is provided,
-  removes state at key `default`."
-  ([go]
-   (state- go :default))
+  "Removes the state of object `go` at key `k`."
   ([go k]
    (with-cmpt go [arcs ArcadiaState]
      (.Remove arcs k)
-     go)))
+     nil)))
 
 (defn clear-state
   "Removes all state from the GameObject `go`."
   [go]
   (with-cmpt go [arcs ArcadiaState]
     (.Clear arcs)
-    go))
+    nil))
+
+(defmacro ^:private update-state-impl-form [go k f & args]
+  `(with-cmpt ~go [arcs# ArcadiaState]
+     (let [v# (~f (maybe-snapshot (.ValueAtKey arcs# ~k)) ~@args)]
+       (.Add arcs# ~k (maybe-mutable v#))
+       v#)))
 
 (defn update-state
-  "Updates the state of object `go` with function `f` and additional
-  arguments `args` at key `k`. Args are applied in the same order as
-  `clojure.core/update`."
+  "Updates the state of GameObject `go` at key `k` with function `f` and
+  additional arguments `args`. Args are applied in the same order as
+  `clojure.core/update`. Returns the new value of the state at `k`.
+
+  In the special case that the value in state is a defmutable
+  instance, `f` will be applied to the persistent representation of
+  that value, which will then be converted to a mutable instance
+  again, and inserted into state at `k`. The returned value will be
+  `f` applied to the persistent representation."
   ([go k f]
-   (with-cmpt go [arcs ArcadiaState]
-     (.Add arcs k (f (.ValueAtKey arcs k)))
-     go))
+   (update-state-impl-form go k f))
   ([go k f x]
-   (with-cmpt go [arcs ArcadiaState]
-     (.Add arcs k (f (.ValueAtKey arcs k) x))
-     go))
+   (update-state-impl-form go k f x))
   ([go k f x y]
-   (with-cmpt go [arcs ArcadiaState]
-     (.Add arcs k (f (.ValueAtKey arcs k) x y))
-     go))
+   (update-state-impl-form go k f x y))
   ([go k f x y z]
-   (with-cmpt go [arcs ArcadiaState]
-     (.Add arcs k (f (.ValueAtKey arcs k) x y z))
-     go))
+   (update-state-impl-form go k f x y z))
   ([go k f x y z & args]
    (with-cmpt go [arcs ArcadiaState]
-     (.Add arcs k (apply f (.ValueAtKey arcs k) x y z args))
-     go)))
+     (let [v (apply f (snapshot (.ValueAtKey arcs k)) x y z args)]
+       (.Add arcs k (maybe-mutable v))
+       v))))
 
 ;; ============================================================
 ;; roles 
@@ -645,47 +741,104 @@
           (sequential? v)
           true)))))
 
-(defn role- [obj k]
-  (reduce-kv
-    (fn [_ ht _]
-      (hook- obj ht k))
-    nil
-    hook-types)
+(defn role-
+  "Removes a role from GameObject `obj` on key `k`. Any hook or state
+  attached to `obj` on key `k` will be removed. Returns `nil`."
+  [obj k]
+  (let [abs (cmpts obj ArcadiaBehaviour)]
+    (loop [i (int 0)]
+      (when (< i (count abs))
+        (let [^ArcadiaBehaviour ab (aget abs i)]
+          (.RemoveFunction ab k)
+          (recur (inc i))))))
   (state- obj k)
-  obj)
+  nil)
 
 (s/fdef role+
-  :args (s/cat :obj #(satisfies? ISceneGraph %)
+  :args (s/cat :obj any? ;; for now #(satisfies? ISceneGraph %)
                :k any?
                :spec ::role)
   :ret any?
   :fn (fn [{:keys [obj]} ret]
         (= obj ret)))
 
-(defn role+ [obj k spec]
+(defn role+
+  "Adds a role `r` to GameObject `obj` on key `k`, replacing any
+  previous role on `k`. Keys in `r` corresponding to Unity event
+  functions, such as `:update`, `:on-collision-enter`, etc, are
+  expected to have values meeting the criteria for hook functions
+  described in the docstring for `hook+`. For such a key `event-kw`,
+  values will be attached to `obj` as though by `(hook+ obj event-kw
+  k (get r event-kw))`.
+
+  If present, the value of the key `:state` in `r` will be attached to
+  `obj` as though by `(state+ obj k (get r :state))`.
+
+  For example,
+
+  ```clj
+  (role+
+  obj,
+  :example-role,
+  {:state 45, {:update #'on-update, :on-collision-enter #'on-collision-enter}})
+  ```
+
+  has the same effect as
+
+  ```clj
+  (role- obj :example-role)
+  (state+ obj :example-role 45)
+  (hook+ obj :update :example-role #'on-update)
+  (hook+ obj :on-collision-enter :example-role #'on-collision-enter)
+  ```
+
+  As with `state+`, persistent reprsentations `defmutable` data as
+  values in `:state` will be converted to mutable instances.
+
+  Returns `r`."
+  [obj k r]
   (role- obj k)
   (reduce-kv
     (fn [_ k2 v]
       (cond
         (hook-types k2)
-        (hook+ obj k2 k v
-          (when-let [ks (get spec (get hook-ks k2))]
-            {:fast-keys ks}))
+        (hook+ obj k2 k v)
 
         (= :state k2)
         (state+ obj k (maybe-mutable v))))
     nil
-    spec)
-  obj)
+    r)
+  r)
 
-(defn roles+ [obj spec]
-  (reduce-kv role+ obj spec))
+(defn roles+
+  "Takes a GameObject `obj` and map `rs` containing role keys and role
+  maps as entries.  For each entry in `rs` with key `k` and value `r`,
+  adds `r` to `obj` on key `k` as though calling
+  
+  ```clj
+  (role+ obj k r)
+  ```
+  
+  Returns `rs`."
+  [obj rs]  
+  (reduce-kv #(role+ obj %2 %3) nil rs)
+  rs)
 
-(defn roles- [obj ks]
-  (reduce role- obj ks))
+(defn roles-
+  "Takes a GameObject `obj` and collection of keys `ks`. For each key
+  `k` in `ks`, will remove `k` from `obj`, as if calling
+
+  ```clj
+  (role- obj k)
+  ```
+
+  Returns `nil`."
+  [obj ks]
+  (reduce role- obj ks)
+  nil)
 
 (s/fdef role
-  :args (s/cat :obj #(satisfies? ISceneGraph %)
+  :args (s/cat :obj any? ;; for now ;; #(satisfies? ISceneGraph %)
                :k any?)
   :ret ::role)
 
@@ -693,21 +846,25 @@
 ;; also instance vs satisfies, here
 ;; maybe this should be a definterface or something
 ;; yeah definitely should be a definterface, this is just here for `defmutable`
-(defn- maybe-snapshot [x]
-  (if (instance? arcadia.core.ISnapshotable x)
-    (snapshot x)
-    x))
 
 (defn- inner-role-step [bldg, ^ArcadiaBehaviour+IFnInfo inf, hook-type-key]
-  (as-> bldg bldg
-        (assoc bldg hook-type-key (.fn inf))
-        (let [fk (.fastKeys inf)]
-          (if (< 1 (count fk))
-            (assoc bldg (hook-type-key->fastkeys-key hook-type-key)
-              (vec (rest fk)))
-            bldg))))
+  (assoc bldg hook-type-key (.fn inf)))
 
-(defn role [obj k]
+(defn role
+  "Returns a map of all hooks and state attached to GameObject `obj` on
+  key `k`. Within the returned map, keys will be either hook event
+  keywords such as `:update`, `:on-collision-enter`, etc, or `:state`.
+
+  ```clj
+  (hook+ obj :update :test #'on-update)
+  (state+ obj :test {:speed 3, :mass 4})
+
+  (role obj :test)
+  ;; returns:
+  ;; {:state {:speed 3, :mass 4},
+  ;;  :update #'on-update}
+  ```"
+  [obj k]
   (let [step (fn [bldg ^ArcadiaBehaviour ab]
                (let [hook-type-key (hook->hook-type-key ab)]
                  (reduce
@@ -721,7 +878,10 @@
         init (if-let [s (state obj k)]
                {:state (maybe-snapshot s)}
                {})]
-    (reduce step init (cmpts obj ArcadiaBehaviour))))
+    (let [m (reduce step init (cmpts obj ArcadiaBehaviour))]
+      (if (zero? (count m))
+        nil
+        m))))
 
 (defn- roles-step [bldg ^ArcadiaBehaviour ab]
   (let [hook-type-key (hook->hook-type-key ab)]
@@ -734,7 +894,28 @@
       (.ifnInfos ab))))
 
 ;; map from hook, state keys to role specs
-(defn roles [obj]
+(defn roles
+  "Returns a map containing all the roles attached to GameObject
+  `obj`. For each entry in this map, the key is the key of some hooks
+  or state attached to `obj`, and the value is the map one would get
+  by calling `(role obj k)` for that key `k`. For example:
+
+  ```clj
+  (hook+ obj :update :key-a #'on-update)
+  (state+ obj :key-a {:speed 3, :mass 4})
+
+  (hook+ obj :update :key-b #'other-on-update)
+  (state+ obj :key-b {:name \"bob\", :health 5})
+
+  (roles obj)
+  ;; returns:
+  ;; {:key-a {:state {:speed 3, :mass 4},
+  ;;          :update #'on-update},
+  ;;  :key-b {:state {:name \"bob\", :health 5},
+  ;;          :update #'other-on-update}}
+  ```
+  Roundtrips with `roles+`."
+  [obj]
   (let [init (if-let [^ArcadiaState arcs (cmpt obj ArcadiaState)]
                (reduce-kv
                  (fn [bldg k v]
@@ -748,7 +929,7 @@
 ;; defrole
 
 (def ^:private hook->args
-  (-> messages/all-messages
+  (-> events/all-events
       (mu/map-keys clojurized-keyword)))
 
 (s/def ::defrole-impl
@@ -789,54 +970,60 @@
                        :key key
                        :value val}))))
 
-;; add documentation string 
-(defmacro defrole
-  "Macro for defining roles quickly.
-Syntax:
-(defrole name entry*)
+;; add documentation string
+(defmacro ^:doc/no-syntax
+  defrole
+  "`(defrole name entry*)`
 
+Macro for defining roles quickly.
 Each entry can be either a key-value pair with a keyword key, such as would normally occur
   in a map intended as an Arcadia role, or an inlined function definition.
 
 Normal key-value pairs get inserted into the generated map. For example,
 
+```clj
 (defrole movement
   :state {:speed 3}
   :update #'movement-update)
+```
 
 will expand into
 
+```clj
 (def movement
   {:state {:speed 3}
    :update #'movement-update})
+```
 
 Inlined function definitions have the following syntax:
 
-(name [args*] body)
+`(name [args*] body)`
 
 name must be the symbol form of an Arcadia hook keyword. A function
   intended for the `:update` hook, for example, should have the name
   `update`:
 
+```clj
 (defrole movement
   :state {:speed 3}
   (update [obj k] ...))
+```
 
-Each inlined function definition will **generate a var**, with a name
-  constructed as follows:
-
-<name of role>-<name of hook>
+Each inlined function definition will *generate a var*, with a name
+  constructed as follows: `<name of role>-<name of hook>`
 
 For example, the `movement` role above will generate a var named
   `movement-update` bound to a function with the provided arguments
   and body, and include that var in the generated role map, expanding
   into something like:
 
+```clj
 (do
   (defn movement-update [obj k] ...)
   (def movement
     {:state {:speed 3}
      :update #'movement-update}))
+```
 
 Note that generating vars is usually a bad idea because it messes with
   tooling and legibility. This macro does it anyway because the hook
@@ -873,79 +1060,42 @@ Note that generating vars is usually a bad idea because it messes with
                         :args vector?
                         :body (s/* any?))))))
 
-(s/def ::element-snapshots-impl
+(s/def ::element-process
   (s/cat
-    :args (s/and vector? #(= 2 (count %)))
+    :args (s/and vector? #(= 3 (count %)))
     :body (s/* any?)))
 
-(s/def ::element-snapshots-map
-  (s/map-of
-    #(or (symbol? %) (keyword? %))
-    ::element-snapshots-impl))
+(s/def ::snapshot-elements
+  (s/map-of keyword? ::element-process))
 
-(s/def ::default-element-snapshots-impl
-  (s/spec
-    (s/cat
-      :args (s/and vector? #(= 3 (count %)))
-      :body (s/* any?))))
+(s/def ::snapshot ::element-process)
 
-(s/def ::more-opts
-  (s/*
-    (s/alt
-      :element-snapshots-map (s/cat
-                               :key #{:element-snapshots}
-                               :element-snapshots ::element-snapshots-map)
-      :default-element-snapshots (s/cat
-                                   :key #{:default-element-snapshots}
-                                   :default-element-snapshots-impl ::default-element-snapshots-impl))))
+(s/def ::mutable-elements
+  (s/map-of keyword? ::element-process))
+
+(s/def ::mutable ::element-process)
 
 (s/def ::defmutable-args
   (s/cat
     :name symbol?
     :fields (s/coll-of symbol?, :kind vector?)
     :protocol-impls (s/* ::protocol-impl)
-    :more-opts ::more-opts))
+    :more-opts (s/keys*
+                 :opt-un [::snapshot
+                          ::snapshot-elements
+                          ::mutable-elements
+                          ::mutable])))
 
-;; the symbol
-(defn mutable-dispatch [{t ::mutable-type}]
-  (cond (instance? System.Type t) (symbol (pr-str t))
-        (symbol? t) t
-        :else (throw
-                (Exception.
-                  (str "Expects type or symbol, instead got instance of " (class t))))))
+(defn mut!
+  "Dynamically sets field keyword `kw` of `defmutable` instance `x` to
+  new value `v`. Returns `v`."
+  [x kw v]
+  (arcadia.internal.protocols/mut! x kw v))
 
-;; constructor (no instance), so this has to be a multimethod
-;; if we're sticking to clojure stuff
-(defmulti mutable
-  "Given a persistent representation of a mutable datatype defined via
-  `defmutable`, constructs and returns a matching instance of that
-  datatype. 
-
-Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via `defmutable`,
-(= (snapshot x) (snapshot (mutable (snapshot x))))"
-  #'mutable-dispatch)
-
-(defprotocol IMutable
-  (mut!
-    [_]
-    [_ _]
-    [_ _ _]
-    [_ _ _ _]
-    [_ _ _ _ _]
-    [_ _ _ _ _ _]
-    [_ _ _ _ _ _ _]
-    [_ _ _ _ _ _ _ _]
-    [_ _ _ _ _ _ _ _ _]
-    [_ _ _ _ _ _ _ _ _ _]
-    [_ _ _ _ _ _ _ _ _ _ _]
-    [_ _ _ _ _ _ _ _ _ _ _ _]
-    [_ _ _ _ _ _ _ _ _ _ _ _ _]
-    [_ _ _ _ _ _ _ _ _ _ _ _ _ _]
-    [_ _ _ _ _ _ _ _ _ _ _ _ _ _ _]
-    [_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _]
-    [_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _]
-    [_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _]
-    [_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _]))
+(defn delete!
+  "Removes dynamic entry `k` from `defmutable` instance `x`."
+  [x k]
+  (arcadia.internal.protocols/delete! x k))
 
 (defn- expand-type-sym [type-sym]
   (symbol
@@ -955,84 +1105,139 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
       "."
       (name type-sym))))
 
-(defn- snapshot-dictionary-form [this-sym fields element-snapshots-map default-element-snapshots]
-  (let [dict-sym (gensym "dictionary_")
-        key-sym (gensym "key_")
-        val-sym (gensym "val_")
-        this-sym-2 (gensym "this_")
-        process-element-sym (gensym "process-element_")
-        processed-field-kvs (apply concat
-                              (for [field fields
-                                    :let [cljf (clojurized-keyword field)]]
-                                [cljf `(~process-element-sym
-                                        ~this-sym
-                                        ~cljf
-                                        ~field)]))]
-    `(let [~process-element-sym  (fn [~this-sym-2 ~key-sym ~val-sym] ; this function will be handed off to 
-                                   (case ~key-sym ; .ToPersistentMap on the internal dictionary
-                                     ~@(apply concat
-                                         (for [[k, {[this-sym-3 val-sym-2] :args,
-                                                    body :body}] element-snapshots-map]
-                                           (let [rform `(let [~this-sym-3 ~this-sym-2
-                                                              ~val-sym-2 ~val-sym]
-                                                          ~@body)
-                                                 k2 (if (keyword? k) k (clojurized-keyword k))]
-                                             [k2 rform])))
-                                     ~(if default-element-snapshots
-                                        (let [{[this-sym-3 key-sym-2 val-sym-2] :args
-                                               body :body} default-element-snapshots]
-                                          `(let [~this-sym-3 ~this-sym-2
-                                                 ~key-sym-2 ~key-sym
-                                                 ~val-sym-2 ~val-sym]
-                                             ~@body))
-                                        val-sym)))
-           ~dict-sym (.ToPersistentMap ~'defmutable-internal-dictionary ~this-sym ~process-element-sym)]       
-       ~(if (seq fields)
-          `(assoc ~dict-sym
-             ~@processed-field-kvs)
-          dict-sym))))
+(defn- apply-user-form [user-form tkv]
+  (let [{:keys [args body]} user-form]
+    `(let ~(vec (interleave args tkv))
+       ~@body)))
 
-;; takes a symbol representing a type
-(defmulti concrete-fields identity)
+(defn- snapshot-dictionary-form [{:keys [this-sym fields field-kws type-name],
+                                  {:keys [snapshot-elements]
+                                   default-element-snapshots :snapshot} :more-opts}]
+  (let [k-sym (gensym "k_")
+        v-sym (gensym "v_")
+        tkv [this-sym k-sym v-sym]
+        els (->> (interleave field-kws fields)
+                 (partition 2)
+                 (reduce (fn [acc [k v]]
+                           (assoc acc k
+                             (if default-element-snapshots
+                               {:k k,
+                                :field v,
+                                :body default-element-snapshots}
+                               {:k k :field v})))
+                   {}))
+        els (reduce-kv (fn [acc k body]
+                         (update acc k (fnil assoc {:k k}) :body body))
+              els
+              snapshot-elements)
+        els (mu/map-vals els
+              (fn [rec]
+                (if (and (:field rec) (:body rec))
+                  (assoc rec :sym (gensym (str (name (:k rec)) "_")))
+                  rec)))
+        has-dynamic-element-process (boolean
+                                      (or default-element-snapshots
+                                          (some #(and (:body %) (not (:field %))) (vals els))))
+        processed-field-bindings (apply concat
+                                   (for [{:keys [body field sym k]} (vals els)
+                                         :when sym]
+                                     [sym (apply-user-form body [this-sym k field])]))
+        dynamic-element-process-sym (gensym "dynamic-element-process_")
+        dynamic-element-process (when has-dynamic-element-process
+                                  (let [element-cases (apply concat
+                                                        (for [{:keys [k body field]} (vals els)
+                                                              :when (and body (not field))]
+                                                          [k (apply-user-form body tkv)]))]
+                                    `(fn ~dynamic-element-process-sym ~tkv
+                                       (case ~k-sym ~@element-cases
+                                         ~(if default-element-snapshots
+                                            (apply-user-form default-element-snapshots tkv)
+                                            v-sym)))))
+        maybe-processed-dict-map (if has-dynamic-element-process
+                                   `(.ToPersistentMap ~'defmutable-internal-dictionary ~this-sym ~dynamic-element-process)
+                                   `(.ToPersistentMap ~'defmutable-internal-dictionary))
+        maybe-processed-field-kvs (-> (select-keys els field-kws)
+                                      (mu/filter-vals :field)
+                                      (mu/map-vals #(or (:sym %) (:field %))))]
+    `(let [~@processed-field-bindings]
+       (if (zero? (.Count ~'defmutable-internal-dictionary))
+         ~(-> maybe-processed-field-kvs (assoc ::mutable-type `(quote ~type-name)))
+         (-> ~maybe-processed-dict-map
+             (mu/massoc
+               ~@(apply concat maybe-processed-field-kvs)
+               ::mutable-type (quote ~type-name)))))))
 
-(defmulti concrete-field-kws identity)
+(defn- mutable-impl-form [{:keys [fields field-kws type-name data-param]
+                           {:keys [mutable-elements]
+                            default-element-to-mutable :mutable} :more-opts}]
+  (let [k-sym (gensym "k_")
+        v-sym (gensym "v_")
+        els (reduce (fn [acc k]
+                      (assoc acc k
+                        (if default-element-to-mutable
+                          {:k k, :is-field true, :body default-element-to-mutable}
+                          {:k k, :is-field true})))
+              {}
+              field-kws)
+        els (reduce-kv (fn [acc k body]
+                         (update acc k (fnil assoc {:k k}) :body body))
+              els
+              mutable-elements)
+        has-dynamic-element-process (boolean
+                                      (or default-element-to-mutable
+                                          (some #(and (:body %) (not (:is-field %))) (vals els))))
+        processed-field-vals (->> (map els field-kws)
+                                  (map (fn [{:keys [k body]}]
+                                         (if body
+                                           (apply-user-form body [data-param k `(get ~data-param ~k)])
+                                           `(get ~data-param ~k)))))
+        dict-form (if has-dynamic-element-process
+                    (let [element-cases (apply concat
+                                          (for [{:keys [k is-field body]} els
+                                                :when (and body (not is-field))]
+                                            [k (apply-user-form body [data-param k-sym v-sym])]))]
+                      `(new Arcadia.DefmutableDictionary ;; can make a constructor that takes arrays instead for more speed
+                         (persistent!
+                           (reduce-kv
+                             (fn ~(gensym "dynamic-element-process_") [acc# ~k-sym ~v-sym]
+                               (if (~(conj (set field-kws) ::mutable-type) ~k-sym)
+                                 acc#
+                                 (assoc! acc# ~k-sym
+                                   (case ~k-sym
+                                     ~@element-cases
+                                     ~(if default-element-to-mutable
+                                        (apply-user-form default-element-to-mutable [data-param k-sym v-sym])
+                                        v-sym)))))
+                             (transient {})
+                             ~data-param))))
+                    `(new Arcadia.DefmutableDictionary))]
+    `(new ~type-name ~@processed-field-vals ~dict-form)))
 
-(defn dynamic-element-map [type-symbol element-map]
-  (apply dissoc element-map (concrete-field-kws type-symbol)))
-
-(defn dynamic-element-dict [type-symbol element-map]
-  (new Arcadia.DefmutableDictionary
-    (dynamic-element-map type-symbol element-map)))
-
-;; (defn field-snapshot-forms [this-sym fields element-snapshots-map default-element-snapshots]
-;;   (for [field fields]
-;;     (if-let [[_ {[arg-sym] :args
-;;                  body :body}] (find element-snapshots-map field)]
-;;       `(let [~arg-sym (cond
-;;                         (symbol? field) field
-;;                         (keyword? field) `(valAt ~this-sym field)
-;;                         :else (throw (Exception. "Field must be keyword or symbol")))]
-;;          ~@body)
-;;       (if-let [[[this-sym-2 ]] default-element-snapshots]))))
-
-;; note: there are 2 serialization formats for defmutable currently,
-;; snapshot and what it prints as. one of those *could* preserve reference
-;; information, maybe? risk of contradictory data though
-(defmacro  ^{:arglists '([name [fields*]])}
+(defmacro ^:doc/no-syntax
   defmutable
-  "Defines a new serializable, type-hinted, mutable datatype, intended
+  "`(defmutable [name [fields*] other*])`
+
+  Defines a new serializable, type-hinted, mutable datatype, intended
   for particularly performance or allocation sensitive operations on a
   single thread (such as Unity's main game thread). These datatypes
   support snapshotting to persistent data via `snapshot`, and
   reconstruction from snapshots via `mutable`; snapshotting and
   reconstructing are also integrated into `role+`, `state+`,
-  `role`, and `roles`.
+  `update-state`, `role`, and `roles`.
+
+  `defmutable` instances may be mutated in two ways. Their fields may
+  be mutated directly using `set!` and dot syntax. Fields may also be
+  dynamically set using `(mut! obj k v)`. Here, `obj` is the
+  `defmutable` instance, `k` is the keyword key for an entry, and `v`
+  is the new value of that entry to set on the defmutable instance.
 
   Instances of these types may be converted into persistent
   representations and back via `snapshot` and `mutable`. This
   roundtrips, so if `x` is such an instance:
 
+  ```clj
   (= (snapshot x) (snapshot (mutable (snapshot x))))
+  ```
 
   If a persistent snapshot is specified as the state argument of
   `set-state`, or as the `:state` value in the map argument of
@@ -1042,8 +1247,62 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
   any mutable instances that would otherwise be the values of `:state`
   in the returned map(s) to persistent snapshots.
 
-  `defmutable` serialization, via either `snapshot` or Unity scene-graph
-  serialization, does *not* currently preserve reference
+  `defmutable` supports four special options to help define custom
+  `snapshot` and `mutable` implementations:
+
+  `:snapshot`          
+  `:mutable`
+  `:snapshot-elements`
+  `:mutable-elements`
+
+  `:snapshot` and `:mutable` expect their values to be in the
+  following form:
+
+  `([this-param key-param value-param] body*)`
+
+  When calling `snapshot` or `mutable`, the function defined by
+  `:snapshot` or `:mutable` will be called on each entry in the
+  `defmutable` instance (in the case of `snapshot`) or the persistent
+  map representation (in the case of `mutable`). When these functions
+  run, `this-param` will be assigned to the original `defmutable`
+  instance for `snapshot`, or to the original persistent map
+  representation for `mutable`; `key-param` will be assigned to the
+  keyword key of this entry; and `val-param` will be assigned to its
+  incoming value. For `:snapshot`, the return will be the value of the
+  corresponding entry in the persistent map representation. For
+  `:mutable`, the return will be the value of the corresponding entry
+  in the `defmutable` instance representation. `:snapshot` and
+  `:mutable` should invert each other.
+
+  `:snapshot-elements` and `:mutable-elements` support finer
+  specialization of `snapshot` and `mutable` behavior. They expect
+  their values to be maps from keyword names of possible entries, to
+  the same sort of function specifications taken by `:snapshot` and
+  `:mutable`.  Specifications made with `:snapshot-elements` or
+  `:mutable-elements` take priority over those made with `:snapshot`
+  or `:mutable`.
+
+  See the online documentation for examples.
+
+  `defmutable` will automatically generate a constructor function. As
+  with `deftype`, the name of its var will be `->` followed by the
+  name of the type, and its expected arguments will be the initial
+  values of `fields`, in order.
+
+  For example, given the followind `defmutable` definition:
+
+  ```clj
+  (defmutable Sheep [wooliness bouyancy])
+  ```
+
+  an instance of `Sheep` could be constructed using
+
+  ```clj
+  (->Sheep 3 4)
+  ```
+  
+  `defmutable` serialization, via either `snapshot` or Unity
+  scene-graph serialization, does *not* currently preserve reference
   identity. Calling `mutable` on the same snapshot twice will result
   in two distinct instances. It is therefore important to store any
   given `defmutable` instance in just one place in the scene graph.
@@ -1063,47 +1322,41 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
       (throw (Exception.
                (str "Invalid arguments to defmutable. Spec explanation: "
                     (with-out-str (clojure.spec.alpha/explain ::defmutable-args args)))))
-      (let [{:keys [name fields protocol-impls more-opts]} parse
-            {{element-snapshots-map :element-snapshots} :element-snapshots-map
-             default-element-snapshots :default-element-snapshots} (into {} more-opts)
+      (let [{:keys [name fields protocol-impls]} parse
             type-name (expand-type-sym name)
             param-sym (-> (gensym (str name "_"))
                           (with-meta {:tag type-name}))
             field-kws (map clojurized-keyword fields)
-            datavec [type-name (zipmap field-kws fields)]
             dict-param (gensym "dict_")
-            data-param (gensym "data_")
-            ensure-internal-dictionary-form `(when (nil? ~'defmutable-internal-dictionary)
-                                               (set! ~'defmutable-internal-dictionary
-                                                 (new Arcadia.DefmutableDictionary)))
-            
+            data-param (gensym "data_")            
             mut-cases-form-fn (fn [this-sym [k v]]
                                 `(case ~k
                                    ~@(mapcat
                                        (fn [field-kw, field]
+
                                          `[~field-kw (set! (. ~this-sym ~field) ~v)])
                                        field-kws
                                        fields)
-                                   (do ~ensure-internal-dictionary-form
-                                       (.Add ~'defmutable-internal-dictionary ~k ~v))))
+                                   (.Add ~'defmutable-internal-dictionary ~k ~v)))
             even-args-mut-impl (fn [[_ args]]
-                                `(mut! ~args (throw (Exception. "requires odd number of arguments"))))
+                                 `(arcadia.internal.protocols/mut! ~args
+                                    (throw (Exception. "requires odd number of arguments"))))
             mut-impl (mac/arities-forms
                        (fn [[this-sym & kvs]]
                          (let [val-sym (gensym "val_")
                                pairs (partition 2 kvs)]
-                           `(mut! [~this-sym ~@kvs]
+                           `(arcadia.internal.protocols/mut! [~this-sym ~@kvs]
                               ~(when-let [lp (last pairs)]
                                  (mut-cases-form-fn this-sym (last pairs)))
-                              (mut! ~this-sym ~@(apply concat (butlast pairs))))))
+                              (arcadia.internal.protocols/mut! ~this-sym ~@(apply concat (butlast pairs))))))
                        {::mac/arg-fn #(gensym (str "arg_" % "_"))
                         ::mac/min-args 1
                         ::mac/max-args 5
                         ::mac/cases (merge
                                       {1 (fn [& stuff]
-                                           `(mut! [this#] this#))
+                                           `(arcadia.internal.protocols/mut! [this#] this#))
                                        3 (fn [[_ [this-sym k v :as args]]]
-                                           `(mut! ~args
+                                           `(arcadia.internal.protocols/mut! ~args
                                               ~(mut-cases-form-fn this-sym [k v])
                                               ~this-sym))}
                                       (into {}
@@ -1116,68 +1369,168 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
                                   (for [{:keys [protocol-name method-impls]} protocol-impls]
                                     (cons protocol-name
                                       (for [{:keys [name args body]} method-impls]
-                                        (list* name args body)))))]
-        `(do (declare ~ctr)
-             (let [t# (deftype ~name ~(-> (->> fields (mapv #(vary-meta % assoc :unsynchronized-mutable true)))
-                                          (conj
-                                            (with-meta
-                                              'defmutable-internal-dictionary
-                                              {:unsynchronized-mutable true,
-                                               :tag 'Arcadia.DefmutableDictionary})))
-                        clojure.lang.ILookup
-                        (valAt [this#, key#]
-                          (case key#
-                            ~@lookup-cases
-                            (do ~ensure-internal-dictionary-form ;; macro
-                                (.GetValue ~'defmutable-internal-dictionary key#))))
-                        System.ICloneable
-                        (Clone [_#]
-                          (do ~ensure-internal-dictionary-form
-                              (~ctr ~@fields (.Clone ~'defmutable-internal-dictionary))))
-                        ISnapshotable
-                        (snapshot [~this-sym]
-                          ~ensure-internal-dictionary-form
-                          {::mutable-type (quote ~type-name)
-                           ::dictionary ~(snapshot-dictionary-form this-sym fields
-                                           element-snapshots-map default-element-snapshots)})
-                        IMutable
-                        ~@mut-impl
-                        ;; splice in any other protocol implementations, including overwrites for these defaults
-                        ~@protocol-impl-forms)]
-               ;; add an arity to the generated constructor
-               ~(let [naked-fields (map #(vary-meta % dissoc :tag) fields)]
-                  `(let [prev-fn# (var-get (var ~ctr))]
-                     (defn ~ctr
-                       ([~@naked-fields]
-                        (~ctr ~@naked-fields (new Arcadia.DefmutableDictionary)))
-                       ([~@naked-fields dict#]
-                        (prev-fn# ~@naked-fields dict#)))))
-               ;; like defrecord:
-               ~(let [map-sym (gensym "data-map_")
-                      field-vals (for [kw field-kws] `(get ~map-sym ~kw))]
-                  `(defn ~(symbol (str "map->" name)) [~map-sym]
-                     (~ctr ~@field-vals (new Arcadia.DefmutableDictionary (dissoc ~map-sym ~@field-kws)))))
-               ;; serialize as dictionary
-               (defmethod mutable (quote ~type-name) [~data-param]
-                 ~(let [dict-sym  (gensym "dict_")
-                        field-vals (for [kw field-kws] `(get ~dict-sym ~kw))]
-                    `(let [~dict-sym (get ~data-param ::dictionary)]
-                       (~ctr ~@field-vals (new Arcadia.DefmutableDictionary (dissoc ~dict-sym ~@field-kws))))))
-               (defmethod concrete-fields (quote ~type-name) [_#]
-                 (quote ~fields))
-               (defmethod concrete-field-kws (quote ~type-name) [_#]
-                 ~(mapv clojurized-keyword fields))
-               (defmethod arcadia.literals/parse-user-type (quote ~type-name) [~dict-param]
-                 (mutable ~dict-param))
-               ~(let [field-map (zipmap field-kws
-                                  (map (fn [field] `(. ~this-sym ~field)) fields))]
-                 `(defmethod print-method ~type-name [~this-sym ^System.IO.TextWriter stream#]
-                    (.Write stream#
-                      (str "#arcadia.core/mutable " (pr-str (snapshot ~this-sym))))))
-               t#))))))
+                                        (list* name args body)))))
+            stream-sym (with-meta (gensym "stream__") {:tag 'System.IO.TextWriter})]
+        `(do (deftype ~name ~(-> (->> fields (mapv #(vary-meta % assoc :unsynchronized-mutable true)))
+                                 (conj
+                                   (with-meta
+                                     'defmutable-internal-dictionary
+                                     {:unsynchronized-mutable true,
+                                      :tag 'Arcadia.DefmutableDictionary})))
+
+               ;; ------------------------------------------------------------
+               clojure.lang.ILookup
+               
+               (valAt [this#, key#]
+                 (case key#
+                   ~@lookup-cases
+                   (.GetValue ~'defmutable-internal-dictionary key#)))
+
+               (valAt [this#, key#, not-found#]
+                 (case key#
+                   ~@lookup-cases
+                   (if (.ContainsKey ~'defmutable-internal-dictionary)
+                     (.GetValue ~'defmutable-internal-dictionary key#)
+                     not-found#)))
+
+               ;; ------------------------------------------------------------
+               arcadia.internal.protocols/ISnapshotable
+
+               (arcadia.internal.protocols/snapshot [~this-sym]
+                 ~(snapshot-dictionary-form (mu/lit-assoc parse field-kws type-name this-sym)))
+               
+               (arcadia.internal.protocols/snapshotable? [~this-sym] true)
+
+               ;; ------------------------------------------------------------
+               arcadia.internal.protocols/IMutable
+               
+               ~@mut-impl
+
+               ;; ------------------------------------------------------------
+               arcadia.internal.protocols/IDeleteableElements
+               
+               ~(let [key-sym (gensym "key_")
+                      key-cases (apply concat
+                                  (for [k field-kws]
+                                    [k `(throw
+                                          (System.NotSupportedException.
+                                            (str "Attempting to delete field key " ~k ". Deleting fields on types defined via `arcadia.core/defmutable` is currently not supported.")))]))]
+                  `(arcadia.internal.protocols/delete! [this# ~key-sym]
+                     (case ~key-sym
+                       ~@key-cases
+                       (.Remove ~'defmutable-internal-dictionary ~key-sym))))
+
+               ;; ------------------------------------------------------------
+               System.Collections.IDictionary
+               
+               (get_IsFixedSize [this#]
+                 false)
+
+               (get_IsReadOnly [this#]
+                 false)
+
+               (get_Item [this# k#]
+                 (get this# k#))
+
+               (set_Item [this# k# v#]
+                 (mut! this# k# v#))
+
+               (get_Keys [this#]
+                 (into [~@field-kws] (.Keys ~'defmutable-internal-dictionary)))
+
+               (get_Values [this#]
+                 (into [~@fields] (.Values ~'defmutable-internal-dictionary)))
+
+               (Add [this# k# v#]
+                 (mut! this# k# v#))
+
+               (System.Collections.IDictionary.Clear [this#]
+                 (throw
+                   (System.NotSupportedException.
+                     "`Clear` is not currently supported for types defined via `arcadia.core/defmutable`")))
+
+               (Contains [this# k#]
+                 (or (#{~@field-kws} k#) (.Contains ~'defmutable-internal-dictionary k#)))
+
+               (System.Collections.IDictionary.GetEnumerator [this#]
+                 (throw
+                   (System.NotSupportedException.
+                     "`System.Collections.IDictionary.GetEnumerator` is not currently supported for types defined via `arcadia.core/defmutable`")))
+
+               (Remove [this# k#]
+                 (if (#{~@field-kws} k#)
+                   (throw
+                     (System.NotSupportedException.
+                       "`Remove` on fields is not currently supported for types defined via `arcadia.core/defmutable`"))
+                   (.Remove ~'defmutable-internal-dictionary k#)))
+
+               ;; ------------------------------------------------------------
+               ;; User-provided interface and protocol implementations
+               
+               ~@protocol-impl-forms)
+             
+             ;; ------------------------------------------------------------
+             ;; Multimethod extensions and generated vars
+             
+             ;; Overwrite the generated constructor
+             ~(let [naked-fields (map #(vary-meta % dissoc :tag) fields)
+                    docs (str "Positional factory function for class " type-name)]
+                `(defn ~ctr ~docs
+                   ([~@naked-fields]
+                    (new ~type-name ~@naked-fields (new Arcadia.DefmutableDictionary)))))
+             
+             ;; like defrecord:
+             ~(let [map-sym (gensym "data-map_")
+                    field-vals (for [kw field-kws] `(get ~map-sym ~kw))]
+                `(defn ~(symbol (str "map->" name)) [~map-sym]
+                   (new ~type-name ~@field-vals
+                     (new Arcadia.DefmutableDictionary
+                       (mu/mdissoc ~map-sym :arcadia.data/type ::mutable-type ~@field-kws)))))
+             
+             ;; convert from generic persistent map to mutable type instance
+             (defmethod arcadia.internal.protocols/mutable (quote ~type-name) [~data-param]
+               ~(mutable-impl-form (mu/lit-assoc parse field-kws type-name data-param)))
+
+             ;; register with our general deserialization
+             (defmethod arcadia.data/read-user-type (quote ~type-name) [~dict-param]
+               ~(let [field-access (for [field-kw field-kws]
+                                     `(get ~dict-param ~field-kw))]
+                  `(let [inst# (~ctr ~@field-access)]
+                     (reduce-kv
+                       (fn [_# k# v#]
+                         (when-not (#{~@field-kws :arcadia.data/type} k#)
+                           (mut! inst# k# v#)))
+                       nil
+                       ~dict-param)
+                     inst#)))
+
+             ;; Serialize via print-method; arcadia.data/*serialize* should be `true` for this to
+             ;; work recursively.
+             (defmethod print-method ~type-name [~this-sym ~stream-sym]
+               ~(let [dict-sym (gensym "dict__")
+                      field-writes (interpose
+                                     `(.Write ~stream-sym ", ")
+                                     (for [[field field-kw] (map list fields field-kws)]
+                                       `(do (print-method ~field-kw ~stream-sym)
+                                            (.Write ~stream-sym " ")
+                                            (print-method (. ~this-sym ~field) ~stream-sym))))
+                      dynamic-writes `(.PrintEntries ~dict-sym print-method ~stream-sym)]
+                  `(let [~dict-sym (. ~this-sym ~'defmutable-internal-dictionary)]
+                     (.Write ~stream-sym "#arcadia.data/data{:arcadia.data/type ")
+                     (.Write ~stream-sym ~(str type-name))
+                     ~(when (seq fields)
+                        `(.Write ~stream-sym ", "))
+                     ~@field-writes
+                     (when (< 0 (.Count ~dict-sym))
+                       (.Write ~stream-sym ", "))
+                     ~dynamic-writes
+                     (.Write ~stream-sym "}"))))
+             
+             ~type-name)))))
 
 (defmacro defmutable-once
-  "Like `defmutable`, but will only evaluate if no type with the same name has been defined."
+  "Like `defmutable`, but will only evaluate if no type with the same
+  name has been defined."
   [& [name :as args]]
   (when-not (resolve name)
     `(defmutable ~@args)))

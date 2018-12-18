@@ -3,13 +3,14 @@
             [arcadia.internal.asset-watcher :as aw]
             [arcadia.internal.state :as state]
             [arcadia.internal.file-system :as fs]
-            [arcadia.packages.data :as pd]
+            [arcadia.internal.packages.data :as pd]
             [clojure.spec.alpha :as s]
             [arcadia.internal.spec :as as]
-            [arcadia.compiler :as compiler]
-            [arcadia.config :as config])
+            [arcadia.internal.compiler :as compiler]
+            [arcadia.internal.config :as config])
   (:import [System.Text.RegularExpressions Regex]
-           [System.IO FileSystemInfo DirectoryInfo Path]))
+           [System.IO FileSystemInfo StringReader DirectoryInfo Path]
+           [clojure.lang PushbackTextReader]))
 
 ;; ------------------------------------------------------------
 ;; grammar
@@ -36,34 +37,25 @@
 
 (s/def ::projects (as/collude [] ::project))
 
-;; ============================================================
-;; defproject parsing for slackers and villains
+(defn- read-all [s]
+  (let [rdr (PushbackTextReader. (StringReader. s))
+        opts {:read-cond :allow
+              :eof ::eof}]
+    (loop [exprs []]
+      (let [next-expr (read opts rdr)]
+        (if (= next-expr ::eof)
+          exprs
+          (recur (conj exprs next-expr)))))))
 
-(defn- ensure-readable-project-file [file-name, raw-file]
-  (let [stringless (-> raw-file
-                       (clojure.string/replace
-                         #"(?m);;.*?$"
-                         "")
-                       (clojure.string/replace
-                         #"(\".*?((\\\\+)|[^\\])\")|\"\"" ;; fancy string matcher
-                         ""))
-        problem (cond
-                  (re-find #"~" stringless)
-                  "'~' found"
-
-                  (re-find #"#[^_]" stringless)
-                  "'#' found")]
-    (when problem
-      (throw
-        (Exception.
-          (str "Unsupported file "
-               (.FullName (fs/info file-name))
-               ": " problem))))))
+(defn- read-defproject [exprs]
+  (->> exprs
+       (filter seq?)
+       (filter #(= 'defproject (first %)))
+       first))
 
 (defn- read-lein-project-file [file]
   (let [raw (slurp file)]
-    (ensure-readable-project-file file raw)
-    (read-string raw)))
+    (-> raw read-all read-defproject)))
 
 (s/fdef project-file-data
   :ret ::defproject)
@@ -134,13 +126,16 @@
   :args (s/cat :project ::project)
   :ret ::fs/path)
 
-(defn project-data-loadpath [{{{:keys [source-paths]} ::body} ::defproject,
+(defn project-data-loadpath [{{{arcadia-opts :arcadia, :as body} ::body} ::defproject,
                               p1 ::fs/path}]
-  (if source-paths
-    (map (fn [p2]
-           (Path/Combine p1 p2))
-      source-paths)
-    [(Path/Combine p1 "src")]))
+  (let [{:keys [source-paths]} (merge
+                                 (select-keys body [:source-paths])
+                                 arcadia-opts)]
+    (if source-paths
+      (map (fn [p2]
+             (Path/Combine p1 p2))
+        source-paths)
+      [(Path/Combine p1 "src")])))
 
 (defn leiningen-loadpaths []
   (->> (all-project-data)

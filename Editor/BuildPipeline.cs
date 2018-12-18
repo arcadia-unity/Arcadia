@@ -124,7 +124,7 @@ namespace Arcadia
 
 			ResetProgress(userNameSpaces.Cast<object>().Count());
 			try {
-				string compilerNs = "arcadia.compiler";
+				string compilerNs = "arcadia.internal.compiler";
 				Arcadia.Util.require(compilerNs);
 				Arcadia.Util.getVar(ref aotNamespacesVar, compilerNs, "aot-namespaces");
 				Arcadia.Util.Invoke(
@@ -141,24 +141,21 @@ namespace Arcadia
 			}
 		}
 
-		[MenuItem("Arcadia/Build/Internal Namespaces")]
-		static void BuildInternal ()
+		public static void BuildInternal ()
 		{
 			EnsureCompiledFolders();
 			var internalNameSpaces = (IList)RT.var("arcadia.internal.editor-interop", "internal-namespaces").deref();
 			CompileNamespacesToFolder(internalNameSpaces, CompiledFolder);
 		}
 
-		[MenuItem("Arcadia/Build/User Namespaces")]
-		static void BuildUser ()
+		public static void BuildUser ()
 		{
 			EnsureCompiledFolders();
 			var userNameSpaces = (IList)RT.var("arcadia.internal.editor-interop", "all-user-namespaces-symbols").invoke();
 			CompileNamespacesToFolder(userNameSpaces, CompiledFolder);
 		}
 
-		[MenuItem("Arcadia/Build/Prepare Export")]
-		static void PrepareExport ()
+		public static void PrepareExport ()
 		{
 			EnsureExportFolders();
 
@@ -187,8 +184,7 @@ namespace Arcadia
 			AssetDatabase.Refresh(ImportAssetOptions.Default);
 		}
 
-		[MenuItem("Arcadia/Build/Clean Compiled", false, 30)]
-		static void CleanCompiled ()
+		public static void CleanCompiled ()
 		{
 			if (Directory.Exists(CompiledFolder))
 				Directory.Delete(CompiledFolder, true);

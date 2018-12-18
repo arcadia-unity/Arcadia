@@ -21,7 +21,7 @@ namespace Arcadia
 
 		public JumpMap ()
 		{
-			dict = new Dictionary<object, KeyVal>();
+			dict = new Dictionary<object, KeyVal>(53);
 		}
 
 		// ==========================================================
@@ -53,6 +53,22 @@ namespace Arcadia
 			}
 		}
 
+		public bool TryGetValue (object key, out object val)
+		{
+			KeyVal val2;
+			if (dict.TryGetValue(key, out val2)) {
+				val = val2.val;
+				return true;
+			}
+			val = null;
+			return false;
+		}
+
+		public bool TryGetKeyVal (object key, out KeyVal keyval)
+		{
+			return dict.TryGetValue(key, out keyval);
+		}
+
 		// sadly it seems we will need null keyvals
 		// do we need them EVERY time we ask?
 		// let us say we do not
@@ -72,6 +88,15 @@ namespace Arcadia
 				kv = new KeyVal(k, null, this, false);
 			}
 			return kv;
+		}
+
+		public IPersistentMap ToPersistentMap ()
+		{
+			ATransientMap building = (ATransientMap)PersistentHashMap.EMPTY.asTransient();
+			foreach (var e in dict) {
+				building.assoc(e.Key, e.Value.val);
+			}
+			return building.persistent();
 		}
 
 		// ----------------------------------------------------------
@@ -117,6 +142,30 @@ namespace Arcadia
 		}
 
 		// ==========================================================
+		// duplication
+
+		public JumpMap CopyTo (JumpMap jm2, IFn defaultConversion, ILookup conversions, object sourceObject, object targetObject)
+		{
+			// TODO: clean this up when we get generic persistent lookup
+			if (conversions != null) {
+				foreach (var e in dict) {
+					object key = e.Key;
+					IFn conversion = defaultConversion;
+					object tempConversion = conversions.valAt(key);
+					if (tempConversion != null) {
+						conversion = Arcadia.Util.AsIFn((IFn)tempConversion);
+					}
+					jm2.Add(key, conversion.invoke(key, e.Value.val, sourceObject, targetObject));
+				}
+			} else {
+				foreach (var e in dict) {
+					jm2.Add(e.Key, defaultConversion.invoke(e.Key, e.Value.val, sourceObject, targetObject));
+				}
+			}
+			return jm2;
+		}
+
+		// ==========================================================
 		// KeyVal
 
 		public class KeyVal
@@ -149,6 +198,19 @@ namespace Arcadia
 				if (isInhabited)
 					return val;
 				return this.jumpMap.ValueAtKey(key);
+			}
+
+			// If the corresponding KeyVal is there now, returns it, 
+			// else returns null.
+			public KeyVal Refreshed ()
+			{
+				if (isInhabited)
+					return this;
+				KeyVal kv;
+				if (jumpMap.TryGetKeyVal(key, out kv)) {
+					return kv;
+				}
+				return null;
 			}
 
 		}

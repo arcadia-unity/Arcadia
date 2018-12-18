@@ -6,7 +6,7 @@ The integration of the Clojure Programming Language with the Unity 3D game engin
 
 Status
 ------
-Arcadia is alpha-quality software, and shouldn't be used for anything important yet.
+Arcadia is beta quality software, and we encourage you to follow our [Getting Started instructions](https://github.com/arcadia-unity/Arcadia/wiki/Getting-Started) to try it out!
 
 Community
 ---------
