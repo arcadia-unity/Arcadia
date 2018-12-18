@@ -582,30 +582,16 @@
 ;; ============================================================
 ;; defmutable support methods
 
-;; see `defmutable` below
-;; This protocol should be considered an internal, unstable
-;; implementation detail of `snapshot` for now. Please refrain from
-;; extending it.
-(defprotocol ISnapshotable
-  (snapshot [self])
-  (snapshotable? [self]))
-
-(extend-protocol ISnapshotable
-
-  System.Object
-  (snapshotable? [self] false)
-  
-  System.ValueType
-  (snapshotable? [self] false)
-  
-  nil
-  (snapshotable? [self] false))
+(defn snapshot
+  "Converts `defmutable` instance `x` to a persistent representation."
+  [x]
+  (arcadia.internal.protocols/snapshot x))
 
 ;; public for macros
 (defn maybe-snapshot
   "Unstable implementation detail, please don't use."
   [x]
-  (if (snapshotable? x)
+  (if (arcadia.internal.protocols/snapshotable? x)
     (snapshot x)
     x))
 
@@ -1424,12 +1410,12 @@ Note that generating vars is usually a bad idea because it messes with
                      not-found#)))
 
                ;; ------------------------------------------------------------
-               ISnapshotable
+               arcadia.internal.protocols/ISnapshotable
 
-               (snapshot [~this-sym]
+               (arcadia.internal.protocols/snapshot [~this-sym]
                  ~(snapshot-dictionary-form (mu/lit-assoc parse field-kws type-name this-sym)))
                
-               (snapshotable? [~this-sym] true)
+               (arcadia.internal.protocols/snapshotable? [~this-sym] true)
 
                ;; ------------------------------------------------------------
                IMutable
