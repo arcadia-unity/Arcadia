@@ -1529,7 +1529,8 @@ Note that generating vars is usually a bad idea because it messes with
              ~type-name)))))
 
 (defmacro defmutable-once
-  "Like `defmutable`, but will only evaluate if no type with the same name has been defined."
+  "Like `defmutable`, but will only evaluate if no type with the same
+  name has been defined."
   [& [name :as args]]
   (when-not (resolve name)
     `(defmutable ~@args)))
