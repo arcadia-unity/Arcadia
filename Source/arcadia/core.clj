@@ -1192,11 +1192,11 @@ Note that generating vars is usually a bad idea because it messes with
                                       (mu/map-vals #(or (:sym %) (:field %))))]
     `(let [~@processed-field-bindings]
        (if (zero? (.Count ~'defmutable-internal-dictionary))
-         ~(-> maybe-processed-field-kvs (assoc :arcadia.data/type `(quote ~type-name)))
+         ~(-> maybe-processed-field-kvs (assoc ::mutable-type `(quote ~type-name)))
          (-> ~maybe-processed-dict-map
              (mu/massoc
                ~@(apply concat maybe-processed-field-kvs)
-               :arcadia.data/type (quote ~type-name)))))))
+               ::mutable-type (quote ~type-name)))))))
 
 (defn- mutable-impl-form [{:keys [fields field-kws type-name data-param]
                            {:keys [mutable-elements]
@@ -1231,7 +1231,7 @@ Note that generating vars is usually a bad idea because it messes with
                          (persistent!
                            (reduce-kv
                              (fn ~(gensym "dynamic-element-process_") [acc# ~k-sym ~v-sym]
-                               (if (~(conj (set field-kws) :arcadia.data/type) ~k-sym)
+                               (if (~(conj (set field-kws) ::mutable-type) ~k-sym)
                                  acc#
                                  (assoc! acc# ~k-sym
                                    (case ~k-sym
@@ -1515,7 +1515,7 @@ Note that generating vars is usually a bad idea because it messes with
                 `(defn ~(symbol (str "map->" name)) [~map-sym]
                    (new ~type-name ~@field-vals
                      (new Arcadia.DefmutableDictionary
-                       (mu/mdissoc ~map-sym :arcadia.data/type ~@field-kws)))))
+                       (mu/mdissoc ~map-sym :arcadia.data/type ::mutable-type ~@field-kws)))))
              
              ;; convert from generic persistent map to mutable type instance
              (defmethod mutable (quote ~type-name) [~data-param]
