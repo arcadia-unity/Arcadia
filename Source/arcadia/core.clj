@@ -577,15 +577,52 @@
   (when-let [^ArcadiaBehaviour hook-cmpt (cmpt obj (ensure-hook-type event-kw))]
     (.CallbackForKey hook-cmpt key)))
 
+
 ;; ============================================================
-;; ISnapShotable
+;; defmutable support methods
 
 ;; see `defmutable` below
 ;; This protocol should be considered an internal, unstable
 ;; implementation detail of `snapshot` for now. Please refrain from
 ;; extending it.
 (defprotocol ISnapshotable
-  (snapshot [self]))
+  (snapshot [self])
+  (snapshotable? [self]))
+
+(extend-protocol ISnapshotable
+  System.Object
+  (snapshotable? [self] false))
+
+;; public for macros
+(defn maybe-snapshot
+  "Unstable implementation detail, please don't use."
+  [x]
+  (if (snapshotable? x)
+    (snapshot x)
+    x))
+
+;; constructor (no instance), so this has to be a multimethod
+;; if we're sticking to clojure stuff
+(defmulti mutable
+  "Given a persistent representation of a mutable datatype defined via
+  `defmutable`, constructs and returns a matching instance of that
+  datatype.
+
+Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via `defmutable`,
+
+```clj
+(= (snapshot x) (snapshot (mutable (snapshot x))))
+```"
+  (fn mutable-dispatch [{t ::mutable-type}] t))
+
+;; public for macros
+(defn maybe-mutable
+  "Unstable implementation detail, please don't use."
+  [x]
+  (if (and (map? x)
+           (contains? x ::mutable-type))
+    (mutable x)
+    x))
 
 ;; ============================================================
 ;; state
@@ -596,7 +633,7 @@
    (when-let [^ArcadiaState s (cmpt gobj ArcadiaState)]
      (let [m (persistent!
                (reduce (fn [m, ^Arcadia.JumpMap+KeyVal kv]
-                         (assoc! m (.key kv) (.val kv)))
+                         (assoc! m (.key kv) (maybe-snapshot (.val kv))))
                  (transient {})
                  (.. s state KeyVals)))]
        (when-not (zero? (count m))
@@ -604,13 +641,6 @@
   ([gobj k]
    (Arcadia.HookStateSystem/Lookup gobj k)))
 
-(declare mutable)
-
-(defn- maybe-mutable [x]
-  (if (and (map? x)
-           (contains? x ::mutable-type))
-    (mutable x)
-    x))
 
 (defn state+
   "Sets the state of GameObject `go` to value `v` at key `k`. Returns `v`."
@@ -810,10 +840,6 @@
 ;; also instance vs satisfies, here
 ;; maybe this should be a definterface or something
 ;; yeah definitely should be a definterface, this is just here for `defmutable`
-(defn- maybe-snapshot [x]
-  (if (instance? arcadia.core.ISnapshotable x)
-    (snapshot x)
-    x))
 
 (defn- inner-role-step [bldg, ^ArcadiaBehaviour+IFnInfo inf, hook-type-key]
   (assoc bldg hook-type-key (.fn inf)))
@@ -1054,24 +1080,6 @@ Note that generating vars is usually a bad idea because it messes with
                           ::mutable-elements
                           ::mutable])))
 
-;; the symbol
-(defn mutable-dispatch [{t :arcadia.data/type}]
-  t)
-
-;; constructor (no instance), so this has to be a multimethod
-;; if we're sticking to clojure stuff
-(defmulti mutable
-  "Given a persistent representation of a mutable datatype defined via
-  `defmutable`, constructs and returns a matching instance of that
-  datatype.
-
-Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via `defmutable`,
-
-```clj
-(= (snapshot x) (snapshot (mutable (snapshot x))))
-```"
-  #'mutable-dispatch)
-
 (defprotocol IMutable
   (mut!
     [_]
@@ -1215,7 +1223,6 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
                     `(new Arcadia.DefmutableDictionary))]
     `(new ~type-name ~@processed-field-vals ~dict-form)))
 
-
 (defmacro ^:doc/no-syntax
   defmutable
   "`(defmutable [name [fields*] other*])`
@@ -1340,6 +1347,8 @@ Roundtrips with `snapshot`; that is, for any instance `x` of a type defined via 
 
                (snapshot [~this-sym]
                  ~(snapshot-dictionary-form (mu/lit-assoc parse field-kws type-name this-sym)))
+               
+               (snapshotable? [~this-sym] true)
 
                ;; ------------------------------------------------------------
                IMutable
