@@ -590,7 +590,14 @@
   (snapshotable? [self]))
 
 (extend-protocol ISnapshotable
+
   System.Object
+  (snapshotable? [self] false)
+  
+  System.ValueType
+  (snapshotable? [self] false)
+  
+  nil
   (snapshotable? [self] false))
 
 ;; public for macros
