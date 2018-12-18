@@ -1,5 +1,5 @@
 # =============== #
-#  Clojure Unity  #
+#     Arcadia     #
 # =============== #
 *.mdb*
 **/Compiled.meta
@@ -11,6 +11,8 @@
 Source/clojure/**/*.meta
 **/*.clj.meta
 **/*.clj.dll.meta
+**/*.md.meta
+**/*.edn.meta
 
 # =============== #
 # Unity generated #
