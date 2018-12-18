@@ -1086,27 +1086,11 @@ Note that generating vars is usually a bad idea because it messes with
                           ::mutable-elements
                           ::mutable])))
 
-(defprotocol IMutable
-  (mut!
-    [_]
-    [_ _]
-    [_ _ _]
-    [_ _ _ _]
-    [_ _ _ _ _]
-    [_ _ _ _ _ _]
-    [_ _ _ _ _ _ _]
-    [_ _ _ _ _ _ _ _]
-    [_ _ _ _ _ _ _ _ _]
-    [_ _ _ _ _ _ _ _ _ _]
-    [_ _ _ _ _ _ _ _ _ _ _]
-    [_ _ _ _ _ _ _ _ _ _ _ _]
-    [_ _ _ _ _ _ _ _ _ _ _ _ _]
-    [_ _ _ _ _ _ _ _ _ _ _ _ _ _]
-    [_ _ _ _ _ _ _ _ _ _ _ _ _ _ _]
-    [_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _]
-    [_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _]
-    [_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _]
-    [_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _]))
+(defn mut!
+  "Dynamically sets field keyword `kw` of `defmutable` instance `x` to
+  new value `v`. Returns `v`."
+  [x kw v]
+  (arcadia.internal.protocols/mut! x kw v))
 
 (defn delete!
   "Removes dynamic entry `k` from `defmutable` instance `x`."
@@ -1355,23 +1339,24 @@ Note that generating vars is usually a bad idea because it messes with
                                        fields)
                                    (.Add ~'defmutable-internal-dictionary ~k ~v)))
             even-args-mut-impl (fn [[_ args]]
-                                `(mut! ~args (throw (Exception. "requires odd number of arguments"))))
+                                 `(arcadia.internal.protocols/mut! ~args
+                                    (throw (Exception. "requires odd number of arguments"))))
             mut-impl (mac/arities-forms
                        (fn [[this-sym & kvs]]
                          (let [val-sym (gensym "val_")
                                pairs (partition 2 kvs)]
-                           `(mut! [~this-sym ~@kvs]
+                           `(arcadia.internal.protocols/mut! [~this-sym ~@kvs]
                               ~(when-let [lp (last pairs)]
                                  (mut-cases-form-fn this-sym (last pairs)))
-                              (mut! ~this-sym ~@(apply concat (butlast pairs))))))
+                              (arcadia.internal.protocols/mut! ~this-sym ~@(apply concat (butlast pairs))))))
                        {::mac/arg-fn #(gensym (str "arg_" % "_"))
                         ::mac/min-args 1
                         ::mac/max-args 5
                         ::mac/cases (merge
                                       {1 (fn [& stuff]
-                                           `(mut! [this#] this#))
+                                           `(arcadia.internal.protocols/mut! [this#] this#))
                                        3 (fn [[_ [this-sym k v :as args]]]
-                                           `(mut! ~args
+                                           `(arcadia.internal.protocols/mut! ~args
                                               ~(mut-cases-form-fn this-sym [k v])
                                               ~this-sym))}
                                       (into {}
@@ -1417,7 +1402,7 @@ Note that generating vars is usually a bad idea because it messes with
                (arcadia.internal.protocols/snapshotable? [~this-sym] true)
 
                ;; ------------------------------------------------------------
-               IMutable
+               arcadia.internal.protocols/IMutable
                
                ~@mut-impl
 
