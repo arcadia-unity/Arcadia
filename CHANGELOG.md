@@ -1,5 +1,9 @@
 # Arcadia Changelog
 
+## Beta 1.0.1
+
+- Fixed issue [#330](https://github.com/arcadia-unity/Arcadia/issues/330).
+
 ## Beta 1.0.0
 
 This beta release includes many breaking changes. In particular, scenes and prefabs using Arcadia components saved from previous versions will not work. Subsequent releases will be backwards-compatible with scenes and prefabs saved as of this release.
@@ -83,22 +87,3 @@ These changes are relative to [83e0931a](https://github.com/arcadia-unity/Arcadi
 - Dropped `:compiler/verbose` and `:compiler/warn-on-reflection` configuration options.
 - Renamed `:compiler/options` to `:compiler-options` in configuration file.
 - Added `arcadia.core/parent`.
-
-### Contributors
-
-Special thanks to [@pjago](https://github.com/pjago)'s pull request and the following community members for the issues they filed:
-
-- [@Saikyun](https://github.com/Saikyun)
-- [@IGJoshua](https://github.com/IGJoshua)
-- [@pjago](https://github.com/pjago)
-- [@selfsame](https://github.com/selfsame)
-- [@srfoster](https://github.com/srfoster)
-- [@acron0](https://github.com/acron0)
-- [@markfarrell](https://github.com/markfarrell)
-- [@aeberts](https://github.com/aeberts)
-- [@gfixler](https://github.com/gfixler)
-- [@Polyrhythm](https://github.com/Polyrhythm)
-- [@Mechrophile](https://github.com/Mechrophile)
-- [@hatmatter](https://github.com/hatmatter)
-- [@LispEngineer](https://github.com/LispEngineer)
-- [@djeis97](https://github.com/djeis97)
