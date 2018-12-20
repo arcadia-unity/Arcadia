@@ -2,6 +2,7 @@
 
 ## Beta 1.0.1
 
+- Fixed issue [#331](https://github.com/arcadia-unity/Arcadia/issues/331).
 - Fixed issue [#330](https://github.com/arcadia-unity/Arcadia/issues/330).
 
 ## Beta 1.0.0
