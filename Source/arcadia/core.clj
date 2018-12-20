@@ -73,13 +73,6 @@
   optionally be given a new position or rotation as well.
 
  Wraps `Object/Instantiate`."
-  {:inline (fn
-             ([^UnityEngine.Object original]
-              `(UnityEngine.Object/Instantiate ~original))
-             ([^UnityEngine.Object original ^Vector3 position]
-              `(UnityEngine.Object/Instantiate ~original ~position Quaternion/identity))
-             ([^UnityEngine.Object original ^Vector3 position ^Quaternion rotation]
-              `(UnityEngine.Object/Instantiate ~original ~position ~rotation)))}
   ([^UnityEngine.Object original]
    (UnityEngine.Object/Instantiate original))
   ([^UnityEngine.Object original ^Vector3 position]
