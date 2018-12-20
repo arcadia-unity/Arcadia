@@ -339,8 +339,23 @@
               :close))
           2)
         (close-after-frames t 5 "didn't complete"))))
-  ;; (as-sub-closing [t "holistic"])
-  )
+  (as-sub-closing [t "if-cmpt"]
+    (with-temp-objects
+      :lit [x y]
+      (let [bc (.AddComponent x UnityEngine.BoxCollider)]
+        (t
+          (at/is (= (ac/if-cmpt x [bc2 UnityEngine.BoxCollider]
+                      bc2)
+                    bc)
+            "if-cmpt retrieves present component")
+          (at/is (nil? (ac/if-cmpt y [bc2 UnityEngine.BoxCollider]
+                         bc2))
+            "if-cmpt returns nil for absent component and no else branch")
+          (at/is (= (ac/if-cmpt y [bc2 UnityEngine.BoxCollider]
+                      bc2
+                      :else)
+                    :else) 
+            "if-cmpt returns else branch for absent component"))))))
 
 
 ;; ------------------------------------------------------------

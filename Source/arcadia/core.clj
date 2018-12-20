@@ -402,7 +402,7 @@
   [gob [cmpt-name cmpt-type] then & else]
   (let [gobsym (gentagged "gob__" 'UnityEngine.GameObject)]
     `(let [~gobsym ~gob]
-       (if-let [~cmpt-name (cmpt ~cmpt-type)]
+       (if-let [~cmpt-name (cmpt ~gobsym ~cmpt-type)]
          ~then
          ~@else))))
 
