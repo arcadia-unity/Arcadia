@@ -566,7 +566,8 @@
 
 ;; ------------------------------------------------------------
 ;; core-namespace
-(at/deftest linear-namespace t
+
+(at/deftest core-namespace t
   (as-sub-closing [t "instantiate"]
     (with-temp-objects :lit [original]
       (let [position (al/v3 (rand) (rand) (rand))
@@ -580,16 +581,16 @@
         (t (at/is (= (.. original transform rotation)
                      (.. clone-0 transform rotation))
                   "1-ary instantiate keeps original rotation"))
-        (t (at/is (= (.. clone-1 transform rotation)
+        (t (at/is (= (.. clone-1 transform position)
                      position)
                   "2-ary instantiate uses new position"))
         (t (at/is (= (.. original transform rotation)
                      (.. clone-1 transform rotation))
                   "2-ary instantiate keeps original rotation"))
-        (t (at/is (= (.. clone-2 transform rotation)
+        (t (at/is (= (.. clone-2 transform position)
                      position)
                   "3-ary instantiate uses new position"))
-        (t (at/is (= (.. original transform rotation)
+        (t (at/is (= (.. clone-2 transform rotation)
                      rotation)
                   "3-ary instantiate uses new rotation"))))))
 
