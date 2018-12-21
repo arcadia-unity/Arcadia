@@ -86,7 +86,7 @@ public class ArcadiaStateEditor : Editor
 			var kvs = state.state.KeyVals();
 
 			Length = kvs.Length;
-			if (Foldouts == null)
+			if (Foldouts == null || Foldouts.Length != Length)
 			{
 				Foldouts = new bool[Length];
 				for (var i = 0; i < Length; i++)
