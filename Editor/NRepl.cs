@@ -176,12 +176,13 @@ namespace Arcadia
 				var sessionBindings = _sessions[session];
 				var outWriter = new Writer("out", _request, _client);
 				var errWriter = new Writer("err", _request, _client);
+				var optsMap = RT.map(Keyword.intern("read-cond"), Keyword.intern("allow"));
 
 				Var.pushThreadBindings(sessionBindings
 						.assoc(RT.OutVar, outWriter)
 						.assoc(RT.ErrVar, errWriter));
 				try {
-					var form = readStringVar.invoke(code);
+					var form = readStringVar.invoke(optsMap, code);
 					var result = evalVar.invoke(form);
 					var value = (string)prStrVar.invoke(result);
 
