@@ -81,6 +81,7 @@ namespace Arcadia
 		}
 
 		private static Var readStringVar;
+		private static IPersistentMap readStringOptions;
 		private static Var evalVar;
 		private static Var prStrVar;
 		private static Var addCallbackVar;
@@ -108,6 +109,8 @@ namespace Arcadia
 			star2Var = RT.var("clojure.core", "*2");
 			star3Var = RT.var("clojure.core", "*3");
 			starEVar = RT.var("clojure.core", "*e");
+			
+			readStringOptions = PersistentHashMap.EMPTY.assoc(Keyword.intern("read-cond"), Keyword.intern("allow"));
 
 			shimsNS = Namespace.findOrCreate(Symbol.intern("arcadia.nrepl.shims"));
 			Var.intern(shimsNS, Symbol.intern("getProperty"), new GetPropertyShimFn());
@@ -181,7 +184,7 @@ namespace Arcadia
 						.assoc(RT.OutVar, outWriter)
 						.assoc(RT.ErrVar, errWriter));
 				try {
-					var form = readStringVar.invoke(code);
+					var form = readStringVar.invoke(readStringOptions, code);
 					var result = evalVar.invoke(form);
 					var value = (string)prStrVar.invoke(result);
 
