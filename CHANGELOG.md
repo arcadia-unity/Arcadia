@@ -1,5 +1,9 @@
 # Arcadia Changelog
 
+## Beta 1.0.2
+- Fixed issue [#333](https://github.com/arcadia-unity/Arcadia/issues/333).
+- Fixed issue [#338](https://github.com/arcadia-unity/Arcadia/issues/338).
+
 ## Beta 1.0.1
 
 - Fixed issue [#331](https://github.com/arcadia-unity/Arcadia/issues/331).
