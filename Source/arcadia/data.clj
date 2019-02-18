@@ -30,6 +30,11 @@
   ^{:doc "Determines whether objects should print in a manner that can be read back in by the edn reader. Defaults to false."}
   *serialize* false)
 
+(def
+  ^:dynamic
+  *print-compactly*
+  false)
+
 ;; ============================================================
 ;; object database 
 ;; ============================================================
@@ -279,7 +284,7 @@
               (str sb)))))))
 
 (defmethod serialize ::unity-value-type [x w]
-  (if *print-readably*
+  (if *print-compactly*
     (vt-serialize-map x w)
     (vt-serialize-vec x w)))
 
@@ -369,7 +374,7 @@
        
        (defmethod serialize ~type-sym [^UnityEngine.Vector3 ~value-sym, ^TextWriter w#]
          (.Write w#
-           (if *print-readably*
+           (if *print-compactly*
              (lit-str
                ~(str "#unity/value{:arcadia.data/type \"" shortname "\"")
                ~@(apply concat

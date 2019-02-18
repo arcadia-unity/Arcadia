@@ -103,10 +103,10 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 		var arcadiaLiteralsNs = "arcadia.data";
 		Arcadia.Util.require(arcadiaLiteralsNs);
 		Arcadia.Util.getVar(ref serializeVar, arcadiaLiteralsNs, "*serialize*");
+		Arcadia.Util.getVar(ref printReadablyVar, arcadiaLiteralsNs, "*print-compactly*");
 		Arcadia.Util.getVar(ref objectDbVar, arcadiaLiteralsNs, "*object-db*");
 
 		var coreNs = "clojure.core";
-		Arcadia.Util.getVar(ref printReadablyVar, coreNs, "*print-readably*");
 		Arcadia.Util.getVar(ref prStrVar, coreNs, "pr-str");
 
 		Arcadia.Util.getVar(ref readStringVar, "clojure.edn", "read-string");
