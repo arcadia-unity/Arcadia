@@ -5,7 +5,10 @@
             [clojure.edn :as edn])
   (:import [UnityEngine Debug]
            [Arcadia JumpMap JumpMap+KeyVal JumpMap+PartialArrayMapView]
-           ArcadiaState))
+           Arcadia.Util
+           ArcadiaState
+           ArcadiaBehaviour+IFnInfo
+           AroundDeserializeDataHook))
 
 (defn jumpmap-to-map [^JumpMap jm]
   (persistent!
@@ -13,6 +16,32 @@
               (assoc! m (.key kv) (.val kv)))
       (transient {})
       (.. jm KeyVals))))
+
+(defn inner-deserialize [data-string]
+  (edn/read-string {:readers *data-readers*} data-string))
+
+(defn deserialize-data-string
+  "Given an ArcadiaState `as`, returns its deserialized data. If an
+  AroundDeserializedDataHook component is attached to the GameObject
+  of `as`, will deserialize the data by threading the string through
+  all registered :around-deserialize-data hook functions. Each of
+  these hook functions is expected to take the arguments [obj k f s],
+  where `obj` is the GameObject of `as`; `k` is the key of the current
+  hook function; `f` is the _next_ function to call; and `s` is the
+  data string being deserialized. Each hook function is expected to
+  return the result of `(f s)`."
+  [^ArcadiaState as]
+  (if-let [^AroundDeserializeDataHook addh (Arcadia.Util/TrueNil
+                                             (.GetComponent as AroundDeserializeDataHook))]
+    (let [obj (.gameObject as)          
+          f (reduce
+              (fn make-wrappers [wrapper-acc ^ArcadiaBehaviour+IFnInfo finf]
+                (fn wrapper [data]
+                  ((.fn finf) obj (.key finf) wrapper-acc data)))
+              #'inner-deserialize
+              (.ifnInfos addh))]
+      (f (.serializedData as)))
+    (inner-deserialize (.serializedData as))))
 
 (defn deserialize [^ArcadiaState as]
   (.BuildDatabaseAtom as true)
@@ -24,7 +53,10 @@
           (.AddAll jm
             ;; in the future, switch on (.serializedFormat as)
             ;; assuming edn for now
-            (edn/read-string {:readers *data-readers*} (.serializedData as))))
+            (deserialize-data-string as)
+            ;; (edn/read-string {:readers *data-readers*}
+            ;;   (.serializedData as))
+            ))
         (catch Exception e
           (Debug/Log "Exception encountered in arcadia.internal.state-help/deserialize:")
           (Debug/Log e)
