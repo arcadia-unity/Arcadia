@@ -8,6 +8,7 @@
            Arcadia.Util
            ArcadiaState
            ArcadiaBehaviour+IFnInfo
+           AroundSerializeDataHook
            AroundDeserializeDataHook))
 
 (defn jumpmap-to-map [^JumpMap jm]
@@ -19,6 +20,14 @@
 
 (defn inner-deserialize [data-string]
   (edn/read-string {:readers *data-readers*} data-string))
+
+(defn around-wrapper [^GameObject obj, ifn-infos, init-f]
+  (reduce
+    (fn make-wrappers [wrapper-acc, ^ArcadiaBehaviour+IFnInfo finf]
+      (fn wrapper [data]
+        ((.fn finf) obj (.key finf) wrapper-acc data)))
+    init-f
+    ifn-infos))
 
 (defn deserialize-data-string
   "Given an ArcadiaState `as`, returns its deserialized data. If an
@@ -33,13 +42,7 @@
   [^ArcadiaState as]
   (if-let [^AroundDeserializeDataHook addh (Arcadia.Util/TrueNil
                                              (.GetComponent as AroundDeserializeDataHook))]
-    (let [obj (.gameObject as)          
-          f (reduce
-              (fn make-wrappers [wrapper-acc ^ArcadiaBehaviour+IFnInfo finf]
-                (fn wrapper [data]
-                  ((.fn finf) obj (.key finf) wrapper-acc data)))
-              #'inner-deserialize
-              (.ifnInfos addh))]
+    (let [f (around-wrapper (.gameObject as) (.ifnInfos addh) inner-deserialize)]
       (f (.serializedData as)))
     (inner-deserialize (.serializedData as))))
 
@@ -72,3 +75,11 @@
   (deserialize as)
   ;;(.RefreshAll as)
   )
+
+;; used from ArcadiaState
+(defn serialize [^ArcadiaState as, state-map]
+  (if-let [^AroundSerializeDataHook asdh (Arcadia.Util/TrueNil
+                                           (.GetComponent as AroundSerializeDataHook))]
+    (let [f (around-wrapper (.gameObject as) (.ifnInfos asdh) pr-str)]
+      (f state-map))
+    (pr-str state-map)))

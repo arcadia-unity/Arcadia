@@ -69,6 +69,8 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 
 	public static Var objectDbVar;
 
+	public static Var serializeFlagVar;
+
 	public static Var serializeVar;
 
 	public static Var printReadablyVar;
@@ -99,10 +101,11 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 		Arcadia.Util.getVar(ref jumpMapToMapVar, stateHelpNs, "jumpmap-to-map");
 		Arcadia.Util.getVar(ref deserializeVar, stateHelpNs, "deserialize");
 		Arcadia.Util.getVar(ref defaultConversion, stateHelpNs, "default-conversion");
+		Arcadia.Util.getVar(ref serializeVar, stateHelpNs, "serialize");
 
 		var arcadiaLiteralsNs = "arcadia.data";
 		Arcadia.Util.require(arcadiaLiteralsNs);
-		Arcadia.Util.getVar(ref serializeVar, arcadiaLiteralsNs, "*serialize*");
+		Arcadia.Util.getVar(ref serializeFlagVar, arcadiaLiteralsNs, "*serialize*");
 		Arcadia.Util.getVar(ref printReadablyVar, arcadiaLiteralsNs, "*print-compactly*");
 		Arcadia.Util.getVar(ref objectDbVar, arcadiaLiteralsNs, "*object-db*");
 
@@ -156,9 +159,10 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 		Initialize();
 
 		WipeDatabase();
-		Var.pushThreadBindings(RT.map(objectDbVar, objectDatabase, serializeVar, true, printReadablyVar, false));
+		Var.pushThreadBindings(RT.map(objectDbVar, objectDatabase, serializeFlagVar, true, printReadablyVar, false));
 		try {
-			serializedData = (string)prStrVar.invoke(state.ToPersistentMap());
+			serializedData = (string)serializeVar.invoke(this, state.ToPersistentMap());
+			//serializedData = (string)prStrVar.invoke(state.ToPersistentMap());
 			// TODO optimize this
 			var map = (PersistentHashMap)objectDatabase.deref();
 			objectDatabaseIds = (int[])RT.seqToTypedArray(typeof(int), RT.keys(map));
