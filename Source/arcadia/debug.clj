@@ -455,12 +455,24 @@
       (update bpr ::site-blacklist disj site-id))))
 
 ;; ------------------------------------------------------------
+;; stack
+
+(defn print-own-stack [id]
+  (let [bpr @breakpoint-registry
+        {:keys [::stack]} (find-by-id bpr id)
+        opts (merge arcadia.internal.stacktrace/default-opts
+               (:error-options (arcadia.internal.config/config)))]
+    (println
+      (arcadia.internal.stacktrace/trace-str stack opts))))
+
+;; ------------------------------------------------------------
 ;; read, eval, etc
 
 (defn print-help []
   (->>
     [[":h, :help", "print help"]
      [":k, :kill", "kill this breakpoint site"]
+     [":s", "print stacktrace, formatted as in repl"]
      [":state", "print breakpoint state"]
      [":this", "print summary of this breakpoint"]
      [":a, :available", "print breakpoints available for connection by inx"]
@@ -493,6 +505,10 @@
 
         (#{:e :env} input)
         (do (print-env id {:short true})
+            request-prompt)
+
+        (= :s input)
+        (do (print-own-stack id)
             request-prompt)
 
         (#{:e+ :env+} input)
