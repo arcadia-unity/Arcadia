@@ -110,6 +110,15 @@
          (bound-fn []
            (deliver p ;; needs to go through agent now
              (try
+               (when-let [repl-options (:repl-options (config/config))]
+                 (when-let [[_ print-level] (find repl-options :print-level)]
+                   (when (or (number? print-level)
+                             (nil? print-level))
+                     (set! *print-level* print-level)))
+                 (when-let [[_ print-length] (find repl-options :print-length)]
+                   (when (or (number? print-length)
+                             (nil? print-length))
+                     (set! *print-length* print-length))))
                (Arcadia.Util/MarkScenesDirty)
                (let [v (eval expr)]
                  {::success true
