@@ -1,4 +1,5 @@
 (ns arcadia.internal.stacktrace
+  (:require [arcadia.internal.config :as config])
   (:import [System.Diagnostics StackFrame StackTrace]
            [System.Reflection MethodInfo ParameterInfo]))
 
@@ -157,12 +158,20 @@
 (defn exception-layers [e]
   (take-while some? (iterate #(.InnerException ^Exception %) e)))
 
-(defn exception-str ^String [^Exception e, opts]
-  (if (:format opts)
-    (let [es (reverse (exception-layers e))]
-      (clojure.string/join "\nvia\n"
-        (for [^Exception e (if (:hide-outer-exceptions opts) (take 1 es) es)]
-          (str (class e) ": " (.Message e) "\n"
-               ;; important that this is type-hinted, changes behavior:
-               (trace-str (StackTrace. e true) opts)))))
-    (str e)))
+(defn exception-string ^String
+  ([^Exception e]
+   (exception-string e nil))
+  ([^Exception e, opts]
+   (let [opts (merge default-opts opts)]
+     (if (:format opts)
+       (let [es (reverse (exception-layers e))]
+         (clojure.string/join "\nvia\n"
+           (for [^Exception e (if (:hide-outer-exceptions opts) (take 1 es) es)]
+             (str (class e) ": " (.Message e) "\n"
+                  ;; important that this is type-hinted, changes behavior:
+                  (trace-str (StackTrace. e true) opts)))))
+       (str e)))))
+
+(defn configured-exception-string ^String [^Exception e]
+  (exception-string e (:error-options (config/config))))
+

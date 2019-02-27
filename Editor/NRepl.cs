@@ -95,9 +95,7 @@ namespace Arcadia
 
 		static NRepl ()
 		{
-			string socketReplNsName = "arcadia.internal.socket-repl";
-			Util.require(socketReplNsName);
-			Util.getVar(ref errorStringVar, socketReplNsName, "error-string");
+			Util.getVar(ref errorStringVar, "arcadia.internal.stacktrace", "configured-exception-string");
 
 			Util.require("arcadia.internal.editor-callbacks");
 			addCallbackVar = RT.var("arcadia.internal.editor-callbacks", "add-callback");
