@@ -368,11 +368,10 @@ namespace Arcadia
 		public static object TrueNil (object obj)
 		{
 			UnityEngine.Object obj2 = obj as UnityEngine.Object;
-			if (obj2 == null) {
+			if (obj2 == null && obj is UnityEngine.Object) {
 				return null;
 			}
-
-			return obj;
+			return obj;	
 		}
 
 		// ==================================================================
