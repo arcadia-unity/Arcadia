@@ -773,7 +773,7 @@
   (role+
   obj,
   :example-role,
-  {:state 45, {:update #'on-update, :on-collision-enter #'on-collision-enter}})
+  {:state 45, :update #'on-update, :on-collision-enter #'on-collision-enter}})
   ```
 
   has the same effect as
