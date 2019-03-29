@@ -90,6 +90,9 @@ namespace Arcadia
 		private static Var star3Var;
 		private static Var starEVar;
 		private static Var errorStringVar;
+		private static Var metaVar;
+		private static Var resolveVar;
+		private static Var symbolVar;
 
 		private static Namespace shimsNS;
 
@@ -109,7 +112,11 @@ namespace Arcadia
 			star2Var = RT.var("clojure.core", "*2");
 			star3Var = RT.var("clojure.core", "*3");
 			starEVar = RT.var("clojure.core", "*e");
-			
+
+			metaVar = RT.var("clojure.core", "meta");
+			resolveVar = RT.var("clojure.core", "resolve");
+			symbolVar = RT.var("clojure.core", "symbol");
+
 			readStringOptions = PersistentHashMap.EMPTY.assoc(Keyword.intern("read-cond"), Keyword.intern("allow"));
 
 			shimsNS = Namespace.findOrCreate(Symbol.intern("arcadia.nrepl.shims"));
@@ -292,6 +299,7 @@ namespace Arcadia
 										{"eval", 1},
 										{"describe", 1},
 										{"clone", 1},
+										{"info", 1},
 									}
 								},
 								{
@@ -322,6 +330,31 @@ namespace Arcadia
 				case "eval":
 					var fn = new EvalFn(message, client);
 					addCallbackVar.invoke(fn);
+					break;
+				case "info":
+					var symbolMetadata = (IPersistentMap)metaVar.invoke(resolveVar.invoke(symbolVar.invoke(message["symbol"].ToString())));
+					var line = (string)symbolMetadata.valAt(Keyword.intern("line")).ToString();
+					var column =  (string)symbolMetadata.valAt(Keyword.intern("column")).ToString();
+					var file = (string)symbolMetadata.valAt(Keyword.intern("file")).ToString();
+					var doc = (string)symbolMetadata.valAt(Keyword.intern("doc")).ToString();
+					var ns = (string)symbolMetadata.valAt(Keyword.intern("ns")).ToString();
+					var arglists = (string)symbolMetadata.valAt(Keyword.intern("arglists")).ToString();
+					var name = (string)symbolMetadata.valAt(Keyword.intern("name")).ToString();
+					SendMessage(
+						new BDictionary
+						{
+							{"id", message["id"]},
+							{"line", line},
+							{"file", file},
+							{"arglists-str", arglists},
+							{"column", column},
+							{"doc", doc},
+							{"ns", ns},
+							{"name", name},
+							{"session", session.ToString()},
+							{"status", new BList {"done"}}
+						}, client);
+					//var metaInfo = RT.var("clojure.core", "meta").deref().invoke()
 					break;
 				default:
 					SendMessage(
