@@ -91,7 +91,8 @@ namespace Arcadia
 		private static Var starEVar;
 		private static Var errorStringVar;
 		private static Var metaVar;
-		private static Var resolveVar;
+		private static Var nsResolveVar;
+		private static Var findNsVar;
 		private static Var symbolVar;
 
 		private static Namespace shimsNS;
@@ -114,7 +115,8 @@ namespace Arcadia
 			starEVar = RT.var("clojure.core", "*e");
 
 			metaVar = RT.var("clojure.core", "meta");
-			resolveVar = RT.var("clojure.core", "resolve");
+			nsResolveVar = RT.var("clojure.core", "ns-resolve");
+			findNsVar = RT.var("clojure.core", "find-ns");
 			symbolVar = RT.var("clojure.core", "symbol");
 
 			readStringOptions = PersistentHashMap.EMPTY.assoc(Keyword.intern("read-cond"), Keyword.intern("allow"));
@@ -297,6 +299,7 @@ namespace Arcadia
 									new BDictionary
 									{
 										{"eval", 1},
+										{"load-file", 1},
 										{"describe", 1},
 										{"clone", 1},
 										{"info", 1},
@@ -331,30 +334,38 @@ namespace Arcadia
 					var fn = new EvalFn(message, client);
 					addCallbackVar.invoke(fn);
 					break;
+				case "load-file":
+					message["code"] = new BString("(do " + message["file"].ToString() + " )");
+					var loadFn = new EvalFn(message, client);
+					addCallbackVar.invoke(loadFn);
+					break;
 				case "info":
-					var symbolMetadata = (IPersistentMap)metaVar.invoke(resolveVar.invoke(symbolVar.invoke(message["symbol"].ToString())));
-					var line = (string)symbolMetadata.valAt(Keyword.intern("line")).ToString();
-					var column =  (string)symbolMetadata.valAt(Keyword.intern("column")).ToString();
-					var file = (string)symbolMetadata.valAt(Keyword.intern("file")).ToString();
-					var doc = (string)symbolMetadata.valAt(Keyword.intern("doc")).ToString();
-					var ns = (string)symbolMetadata.valAt(Keyword.intern("ns")).ToString();
-					var arglists = (string)symbolMetadata.valAt(Keyword.intern("arglists")).ToString();
-					var name = (string)symbolMetadata.valAt(Keyword.intern("name")).ToString();
-					SendMessage(
-						new BDictionary
-						{
+					var symbolMetadata = (IPersistentMap)metaVar.invoke(nsResolveVar.invoke(
+						findNsVar.invoke(symbolVar.invoke(message["ns"].ToString())),
+						symbolVar.invoke(message["symbol"].ToString())));
+
+					if (symbolMetadata != null) {
+						var resultMessage = new BDictionary {
 							{"id", message["id"]},
-							{"line", line},
-							{"file", file},
-							{"arglists-str", arglists},
-							{"column", column},
-							{"doc", doc},
-							{"ns", ns},
-							{"name", name},
 							{"session", session.ToString()},
 							{"status", new BList {"done"}}
-						}, client);
-					//var metaInfo = RT.var("clojure.core", "meta").deref().invoke()
+						};
+						foreach (var entry in symbolMetadata) {
+							if (entry.val() != null) {
+								resultMessage[entry.key().ToString().Substring(1)] =
+									new BString(entry.val().ToString());
+								}
+							}
+							SendMessage(resultMessage, client);
+					} else {
+							SendMessage(
+								new BDictionary
+								{
+									{"id", message["id"]},
+									{"session", session.ToString()},
+									{"status", new BList {"done", "no-info"}}
+								}, client);
+					}
 					break;
 				default:
 					SendMessage(
