@@ -7,6 +7,7 @@
 
 (def inclusive-binding-flag
   (enum-or
+    BindingFlags/FlattenHierarchy
     BindingFlags/Static
     BindingFlags/Instance
     BindingFlags/Public

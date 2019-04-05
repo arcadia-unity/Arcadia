@@ -201,6 +201,7 @@
 
 ;; ------------------------------------------------------------
 
+
 (at/deftest scene-graph-system t
   (as-sub-closing [t "GameObject traversal"]
     (with-temp-objects :lit [x y z]
@@ -568,6 +569,17 @@
 ;; core-namespace
 
 (at/deftest core-namespace t
+  (as-sub-closing [t "null->nil"]
+    (with-temp-objects :lit [obj]
+      (t (at/is (= obj (ac/null->nil obj))
+           "non-destroyed object null->nil value is original object")))
+    (with-temp-objects :lit [obj]
+      (ac/destroy-immediate obj)
+      (t (at/is (= nil (ac/null->nil obj))
+           "destroyed object null->nil value is nil")))
+    (t
+      (at/is (= :not-a-unity-object (ac/null->nil :not-a-unity-object)))
+      (at/is (= nil (ac/null->nil nil)))))
   (as-sub-closing [t "instantiate"]
     (with-temp-objects :lit [original]
       (let [position (al/v3 (rand) (rand) (rand))
@@ -592,7 +604,10 @@
                   "3-ary instantiate uses new position"))
         (t (at/is (= (.. clone-2 transform rotation)
                      rotation)
-                  "3-ary instantiate uses new rotation"))))))
+             "3-ary instantiate uses new rotation"))))))
+
+;; ------------------------------------------------------------
+
 
 ;; ------------------------------------------------------------
 ;; linear-namespace

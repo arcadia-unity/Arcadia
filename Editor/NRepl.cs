@@ -90,6 +90,10 @@ namespace Arcadia
 		private static Var star3Var;
 		private static Var starEVar;
 		private static Var errorStringVar;
+		private static Var metaVar;
+		private static Var nsResolveVar;
+		private static Var findNsVar;
+		private static Var symbolVar;
 
 		private static Namespace shimsNS;
 
@@ -109,7 +113,12 @@ namespace Arcadia
 			star2Var = RT.var("clojure.core", "*2");
 			star3Var = RT.var("clojure.core", "*3");
 			starEVar = RT.var("clojure.core", "*e");
-			
+
+			metaVar = RT.var("clojure.core", "meta");
+			nsResolveVar = RT.var("clojure.core", "ns-resolve");
+			findNsVar = RT.var("clojure.core", "find-ns");
+			symbolVar = RT.var("clojure.core", "symbol");
+
 			readStringOptions = PersistentHashMap.EMPTY.assoc(Keyword.intern("read-cond"), Keyword.intern("allow"));
 
 			shimsNS = Namespace.findOrCreate(Symbol.intern("arcadia.nrepl.shims"));
@@ -290,8 +299,10 @@ namespace Arcadia
 									new BDictionary
 									{
 										{"eval", 1},
+										{"load-file", 1},
 										{"describe", 1},
 										{"clone", 1},
+										{"info", 1},
 									}
 								},
 								{
@@ -322,6 +333,39 @@ namespace Arcadia
 				case "eval":
 					var fn = new EvalFn(message, client);
 					addCallbackVar.invoke(fn);
+					break;
+				case "load-file":
+					message["code"] = new BString("(do " + message["file"].ToString() + " )");
+					var loadFn = new EvalFn(message, client);
+					addCallbackVar.invoke(loadFn);
+					break;
+				case "info":
+					var symbolMetadata = (IPersistentMap)metaVar.invoke(nsResolveVar.invoke(
+						findNsVar.invoke(symbolVar.invoke(message["ns"].ToString())),
+						symbolVar.invoke(message["symbol"].ToString())));
+
+					if (symbolMetadata != null) {
+						var resultMessage = new BDictionary {
+							{"id", message["id"]},
+							{"session", session.ToString()},
+							{"status", new BList {"done"}}
+						};
+						foreach (var entry in symbolMetadata) {
+							if (entry.val() != null) {
+								resultMessage[entry.key().ToString().Substring(1)] =
+									new BString(entry.val().ToString());
+								}
+							}
+							SendMessage(resultMessage, client);
+					} else {
+							SendMessage(
+								new BDictionary
+								{
+									{"id", message["id"]},
+									{"session", session.ToString()},
+									{"status", new BList {"done", "no-info"}}
+								}, client);
+					}
 					break;
 				default:
 					SendMessage(

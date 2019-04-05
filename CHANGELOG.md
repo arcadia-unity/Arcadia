@@ -1,5 +1,17 @@
 # Arcadia Changelog
 
+## Beta 1.0.6
+
+- Fixed issue [#351](https://github.com/arcadia-unity/Arcadia/issues/351).
+
+## Beta 1.0.5
+
+- Fixed issue [#346](https://github.com/arcadia-unity/Arcadia/issues/346).
+
+## Beta 1.0.4
+
+- Fixed issue [#345](https://github.com/arcadia-unity/Arcadia/issues/345).
+
 ## Beta 1.0.3
 - Fixed MAGIC issue [#35](https://github.com/nasser/magic/issues/35) with a compiler built from [arcadia-unity/clojure-clr@9e5b7330](https://github.com/arcadia-unity/clojure-clr/commit/9e5b7330c7e46ac7e5978bd289a869199c2f6e53)
 

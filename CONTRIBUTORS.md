@@ -8,3 +8,4 @@
 * Vincent Cantin - [green-coder](https://github.com/green-coder)
 * Jeremy Kross - [jeremykross](https://github.com/jeremykross)
 * Artur Dębkowski - [ekhart](https://github.com/ekhart)
+* Josep Sànchez - [setzer22](https://github.com/setzer22)

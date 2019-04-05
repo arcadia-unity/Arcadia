@@ -18,7 +18,7 @@
             [arcadia.internal.array-utils :as au]
             [clojure.data :as d])
   (:import [Arcadia StringHelper ArrayHelper]
-   [System.Collections Queue]
+           [System.Collections Queue]
            [System.IO FileSystemInfo DirectoryInfo FileInfo Path File]
            [System DateTime]
            [System.Threading Thread ThreadStart]
@@ -76,12 +76,12 @@
   ;;     (s/keys :req [::g ::fsis])))
   )
 
-(s/fdef merge-file-graphs
-  :args (s/alt
-          :0 #{[]}
-          :1 ::file-graph
-          :2 (s/cat :g1 ::file-graph, :g2 ::file-graph))
-  :ret ::file-graph)
+;; (s/fdef merge-file-graphs
+;;   :args (s/alt
+;;           :0 #{[]}
+;;           :1 ::file-graph
+;;           :2 (s/cat :g1 ::file-graph, :g2 ::file-graph))
+;;   :ret ::file-graph)
 
 (defn- merge-file-graphs
   ([] {::g {}, ::fsis {}, ::type ::file-graph})
@@ -115,8 +115,8 @@
 
 (def empty-set #{}) ;;omg
 
-(s/fdef info-children
-  :args (s/cat :info ::info))
+;; (s/fdef info-children
+;;   :args (s/cat :info ::info))
 
 (defn- info-children [info]
   ;;{:pre [(as/loud-valid? ::info info)]}
@@ -151,10 +151,10 @@
                   (catch System.ArgumentException e))
     :else (throw (System.ArgumentException. "Expects DirectoryInfo or String."))))
 
-(s/fdef info
-  :args (s/cat :arg ::info-path)
-  :ret (s/or :info ::info
-             :nil nil?))
+;; (s/fdef info
+;;   :args (s/cat :arg ::info-path)
+;;   :ret (s/or :info ::info
+;;              :nil nil?))
 
 ;; !!!!THIS SOMETIMES RETURNS NIL!!!!
 (defn- info ^FileSystemInfo [x]
@@ -170,14 +170,14 @@
     :else (throw (System.ArgumentException. "Expects FileSystemInfo or String."))))
 
 
-(s/fdef file-graph
-  :args (s/alt
-          :no-opts (s/cat :root ::path)
-          :with-opts (s/cat
-                       :path ::path
-                       :opts map?))
-  :ret (s/or :info ::info
-             :nil nil?))
+;; (s/fdef file-graph
+;;   :args (s/alt
+;;           :no-opts (s/cat :root ::path)
+;;           :with-opts (s/cat
+;;                        :path ::path
+;;                        :opts (s/nilable map?)))
+;;   :ret (s/or :info ::info
+;;              :nil nil?))
 
 ;; this might screw up symlinks
 (defn file-graph
@@ -375,17 +375,17 @@
 (s/def ::listener
   (s/keys :req [::listener-key ::func ::event-type ::re-filter]))
 
-(s/fdef apply-listener
-  :args (s/cat :listener ::listener, :event ::event))
+;; (s/fdef apply-listener
+;;   :args (s/cat :listener ::listener, :event ::event))
 
 (defn- apply-listener [{:keys [::func] :as listener} event]
   (func event))
 
-(s/fdef run-listeners
-  :args (s/cat
-          :watch-data ::watch-data
-          :changes (s/every ::event))
-  :ret nil?)
+;; (s/fdef run-listeners
+;;   :args (s/cat
+;;           :watch-data ::watch-data
+;;           :changes (s/every ::event))
+;;   :ret nil?)
 
 (defn- re-filter-matches? [re-filter path]
   (or (= :directory re-filter)
@@ -480,9 +480,9 @@
 ;; ------------------------------------------------------------
 ;; updating topology
 
-(s/fdef update-history
-  :args (s/cat :history ::history, :changes (s/every ::event))
-  :ret ::history)
+;; (s/fdef update-history
+;;   :args (s/cat :history ::history, :changes (s/every ::event))
+;;   :ret ::history)
 
 (defn- update-history [history changes]
   (reduce (fn [history {:keys [::path ::event-type] :as change}]
@@ -503,9 +503,9 @@
 
 (defonce ws-weirdness-log (atom []))
 
-(s/fdef watch-step
-  :args (s/cat :watch-data ::watch-data)
-  :ret ::watch-data)
+;; (s/fdef watch-step
+;;   :args (s/cat :watch-data ::watch-data)
+;;   :ret ::watch-data)
 
 (defn- watch-step [{:keys [::event-type->listeners] :as watch-data}] 
   (if-let [chs (seq (changes watch-data))]
