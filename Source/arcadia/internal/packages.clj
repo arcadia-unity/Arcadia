@@ -117,6 +117,7 @@
   (cp-r-folder-info (DirectoryInfo. from)
                     (DirectoryInfo. to)))
 
+;; NOTE Assets/Arcadia/Infrastructure/NuGetAssetParser.exe has been removed due to #356, this will no longer work
 (defn install [destination]
   (let [to-copy (volatile! [])]
     (Shell/MonoRun
