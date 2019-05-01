@@ -7,8 +7,10 @@
            Mozilla uses in Firefox. We load the assembly and simulate a
            command line session passing --import --sync as arguments."}
   arcadia.internal.mozroots
-  (:import Arcadia.Shell))
+  (:import [Arcadia Initialization Shell]
+           [System.IO Path]))
 
+;; TODO fix hardcoded path here
 (defn import-sync-mozroots []
   (Shell/MonoRun Shell/MozrootsExePath
-                 "--file Assets/Arcadia/Infrastructure/certdata.txt --import --sync"))
+                 (str "--file " (Path/Combine (Initialization/GetArcadiaFolder) "Infrastructure" "certdata.txt") " --import --sync")))

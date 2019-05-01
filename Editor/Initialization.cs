@@ -15,8 +15,8 @@ namespace Arcadia
 		// ============================================================
 		// Data
 		public static string PathToCompiled = Path.GetFullPath(VariadicPathCombine(Application.dataPath, "..", "Arcadia", "Compiled"));
-
-		public static string PathToCompiledForExport = Path.GetFullPath(VariadicPathCombine(Application.dataPath, "Arcadia", "Export"));
+		
+		public static string PathToCompiledForExport = Path.GetFullPath(VariadicPathCombine(GetArcadiaFolder(), "Arcadia", "Export"));
 
 		static Initialization ()
 		{
@@ -26,6 +26,11 @@ namespace Arcadia
 		public static String GetClojureDllFolder ()
 		{
 			return Path.GetDirectoryName(typeof(clojure.lang.RT).Assembly.Location).Substring(Directory.GetCurrentDirectory().Length + 1);
+		}
+
+		public static String GetArcadiaFolder()
+		{
+			return Directory.GetParent(GetClojureDllFolder()).ToString();
 		}
 
 		public static void StartWatching ()

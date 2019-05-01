@@ -3,7 +3,7 @@
             [clojure.edn :as edn]
             [arcadia.internal.leiningen :as lein]
             [arcadia.internal.config :as config])
-  (:import [Arcadia ProgressBar Shell]
+  (:import [Arcadia Initialization ProgressBar Shell]
            UnityEditor.EditorUtility
            UnityEngine.Debug
            [System.Diagnostics Process]
@@ -72,7 +72,7 @@
 
 ;;;; NuGet & JSON wrangling
 
-(def nuget-exe-path (Path/Combine "Assets" "Arcadia" "Infrastructure" "NuGet.exe"))
+(def nuget-exe-path (Path/Combine (Initialization/GetArcadiaFolder) "Infrastructure" "NuGet.exe"))
 (def external-packages-folder (Path/Combine "Arcadia" "Libraries"))
 (def internal-packages-folder (Path/Combine "Assets" "Arcadia" "Libraries"))
 (def external-package-files-folder (Path/Combine external-packages-folder "Files"))
@@ -121,7 +121,7 @@
 (defn install [destination]
   (let [to-copy (volatile! [])]
     (Shell/MonoRun
-     "Assets/Arcadia/Infrastructure/NuGetAssetParser.exe"
+     (Path/Combine (Initialization/GetArcadiaFolder) "Infrastructure" "NuGetAssetParser.exe")
      (str package-lock-file " 4.6")
      {:output (fn [s] (vswap! to-copy conj s))
       :done (fn []
