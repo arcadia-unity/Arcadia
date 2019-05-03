@@ -7,8 +7,8 @@ namespace Arcadia
         [MenuItem("Arcadia/AOT Compile")]
         public static void AOTCompile()
         {
-            BuildPipeline.BuildInternal();
-            BuildPipeline.BuildUser();
+            Initialization.PurgeAllCompiled();
+            BuildPipeline.BuildAll();
         }
 
         [MenuItem("Arcadia/Prepare for Export")]
