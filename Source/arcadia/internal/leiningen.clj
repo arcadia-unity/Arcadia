@@ -105,10 +105,11 @@
       (.GetFiles di))))
 
 (defn leiningen-project-directories []
-  (->> "project"
-       AssetDatabase/FindAssets
-       (map #(AssetDatabase/GUIDToAssetPath %))
-       (map #(Directory/GetParent %))
+  (->> (.EnumerateFiles
+         (DirectoryInfo. (BasicPaths/BestGuessDataPath))
+         "project.clj"
+         System.IO.SearchOption/AllDirectories)
+       (map #(.Directory %))
        (filter leiningen-structured-directory?)))
 
 (s/fdef all-project-data

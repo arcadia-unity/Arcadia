@@ -405,8 +405,10 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 	{
 		if (varsRealized)
 			return;
-		// keyNames won't be there yet for fresh object
-		// TODO: might want to clear them out after realizing vars
+        // keyNames won't be there yet for fresh object
+        // TODO: might want to clear them out after realizing vars
+
+        PlayModeInitialization.Initialize1();
 
 		if (keyNames != null) {
 			ifnInfos = new IFnInfo[keyNames.Length];

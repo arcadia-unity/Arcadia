@@ -4,10 +4,10 @@
   (:require [clojure.string :as string]
             [arcadia.internal.events :as events])
   (:import [clojure.lang RT]
-           [Arcadia Initialization]
+           [Arcadia BasicPaths]
            [System.IO Path]))
 
-(def path (Path/Combine (Initialization/GetArcadiaFolder) "Components"))
+(def path (Path/Combine BasicPaths/ArcadiaFolder "Components"))
 
 (defn component-name [event]
   (str event "Hook"))

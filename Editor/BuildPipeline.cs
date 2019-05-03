@@ -20,12 +20,12 @@ namespace Arcadia
 
 		public static string CompiledFolder = Path.Combine("Arcadia", "Compiled");
 		public static string ExportFolder = Path.Combine("Arcadia", "Export");
-		public static string ExportAssetsFolder = Path.Combine(Initialization.GetArcadiaFolder(), "Export");
+		public static string ExportAssetsFolder = Path.Combine(BasicPaths.ArcadiaFolder, "Export");
 
 		static BuildPipeline ()
 		{
             Util.require("arcadia.internal.editor-interop");
-			EditorUtility.ClearProgressBar();
+			//EditorUtility.ClearProgressBar();
 		}
 
 		public static void EnsureCompiledFolders ()
