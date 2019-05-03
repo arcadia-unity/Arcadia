@@ -263,3 +263,6 @@
     arcadia.internal.filewatcher-dummy arcadia.internal.file-system arcadia.internal.editor-interop
     arcadia.internal.components arcadia.internal.benchmarking arcadia.internal.asset-watcher
     arcadia.internal.array-utils arcadia.internal.packages.data arcadia.internal.socket-repl])
+
+(defn internal-and-user-root-namespaces []
+  (vec (set (concat internal-namespaces (all-user-namespaces-symbols)))))

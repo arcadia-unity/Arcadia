@@ -141,19 +141,12 @@ namespace Arcadia
 			}
 		}
 
-		public static void BuildInternal ()
-		{
-			EnsureCompiledFolders();
-			var internalNameSpaces = (IList)RT.var("arcadia.internal.editor-interop", "internal-namespaces").deref();
-			CompileNamespacesToFolder(internalNameSpaces, CompiledFolder);
-		}
-
-		public static void BuildUser ()
-		{
-			EnsureCompiledFolders();
-			var userNameSpaces = (IList)RT.var("arcadia.internal.editor-interop", "all-user-namespaces-symbols").invoke();
-			CompileNamespacesToFolder(userNameSpaces, CompiledFolder);
-		}
+        public static void BuildAll ()
+        {
+            EnsureCompiledFolders();
+            IList internalAndUserNameSpaces = (IList)RT.var("arcadia.internal.editor-interop", "internal-and-user-root-namespaces").invoke();
+            CompileNamespacesToFolder(internalAndUserNameSpaces, CompiledFolder);
+        }
 
 		public static void PrepareExport ()
 		{

@@ -1,5 +1,13 @@
 # Arcadia Changelog
 
+## Beta 1.0.10
+
+- Fixed issue [#363](https://github.com/arcadia-unity/Arcadia/issues/363).
+
+## Beta 1.0.9
+
+- Fixed issue [#362](https://github.com/arcadia-unity/Arcadia/issues/362).
+
 ## Beta 1.0.8
 
 - Support Arcadia installation in folders other than "Assets/Arcadia"
