@@ -97,7 +97,6 @@ namespace Arcadia
             LoadSocketREPL();
             NRepl.StartServer();
             StartNudge();
-            Debug.Log($"At end of Initialize(). clojure.lang.RT/GetFindFilePaths: {clojure.lang.RT.GetFindFilePaths().Aggregate("", (acc, x) => acc + "\n" + x)}");
             Debug.Log("Arcadia Started!");
 
             initialized = true;
@@ -119,8 +118,6 @@ namespace Arcadia
 
         public static void LoadConfig()
         {
-            Debug.Log($"In LoadConfig. CLOJURE_LOAD_PATH: {Environment.GetEnvironmentVariable("CLOJURE_LOAD_PATH")}");
-            Debug.Log($"In LoadConfig. clojure.lang.RT/GetFindFilePaths: {clojure.lang.RT.GetFindFilePaths().Aggregate("",(acc, x) => acc + ":" + x)}");
             Util.require("arcadia.internal.config");
             RT.var("arcadia.internal.config", "update!").invoke();
         }
@@ -162,8 +159,6 @@ namespace Arcadia
                 InitialClojureLoadPath() + Path.PathSeparator +
                 RT.var("arcadia.internal.compiler", "loadpath-extension-string").invoke() + Path.PathSeparator +
                 Path.GetFullPath(Path.Combine(clojureDllFolder, "..", "Libraries")));
-
-            Debug.Log("Load Path is " + Environment.GetEnvironmentVariable("CLOJURE_LOAD_PATH"));
         }
 
         static void LoadSocketREPL()

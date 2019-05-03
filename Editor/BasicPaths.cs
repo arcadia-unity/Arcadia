@@ -14,7 +14,6 @@ namespace Arcadia
                 if (bestGuessDataPath == null)
                 {
                     bestGuessDataPath = Path.Combine(Directory.GetCurrentDirectory(), "Assets");
-                    UnityEngine.Debug.Log($"Computed BestGuessDataPath. BestGuessDataPath: {bestGuessDataPath}");
                 }
                 return bestGuessDataPath;
             }
@@ -29,7 +28,6 @@ namespace Arcadia
                 if (pathToCompiled == null)
                 {
                     pathToCompiled = Path.GetFullPath(Path.Combine(BestGuessDataPath, "..", "Arcadia", "Compiled"));
-                    UnityEngine.Debug.Log($"Computed PathToCompiled. PathToCompiled: {pathToCompiled}");
                 }
                 return pathToCompiled;
             }
