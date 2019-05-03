@@ -1,5 +1,15 @@
 # Arcadia Changelog
 
+## Beta 1.0.8
+
+- Support Arcadia installation in folders other than "Assets/Arcadia"
+- Support leiningen projects at any level of nesting under the Assets folder
+
+## Beta 1.0.7
+
+- Merged PR [#359](https://github.com/arcadia-unity/Arcadia/pull/359) from [@setzer22](https://github.com/setzer22) -- thanks!
+- Fixed issue [#356](https://github.com/arcadia-unity/Arcadia/issues/351).
+
 ## Beta 1.0.6
 
 - Fixed issue [#351](https://github.com/arcadia-unity/Arcadia/issues/351).

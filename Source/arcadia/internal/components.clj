@@ -3,10 +3,11 @@
   arcadia.internal.components
   (:require [clojure.string :as string]
             [arcadia.internal.events :as events])
-  (:import [clojure.lang RT]))
+  (:import [clojure.lang RT]
+           [Arcadia BasicPaths]
+           [System.IO Path]))
 
-;; TODO path seperators
-(def path "Assets/Arcadia/Components/")
+(def path (Path/Combine BasicPaths/ArcadiaFolder "Components"))
 
 (defn component-name [event]
   (str event "Hook"))

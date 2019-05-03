@@ -5,12 +5,13 @@
             [arcadia.internal.filewatcher :as fw]
             [arcadia.internal.file-system :as fs])
   (:import
-    [System DateTime]
-    [System.IO FileSystemInfo File Path]
-    [UnityEngine Debug]
-    [System.Text.RegularExpressions Regex]))
-
-(def default-config-file-path (Path/Combine "Assets" "Arcadia" "configuration.edn"))
+   [Arcadia BasicPaths]
+   [System DateTime]
+   [System.IO FileSystemInfo File Path]
+   [UnityEngine Debug]
+   [System.Text.RegularExpressions Regex]))
+ 
+(def default-config-file-path (Path/Combine (BasicPaths/ArcadiaFolder) "configuration.edn"))
 (def user-config-file-path (Path/Combine "Assets" "configuration.edn"))
 
 (defn config []
