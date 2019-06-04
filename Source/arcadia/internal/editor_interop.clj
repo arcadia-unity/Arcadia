@@ -13,20 +13,36 @@
            [UnityEditor EditorGUILayout EditorGUIUtility MessageType EditorStyles EditorSkin]))
 
 ;; PERF memoize 
-(defn all-user-namespaces-symbols []
+(defn user-export-namespaces-symbols []
   (cons 'clojure.core
         (-> (config/config) :export-namespaces)))
 
-(defn all-loaded-user-namespaces []
-  (keep find-ns (all-user-namespaces-symbols)))
+(defn user-aot-namespaces-symbols []
+  (:aot-namespaces (config/config)))
 
-(defn load-user-namespaces! []
-  (doseq [n (all-user-namespaces-symbols)]
+(defn all-loaded-aot-namespaces []
+  (keep find-ns (user-aot-namespaces-symbols)))
+
+(defn all-loaded-export-namespaces []
+  (keep find-ns (user-export-namespaces-symbols)))
+
+(defn load-aot-namespaces! []
+  (doseq [n (user-aot-namespaces-symbols)]
     (Debug/Log (str "Loading " n))
     (require n)))
 
-(defn reload-user-namespaces! []
-  (doseq [n (all-user-namespaces-symbols)]
+(defn load-export-namespaces! []
+  (doseq [n (user-export-namespaces-symbols)]
+    (Debug/Log (str "Loading " n))
+    (require n)))
+
+(defn reload-aot-namespaces! []
+  (doseq [n (user-aot-namespaces-symbols)]
+    (Debug/Log (str "Reloading " n))
+    (require n :reload)))
+
+(defn reload-export-namespaces! []
+  (doseq [n (user-export-namespaces-symbols)]
     (Debug/Log (str "Reloading " n))
     (require n :reload)))
 
@@ -264,5 +280,5 @@
     arcadia.internal.components arcadia.internal.benchmarking arcadia.internal.asset-watcher
     arcadia.internal.array-utils arcadia.internal.packages.data arcadia.internal.socket-repl])
 
-(defn internal-and-user-root-namespaces []
-  (vec (set (concat internal-namespaces (all-user-namespaces-symbols)))))
+(defn internal-and-user-aot-root-namespaces []
+  (vec (set (concat internal-namespaces (user-aot-namespaces-symbols)))))

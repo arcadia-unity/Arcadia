@@ -144,7 +144,7 @@ namespace Arcadia
         public static void BuildAll ()
         {
             EnsureCompiledFolders();
-            IList internalAndUserNameSpaces = (IList)RT.var("arcadia.internal.editor-interop", "internal-and-user-root-namespaces").invoke();
+            IList internalAndUserNameSpaces = (IList)RT.var("arcadia.internal.editor-interop", "internal-and-user-aot-root-namespaces").invoke();
             CompileNamespacesToFolder(internalAndUserNameSpaces, CompiledFolder);
         }
 
@@ -158,7 +158,7 @@ namespace Arcadia
 				UnityEngine.Debug.Log("newLoadPath: " + newLoadPath);
 				System.Environment.SetEnvironmentVariable("CLOJURE_LOAD_PATH", newLoadPath);
 
-				var userNamespaces = ((IList)RT.var("arcadia.internal.editor-interop", "all-user-namespaces-symbols").invoke()).Cast<Symbol>();
+				var userNamespaces = ((IList)RT.var("arcadia.internal.editor-interop", "user-export-namespaces-symbols").invoke()).Cast<Symbol>();
 
 				CompileNamespacesToFolder(userNamespaces, ExportFolder);
 
