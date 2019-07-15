@@ -26,9 +26,10 @@ namespace Arcadia
 		{
 			if (!initialized) {
 				string callbackNs = "arcadia.internal.player-callbacks";
-				Arcadia.Util.getVar(ref updateCallbackRunnerVar, callbackNs, "run-update-callbacks");
-				Arcadia.Util.getVar(ref fixedUpdateCallbackRunnerVar, callbackNs, "run-fixed-update-callbacks");
-				Arcadia.Util.getVar(ref isActiveCallbackComponentVar, callbackNs, "active-callback-component?");
+				// not using Arcadia.Util, because it may introduce an Editor dependency as currently written
+				updateCallbackRunnerVar = RT.var(callbackNs, "run-update-callbacks");
+				fixedUpdateCallbackRunnerVar = RT.var(callbackNs, "run-fixed-update-callbacks");
+				isActiveCallbackComponentVar = RT.var(callbackNs, "active-callback-component?");
 				initialized = true;
 			}
 		}
