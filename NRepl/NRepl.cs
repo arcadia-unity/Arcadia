@@ -42,8 +42,6 @@ namespace Arcadia
 {
 	public class NRepl
 	{
-
-
 		class Writer : TextWriter
 		{
 			private string _id;
@@ -85,11 +83,12 @@ namespace Arcadia
 		private static Var evalVar;
 		private static Var prStrVar;
 		private static Var addCallbackVar;
+		private static IFn addCallbackIFn;
 		private static Var star1Var;
 		private static Var star2Var;
 		private static Var star3Var;
 		private static Var starEVar;
-		private static Var errorStringVar;
+		// private static Var errorStringVar;
 		private static Var metaVar;
 		private static Var nsResolveVar;
 		private static Var findNsVar;
@@ -99,12 +98,7 @@ namespace Arcadia
 
 		static NRepl ()
 		{
-			string socketReplNsName = "arcadia.internal.socket-repl";
-			Util.require(socketReplNsName);
-			Util.getVar(ref errorStringVar, socketReplNsName, "error-string");
 
-			Util.require("arcadia.internal.editor-callbacks");
-			addCallbackVar = RT.var("arcadia.internal.editor-callbacks", "add-callback");
 			readStringVar = RT.var("clojure.core", "read-string");
 			evalVar = RT.var("clojure.core", "eval");
 			prStrVar = RT.var("clojure.core", "pr-str");
@@ -237,7 +231,7 @@ namespace Arcadia
 					{
 						{"id", _request["id"]},
 						{"session", session.ToString()},
-						{"err", errorStringVar.invoke(e).ToString()},
+						{"err", e.ToString()},
 					}, _client);
 
 					SendMessage(new BDictionary
@@ -332,12 +326,12 @@ namespace Arcadia
 					break;
 				case "eval":
 					var fn = new EvalFn(message, client);
-					addCallbackVar.invoke(fn);
+					addCallbackIFn.invoke(fn);
 					break;
 				case "load-file":
 					message["code"] = new BString("(do " + message["file"].ToString() + " )");
 					var loadFn = new EvalFn(message, client);
-					addCallbackVar.invoke(loadFn);
+					addCallbackIFn.invoke(loadFn);
 					break;
 				case "info":
 					var symbolMetadata = (IPersistentMap)metaVar.invoke(nsResolveVar.invoke(
@@ -380,15 +374,20 @@ namespace Arcadia
 			}
 		}
 
-		private const int Port = 3722;
+		private const int DefaultPort = 3722;
+		private static int Port;
 
 		public static void StopServer ()
 		{
 			running = false;
 		}
 
-		public static void StartServer ()
+		// ReSharper disable once ParameterHidesMember
+		public static void StartServer (IFn addCallbackIFn = null, int port = DefaultPort)
 		{
+			NRepl.addCallbackIFn = addCallbackIFn ?? addCallbackVar;
+			Port = port;
+			
 			Debug.Log("nrepl: starting");
 			
 			running = true;

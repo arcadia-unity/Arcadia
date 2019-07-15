@@ -95,11 +95,17 @@ namespace Arcadia
             StartEditorCallbacks();
             StartWatching();
             LoadSocketREPL();
-            NRepl.StartServer();
+            StartNRepl();
             StartNudge();
             Debug.Log("Arcadia Started!");
 
             initialized = true;
+        }
+        
+        private static void StartNRepl()
+        {
+          Util.require("arcadia.internal.editor-callbacks");
+          NRepl.StartServer(RT.var("arcadia.internal.editor-callbacks", "add-callback"));
         }
 
         private static void InitializeLoadPathExtensions()

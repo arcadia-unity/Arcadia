@@ -57,11 +57,17 @@
   (callback-component)
   (.Enqueue update-work-queue f))
 
+(defn add-update-callback-without-initialization [f]
+  (.Enqueue update-work-queue f))
+
 (defonce ^Queue fixed-update-work-queue
   (Queue/Synchronized (Queue.)))
 
 (defn add-fixed-update-callback [f]
   (callback-component)
+  (.Enqueue fixed-update-work-queue f))
+
+(defn add-fixed-update-callback-without-initialization [f]
   (.Enqueue fixed-update-work-queue f))
 
 ;; ============================================================
