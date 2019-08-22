@@ -80,5 +80,9 @@
     OnSubmit [BaseEventData]
     OnUpdateSelected [BaseEventData]})
 
+(def special-hooks
+  '{})
+
 (def all-events
-  (merge events interface-events))
+  (merge events interface-events special-hooks))
+
