@@ -81,7 +81,7 @@
     OnUpdateSelected [BaseEventData]})
 
 (def special-hooks
-  '{})
+  '{OnRemoveState []})
 
 (def all-events
   (merge events interface-events special-hooks))

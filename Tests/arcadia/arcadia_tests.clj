@@ -429,7 +429,17 @@
       (ac/state+ obj :test-2 state-2)
       (ac/state- obj :test)
       (t (at/is (= (ac/state obj) {:test-2 state-2})
-           "partial state retrieval after state-"))))
+           "partial state retrieval after state-")))
+    (as-sub [t "`on-remove-state`"]
+      (with-temp-objects :lit [obj]
+        (ac/state+ obj :test state-1)
+        (ac/hook+ obj :on-remove-state :test
+          (fn [obj k]
+            (t (at/is true "on-remove-state runs on state-"))
+            (let [state (ac/lookup obj k)]
+              (t (at/is (= state state-1) "state is available for on-remove-state")
+                :close))))
+        (ac/state- obj :test))))
   (as-sub-closing [t "state serialization via instantiate"]
     (with-temp-objects :lit [obj]
       (ac/state+ obj :test state-1)
@@ -560,10 +570,24 @@
               (at/is
                 (do (ac/role- obj :absent-key)
                     (= (ac/roles obj) {}))
-                "`role-` works for fresh object")))))
+                "`role-` works for fresh object"))))
+        (as-sub [t "`on-remove-state`"]
+          (with-temp-objects :lit [obj]
+            (let [the-state (System.Object.) ; sentinel
+                  ]
+              (ac/role+ obj :test-role-1
+                {:state the-state
+                 :on-remove-state (fn on-remove-state-tester [obj k]
+                                    (t
+                                      (at/is true ":on-remove-state runs on role-")
+                                      (at/is (= (ac/lookup obj k) the-state)
+                                        "State present for on-remove-state")))})
+              (ac/role- obj :test-role-1)
+              (t (at/is (nil? (ac/role obj :test-role-1))
+                   ":on-remove-state hook removed during role-")
+                :close)))))
       (t :close))
-    (t :close))
-  )
+    (t :close)))
 
 ;; ------------------------------------------------------------
 ;; core-namespace

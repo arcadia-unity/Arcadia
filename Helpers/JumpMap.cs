@@ -1,5 +1,7 @@
+
+using Object = UnityEngine.Object;
 #if NET_4_6
-using UnityEngine;
+using System;
 using System.Collections.Generic;
 using clojure.lang;
 using System.Linq;
@@ -128,6 +130,16 @@ namespace Arcadia
 		{
 			var ks = dict.Keys.ToArray();
 			for (int i = 0; i < ks.Length; i++) {
+				Remove(ks[i]);
+			}
+		}
+
+		public void Clear(Action<object> callback)
+		{
+			var ks = dict.Keys.ToArray();
+			for (int i = 0; i < ks.Length; i++)
+			{
+				callback(ks[i]);
 				Remove(ks[i]);
 			}
 		}

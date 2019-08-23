@@ -249,6 +249,11 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 	// that it's the simplest thing to do and key deletions are probably pretty rare.
 	public void Remove (object k)
 	{
+		var removeStateHook = GetComponent<OnRemoveStateHook>();
+		if (removeStateHook != null)
+		{
+			removeStateHook.OnRemoveState(k);
+		}
 		state.Remove((Keyword)k);
 		// TODO: consider caching this
 		foreach (var x in GetComponents<ArcadiaBehaviour>()) {
@@ -256,9 +261,20 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 		}
 	}
 
-	public void Clear ()
+	public void Clear()
 	{
-		state.Clear();
+		var removeStateHook = GetComponent<OnRemoveStateHook>();
+		if (removeStateHook != null)
+		{
+			state.Clear(k =>
+			{
+				removeStateHook.OnRemoveState(k);
+			});
+		}
+		else
+		{
+			state.Clear();
+		}
 	}
 
 	// TODO add arity with default value

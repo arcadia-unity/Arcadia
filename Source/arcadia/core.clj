@@ -738,13 +738,30 @@
   "Removes a role from GameObject `obj` on key `k`. Any hook or state
   attached to `obj` on key `k` will be removed. Returns `nil`."
   [obj k]
+  ;; We may want lifecycle callbacks in the future for removing
+  ;; individual hooks, and it would probably be useful for them to
+  ;; have access to the state of the role. Therefore it seems that the
+  ;; state should be removed last. However, if we remove
+  ;; OnRemoveStateHook before we trigger the normal state removal
+  ;; method, it won't be around to get triggered. So we might delay
+  ;; removing OnRemoveStateHook until last, but then the listener for
+  ;; *that* hook being removed doesn't have state (and may itself
+  ;; already have been removed, but I guess we'll cross that bridge
+  ;; when we get there). So there's no way to ensure that all such
+  ;; hook removal listeners would have access to state (the
+  ;; on-remove-state listener would not, obviously). So I'm just going
+  ;; to say that we're going to lead with removing state (which will
+  ;; trigger on-remove-state) and other hook listeners shouldn't count
+  ;; on state still being around in the case of a role- call. If we
+  ;; want to come up with some support for that later it won't be a
+  ;; breaking change.
   (let [abs (cmpts obj ArcadiaBehaviour)]
+    (state- obj k)
     (loop [i (int 0)]
       (when (< i (count abs))
         (let [^ArcadiaBehaviour ab (aget abs i)]
           (.RemoveFunction ab k)
           (recur (inc i))))))
-  (state- obj k)
   nil)
 
 (s/fdef role+
