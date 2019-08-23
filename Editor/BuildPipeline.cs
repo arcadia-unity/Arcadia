@@ -20,12 +20,12 @@ namespace Arcadia
 
 		public static string CompiledFolder = Path.Combine("Arcadia", "Compiled");
 		public static string ExportFolder = Path.Combine("Arcadia", "Export");
-		public static string ExportAssetsFolder = Path.Combine("Assets", Path.Combine("Arcadia", "Export"));
+		public static string ExportAssetsFolder = Path.Combine(BasicPaths.ArcadiaFolder, "Export");
 
 		static BuildPipeline ()
 		{
             Util.require("arcadia.internal.editor-interop");
-			EditorUtility.ClearProgressBar();
+			//EditorUtility.ClearProgressBar();
 		}
 
 		public static void EnsureCompiledFolders ()
@@ -141,19 +141,12 @@ namespace Arcadia
 			}
 		}
 
-		public static void BuildInternal ()
-		{
-			EnsureCompiledFolders();
-			var internalNameSpaces = (IList)RT.var("arcadia.internal.editor-interop", "internal-namespaces").deref();
-			CompileNamespacesToFolder(internalNameSpaces, CompiledFolder);
-		}
-
-		public static void BuildUser ()
-		{
-			EnsureCompiledFolders();
-			var userNameSpaces = (IList)RT.var("arcadia.internal.editor-interop", "all-user-namespaces-symbols").invoke();
-			CompileNamespacesToFolder(userNameSpaces, CompiledFolder);
-		}
+        public static void BuildAll ()
+        {
+            EnsureCompiledFolders();
+            IList internalAndUserNameSpaces = (IList)RT.var("arcadia.internal.editor-interop", "internal-and-user-aot-root-namespaces").invoke();
+            CompileNamespacesToFolder(internalAndUserNameSpaces, CompiledFolder);
+        }
 
 		public static void PrepareExport ()
 		{
@@ -165,7 +158,7 @@ namespace Arcadia
 				UnityEngine.Debug.Log("newLoadPath: " + newLoadPath);
 				System.Environment.SetEnvironmentVariable("CLOJURE_LOAD_PATH", newLoadPath);
 
-				var userNamespaces = ((IList)RT.var("arcadia.internal.editor-interop", "all-user-namespaces-symbols").invoke()).Cast<Symbol>();
+				var userNamespaces = ((IList)RT.var("arcadia.internal.editor-interop", "user-export-namespaces-symbols").invoke()).Cast<Symbol>();
 
 				CompileNamespacesToFolder(userNamespaces, ExportFolder);
 

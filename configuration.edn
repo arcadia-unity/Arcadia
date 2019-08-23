@@ -16,6 +16,10 @@
  ;; declare specific compilation targets, will also compile their dependencies
  ;; :export-namespaces [foo.core]
 
+ ;; declare specific namespaces to compile in response to the AOT Compile menu
+ ;; option, will also compile their dependencies
+ ;; :aot-namespaces [foo.core]
+
  ;; set to true in user configuration.edn to enable automatic code
  ;; reloading when a clojure file is saved
  :reload-on-change false

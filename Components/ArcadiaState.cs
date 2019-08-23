@@ -138,8 +138,8 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 		if (fullyInitialized)
 			return;
 
-		// TODO: cache component access
-
+        // TODO: cache component access
+        PlayModeInitialization.Initialize1();
 		InitializeOwnVars();
 		DeserializeState();
 		DeserializeConversions();

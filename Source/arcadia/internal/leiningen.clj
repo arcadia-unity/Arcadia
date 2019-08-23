@@ -9,7 +9,8 @@
             [arcadia.internal.compiler :as compiler]
             [arcadia.internal.config :as config])
   (:import [System.Text.RegularExpressions Regex]
-           [System.IO FileSystemInfo StringReader DirectoryInfo Path]
+           [System.IO FileSystemInfo StringReader Directory DirectoryInfo Path]
+           [UnityEditor AssetDatabase]
            [clojure.lang PushbackTextReader]))
 
 ;; ------------------------------------------------------------
@@ -72,14 +73,10 @@
 ;; ============================================================
 ;; filesystem
 
-(def ^:private assets-dir
-  (.FullName (fs/info "Assets")))
-
 ;; if anyone can think of another way lemme know -tsg
 (defn leiningen-project-file? [fi]
   (when-let [fi (fs/info fi)] ;; not sure this stupid function returns nil if input is already a filesysteminfo for a non existant filesystemthing
     (and (= "project.clj" (.Name fi))
-         (= assets-dir (first (drop 2 (fs/path-supers (.FullName fi)))))
          (boolean
            (re-find #"(?m)^\s*\(defproject(?:$|\s.*?$)" ;; shift to something less expensive
              (slurp fi))))))
@@ -108,7 +105,11 @@
       (.GetFiles di))))
 
 (defn leiningen-project-directories []
-  (->> (.GetDirectories (DirectoryInfo. "Assets"))
+  (->> (.EnumerateFiles
+         (DirectoryInfo. (BasicPaths/BestGuessDataPath))
+         "project.clj"
+         System.IO.SearchOption/AllDirectories)
+       (map #(.Directory %))
        (filter leiningen-structured-directory?)))
 
 (s/fdef all-project-data
