@@ -688,7 +688,7 @@
    (update-state-impl-form go k f x y z))
   ([go k f x y z & args]
    (with-cmpt go [arcs ArcadiaState]
-     (let [v (apply f (snapshot (.ValueAtKey arcs k)) x y z args)]
+     (let [v (apply f (maybe-snapshot (.ValueAtKey arcs k)) x y z args)]
        (.Add arcs k (maybe-mutable v))
        v))))
 
