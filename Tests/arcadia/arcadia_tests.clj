@@ -161,6 +161,11 @@
            (t (at/is false message) :close))))
     frames))
 
+(defn if-open-fail-and-close [t message]
+  (when-not (::at/closed @(at/get-ref t))
+    (t (at/is false message)
+      :close)))
+
 ;; ============================================================
 ;; the tests
 ;; ============================================================
@@ -415,7 +420,18 @@
       (ac/state+ obj-1 :test state-1)
       (ac/state+ obj-1 :test state-2)
       (t (at/is (= (ac/state obj-1 :test) state-2)
-           "state+ overwrites"))))
+           "state+ overwrites")))
+    ;; assumes on-add-state is synchronous, rewrite this if that changes
+    ;; (as-sub-closing [t "on-add-state"]
+    ;;   (with-temp-objects :lit [obj]
+    ;;     (ac/hook+ obj :on-add-state :test
+    ;;       (fn [obj k]
+    ;;         (t
+    ;;           (at/is true "on-add-state runs")
+    ;;           (at/is (= (ac/lookup obj k) state-1) "state available in on-add-state")
+    ;;           :close)))
+    ;;     (ac/state+ obj :on-add-state state-1)))
+    )
   (as-sub-closing [t "state-"]
     (with-temp-objects :lit [obj]
       (t (at/is (do (ac/state- obj :absent-key) true) "state- runs for fresh objects")))
@@ -506,8 +522,8 @@
                 (at/is (= k :test-role) "correct key in role `update`")
                 (at/is (= state-1 (ac/state obj :test-role)) "correct state retrieval in role `update`")
                 :close)))
-          (ac/role+ obj :test-role r1))
-        (close-after-frames t 4 "`role+` test didn't complete"))
+          (ac/role+ obj :test-role r1)
+          (close-after-frames t 4 "`role+` test didn't complete")))
       (as-sub-closing t
         (with-temp-objects :lit [obj]
           (ac/role+ obj :test-role-1 r1)
@@ -585,7 +601,19 @@
               (ac/role- obj :test-role-1)
               (t (at/is (nil? (ac/role obj :test-role-1))
                    ":on-remove-state hook removed during role-")
-                :close)))))
+                :close))))
+        (as-sub [t "`on-add-state`"]
+          ;; assuming this is synchronous, rewrite if that changes
+          (with-temp-objects :lit [obj]
+            (let [r {:state state-1}]
+              (ac/role+ obj :test
+                (assoc r
+                  :on-add-state (fn [obj k]
+                                  (t
+                                    (at/is true "on-add-state runs")
+                                    (at/is (= state-1 (ac/lookup obj k)) "state present for on-add-state")
+                                    :close)))))
+            (if-open-fail-and-close t "on-add-state did not run"))))
       (t :close))
     (t :close)))
 

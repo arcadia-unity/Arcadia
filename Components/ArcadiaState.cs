@@ -222,7 +222,15 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 
 	public void Add (object k, object v)
 	{
-		state.Add((Keyword)k, v);
+		if (state.Add((Keyword) k, v))
+		{
+			//TODO: cache this reference
+			var onAddStateHook = GetComponent<OnAddStateHook>();
+			if (onAddStateHook != null)
+			{
+				onAddStateHook.OnAddState(k);
+			}
+		}
 	}
 
 	// Strategies for removing keys in the presence of a lookup

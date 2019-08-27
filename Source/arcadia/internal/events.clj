@@ -79,9 +79,10 @@
     OnSelect [BaseEventData]
     OnSubmit [BaseEventData]
     OnUpdateSelected [BaseEventData]})
-
+ 
 (def special-hooks
-  '{OnRemoveState []})
+  '{OnAddState []
+    OnRemoveState []})
 
 (def all-events
   (merge events interface-events special-hooks))

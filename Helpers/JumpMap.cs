@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using clojure.lang;
 using System.Linq;
+using UnityEditorInternal;
 
 // for starters, I think we should build a version that deals with a missing
 // key someone wants access to by distributing an uninhabited kv pair that falls back on a runtime
@@ -109,13 +110,16 @@ namespace Arcadia
 			return dict.ContainsKey(k) && KeyValAtKey(k).isInhabited;
 		}
 
-		public void Add (object k, object v)
+		// Returns true iff the key wasn't there before
+		public bool Add (object k, object v)
 		{
 			if (ContainsKey(k)) {
 				KeyValAtKey(k).val = v;
+				return false;
 			} else {
 				KeyVal kv = new KeyVal(k, v, this, true);
 				dict.Add(k, kv);
+				return true;
 			}
 		}
 

@@ -810,14 +810,12 @@
   (role- obj k)
   (reduce-kv
     (fn [_ k2 v]
-      (cond
-        (hook-types k2)
-        (hook+ obj k2 k v)
-
-        (= :state k2)
-        (state+ obj k (maybe-mutable v))))
+      (when (hook-types k2)
+        (hook+ obj k2 k v)))
     nil
     r)
+  (when-let [state (get r :state)] ; this happens here so :on-add-state is present for it
+    (state+ obj k (maybe-mutable state)))
   r)
 
 (defn roles+
