@@ -134,7 +134,9 @@
                                  arcadia-opts)]
     (if source-paths
       (map (fn [p2]
-             (Path/Combine p1 p2))
+             ; GetFullPath will convert directory separators; see issue #371
+             (System.IO.Path/GetFullPath
+               (Path/Combine p1 p2)))
         source-paths)
       [(Path/Combine p1 "src")])))
 
