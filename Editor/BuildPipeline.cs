@@ -1,4 +1,3 @@
-#if NET_4_6
 using UnityEngine;
 using Ionic.Zip;
 using UnityEditor;
@@ -193,4 +192,3 @@ namespace Arcadia
 		}
 	}
 }
-#endif

@@ -1,4 +1,3 @@
-#if NET_4_6
 using System;
 using UnityEngine;
 using UnityEditor;
@@ -27,4 +26,3 @@ namespace Arcadia
 
 	}
 }
-#endif

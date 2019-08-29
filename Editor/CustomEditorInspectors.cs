@@ -1,4 +1,3 @@
-#if NET_4_6
 using System;
 using System.IO;
 using System.Runtime.CompilerServices;
@@ -183,4 +182,3 @@ public class ArcadiaStateEditor : Editor
 		}
 	}	
 }
-#endif

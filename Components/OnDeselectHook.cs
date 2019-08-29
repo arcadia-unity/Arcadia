@@ -1,13 +1,11 @@
-#if NET_4_6
 using UnityEngine;
 using UnityEngine.EventSystems;
 using clojure.lang;
 
-public class OnDeselectHook : ArcadiaBehaviour, IDeselectHandler
+public class OnDeselectHook : ArcadiaBehaviour
 {
   public void OnDeselect(BaseEventData a)
   {
       RunFunctions(a);
   }
 }
-#endif

@@ -1,4 +1,3 @@
-﻿#if NET_4_6
 using System;
 using System.IO;
 using System.Linq;
@@ -208,4 +207,3 @@ namespace Arcadia
         }
     }
 }
-#endif
