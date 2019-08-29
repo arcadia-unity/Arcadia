@@ -13,7 +13,7 @@
   (str event "Hook"))
 
 (defn component-file [event]
-  (str path (component-name event) ".cs"))
+  (Path/Combine path (str (component-name event) ".cs")))
 
 (def alphabet
   (->> (range \a \z)

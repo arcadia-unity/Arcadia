@@ -21,6 +21,20 @@ namespace Arcadia
 		}
 
 		// ==================================================================
+		// tuple implementation
+		public class Tuple2<T, V>
+		{
+			public T Item1;
+			public V Item2;
+
+            public Tuple2(T item1, V item2)
+            {
+                Item1 = item1;
+                Item2 = item2;
+            }
+        }
+
+		// ==================================================================
 		// namespace and Var loading
 
 		public static Var requireVar;
@@ -169,13 +183,13 @@ namespace Arcadia
 			return QualifiedName(v.sym);
 		}
 
-		public static Tuple<string, string> SplitQualifiedName (string qualifiedName)
+		public static Tuple2<string, string> SplitQualifiedName (string qualifiedName)
 		{
 			int i = qualifiedName.IndexOf('/');
 			if (i == -1) {
-				return new Tuple<string, string>(null, qualifiedName);
+				return new Tuple2<string, string>(null, qualifiedName);
 			}
-			return new Tuple<string, string>(qualifiedName.Substring(0, i), qualifiedName.Substring(i));
+			return new Tuple2<string, string>(qualifiedName.Substring(0, i), qualifiedName.Substring(i));
 		}
 
 		// loads var namespace as it goes
@@ -283,7 +297,7 @@ namespace Arcadia
 			}
 		}
 
-		public static Tuple<string[], string[]> SerializeKeyVarMap (IKVReduce m, string[] keysArIn, string[] valsArIn)
+		public static Tuple2<string[], string[]> SerializeKeyVarMap (IKVReduce m, string[] keysArIn, string[] valsArIn)
 		{
 			int len = ((clojure.lang.Counted)m).count();
 			string[] keysAr = (keysArIn != null && keysArIn.Length == len) ? keysArIn : new string[len];
@@ -291,7 +305,7 @@ namespace Arcadia
 
 			m.kvreduce(new SerializeKeyVarMapRFn(keysAr, valsAr), null);
 
-			return new Tuple<string[], string[]>(keysAr, valsAr);
+			return new Tuple2<string[], string[]>(keysAr, valsAr);
 		}
 
 		// ------------------------------------------------------------------
@@ -417,7 +431,7 @@ namespace Arcadia
 
 			throw new ArgumentException(
 				"Expects instance of UnityEngine.GameObject or UnityEngine.Component, instead received instance of " + x.GetType(),
-				nameof(x));
+				"x");
 		}
 
 		// We want a more informative error than that normally thrown
@@ -433,13 +447,13 @@ namespace Arcadia
 
 			if (x == null) {
 				throw new ArgumentNullException(
-					nameof(x), 
+					"x", 
 					"Expects UnityEngine.GameObject instance, instead got null");
 			}
 
 			throw new ArgumentException(
 				"Expects instance of UnityEngine.GameObject, instead received instance of " + x.GetType(), 
-				nameof(x));
+				"x");
 		}
 
 		// ==================================================================
