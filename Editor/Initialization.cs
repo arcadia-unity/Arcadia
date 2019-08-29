@@ -1,4 +1,4 @@
-﻿#if NET_4_6
+#if NET_4_6
 using System;
 using System.IO;
 using System.Linq;
@@ -130,8 +130,9 @@ namespace Arcadia
         public static string InitialClojureLoadPath()
         {
             var path = BasicPaths.PathToCompiled + Path.PathSeparator +
-                    Path.GetFullPath(Path.Combine(BasicPaths.ClojureDllFolder, "..", "Source")) + Path.PathSeparator +
-                 BasicPaths.BestGuessDataPath;
+                    Path.GetFullPath(BasicPaths.PathCombine(BasicPaths.ClojureDllFolder, "..", "Source")) + Path.PathSeparator +
+                    BasicPaths.BestGuessDataPath + Path.PathSeparator +
+                    BasicPaths.PathCombine(BasicPaths.BestGuessDataPath, "Clojure", "Clojure.Source");
             return path;
         }
 
