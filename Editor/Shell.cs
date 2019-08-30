@@ -80,12 +80,12 @@ namespace Arcadia
             var outputFn = (IFn)options.valAt(OutputKeyword);
             var errorFn = (IFn)options.valAt(ErrorKeyword);
             var doneFn = (IFn)options.valAt(DoneKeyword);
-            return Run(MonoExecutablePath, string.Join(" ", pathToExe, arguments), workingDirectory, outputFn, errorFn, doneFn);
+            return Run(MonoExecutablePath, pathToExe + " " + arguments, workingDirectory, outputFn, errorFn, doneFn);
         }
 
         public static Process MonoRun(string pathToExe, string arguments)
         {
-            return Run(MonoExecutablePath, string.Join(" ", pathToExe, arguments));
+            return Run(MonoExecutablePath, pathToExe + " " + arguments);
         }
 
         public static Process MonoRun(string pathToExe)
