@@ -20,6 +20,11 @@ namespace Arcadia
                 Debug.LogWarningFormat("Expected Unity version 2018.x, got {0}. This might cause issues.", Application.unityVersion);
             }
 
+            if (PlayerSettings.GetApiCompatibilityLevel(BuildTargetGroup.Standalone) != ApiCompatibilityLevel.NET_4_6)
+			{
+			    Debug.LogWarning("API Compatibility is not .NET 4.6. Please change your API Compatibility in Edit > Project Settings > Other Settings or you will likely have issues.");
+			}
+
             if (!PlayerSettings.runInBackground)
             {
                 Debug.Log("Updating Run In Background to true");
