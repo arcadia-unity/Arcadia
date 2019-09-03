@@ -22,7 +22,7 @@ namespace Arcadia
 
 		// ==================================================================
 		// tuple implementation
-		public class Tuple2<T, V>
+		public struct Tuple2<T, V>
 		{
 			public T Item1;
 			public V Item2;
