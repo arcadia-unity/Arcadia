@@ -1,7 +1,7 @@
 {;; This specifies a form that the repl will evaluate before
  ;; evaluating every input:
  
- ;; :repl/injections (use 'clojure.repl)
+ ;; :repl/injections (try (clojure.core/use 'clojure.repl) (catch Exception e))
 
  ;; set :reactive to false in user configuration file to disable file
  ;; watching, and everything that depends on it, such as automaic file
