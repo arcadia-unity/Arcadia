@@ -42,7 +42,7 @@ namespace Arcadia
 {
 	public class NRepl
 	{
-		class Writer : TextWriter
+		public class Writer : TextWriter
 		{
 			private string _id;
 			private string _session;
@@ -162,6 +162,162 @@ namespace Arcadia
 			else
 				session = NewSession();
 			return session;
+		}
+
+		class SetVar : AFn
+		{
+			private object newValue;
+
+			public SetVar(object newValue)
+			{
+				this.newValue = newValue;
+			}
+			public override object invoke(object arg1)
+			{
+				return newValue;
+			}
+		}
+
+		public class OffMainThreadCompileEvalFn : AFn
+		{
+			private IFn boundFunction;
+			private BDictionary request;
+			private TcpClient client;
+			private Writer outWriter, errWriter;
+			
+			public OffMainThreadCompileEvalFn(IFn boundFunction, BDictionary request, TcpClient client, Writer outWriter, Writer errWriter)
+			{
+				this.boundFunction = boundFunction;
+				this.request = request;
+				this.client = client;
+				this.outWriter = outWriter;
+				this.errWriter = errWriter;
+			}
+
+			public override object invoke()
+			{
+				var session = GetSession(request);
+				var sessionBindings = _sessions[session];
+				
+				Var.pushThreadBindings(sessionBindings
+					.assoc(RT.OutVar, outWriter)
+					.assoc(RT.ErrVar, errWriter));
+				try {
+					Debug.LogFormat("[nrepl] evaluating on thread {0} code: {1}", Thread.CurrentThread.ManagedThreadId, boundFunction);
+					var result = boundFunction.invoke();
+					var value = (string)prStrVar.invoke(result);
+
+					star3Var.set(star2Var.deref());
+					star2Var.set(star1Var.deref());
+					star1Var.set(result);
+
+					UpdateSession(session, Var.getThreadBindings());
+
+					SendMessage(new BDictionary
+					{
+						{"id", request["id"]},
+						{"value", value}, // TODO do we need :values?
+						{"ns", RT.CurrentNSVar.deref().ToString()},
+						{"session", session.ToString()},
+					}, client);
+
+					outWriter.Flush();
+					errWriter.Flush();
+
+					SendMessage(new BDictionary
+					{
+						{"id", request["id"]},
+						{"status", new BList {"done"}}, // TODO does this have to be a list?
+						{"session", session.ToString()},
+					}, client);
+				}
+				catch (Exception e)
+				{
+					starEVar.set(e);
+
+					UpdateSession(session, Var.getThreadBindings());
+
+					SendMessage(new BDictionary
+					{
+						{"id", request["id"]},
+						{"status", new BList {"eval-error"}},
+						{"session", session.ToString()},
+						{"ex", e.GetType().ToString()},
+					}, client);
+
+					SendMessage(new BDictionary
+					{
+						{"id", request["id"]},
+						{"session", session.ToString()},
+						{"err", e.ToString()},
+					}, client);
+
+					SendMessage(new BDictionary
+					{
+						{"id", request["id"]},
+						{"status", new BList {"done"}},
+						{"session", session.ToString()},
+					}, client);
+
+					throw;
+				} finally {
+					Var.popThreadBindings();
+				}
+				
+				return null;
+			}
+
+			public static IFn MakeEvalFn(BDictionary request, TcpClient client)
+			{
+				var session = GetSession(request);
+				var code = "(fn [] " + request["code"] + ")";
+				var sessionBindings = _sessions[session];
+				var outWriter = new Writer("out", request, client);
+				var errWriter = new Writer("err", request, client);
+
+				Var.pushThreadBindings(sessionBindings
+					.assoc(RT.OutVar, outWriter)
+					.assoc(RT.ErrVar, errWriter));
+				try {
+					var form = readStringVar.invoke(readStringOptions, code);
+					var result = (IFn)evalVar.invoke(form);
+					
+					Debug.LogFormat("[nrepl] compiling on thread {0} code: {1}", Thread.CurrentThread.ManagedThreadId, code);
+					
+					return new OffMainThreadCompileEvalFn(result, request, client, outWriter, errWriter);
+					
+				} catch (Exception e) {
+					starEVar.set(e);
+
+					UpdateSession(session, Var.getThreadBindings());
+
+					SendMessage(new BDictionary
+					{
+						{"id", request["id"]},
+						{"status", new BList {"eval-error"}},
+						{"session", session.ToString()},
+						{"ex", e.GetType().ToString()},
+					}, client);
+
+					SendMessage(new BDictionary
+					{
+						{"id", request["id"]},
+						{"session", session.ToString()},
+						{"err", e.ToString()},
+					}, client);
+
+					SendMessage(new BDictionary
+					{
+						{"id", request["id"]},
+						{"status", new BList {"done"}},
+						{"session", session.ToString()},
+					}, client);
+
+					throw;
+				} finally {
+					Var.popThreadBindings();
+				}
+			}
 		}
 
 		class EvalFn : AFn
@@ -325,7 +481,8 @@ namespace Arcadia
 						}, client);
 					break;
 				case "eval":
-					var fn = new EvalFn(message, client);
+//					var fn = new EvalFn(message, client);
+					var fn = OffMainThreadCompileEvalFn.MakeEvalFn(message, client);
 					addCallbackIFn.invoke(fn);
 					break;
 				case "load-file":
@@ -383,16 +540,17 @@ namespace Arcadia
 		}
 
 		// ReSharper disable once ParameterHidesMember
-		public static void StartServer (IFn addCallbackIFn = null, int port = DefaultPort)
+		public static void StartServer (IFn addCallbackIFn = null, int port = DefaultPort, IPAddress address = null)
 		{
 			NRepl.addCallbackIFn = addCallbackIFn ?? addCallbackVar;
 			Port = port;
-			
+			if(address == null) address = IPAddress.Loopback;
+
 			Debug.Log("nrepl: starting");
 			
 			running = true;
 			new Thread(() => {
-				var listener = new TcpListener(IPAddress.Loopback, Port);
+				var listener = new TcpListener(address, Port);
 				try
 				{
 					// TODO make IPAddress.Loopback configurable to allow remote connections

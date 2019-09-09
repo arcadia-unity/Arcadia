@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Net;
 using clojure.lang;
 using UnityEngine;
 
@@ -31,8 +32,8 @@ namespace Arcadia
         private void Awake()
         {
             var addCallbackIFn = new AddCallbackFn(WorkQueue);
-            System.Console.WriteLine("[nrepl] bootstrap awake, callback fn: {0} port: {1}", addCallbackIFn, port);
-            NRepl.StartServer(addCallbackIFn, port);
+            System.Console.WriteLine("[nrepl] bootstrap awake, callback fn: {0} port: {1}, addr: {2}", addCallbackIFn, port, IPAddress.Any);
+            NRepl.StartServer(addCallbackIFn, port, IPAddress.Any);
         }
 
         private void Update()
