@@ -14,8 +14,8 @@
 
 ;; PERF memoize 
 (defn user-export-namespaces-symbols []
-  (cons 'clojure.core
-        (-> (config/config) :export-namespaces)))
+  (concat '[clojure.core arcadia.internal.namespace]
+          (-> (config/config) :export-namespaces)))
 
 (defn user-aot-namespaces-symbols []
   (:aot-namespaces (config/config)))
