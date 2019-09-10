@@ -164,7 +164,16 @@ namespace Arcadia
         static void LoadSocketREPL()
         {
             Util.require("arcadia.internal.socket-repl");
-            RT.var("arcadia.internal.socket-repl", "server-reactive").invoke();
+            Util.require("arcadia.internal.editor-callbacks");
+            var acceptKeyword = Keyword.intern("accept");
+            var argsKeyword = Keyword.intern("args");
+            var optionsMap = RT.mapUniqueKeys(
+                acceptKeyword, Symbol.intern("arcadia.internal.socket-repl", "repl"),
+                argsKeyword, RT.vector(RT.var("arcadia.internal.editor-callbacks", "add-callback"))
+            );
+
+            RT.var("arcadia.internal.socket-repl", "start-server").invoke(optionsMap);
+            // RT.var("arcadia.internal.socket-repl", "server-reactive").invoke();
         }
 
         public static void StartEditorCallbacks()
