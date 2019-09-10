@@ -1,6 +1,5 @@
 (ns arcadia.internal.socket-repl
   (:require [clojure.core.server :as s]
-            [arcadia.internal.editor-callbacks :as cb]
             [arcadia.internal.config :as config]
             [clojure.main :as m]
             [arcadia.internal.state :as state]
@@ -99,7 +98,6 @@
 (defn game-thread-eval
   ([expr] (game-thread-eval expr nil))
   ([expr {:keys [callback-driver]
-          :or {callback-driver cb/add-callback}
           :as opts}]
    (let [old-read-eval *read-eval*
          p (promise)
@@ -153,18 +151,17 @@
   (binding [*out* *err*]
     (println (error-string e))))
 
-(defn repl []
-  (m/repl
+(defn repl [callback-driver]
+   (m/repl
     :init s/repl-init
     :read #'repl-read
     :print identity
     :caught #'repl-caught
-    :eval #'game-thread-eval))
+    :eval #(game-thread-eval % {:callback-driver callback-driver})))
 
 (def server-defaults
   {:port 37220
-   :name "default-server"
-   :accept `repl})
+   :name "default-server"})
 
 ;; see also clojure.core.server/start-servers, etc
 (defn start-server
