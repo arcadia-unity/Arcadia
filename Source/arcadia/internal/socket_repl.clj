@@ -183,22 +183,25 @@
   ([{:keys [socket-repl]
      ;; socket repl on by default if we're in the editor
      :or {socket-repl Arcadia.UnityStatusHelper/IsInEditor}}]
-   (let [callback-driver (::callback-driver @state/state)]
+   (let [repl-options (::repl-options @state/state)]
     (cond
-      (and socket-repl callback-driver)
+      (and socket-repl repl-options)
       (let [opts (when (map? socket-repl)
                     socket-repl)]
-        (start-server (merge opts {:args [callback-driver]})))
-      (not callback-driver)
-      (UnityEngine.Debug/LogWarning "callback-driver not set in state, not starting socket REPL server.")
+        (start-server (merge repl-options opts)))
+      (not repl-options)
+      (UnityEngine.Debug/LogWarning "repl-options not set in state, not starting socket REPL server.")
       (not socket-repl)
       (s/stop-servers)))))
 
 (state/add-listener ::config/on-update ::server-reactive #'server-reactive)
 
-(defn set-callback [callback]
-  (swap! state/state assoc ::callback-driver callback))
+(defn set-options [options]
+  (swap! state/state assoc ::repl-options options))
 
-(defn set-callback-and-start-server [callback]
-  (set-callback callback)
+(defn set-options-and-start-server [options]
+  (set-options options)
   (server-reactive))
+
+(defn set-callback-and-start-server [callback-driver]
+  (set-options-and-start-server {:args [callback-driver]}))
