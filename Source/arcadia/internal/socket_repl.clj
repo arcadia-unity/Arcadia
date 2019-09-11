@@ -5,7 +5,8 @@
             [arcadia.internal.state :as state]
             [arcadia.internal.stacktrace :as stacktrace]
             arcadia.data)
-  (:import [System.Threading Thread]))
+  (:import [System.Threading Thread]
+           [System.Reflection BindingFlags]))
 
 ;; Think this sleaziness has to be a macro, for `set!`
 ;; Getting these from clojure.main
@@ -161,6 +162,7 @@
 
 (def server-defaults
   {:port 37220
+   :accept `repl
    :name "default-server"})
 
 ;; see also clojure.core.server/start-servers, etc
@@ -181,15 +183,22 @@
   ([{:keys [socket-repl]
      ;; socket repl on by default if we're in the editor
      :or {socket-repl Arcadia.UnityStatusHelper/IsInEditor}}]
-   (cond
-     socket-repl
-     (let [opts (when (map? socket-repl)
-                  socket-repl)]
-       (start-server opts))
-
-     (not socket-repl)
-     (s/stop-servers))))
+   (let [callback-driver (::callback-driver @state/state)]
+    (cond
+      (and socket-repl callback-driver)
+      (let [opts (when (map? socket-repl)
+                    socket-repl)]
+        (start-server (merge opts {:args [callback-driver]})))
+      (not callback-driver)
+      (UnityEngine.Debug/LogWarning "callback-driver not set in state, not starting socket REPL server.")
+      (not socket-repl)
+      (s/stop-servers)))))
 
 (state/add-listener ::config/on-update ::server-reactive #'server-reactive)
 
+(defn set-callback [callback]
+  (swap! state/state assoc ::callback-driver callback))
 
+(defn set-callback-and-start-server [callback]
+  (set-callback callback)
+  (server-reactive))
