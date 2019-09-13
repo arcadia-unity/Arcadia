@@ -57,7 +57,7 @@ namespace Arcadia
                 portKeyword, port,
                 argsKeyword, RT.vector(addCallbackIFn)
             );
-            startServerVar.invoke(addCallbackIFn);
+            startServerVar.invoke(optionsMap);
         }
 
         private void Update()
