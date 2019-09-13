@@ -145,6 +145,26 @@ public class ArcadiaStateEditor : Editor
 		}
 	}
 
+	static HashSet<ArcadiaState> statesToRemove = new HashSet<ArcadiaState>();
+
+	void CleanupCache()
+	{
+		statesToRemove.Clear();
+
+		foreach (var state in _cache.Keys)
+		{
+			if(state == null)
+			{
+				statesToRemove.Add(state);
+			}
+		}
+
+		foreach (var state in statesToRemove)
+		{
+			_cache.Remove(state);
+		}
+	}
+
 	private void Refresh()
 	{
 		if(!_cache.TryGetValue(state, out cache))
@@ -152,6 +172,8 @@ public class ArcadiaStateEditor : Editor
 			cache = new InspectorCache();
 			_cache.Add(state, cache);
 		}
+
+		CleanupCache();
 		
 		cache.UpdateFrom(state);
 		EditorUtility.SetDirty(target);
@@ -164,6 +186,16 @@ public class ArcadiaStateEditor : Editor
 			throw new Exception(String.Format("target of ArcadiaState inspector has type {0}", target.GetType()));
 		
 		Refresh();
+	}
+
+	void OnDisable()
+	{
+		CleanupCache();
+	}
+
+	void OnDestroy()
+	{
+		CleanupCache();
 	}
 
 	public override void OnInspectorGUI()
