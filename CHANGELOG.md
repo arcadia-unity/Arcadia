@@ -1,5 +1,10 @@
 # Arcadia Changelog
 
+## Beta 1.0.12
+
+- Make socket REPL exportable
+- Make configuration exportable
+
 ## Beta 1.0.11
 
 - Fixed issue [#361](https://github.com/arcadia-unity/Arcadia/issues/361).
