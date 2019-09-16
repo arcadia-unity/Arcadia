@@ -270,7 +270,7 @@
   ;; print as a nice table eventually
   (let [bpr @breakpoint-registry]
     (->> (available-breakpoints id)
-         (map-indexed (fn [i id] (cons i (breakpoint-summary-vec id))))
+         (map-indexed (fn [i id] (cons i (breakpoint-summary-vec bpr id))))
          (cons ["Inx" "Name" "Thread" "Break-ID" "Frame"])
          table
          println)))
