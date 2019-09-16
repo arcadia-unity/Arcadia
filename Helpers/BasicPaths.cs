@@ -5,6 +5,20 @@ namespace Arcadia
 {
     public static class BasicPaths
     {
+        public static string PathCombine(params string[] paths)
+        {
+            if(paths.Length == 0)
+                return "";
+            
+            var combinedPath = paths[0];
+            for (int i = 1; i < paths.Length; i++)
+            {
+                combinedPath = Path.Combine(combinedPath, paths[i]);
+            }
+
+            return combinedPath;
+        }
+
         private static string bestGuessDataPath;
 
         public static string BestGuessDataPath
@@ -27,7 +41,7 @@ namespace Arcadia
             {
                 if (pathToCompiled == null)
                 {
-                    pathToCompiled = Path.GetFullPath(Path.Combine(BestGuessDataPath, "..", "Arcadia", "Compiled"));
+                    pathToCompiled = Path.GetFullPath(PathCombine(BestGuessDataPath, "..", "Arcadia", "Compiled"));
                 }
                 return pathToCompiled;
             }
@@ -41,7 +55,14 @@ namespace Arcadia
             {
                 if (clojureDllFolder == null)
                 {
-                    clojureDllFolder = Path.GetDirectoryName(typeof(clojure.lang.RT).Assembly.Location).Substring(Directory.GetCurrentDirectory().Length + 1);
+                    if(typeof(clojure.lang.RT).Assembly.Location.Contains("Clojure.dll"))
+                    {
+                        clojureDllFolder = Path.GetDirectoryName(typeof(clojure.lang.RT).Assembly.Location).Substring(Directory.GetCurrentDirectory().Length + 1);
+                    }
+                    else
+                    {
+                        clojureDllFolder = PathCombine(BestGuessDataPath, "Arcadia", "Infrastructure");
+                    }
                 }
                 return clojureDllFolder;
             }
@@ -69,7 +90,7 @@ namespace Arcadia
             {
                 if (pathToCompiledForExport == null)
                 {
-                    pathToCompiledForExport = Path.GetFullPath(Path.Combine(BasicPaths.ArcadiaFolder, "Arcadia", "Export"));
+                    pathToCompiledForExport = Path.GetFullPath(PathCombine(BasicPaths.ArcadiaFolder, "Arcadia", "Export"));
                 }
                 return pathToCompiledForExport;
             }

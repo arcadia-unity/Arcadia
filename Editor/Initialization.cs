@@ -1,4 +1,3 @@
-﻿#if NET_4_6
 using System;
 using System.IO;
 using System.Linq;
@@ -95,7 +94,9 @@ namespace Arcadia
             StartEditorCallbacks();
             StartWatching();
             LoadSocketREPL();
+#if NET_4_6
             NRepl.StartServer();
+#endif
             StartNudge();
             Debug.Log("Arcadia Started!");
 
@@ -130,7 +131,7 @@ namespace Arcadia
         public static string InitialClojureLoadPath()
         {
             var path = BasicPaths.PathToCompiled + Path.PathSeparator +
-                    Path.GetFullPath(Path.Combine(BasicPaths.ClojureDllFolder, "..", "Source")) + Path.PathSeparator +
+                    Path.GetFullPath(BasicPaths.PathCombine(BasicPaths.ClojureDllFolder, "..", "Source")) + Path.PathSeparator +
                  BasicPaths.BestGuessDataPath;
             return path;
         }
@@ -158,7 +159,7 @@ namespace Arcadia
             Environment.SetEnvironmentVariable("CLOJURE_LOAD_PATH",
                 InitialClojureLoadPath() + Path.PathSeparator +
                 RT.var("arcadia.internal.compiler", "loadpath-extension-string").invoke() + Path.PathSeparator +
-                Path.GetFullPath(Path.Combine(clojureDllFolder, "..", "Libraries")));
+                Path.GetFullPath(BasicPaths.PathCombine(clojureDllFolder, "..", "Libraries")));
         }
 
         static void LoadSocketREPL()
@@ -185,7 +186,7 @@ namespace Arcadia
                     file.Delete();
                 }
             }
-            var outerCompiledForExportDir = new DirectoryInfo(Path.Combine(BasicPaths.PathToCompiled, "..", "Export"));
+            var outerCompiledForExportDir = new DirectoryInfo(BasicPaths.PathCombine(BasicPaths.PathToCompiled, "..", "Export"));
             if (outerCompiledForExportDir.Exists)
             {
                 foreach (var file in outerCompiledForExportDir.GetFiles())
@@ -209,4 +210,3 @@ namespace Arcadia
         }
     }
 }
-#endif

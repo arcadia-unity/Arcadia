@@ -1,5 +1,4 @@
-﻿#if NET_4_6
-using UnityEngine;
+﻿using UnityEngine;
 using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
@@ -562,4 +561,3 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 	}
 
 }
-#endif

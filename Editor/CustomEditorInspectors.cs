@@ -1,7 +1,6 @@
-#if NET_4_6
 using System;
 using System.IO;
-using System.Runtime.CompilerServices;
+using System.Collections.Generic;
 using Arcadia;
 using UnityEditor;
 using UnityEngine;
@@ -103,7 +102,7 @@ public class ArcadiaStateEditor : Editor
 				var sw = new StringWriter();
 				pprint.invoke(kvs[i].key, sw);
 				PrintedKeys[i] = sw.ToString();
-				sw.GetStringBuilder().Clear();
+				sw.GetStringBuilder().Length = 0;
 				pprint.invoke(kvs[i].val, sw);
 				PrintedValues[i] = sw.ToString();
 				CachedKeys[i] = kvs[i].key;
@@ -112,8 +111,8 @@ public class ArcadiaStateEditor : Editor
 		}
 	}
 
-	private static ConditionalWeakTable<ArcadiaState, InspectorCache> _cache =
-		new ConditionalWeakTable<ArcadiaState, InspectorCache>();
+	private static Dictionary<ArcadiaState, InspectorCache> _cache =
+		new Dictionary<ArcadiaState, InspectorCache>();
 	
 	private ArcadiaState state;
 	private InspectorCache cache;
@@ -146,9 +145,36 @@ public class ArcadiaStateEditor : Editor
 		}
 	}
 
+	static HashSet<ArcadiaState> statesToRemove = new HashSet<ArcadiaState>();
+
+	void CleanupCache()
+	{
+		statesToRemove.Clear();
+
+		foreach (var state in _cache.Keys)
+		{
+			if(state == null)
+			{
+				statesToRemove.Add(state);
+			}
+		}
+
+		foreach (var state in statesToRemove)
+		{
+			_cache.Remove(state);
+		}
+	}
+
 	private void Refresh()
 	{
-		cache = _cache.GetValue(state, _ => new InspectorCache());
+		if(!_cache.TryGetValue(state, out cache))
+		{
+			cache = new InspectorCache();
+			_cache.Add(state, cache);
+		}
+
+		CleanupCache();
+		
 		cache.UpdateFrom(state);
 		EditorUtility.SetDirty(target);
 	}
@@ -160,6 +186,16 @@ public class ArcadiaStateEditor : Editor
 			throw new Exception(String.Format("target of ArcadiaState inspector has type {0}", target.GetType()));
 		
 		Refresh();
+	}
+
+	void OnDisable()
+	{
+		CleanupCache();
+	}
+
+	void OnDestroy()
+	{
+		CleanupCache();
 	}
 
 	public override void OnInspectorGUI()
@@ -183,4 +219,3 @@ public class ArcadiaStateEditor : Editor
 		}
 	}	
 }
-#endif
