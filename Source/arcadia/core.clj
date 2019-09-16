@@ -827,7 +827,7 @@
 
   Returns `nil`."
   [obj ks]
-  (reduce role- obj ks)
+  (reduce (fn [_ k] (role- obj k)) nil ks)
   nil)
 
 (s/fdef role

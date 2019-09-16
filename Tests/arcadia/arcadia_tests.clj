@@ -538,6 +538,15 @@
             (t (at/is (= (ac/roles obj) the-roles) "`roles+` can be retrieved by `roles`"))
             (ac/roles+ obj {:test-role-2 r3})
             (t (at/is (= (ac/roles obj) (merge the-roles {:test-role-2 r3})) "roles+ does shallow merge")))))
+      (as-sub-closing [t "`roles-`"]
+        (with-temp-objects :lit [obj]
+          (let [the-roles {:test-role-1 r1,
+                           :test-role-2 r2,
+                           :test-role-3 r2}]
+            (ac/roles+ obj the-roles)
+            (ac/roles- obj [:test-role-1 :test-role-3])
+            (t (at/is (= [:test-role-2] (keys (ac/roles obj)))
+                 "`roles-` removes multiple roles")))))
       (as-sub-closing [t "`role-`"]
         ;; - does role- get reflected in roles?
         ;; - does role- work when the key is absent?
