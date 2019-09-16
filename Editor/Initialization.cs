@@ -164,7 +164,8 @@ namespace Arcadia
         static void LoadSocketREPL()
         {
             Util.require("arcadia.internal.socket-repl");
-            RT.var("arcadia.internal.socket-repl", "server-reactive").invoke();
+            Util.require("arcadia.internal.editor-callbacks");
+            RT.var("arcadia.internal.socket-repl", "set-callback-and-start-server").invoke(RT.var("arcadia.internal.editor-callbacks", "add-callback"));
         }
 
         public static void StartEditorCallbacks()

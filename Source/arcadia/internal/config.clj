@@ -7,15 +7,25 @@
   (:import
    [Arcadia BasicPaths]
    [System DateTime]
+   [System.Reflection Assembly]
    [System.IO FileSystemInfo File Path]
-   [UnityEngine Debug]
+   [UnityEngine Debug Application]
    [System.Text.RegularExpressions Regex]))
  
 (def default-config-file-path (Path/Combine (BasicPaths/ArcadiaFolder) "configuration.edn"))
 (def user-config-file-path (Path/Combine "Assets" "configuration.edn"))
 
+(def exported-configuration
+  (if (Application/isEditor)
+    {}
+    (let [base (Path/GetDirectoryName (.Location (Assembly/GetExecutingAssembly)))
+          edn-file (Path/Combine base "exported-configuration.edn")]
+      (edn/read-string (slurp edn-file :encoding "utf8")))))
+
 (defn config []
-  (@state/state ::config))
+  (if (Application/isEditor)
+    (@state/state ::config)
+    exported-configuration))
 
 (defn default-config
   "Built in Arcadia default configuration file. Never changes."
