@@ -194,13 +194,13 @@ namespace Arcadia
 			{
 				string name = Path.GetFileNameWithoutExtension(pathToBuiltProject);
 				string directory = Path.GetDirectoryName(pathToBuiltProject);
-				return Path.Combine(directory, name + "_Data", "Managed");
+				return BasicPaths.PathCombine(directory, name + "_Data", "Managed");
 			}
 			if (target.ToString ().Contains ("Linux"))
 			{
 				string name = Path.GetFileNameWithoutExtension(pathToBuiltProject);
 				string directory = Path.GetDirectoryName(pathToBuiltProject);
-				return Path.Combine(directory, name + "_Data", "Managed");
+				return BasicPaths.PathCombine(directory, name + "_Data", "Managed");
 			}
 			UnityEngine.Debug.Log(string.Format("Exported configuration for target {0} not supported. Configuration will not be usable in export.", target));
 			return Path.GetDirectoryName(pathToBuiltProject);
