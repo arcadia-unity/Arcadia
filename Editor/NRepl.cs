@@ -1,3 +1,4 @@
+#if NET_4_6
 using System;
 using System.Collections.Concurrent;
 using System.IO;
@@ -528,3 +529,4 @@ namespace Arcadia
 		}
 	}
 }
+#endif

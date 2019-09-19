@@ -1,12 +1,12 @@
 (ns arcadia.internal.socket-repl
   (:require [clojure.core.server :as s]
-            [arcadia.internal.editor-callbacks :as cb]
             [arcadia.internal.config :as config]
             [clojure.main :as m]
             [arcadia.internal.state :as state]
             [arcadia.internal.stacktrace :as stacktrace]
             arcadia.data)
-  (:import [System.Threading Thread]))
+  (:import [System.Threading Thread]
+           [System.Reflection BindingFlags]))
 
 ;; Think this sleaziness has to be a macro, for `set!`
 ;; Getting these from clojure.main
@@ -99,7 +99,6 @@
 (defn game-thread-eval
   ([expr] (game-thread-eval expr nil))
   ([expr {:keys [callback-driver]
-          :or {callback-driver cb/add-callback}
           :as opts}]
    (let [old-read-eval *read-eval*
          p (promise)
@@ -153,18 +152,18 @@
   (binding [*out* *err*]
     (println (error-string e))))
 
-(defn repl []
-  (m/repl
+(defn repl [callback-driver]
+   (m/repl
     :init s/repl-init
     :read #'repl-read
     :print identity
     :caught #'repl-caught
-    :eval #'game-thread-eval))
+    :eval #(game-thread-eval % {:callback-driver callback-driver})))
 
 (def server-defaults
   {:port 37220
-   :name "default-server"
-   :accept `repl})
+   :accept `repl
+   :name "default-server"})
 
 ;; see also clojure.core.server/start-servers, etc
 (defn start-server
@@ -184,15 +183,25 @@
   ([{:keys [socket-repl]
      ;; socket repl on by default if we're in the editor
      :or {socket-repl Arcadia.UnityStatusHelper/IsInEditor}}]
-   (cond
-     socket-repl
-     (let [opts (when (map? socket-repl)
-                  socket-repl)]
-       (start-server opts))
-
-     (not socket-repl)
-     (s/stop-servers))))
+   (let [repl-options (::repl-options @state/state)]
+    (cond
+      (and socket-repl repl-options)
+      (let [opts (when (map? socket-repl)
+                    socket-repl)]
+        (start-server (merge repl-options opts)))
+      (not repl-options)
+      (UnityEngine.Debug/LogWarning "repl-options not set in state, not starting socket REPL server.")
+      (not socket-repl)
+      (s/stop-servers)))))
 
 (state/add-listener ::config/on-update ::server-reactive #'server-reactive)
 
+(defn set-options [options]
+  (swap! state/state assoc ::repl-options options))
 
+(defn set-options-and-start-server [options]
+  (set-options options)
+  (server-reactive))
+
+(defn set-callback-and-start-server [callback-driver]
+  (set-options-and-start-server {:args [callback-driver]}))

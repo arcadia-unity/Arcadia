@@ -1,5 +1,4 @@
-﻿#if NET_4_6
-using UnityEngine;
+﻿using UnityEngine;
 using System.Collections.Generic;
 using clojure.lang;
 using Arcadia;
@@ -286,4 +285,3 @@ public class ArcadiaState : MonoBehaviour, ISerializationCallbackReceiver
 	}
 	
 }
-#endif

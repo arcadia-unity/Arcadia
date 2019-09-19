@@ -1,5 +1,5 @@
-#if NET_4_6
 using UnityEngine;
+using UnityEngine.EventSystems;
 using clojure.lang;
 
 public class OnCollisionExitHook : ArcadiaBehaviour
@@ -9,4 +9,3 @@ public class OnCollisionExitHook : ArcadiaBehaviour
       RunFunctions(a);
   }
 }
-#endif

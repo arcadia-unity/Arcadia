@@ -1,5 +1,5 @@
-#if NET_4_6
 using UnityEngine;
+using UnityEngine.EventSystems;
 using clojure.lang;
 
 public class AwakeHook : ArcadiaBehaviour
@@ -10,4 +10,3 @@ public class AwakeHook : ArcadiaBehaviour
       RunFunctions();
   }
 }
-#endif

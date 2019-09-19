@@ -13,7 +13,7 @@
   (str event "Hook"))
 
 (defn component-file [event]
-  (str path (component-name event) ".cs"))
+  (Path/Combine path (str (component-name event) ".cs")))
 
 (def alphabet
   (->> (range \a \z)
@@ -32,8 +32,8 @@
   ([event args interface]
   (let [arg-names (take (count args) alphabet)]
     (str
-"#if NET_4_6
-using UnityEngine;
+"using UnityEngine;
+using UnityEngine.EventSystems;
 " (if interface
     (str "using " (.Namespace (RT/classForName interface)) ";\n"))
 "using clojure.lang;
@@ -48,8 +48,7 @@ public class " (component-name event) " : ArcadiaBehaviour" (if interface (str "
     (str "      base." event "(" (string/join ", " arg-names) ");\n"))
 "      RunFunctions(" (string/join ", " arg-names) ");
   }
-}
-#endif"))))
+}"))))
 
 (defn write-component!
   ([event args] (write-component! event args nil))

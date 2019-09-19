@@ -1,4 +1,3 @@
-#if NET_4_6
 using UnityEngine;
 using Ionic.Zip;
 using UnityEditor;
@@ -25,6 +24,7 @@ namespace Arcadia
 		static BuildPipeline ()
 		{
             Util.require("arcadia.internal.editor-interop");
+            Util.require("arcadia.internal.config");
 			//EditorUtility.ClearProgressBar();
 		}
 
@@ -183,9 +183,36 @@ namespace Arcadia
 				Directory.Delete(CompiledFolder, true);
 		}
 
+		// https://forum.unity.com/threads/postprocessbuild-preprocessbuild.293616/
+		static string GetDataManagedFolder(BuildTarget target, string pathToBuiltProject)
+		{
+			if (target.ToString ().Contains ("OSX"))
+			{
+				return pathToBuiltProject+"/Contents/Resources/Data/Managed/";
+			}
+			if (target.ToString ().Contains ("Windows"))
+			{
+				string name = Path.GetFileNameWithoutExtension(pathToBuiltProject);
+				string directory = Path.GetDirectoryName(pathToBuiltProject);
+				return Path.Combine(directory, name + "_Data", "Managed");
+			}
+			if (target.ToString ().Contains ("Linux"))
+			{
+				string name = Path.GetFileNameWithoutExtension(pathToBuiltProject);
+				string directory = Path.GetDirectoryName(pathToBuiltProject);
+				return Path.Combine(directory, name + "_Data", "Managed");
+			}
+			UnityEngine.Debug.Log(string.Format("Exported configuration for target {0} not supported. Configuration will not be usable in export.", target));
+			return Path.GetDirectoryName(pathToBuiltProject);
+		}
+
 		[PostProcessBuild(1)]
 		public static void OnPostprocessBuild (BuildTarget target, string pathToBuiltProject)
 		{
+			var configString = RT.var("arcadia.internal.config", "config").invoke().ToString();
+			var managedFolder = GetDataManagedFolder(target, pathToBuiltProject);
+			File.WriteAllText(Path.Combine(managedFolder, "exported-configuration.edn"), configString);
+
 			if (Directory.Exists(ExportFolder))
 				Directory.Delete(ExportFolder, true);
 			if (Directory.Exists(ExportAssetsFolder))
@@ -193,4 +220,3 @@ namespace Arcadia
 		}
 	}
 }
-#endif
