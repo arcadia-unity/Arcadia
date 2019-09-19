@@ -90,6 +90,8 @@ namespace Arcadia
 		private static Var star2Var;
 		private static Var star3Var;
 		private static Var starEVar;
+		private static Var printLevelVar;
+		private static Var printLengthVar;
 		private static Var errorStringVar;
 		private static Var metaVar;
 		private static Var nsResolveVar;
@@ -114,6 +116,8 @@ namespace Arcadia
 			star2Var = RT.var("clojure.core", "*2");
 			star3Var = RT.var("clojure.core", "*3");
 			starEVar = RT.var("clojure.core", "*e");
+			printLevelVar = RT.var("clojure.core", "*print-level*");
+			printLengthVar = RT.var("clojure.core", "*print-length*");
 
 			metaVar = RT.var("clojure.core", "meta");
 			nsResolveVar = RT.var("clojure.core", "ns-resolve");
@@ -135,7 +139,8 @@ namespace Arcadia
 				RT.CurrentNSVar, Namespace.findOrCreate(Symbol.intern("user")),
 				RT.UncheckedMathVar, false,
 				RT.WarnOnReflectionVar, false,
-				RT.var("clojure.core", "*print-length*"), null,
+				printLevelVar, null,
+				printLengthVar, null,
 				star1Var, null,
 				star2Var, null,
 				star3Var, null,
