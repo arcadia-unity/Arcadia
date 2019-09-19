@@ -430,6 +430,18 @@
       (ac/state- obj :test)
       (t (at/is (= (ac/state obj) {:test-2 state-2})
            "partial state retrieval after state-"))))
+  (as-sub-closing [t "update-state"]
+    (let [s {:counter 0}]
+      (with-temp-objects :lit [obj]
+        (ac/state+ obj :test s)
+        (ac/update-state obj :test update :counter inc)
+        (at/is (= (ac/state obj :test) {:counter 1})
+          "`update-state` works with 5 arguments"))
+      (with-temp-objects :lit [obj]
+        (ac/state+ obj :test {})
+        (ac/update-state obj :test assoc :a :A,:b :B,:c :C,:d :D,:e :E)
+        (at/is (= (ac/state obj :test) {:a :A,:b :B,:c :C,:d :D,:e :E})
+          "`update-state` works with many arguments"))))
   (as-sub-closing [t "state serialization via instantiate"]
     (with-temp-objects :lit [obj]
       (ac/state+ obj :test state-1)
@@ -538,6 +550,15 @@
             (t (at/is (= (ac/roles obj) the-roles) "`roles+` can be retrieved by `roles`"))
             (ac/roles+ obj {:test-role-2 r3})
             (t (at/is (= (ac/roles obj) (merge the-roles {:test-role-2 r3})) "roles+ does shallow merge")))))
+      (as-sub-closing [t "`roles-`"]
+        (with-temp-objects :lit [obj]
+          (let [the-roles {:test-role-1 r1,
+                           :test-role-2 r2,
+                           :test-role-3 r2}]
+            (ac/roles+ obj the-roles)
+            (ac/roles- obj [:test-role-1 :test-role-3])
+            (t (at/is (= [:test-role-2] (keys (ac/roles obj)))
+                 "`roles-` removes multiple roles")))))
       (as-sub-closing [t "`role-`"]
         ;; - does role- get reflected in roles?
         ;; - does role- work when the key is absent?
