@@ -10,7 +10,6 @@
 **/Export/*.dll*
 Source/clojure/**/*.meta
 **/*.clj.meta
-**/*.clj.dll.meta
 **/*.md.meta
 **/*.edn.meta
 
