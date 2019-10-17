@@ -18,7 +18,7 @@
 (def exported-configuration
   (if (Application/isEditor)
     {}
-    (let [base (Path/GetDirectoryName (.Location (Assembly/GetExecutingAssembly)))
+    (let [base (-> "mscorlib" Assembly/Load .Location Path/GetDirectoryName)
           edn-file (Path/Combine base "exported-configuration.edn")]
       (edn/read-string (slurp edn-file :encoding "utf8")))))
 
