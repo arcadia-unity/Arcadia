@@ -1,24 +1,8 @@
 (ns arcadia.internal.map-utils
   (:require 
-    ;;clojure.core.protocols
+    clojure.core.protocols
     clojure.set)
-  ;; (:import [clojure.core.protocols CollReduce])
-  )
-
-(defmacro if-compiled [& branches]
-  (if *compile-files*
-    (first branches)
-    (second branches)))
-
-(UnityEngine.Debug/Log
-  (str "loading arcadia.internal.map-utils! "
-    (if-compiled
-      "Loading from compiled."
-      "NOT loading from compiled.")))
-
-;; ------------------------------------------------------------
-
-
+  (:import [clojure.core.protocols CollReduce]))
 
 ;;; other ways to do it, should benchmark all of this also could use
 ;;; transients. most maps are small tho. hm. how fast is count on
@@ -248,23 +232,3 @@
     clojure.lang.Counted
     (count [_]
       (count m))))
-
-;; ------------------------------------------------------------
-
-(defonce old-valsr-instance
-  {:valsr (valsr {:a :A :b :B})
-   :coll-reduce-type clojure.core.protocols.CollReduce})
-
-(try
-  (UnityEngine.Debug/Log
-    (str
-      "running old-valsr-instance. vectorified: "
-      (into [] (map identity) (:valsr old-valsr-instance))))
-  (catch Exception e
-    (UnityEngine.Debug/Log
-      (str "!! Exception encountered while trying to run old-valsr-instance !!\n"
-           "clojure.core.protocols.CollReduce = stored? "
-           (= clojure.core.protocols.CollReduce
-              (:coll-reduce-type old-valsr-instance))))
-    ;;(throw e)
-    ))
