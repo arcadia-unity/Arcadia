@@ -232,3 +232,20 @@
     clojure.lang.Counted
     (count [_]
       (count m))))
+
+(defn cached-valsr-fn
+  "Returns a function that works like `clojure.core/vals`, except that
+  it will store the previous map it was called on and the value
+  sequence of that map. If called on the same map again, will return
+  the previous value sequence, otherwise will store the new map and
+  its value sequence, returning that new value sequence. This is to
+  avoid an issue with `valsr` above."
+  []
+  (let [mem (atom nil)]
+    (fn instance [m]
+      (let [{:keys [prev-map prev-vals]} @mem]
+        (if (identical? prev-map m)
+          prev-vals
+          (let [vs (vals m)]
+            (reset! mem {:prev-map m, :prev-vals vs})
+            vs))))))
