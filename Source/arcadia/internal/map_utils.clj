@@ -1,8 +1,7 @@
 (ns arcadia.internal.map-utils
   (:require 
-    clojure.core.protocols
-    clojure.set)
-  (:import [clojure.core.protocols CollReduce]))
+    ;; clojure.core.protocols
+    clojure.set))
 
 ;;; other ways to do it, should benchmark all of this also could use
 ;;; transients. most maps are small tho. hm. how fast is count on
@@ -206,32 +205,37 @@
 (defn keysr
   "Returns reducible collection of keys in m. Fast."
   [m]
-  (reify
-    clojure.core.protocols.CollReduce
-    (coll-reduce [this f]
-      (clojure.core.protocols/coll-reduce this f (f)))
-    (coll-reduce [_ f init]
-      (letfn [(rfn [bldg k _]
-                (f bldg k))]
-        (reduce-kv rfn init m)))
-    clojure.lang.Counted
-    (count [_]
-      (count m))))
+  (keys m)
+  ;; (reify
+  ;;   clojure.core.protocols/CollReduce
+  ;;   (clojure.core.protocols/coll-reduce [this f]
+  ;;     (clojure.core.protocols/coll-reduce this f (f)))
+  ;;   (clojure.core.protocols/coll-reduce [_ f init]
+  ;;     (letfn [(rfn [bldg k _]
+  ;;               (f bldg k))]
+  ;;       (reduce-kv rfn init m)))
+  ;;   clojure.lang.Counted
+  ;;   (count [_]
+  ;;     (count m)))
+  )
 
 (defn valsr
   "Returns reducible collection of vals in m. Fast."
   [m]
-  (reify
-    clojure.core.protocols.CollReduce
-    (coll-reduce [this f]
-      (clojure.core.protocols/coll-reduce this f (f)))
-    (coll-reduce [_ f init]
-      (letfn [(rfn [bldg _ v]
-                (f bldg v))]
-        (reduce-kv rfn init m)))
-    clojure.lang.Counted
-    (count [_]
-      (count m))))
+  (vals m)
+  ;; (reify
+  ;;   clojure.core.protocols/CollReduce
+  ;;   (clojure.core.protocols/coll-reduce [this f]
+  ;;     (clojure.core.protocols/coll-reduce this f (f)))
+  ;;   (clojure.core.protocols/coll-reduce [_ f init]
+  ;;     (letfn [(rfn [bldg _ v]
+  ;;               (f bldg v))]
+  ;;       (reduce-kv rfn init m)))
+  ;;   clojure.lang.Counted
+  ;;   (count [_]
+  ;;     (count m)))
+  )
+
 
 (defn cached-valsr-fn
   "Returns a function that works like `clojure.core/vals`, except that
