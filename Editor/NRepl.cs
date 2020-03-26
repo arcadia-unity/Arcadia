@@ -346,9 +346,16 @@ namespace Arcadia
 					addCallbackVar.invoke(loadFn);
 					break;
 				case "info":
+
+                    String symbolStr = message["symbol"].ToString();
+
+                    // Editor like Calva that support doc-on-hover sometimes will ask about empty strings or spaces
+					if (symbolStr == "" || symbolStr == null || symbolStr == " ") break;
+
 					var symbolMetadata = (IPersistentMap)metaVar.invoke(nsResolveVar.invoke(
 						findNsVar.invoke(symbolVar.invoke(message["ns"].ToString())),
-						symbolVar.invoke(message["symbol"].ToString())));
+						symbolVar.invoke(symbolStr)));
+
 
 					if (symbolMetadata != null) {
 						var resultMessage = new BDictionary {
@@ -356,12 +363,20 @@ namespace Arcadia
 							{"session", session.ToString()},
 							{"status", new BList {"done"}}
 						};
+
 						foreach (var entry in symbolMetadata) {
 							if (entry.val() != null) {
-								resultMessage[entry.key().ToString().Substring(1)] =
-									new BString(entry.val().ToString());
+								String keyStr = entry.key().ToString().Substring(1);
+								String keyVal = entry.val().ToString();
+								if (keyStr == "arglists") {
+									keyStr = "arglists-str";
 								}
-							}
+								if (keyStr == "forms") {
+									keyStr = "forms-str";
+								}
+								resultMessage[keyStr] = new BString(keyVal);
+						    }
+					    }
 							SendMessage(resultMessage, client);
 					} else {
 							SendMessage(
