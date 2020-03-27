@@ -345,6 +345,7 @@ namespace Arcadia
 										{"describe", 1},
 										{"clone", 1},
 										{"info", 1},
+										{"complete", 1}
 									}
 								},
 								{
@@ -385,7 +386,7 @@ namespace Arcadia
 
                     String symbolStr = message["symbol"].ToString();
 
-                    // Editor like Calva that support doc-on-hover sometimes will ask about empty strings or spaces
+                    // Editors like Calva that support doc-on-hover sometimes will ask about empty strings or spaces
 					if (symbolStr == "" || symbolStr == null || symbolStr == " ") break;
 
 					var symbolMetadata = (IPersistentMap)metaVar.invoke(nsResolveVar.invoke(
@@ -423,6 +424,80 @@ namespace Arcadia
 									{"status", new BList {"done", "no-info"}}
 								}, client);
 					}
+					break;
+				case "complete":
+					foreach (var k in message.Keys)
+					{
+                        Debug.Log(k.ToString() + ": " + message[k].ToString());
+					}
+
+					Namespace ns = Namespace.find(Symbol.create(message["ns"].ToString()));
+                    var sessionBindings = _sessions[session];
+					var completeBindings = sessionBindings;
+                    if (ns != null) {
+						completeBindings = completeBindings.assoc(RT.CurrentNSVar, ns);
+                    }
+
+					// Inline clojure lambda is maybe not the best idea...
+					IFn complete_symbol = (IFn) evalVar.invoke(
+                        readStringVar.invoke(
+							@"(fn complete-symbol [text]
+                                (let [[ns prefix-str] (as-> text <>
+                                                        (symbol <>)
+                                                        [(some-> <> namespace symbol) (name <>)])
+                                      ns-to-check (if ns
+                                                    (or ((ns-aliases *ns*) ns) (find-ns ns))
+                                                    *ns*)
+                                      fn-candidate-list (when ns-to-check
+                                                          (if ns
+                                                            (map str (keys (ns-publics ns-to-check)))
+                                                            (map str (keys (ns-map ns-to-check)))))
+
+                                      ns-candidate-list (when-not ns
+                                                          (map (comp str ns-name) (all-ns)))]
+                                  (into '() (comp (filter #(.StartsWith % prefix-str))
+                                                  (map #(if ns (str ns ""/"" %) %)))
+                                        (concat
+                                         fn-candidate-list
+                                         ns-candidate-list))))"));
+
+
+					IFn complete_keyword = (IFn) evalVar.invoke(
+                        readStringVar.invoke(
+							@"(defn complete-keyword [text]
+                                (let [keyword-candidate-list
+                                      (as-> :_ <>
+                                        (.GetType <>)
+                                        (.GetField <> ""_symKeyMap"" (enum-or BindingFlags/NonPublic
+                                                                            BindingFlags/Static))
+                                        (.GetValue <> :_)
+                                        (.Values <>)
+                                        (map #(str (.Target %)) <>))]
+                                  (into '() (filter #(.StartsWith % text))
+                                        keyword-candidate-list)))"));
+
+                    IFn complete = message["symbol"].ToString().StartsWith(":") ? complete_keyword : complete_symbol;
+
+					// Make sure to eval this in the right namespace
+					Var.pushThreadBindings(completeBindings);
+					ISeq completionStrings = (ISeq) complete.invoke(message["symbol"].ToString());
+					Var.popThreadBindings();
+
+					BList completions = new BList();
+					while (completionStrings != null && completionStrings.count() > 0)
+					{
+						completions.Add(new BDictionary{{ "candidate", (String)completionStrings.first() }});
+						completionStrings = completionStrings.next();
+					}
+					
+
+					SendMessage(new BDictionary
+                        {
+                            {"id", message["id"]},
+                            {"session", session.ToString()},
+                            {"status", new BList {"done", "no-info"}},
+							{"completions", completions}
+                        }, client);
 					break;
 				default:
 					SendMessage(
