@@ -201,10 +201,10 @@ namespace Arcadia
 				
 				// Split the path, and try to infer the ns from the filename. If the ns exists, then change the current ns before evaluating
 				List<String> nsList = new List<String>();
-				var path = _request["file"].ToString();
 				Namespace fileNs = null;
 				try
 				{
+					var path = _request["file"].ToString();
 					string current = null;
 					while (path != null && current != "Assets")
 					{
