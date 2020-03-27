@@ -98,6 +98,7 @@ namespace Arcadia
 		private static Var nsResolveVar;
 		private static Var findNsVar;
 		private static Var symbolVar;
+		private static Var concatVar;
 
 		private static Namespace shimsNS;
 
@@ -124,6 +125,7 @@ namespace Arcadia
 			nsResolveVar = RT.var("clojure.core", "ns-resolve");
 			findNsVar = RT.var("clojure.core", "find-ns");
 			symbolVar = RT.var("clojure.core", "symbol");
+			concatVar = RT.var("clojure.core", "concat");
 
 			readStringOptions = PersistentHashMap.EMPTY.assoc(Keyword.intern("read-cond"), Keyword.intern("allow"));
 
@@ -345,6 +347,7 @@ namespace Arcadia
 										{"describe", 1},
 										{"clone", 1},
 										{"info", 1},
+										{"eldoc", 1},
 										{"complete", 1}
 									}
 								},
@@ -383,6 +386,7 @@ namespace Arcadia
 					addCallbackVar.invoke(loadFn);
 					break;
 				case "info":
+				case "eldoc":
 
                     String symbolStr = message["symbol"].ToString();
 
@@ -439,7 +443,7 @@ namespace Arcadia
                     }
 
 					// Inline clojure lambda is maybe not the best idea...
-					IFn complete_symbol = (IFn) evalVar.invoke(
+					IFn complete_fn_symbol = (IFn) evalVar.invoke(
                         readStringVar.invoke(
 							@"(fn complete-symbol [text]
                                 (let [[ns prefix-str] (as-> text <>
@@ -451,20 +455,33 @@ namespace Arcadia
                                       fn-candidate-list (when ns-to-check
                                                           (if ns
                                                             (map str (keys (ns-publics ns-to-check)))
-                                                            (map str (keys (ns-map ns-to-check)))))
+                                                            (map str (keys (ns-map ns-to-check)))))]
+                                  (into '() (comp (filter #(.StartsWith % prefix-str))
+                                                  (map #(if ns (str ns ""/"" %) %))
+                                                  (map #(-> {:candidate %
+                                                             :type ""function""})))
+                                        (concat
+                                         fn-candidate-list))))"));
 
+					
+
+					IFn complete_ns_symbol = (IFn) evalVar.invoke(
+                        readStringVar.invoke(
+							@"(fn complete-namespace [text]
+                                (let [[ns prefix-str] (as-> text <>
+                                                        (symbol <>)
+                                                        [(some-> <> namespace symbol) (name <>)])
                                       ns-candidate-list (when-not ns
                                                           (map (comp str ns-name) (all-ns)))]
                                   (into '() (comp (filter #(.StartsWith % prefix-str))
-                                                  (map #(if ns (str ns ""/"" %) %)))
-                                        (concat
-                                         fn-candidate-list
-                                         ns-candidate-list))))"));
-
+                                                  (map str)
+                                                  (map #(-> {:candidate %
+                                                             :type ""namespace""})))
+                                        ns-candidate-list)))"));
 
 					IFn complete_keyword = (IFn) evalVar.invoke(
                         readStringVar.invoke(
-							@"(defn complete-keyword [text]
+							@"(fn complete-keyword [text]
                                 (let [keyword-candidate-list
                                       (as-> :_ <>
                                         (.GetType <>)
@@ -473,20 +490,34 @@ namespace Arcadia
                                         (.GetValue <> :_)
                                         (.Values <>)
                                         (map #(str (.Target %)) <>))]
-                                  (into '() (filter #(.StartsWith % text))
+                                  (into '() (comp (filter #(.StartsWith % text))
+                                                  (map #(-> {:candidate %
+                                                             :type ""keyword""})))
                                         keyword-candidate-list)))"));
 
-                    IFn complete = message["symbol"].ToString().StartsWith(":") ? complete_keyword : complete_symbol;
+					Boolean isKeyword = message["symbol"].ToString().StartsWith(":");
 
 					// Make sure to eval this in the right namespace
 					Var.pushThreadBindings(completeBindings);
-					ISeq completionStrings = (ISeq) complete.invoke(message["symbol"].ToString());
+                    ISeq completionStrings = null;
+					if (isKeyword)
+					{
+                        completionStrings = (ISeq) complete_keyword.invoke(message["symbol"].ToString());
+					} else
+					{
+                        ISeq fns = ((ISeq)complete_fn_symbol.invoke(message["symbol"].ToString()));
+                        ISeq nss = ((ISeq)complete_ns_symbol.invoke(message["symbol"].ToString()));
+                        completionStrings = (ISeq)concatVar.invoke(fns, nss);
+					}
 					Var.popThreadBindings();
 
 					BList completions = new BList();
 					while (completionStrings != null && completionStrings.count() > 0)
 					{
-						completions.Add(new BDictionary{{ "candidate", (String)completionStrings.first() }});
+						completions.Add(new BDictionary{
+							{ "candidate", (String)((Associative)completionStrings.first()).valAt(Keyword.intern("candidate")) },
+							{ "type", (String)((Associative)completionStrings.first()).valAt(Keyword.intern("type")) }
+						});
 						completionStrings = completionStrings.next();
 					}
 					
