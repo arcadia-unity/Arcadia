@@ -1,5 +1,6 @@
 #if NET_4_6
 using System;
+using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Net;
@@ -195,9 +196,44 @@ namespace Arcadia
 				var outWriter = new Writer("out", _request, _client);
 				var errWriter = new Writer("err", _request, _client);
 
-				Var.pushThreadBindings(sessionBindings
-						.assoc(RT.OutVar, outWriter)
-						.assoc(RT.ErrVar, errWriter));
+				Debug.Log("Evaling code in " + _request["file"]);
+
+				
+				// Split the path, and try to infer the ns from the filename. If the ns exists, then change the current ns before evaluating
+				List<String> nsList = new List<String>();
+				var path = _request["file"].ToString();
+				Namespace fileNs = null;
+				try
+				{
+					string current = null;
+					while (path != null && current != "Assets")
+					{
+						current = Path.GetFileNameWithoutExtension(path);
+						nsList.Add(current);
+						path = Directory.GetParent(path).FullName;
+					}
+					nsList.Reverse();
+					nsList.RemoveAt(0);
+					// Debug.Log("Trying to find: " + string.Join(".", nsList.ToArray()));
+					fileNs = Namespace.find(Symbol.create(string.Join(".", nsList.ToArray())));
+					// Debug.Log("Found: " + string.Join(".", nsList.ToArray()));
+				} 
+				catch (Exception e)
+				{ 
+					/* Whatever sent in :file was not a path. Ignore it */
+					// Debug.Log(":file was not a valid ns");
+				}
+
+				var evalBindings = sessionBindings
+					.assoc(RT.OutVar, outWriter)
+					.assoc(RT.ErrVar, errWriter);
+				if (fileNs != null)
+				{
+					// Debug.Log("Current ns: " + fileNs.ToString());
+					evalBindings = evalBindings.assoc(RT.CurrentNSVar, fileNs);
+				}
+
+				Var.pushThreadBindings(evalBindings);
 				try {
 					var form = readStringVar.invoke(readStringOptions, code);
 					var result = evalVar.invoke(form);
