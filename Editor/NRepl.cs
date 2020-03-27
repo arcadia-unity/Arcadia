@@ -426,10 +426,10 @@ namespace Arcadia
 					}
 					break;
 				case "complete":
-					foreach (var k in message.Keys)
-					{
-                        Debug.Log(k.ToString() + ": " + message[k].ToString());
-					}
+					//foreach (var k in message.Keys)
+					//{
+                     //   Debug.Log(k.ToString() + ": " + message[k].ToString());
+					//}
 
 					Namespace ns = Namespace.find(Symbol.create(message["ns"].ToString()));
                     var sessionBindings = _sessions[session];
