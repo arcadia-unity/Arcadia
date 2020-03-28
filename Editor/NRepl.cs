@@ -198,7 +198,7 @@ namespace Arcadia
 				var outWriter = new Writer("out", _request, _client);
 				var errWriter = new Writer("err", _request, _client);
 
-				Debug.Log("Evaling code in " + _request["file"]);
+				// Debug.Log("Evaling code in " + _request["file"]);
 
 				
 				// Split the path, and try to infer the ns from the filename. If the ns exists, then change the current ns before evaluating
@@ -385,17 +385,25 @@ namespace Arcadia
 					var loadFn = new EvalFn(message, client);
 					addCallbackVar.invoke(loadFn);
 					break;
-				case "info":
 				case "eldoc":
+				case "info":
 
                     String symbolStr = message["symbol"].ToString();
 
                     // Editors like Calva that support doc-on-hover sometimes will ask about empty strings or spaces
 					if (symbolStr == "" || symbolStr == null || symbolStr == " ") break;
 
-					var symbolMetadata = (IPersistentMap)metaVar.invoke(nsResolveVar.invoke(
-						findNsVar.invoke(symbolVar.invoke(message["ns"].ToString())),
-						symbolVar.invoke(symbolStr)));
+					IPersistentMap symbolMetadata = null;
+					try
+					{
+                        symbolMetadata = (IPersistentMap)metaVar.invoke(nsResolveVar.invoke(
+                            findNsVar.invoke(symbolVar.invoke(message["ns"].ToString())),
+                            symbolVar.invoke(symbolStr)));
+					} catch (TypeNotFoundException) { 
+							// We'll just ignore this call if the type cannot be found. This happens sometimes.
+							// TODO: One particular case when this happens is when querying info for a namespace. 
+							//       That case should be handled separately (e.g., via `find-ns`?)
+						}
 
 
 					if (symbolMetadata != null) {
