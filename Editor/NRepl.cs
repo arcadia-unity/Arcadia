@@ -381,7 +381,7 @@ namespace Arcadia
                         {"info", 1},
                         {"eldoc", 1},
                     };
-					Debug.Log("Autocomplete support is enabled?: " + autoCompletionSupportEnabled);
+					// Debug.Log("Autocomplete support is enabled?: " + autoCompletionSupportEnabled);
 					if (autoCompletionSupportEnabled) {
 						supportedOps.Add("complete", 1);
 					}
@@ -482,7 +482,7 @@ namespace Arcadia
 
 					// When autoCompletionSupportEnabled is false, we don't advertise auto-completion support. 
 					// some editors seem to ignore this and request anyway, so we return an unknown op message.
-					if (!autoCompletionSupportEnabled)  {
+					if (!autoCompletionSupportEnabled) {
                         SendMessage(
                             new BDictionary
                             {
