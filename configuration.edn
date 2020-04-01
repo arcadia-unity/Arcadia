@@ -60,5 +60,21 @@
  ;; see https://github.com/arcadia-unity/Arcadia/wiki/Stacktraces-and-Error-Reporting
  ;; for options on formatting thrown Exceptions
  ;; :error-options {:format true}
+
+
+ ;; This boolean variable controls whether auto-completion support on an nrepl
+ ;; connection is enabled. When enabled, the nREPL server will answer requests
+ ;; to the "complete" message with the following information:
+ ;;
+ ;; - Autocomplete fns in current namespace: The server tries to complete all
+ ;;   the symbols available to the current context. That is, the public vars of
+ ;;   the current namespace, as well as any `use` or `:refer :all` imported symbols.
+ ;; - Autocomplete fns from other namespaces: You can also autocomplete things
+ ;;   from other namespaces, both via alias, e.g. `str/split`, and fully
+ ;;   qualified name, e.g. `clojure.string/split`.
+ ;; - Autocomplete namespaces: The name of namespaces is also autocompleted.
+ ;; - Autocomplete keywords: Any keywords used (i.e., interned) in the project
+ ;;   are also autocompleted.
+ :nrepl-auto-completion true
  }
 
