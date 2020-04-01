@@ -99,6 +99,8 @@ namespace Arcadia
 		private static Var findNsVar;
 		private static Var symbolVar;
 		private static Var concatVar;
+		private static Var completeVar;
+		private static Var configVar;
 
 		private static Namespace shimsNS;
 
@@ -126,6 +128,12 @@ namespace Arcadia
 			findNsVar = RT.var("clojure.core", "find-ns");
 			symbolVar = RT.var("clojure.core", "symbol");
 			concatVar = RT.var("clojure.core", "concat");
+
+			Util.require("arcadia.internal.nrepl-support");
+			completeVar = RT.var("arcadia.internal.nrepl-support", "complete");
+
+			Util.require("arcadia.internal.config");
+			configVar = RT.var("arcadia.internal.config", "config");
 
 			readStringOptions = PersistentHashMap.EMPTY.assoc(Keyword.intern("read-cond"), Keyword.intern("allow"));
 
@@ -199,6 +207,38 @@ namespace Arcadia
 				var errWriter = new Writer("err", _request, _client);
 
 				// Debug.Log("Evaling code in " + _request["file"]);
+				// Debug.Log("Code to eval " + _request["code"]);
+
+				// HACK:
+				// Sometimes, cider wants to know about the Java classpath because it has no knowledge of CLR and assumes
+				// this is a regular Java REPL. It will ask to eval:
+				//    (seq (.split (System/getProperty "java.class.path") ":"))
+				// The culprit line is in:
+				//    https://github.com/clojure-emacs/cider/blob/4cc4280677e6eeb16cd55d9865c0ea9f9d141af3/cider-client.el#L517
+				// This causes an exception on the unity console, but  may be even worse: If no reply is sent, sometimes emacs blocks 
+				// forever with a "Lisp Expression: " minibuffer prompt. We take a workaround here and just return an empty list. 
+				if (code.Contains("(seq (.split (System/getProperty \"java.class.path\") \":\"))")) {
+					// This is still bad in some situations when emacs decides to start spamming sync requests to our nREPL server trying
+					// to find out about the classpath. If this occurs, we'll at least let the user know about it so they know what to ask.
+					Debug.LogWarning("Your clojure tooling (most likely CIDER) made a request to get the java.class.path which is not available on this platform.");
+
+					SendMessage(new BDictionary
+					{
+						{"id", _request["id"]},
+						{"value", "()"}, 
+                        {"ns", RT.CurrentNSVar.deref().ToString()},
+						{"session", session.ToString()},
+					}, _client);
+
+					SendMessage(new BDictionary
+					{
+						{"id", _request["id"]},
+						{"status", new BList {"done"}}, 
+                        {"session", session.ToString()},
+					}, _client);
+
+					return null;
+				}
 
 				
 				// Split the path, and try to infer the ns from the filename. If the ns exists, then change the current ns before evaluating
@@ -312,6 +352,7 @@ namespace Arcadia
 		{
 			var opValue = message["op"];
 			var opString = opValue as BString;
+			var autoCompletionSupportEnabled = (bool)((IPersistentMap)configVar.invoke()).valAt(Keyword.intern("nrepl-auto-completion"));
 			if (opString != null) {
 				var session = GetSession(message);
 				switch (opString.ToString()) {
@@ -332,25 +373,25 @@ namespace Arcadia
 					var clojureMinor = (int)clojureVersion.valAt(Keyword.intern("minor"));
 					var clojureIncremental = (int)clojureVersion.valAt(Keyword.intern("incremental"));
 					var clojureQualifier = (string)clojureVersion.valAt(Keyword.intern("qualifier"));
+                    var supportedOps = new BDictionary {
+                        {"eval", 1},
+                        {"load-file", 1},
+                        {"describe", 1},
+                        {"clone", 1},
+                        {"info", 1},
+                        {"eldoc", 1},
+                    };
+					Debug.Log("Autocomplete support is enabled?: " + autoCompletionSupportEnabled);
+					if (autoCompletionSupportEnabled) {
+						supportedOps.Add("complete", 1);
+					}
 					SendMessage(
 						new BDictionary
 						{
 								{"id", message["id"]},
 								{"session", session.ToString()},
 								{"status", new BList {"done"}},
-								{
-									"ops",
-									new BDictionary
-									{
-										{"eval", 1},
-										{"load-file", 1},
-										{"describe", 1},
-										{"clone", 1},
-										{"info", 1},
-										{"eldoc", 1},
-										{"complete", 1}
-									}
-								},
+								{ "ops", supportedOps},
 								{
 									"versions",
 									new BDictionary
@@ -438,10 +479,19 @@ namespace Arcadia
 					}
 					break;
 				case "complete":
-					//foreach (var k in message.Keys)
-					//{
-                     //   Debug.Log(k.ToString() + ": " + message[k].ToString());
-					//}
+
+					// When autoCompletionSupportEnabled is false, we don't advertise auto-completion support. 
+					// some editors seem to ignore this and request anyway, so we return an unknown op message.
+					if (!autoCompletionSupportEnabled)  {
+                        SendMessage(
+                            new BDictionary
+                            {
+                                    {"id", message["id"]},
+                                    {"session", session.ToString()},
+                                    {"status", new BList {"done", "error", "unknown-op"}}
+                            }, client);
+						break;
+					}
 
 					Namespace ns = Namespace.find(Symbol.create(message["ns"].ToString()));
                     var sessionBindings = _sessions[session];
@@ -450,91 +500,16 @@ namespace Arcadia
 						completeBindings = completeBindings.assoc(RT.CurrentNSVar, ns);
                     }
 
-					// Inline clojure lambda is maybe not the best idea...
-					IFn complete_fn_symbol = (IFn) evalVar.invoke(
-                        readStringVar.invoke(
-							@"(fn complete-symbol [text]
-                                (let [[ns prefix-str] (as-> text <>
-                                                        (symbol <>)
-                                                        [(some-> <> namespace symbol) (name <>)])
-                                      ns-to-check (if ns
-                                                    (or ((ns-aliases *ns*) ns) (find-ns ns))
-                                                    *ns*)
-                                      fn-candidate-list (when ns-to-check
-                                                          (if ns
-                                                            (map str (keys (ns-publics ns-to-check)))
-                                                            (map str (keys (ns-map ns-to-check)))))]
-                                  (into '() (comp (filter #(.StartsWith % prefix-str))
-                                                  (map #(if ns (str ns ""/"" %) %))
-                                                  (map #(-> {:candidate %
-                                                             :type ""function""})))
-                                        (concat
-                                         fn-candidate-list))))"));
-
-					
-
-					IFn complete_ns_symbol = (IFn) evalVar.invoke(
-                        readStringVar.invoke(
-							@"(fn complete-namespace [text]
-                                (let [[ns prefix-str] (as-> text <>
-                                                        (symbol <>)
-                                                        [(some-> <> namespace symbol) (name <>)])
-                                      ns-candidate-list (when-not ns
-                                                          (map (comp str ns-name) (all-ns)))]
-                                  (into '() (comp (filter #(.StartsWith % prefix-str))
-                                                  (map str)
-                                                  (map #(-> {:candidate %
-                                                             :type ""namespace""})))
-                                        ns-candidate-list)))"));
-
-					IFn complete_keyword = (IFn) evalVar.invoke(
-                        readStringVar.invoke(
-							@"(fn complete-keyword [text]
-                                (let [keyword-candidate-list
-                                      (as-> :_ <>
-                                        (.GetType <>)
-                                        (.GetField <> ""_symKeyMap"" (enum-or BindingFlags/NonPublic
-                                                                            BindingFlags/Static))
-                                        (.GetValue <> :_)
-                                        (.Values <>)
-                                        (map #(str (.Target %)) <>))]
-                                  (into '() (comp (filter #(.StartsWith % text))
-                                                  (map #(-> {:candidate %
-                                                             :type ""keyword""})))
-                                        keyword-candidate-list)))"));
-
-					Boolean isKeyword = message["symbol"].ToString().StartsWith(":");
-
 					// Make sure to eval this in the right namespace
 					Var.pushThreadBindings(completeBindings);
-                    ISeq completionStrings = null;
-					if (isKeyword)
-					{
-                        completionStrings = (ISeq) complete_keyword.invoke(message["symbol"].ToString());
-					} else
-					{
-                        ISeq fns = ((ISeq)complete_fn_symbol.invoke(message["symbol"].ToString()));
-                        ISeq nss = ((ISeq)complete_ns_symbol.invoke(message["symbol"].ToString()));
-                        completionStrings = (ISeq)concatVar.invoke(fns, nss);
-					}
+					BList completions = (BList) completeVar.invoke(message["symbol"].ToString());
 					Var.popThreadBindings();
-
-					BList completions = new BList();
-					while (completionStrings != null && completionStrings.count() > 0)
-					{
-						completions.Add(new BDictionary{
-							{ "candidate", (String)((Associative)completionStrings.first()).valAt(Keyword.intern("candidate")) },
-							{ "type", (String)((Associative)completionStrings.first()).valAt(Keyword.intern("type")) }
-						});
-						completionStrings = completionStrings.next();
-					}
-					
 
 					SendMessage(new BDictionary
                         {
                             {"id", message["id"]},
                             {"session", session.ToString()},
-                            {"status", new BList {"done", "no-info"}},
+                            {"status", new BList {"done"}},
 							{"completions", completions}
                         }, client);
 					break;
