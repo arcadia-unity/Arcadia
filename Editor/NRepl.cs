@@ -205,41 +205,6 @@ namespace Arcadia
 				var sessionBindings = _sessions[session];
 				var outWriter = new Writer("out", _request, _client);
 				var errWriter = new Writer("err", _request, _client);
-
-				// Debug.Log("Evaling code in " + _request["file"]);
-				// Debug.Log("Code to eval " + _request["code"]);
-
-				// HACK:
-				// Sometimes, cider wants to know about the Java classpath because it has no knowledge of CLR and assumes
-				// this is a regular Java REPL. It will ask to eval:
-				//    (seq (.split (System/getProperty "java.class.path") ":"))
-				// The culprit line is in:
-				//    https://github.com/clojure-emacs/cider/blob/4cc4280677e6eeb16cd55d9865c0ea9f9d141af3/cider-client.el#L517
-				// This causes an exception on the unity console, but  may be even worse: If no reply is sent, sometimes emacs blocks 
-				// forever with a "Lisp Expression: " minibuffer prompt. We take a workaround here and just return an empty list. 
-				if (code.Contains("(seq (.split (System/getProperty \"java.class.path\") \":\"))")) {
-					// This is still bad in some situations when emacs decides to start spamming sync requests to our nREPL server trying
-					// to find out about the classpath. If this occurs, we'll at least let the user know about it so they know what to ask.
-					Debug.LogWarning("Your clojure tooling (most likely CIDER) made a request to get the java.class.path which is not available on this platform.");
-
-					SendMessage(new BDictionary
-					{
-						{"id", _request["id"]},
-						{"value", "()"}, 
-                        {"ns", RT.CurrentNSVar.deref().ToString()},
-						{"session", session.ToString()},
-					}, _client);
-
-					SendMessage(new BDictionary
-					{
-						{"id", _request["id"]},
-						{"status", new BList {"done"}}, 
-                        {"session", session.ToString()},
-					}, _client);
-
-					return null;
-				}
-
 				
 				// Split the path, and try to infer the ns from the filename. If the ns exists, then change the current ns before evaluating
 				List<String> nsList = new List<String>();
@@ -380,6 +345,7 @@ namespace Arcadia
                         {"clone", 1},
                         {"info", 1},
                         {"eldoc", 1},
+						{"classpath", 1},
                     };
 					// Debug.Log("Autocomplete support is enabled?: " + autoCompletionSupportEnabled);
 					if (autoCompletionSupportEnabled) {
@@ -511,6 +477,20 @@ namespace Arcadia
                             {"session", session.ToString()},
                             {"status", new BList {"done"}},
 							{"completions", completions}
+                        }, client);
+					break;
+				case "classpath":
+                    // Debug.Log("Classpath op has been called");
+					string assetsPath = Path.Combine(Path.GetFullPath("."), "Assets");
+					string arcadiaSrcPath = Path.Combine(assetsPath, "Arcadia", "Source");
+                    // Debug.Log("assetsPath: " + assetsPath);
+                    // Debug.Log("arcadiaSrcPath: " + arcadiaSrcPath);
+					SendMessage(new BDictionary
+                        {
+                            {"id", message["id"]},
+                            {"session", session.ToString()},
+                            {"status", new BList {"done"}},
+							{"classpath", new BList { assetsPath, arcadiaSrcPath }},
                         }, client);
 					break;
 				default:
