@@ -352,7 +352,7 @@ namespace Arcadia
 		{
 			var opValue = message["op"];
 			var opString = opValue as BString;
-			var autoCompletionSupportEnabled = (bool)((IPersistentMap)configVar.invoke()).valAt(Keyword.intern("nrepl-auto-completion"));
+			var autoCompletionSupportEnabled = RT.booleanCast(((IPersistentMap)configVar.invoke()).valAt(Keyword.intern("nrepl-auto-completion")));
 			if (opString != null) {
 				var session = GetSession(message);
 				switch (opString.ToString()) {

@@ -32,16 +32,17 @@
                                :type "namespace"})))
           ns-candidate-list)))
 
+(def sym-key-map
+  (-> clojure.lang.Keyword
+      (.GetField "_symKeyMap" (enum-or BindingFlags/NonPublic BindingFlags/Static))
+      (.GetValue nil)))
+
 (defn complete-keyword [text]
   (let [keyword-candidate-list
         ;; NOTE: :_ is used here to get an instance to some keyword.
-        (as-> :_ <>
-          (.GetType <>)
-          (.GetField <> "_symKeyMap" (enum-or BindingFlags/NonPublic
-                                              BindingFlags/Static))
-          (.GetValue <> :_)
-          (.Values <>)
-          (map #(str (.Target %)) <>))]
+        (->> sym-key-map
+             (.Values)
+             (map #(str (.Target %))))]
     (into '() (comp (filter #(.StartsWith % text))
                     (map #(-> {:candidate %
                                :type "keyword"})))
