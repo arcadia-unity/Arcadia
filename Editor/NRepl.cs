@@ -480,17 +480,19 @@ namespace Arcadia
                         }, client);
 					break;
 				case "classpath":
-                    // Debug.Log("Classpath op has been called");
-					string assetsPath = Path.Combine(Path.GetFullPath("."), "Assets");
-					string arcadiaSrcPath = Path.Combine(assetsPath, "Arcadia", "Source");
-                    // Debug.Log("assetsPath: " + assetsPath);
-                    // Debug.Log("arcadiaSrcPath: " + arcadiaSrcPath);
+                    BList classpath = new BList();
+					foreach (String p in Environment.GetEnvironmentVariable("CLOJURE_LOAD_PATH").Split(System.IO.Path.PathSeparator)) {
+						if (p != "") {
+                            classpath.Add(Path.GetFullPath(p));
+                        }
+                    }
+
 					SendMessage(new BDictionary
                         {
                             {"id", message["id"]},
                             {"session", session.ToString()},
                             {"status", new BList {"done"}},
-							{"classpath", new BList { assetsPath, arcadiaSrcPath }},
+							{"classpath", classpath},
                         }, client);
 					break;
 				default:
