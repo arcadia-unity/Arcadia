@@ -55,9 +55,9 @@
 
 (defmulti potential-completions
   (fn [^String prefix ns]
-    (cond (.Contains prefix "/") :scoped
+    (cond (.StartsWith prefix ":") :keyword
+          (.Contains prefix "/") :scoped
           (.Contains prefix ".") :class
-          (.StartsWith prefix ":") :keyword
           :else :var)))
 
 (defmethod potential-completions :scoped
