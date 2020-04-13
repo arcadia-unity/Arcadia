@@ -1,5 +1,9 @@
 # Arcadia Changelog
 
+## Beta 1.0.16
+
+- Merged PR [#380](https://github.com/arcadia-unity/Arcadia/pull/380) from [@setzer22](https://github.com/setzer22) that vastly improves our nREPL implementation -- thanks!
+
 ## Beta 1.0.15
 
 - Workaround for issue [#378](https://github.com/arcadia-unity/Arcadia/issues/378).
