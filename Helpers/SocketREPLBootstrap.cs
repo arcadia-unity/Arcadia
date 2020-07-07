@@ -3,6 +3,7 @@ using System;
 using System.Collections;
 using System.Net;
 using UnityEngine;
+using Arcadia.Ifrit;
 
 namespace Arcadia
 {
@@ -27,20 +28,25 @@ namespace Arcadia
                 go.AddComponent<SocketREPLBootstrap>();
                 DontDestroyOnLoad(go);
                 System.Console.WriteLine("[socket-repl] creating {0}", go);
+                FileConsole.Log("[socket-repl] creating {0}", go);
             }
         }
 
         public void SetupIfrit()
         {
+            FileConsole.Log("[socket repl] Entering SetupIfrit");
             var setupNsName = "arcadiatech.intervention-api.setup";
             Arcadia.Util.require(setupNsName);
             RT.var(setupNsName, "setup").invoke(this.gameObject);
+            FileConsole.Log("[socket repl] Exiting SetupIfrit");
         }
 
         static void DoInit()
         {
+            FileConsole.Log("[socket-repl] entering DoInit");
             if (didInit == false)
             {
+                FileConsole.Log("[socket-repl] entering DoInit body");
                 didInit = true;
                 callbackDriverKeyword = Keyword.intern("callback-driver");
                 portKeyword = Keyword.intern("port");
@@ -48,10 +54,12 @@ namespace Arcadia
                 Arcadia.Util.require("arcadia.internal.socket-repl");
                 startServerVar = RT.var("arcadia.internal.socket-repl", "set-options-and-start-server");
             }
+            FileConsole.Log("[socket-repl] exiting DoInit");
         }
 
         private void Awake()
         {
+            FileConsole.Log("[socket repl] Entering Awake");
             DoInit();
             var addCallbackIFn = new AddCallbackFn(WorkQueue);
             System.Console.WriteLine("[socket-repl] bootstrap awake, callback fn: {0} port: {1}, addr: {2}", addCallbackIFn, port, IPAddress.Any);
@@ -61,6 +69,7 @@ namespace Arcadia
             );
             startServerVar.invoke(optionsMap);
             SetupIfrit();
+            FileConsole.Log("[socket repl] Exiting Awake SetupIfrit");
         }
 
         private void Update()
@@ -76,7 +85,14 @@ namespace Arcadia
                     if (cb != null)
                     {
                         System.Console.WriteLine("[socket-repl] invoking {0}", cb);
-                        cb.invoke();
+                        try
+                        {
+                            cb.invoke();
+                        } 
+                        catch (Exception e)
+                        {
+                            FileConsole.Log("[socket-repl] Exception encountered in work queue:\n{0}", e);
+                        }
                     }
                     else
                     {
