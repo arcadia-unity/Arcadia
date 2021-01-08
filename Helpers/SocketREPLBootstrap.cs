@@ -27,7 +27,6 @@ namespace Arcadia
                 var go = new GameObject(HostObjectName);
                 go.AddComponent<SocketREPLBootstrap>();
                 DontDestroyOnLoad(go);
-                System.Console.WriteLine("[socket-repl] creating {0}", go);
                 FileConsole.Log("[socket-repl] creating {0}", go);
             }
         }
@@ -62,7 +61,7 @@ namespace Arcadia
             FileConsole.Log("[socket repl] Entering Awake");
             DoInit();
             var addCallbackIFn = new AddCallbackFn(WorkQueue);
-            System.Console.WriteLine("[socket-repl] bootstrap awake, callback fn: {0} port: {1}, addr: {2}", addCallbackIFn, port, IPAddress.Any);
+            FileConsole.Log("[socket-repl] bootstrap awake, callback fn: {0} port: {1}, addr: {2}", addCallbackIFn, port, IPAddress.Any);
             var optionsMap = RT.mapUniqueKeys(
                 portKeyword, port,
                 argsKeyword, RT.vector(addCallbackIFn)
@@ -77,14 +76,14 @@ namespace Arcadia
             // System.Console.WriteLine("[socket-repl] bootstrap update");
             if (WorkQueue.Count > 0)
             {
-                System.Console.WriteLine("[socket-repl] dequeueing {0} items", WorkQueue.Count);
+                FileConsole.Log("[socket-repl] dequeueing {0} items", WorkQueue.Count);
                 while (WorkQueue.Count > 0)
                 {
                     var workItem = WorkQueue.Dequeue();
                     var cb = workItem as IFn;
                     if (cb != null)
                     {
-                        System.Console.WriteLine("[socket-repl] invoking {0}", cb);
+                        FileConsole.Log("[socket-repl] invoking {0}", cb);
                         try
                         {
                             cb.invoke();
@@ -96,7 +95,7 @@ namespace Arcadia
                     }
                     else
                     {
-                        System.Console.WriteLine("[socket-repl] not invoking {0}", workItem);
+                        FileConsole.Log("[socket-repl] not invoking {0}", workItem);
                     }
                 }
             }
@@ -108,13 +107,13 @@ namespace Arcadia
 
             public AddCallbackFn(Queue workQueue)
             {
-                System.Console.WriteLine("[AddCallbackFn] ctor");
+                FileConsole.Log("[AddCallbackFn] ctor");
                 this.workQueue = workQueue;
             }
 
             public override object invoke(object callbackfn)
             {
-                System.Console.WriteLine("[AddCallbackFn] invoke {0}", callbackfn);
+                FileConsole.Log("[AddCallbackFn] invoke {0}", callbackfn);
                 workQueue.Enqueue(callbackfn);
                 return null;
             }
