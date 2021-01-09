@@ -58,17 +58,24 @@ namespace Arcadia
 
         private void Awake()
         {
-            FileConsole.Log("[socket repl] Entering Awake");
-            DoInit();
-            var addCallbackIFn = new AddCallbackFn(WorkQueue);
-            FileConsole.Log("[socket-repl] bootstrap awake, callback fn: {0} port: {1}, addr: {2}", addCallbackIFn, port, IPAddress.Any);
-            var optionsMap = RT.mapUniqueKeys(
-                portKeyword, port,
-                argsKeyword, RT.vector(addCallbackIFn)
-            );
-            startServerVar.invoke(optionsMap);
-            SetupIfrit();
-            FileConsole.Log("[socket repl] Exiting Awake SetupIfrit");
+            // Guarding with try/catch because error during Awake seems to cause component or object to be disabled, thereby killing the repl
+            try
+            {
+                FileConsole.Log("[socket repl] Entering Awake");
+                DoInit();
+                var addCallbackIFn = new AddCallbackFn(WorkQueue);
+                FileConsole.Log("[socket-repl] bootstrap awake, callback fn: {0} port: {1}, addr: {2}", addCallbackIFn, port, IPAddress.Any);
+                var optionsMap = RT.mapUniqueKeys(
+                    portKeyword, port,
+                    argsKeyword, RT.vector(addCallbackIFn)
+                );
+                startServerVar.invoke(optionsMap);
+                SetupIfrit();
+                FileConsole.Log("[socket repl] Exiting Awake SetupIfrit");
+            } catch (Exception e)
+            {
+                FileConsole.Log("[socket-repl] Error encountered during Awake:\n{0}", e.ToString());
+            }
         }
 
         private void Update()
