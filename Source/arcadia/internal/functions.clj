@@ -4,6 +4,7 @@
     arcadia.internal.functions
   (:refer-clojure :exclude [comp, partial, some])
   (:require [arcadia.internal.macro :as am]
+            [clojure.core.protocols]
             [arcadia.internal.benchmarking :as b]))
 
 ;; ============================================================
@@ -116,19 +117,19 @@
 ;; ============================================================
 ;; reducers, transducers
 
-;; aka transreductorooni
-(defn transreducer
-  "Takes a transducer and a reducible, returns a reducible incorporating the transducer."
-  [xfrm reducible]
-  (reify
-    clojure.core.protocols/CollReduce
-    (coll-reduce [this f]
-      (clojure.core.protocols/coll-reduce this f (f))) ;; right?
-    (coll-reduce [_ f init]
-      (transduce xfrm f init reducible))
-    clojure.lang.Counted
-    (count [_]
-      (count reducible))))
+;; ;; aka transreductorooni
+;; (defn transreducer
+;;   "Takes a transducer and a reducible, returns a reducible incorporating the transducer."
+;;   [xfrm reducible]
+;;   (reify
+;;     clojure.core.protocols/CollReduce
+;;     (clojure.core.protocols/coll-reduce [this f]
+;;       (clojure.core.protocols/coll-reduce this f (f))) ;; right?
+;;     (clojure.core.protocols/coll-reduce [_ f init]
+;;       (transduce xfrm f init reducible))
+;;     clojure.lang.Counted
+;;     (count [_]
+;;       (count reducible))))
 
 ;; ============================================================
 ;; other suboptimal core stuff
