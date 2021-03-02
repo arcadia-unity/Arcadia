@@ -13,7 +13,7 @@
             [arcadia.internal.editor-callbacks :as callbacks])
   (:import [Arcadia StringHelper]
            [clojure.lang Namespace]
-           [System.IO Path File StringWriter Directory]
+           [System.IO Path File StringWriter Directory DirectoryInfo]
            [System.Text.RegularExpressions Regex]
            [System.Collections Queue]
            [System.Threading Thread ThreadStart]
@@ -155,30 +155,50 @@
 
 (def ^:dynamic *exporting?* false)
 
+(defn packaged-namespaces []
+  (let [infrastructure (DirectoryInfo.
+                         (reduce
+                           #(Path/Combine %1 %2)
+                           UnityEngine.Application/dataPath
+                           ["Arcadia" "Infrastructure"]))]
+    (set
+      (for [finf (.EnumerateFiles infrastructure)
+            :let [name (.Name finf)
+                  m (re-matches #"(.*)\.clj\.dll$" name)]
+            :when m]
+        (symbol (peek m))))))
+
 (defn aot-namespaces
   ([path nss]
    (aot-namespaces path nss nil))
   ([path nss {:keys [file-callback] :as opts}]
    ;; We want to ensure that namespaces are neither double-aot'd, nor
-   ;; _not_ aot'd if already in memory.
-   ;; In other words, we want to walk the forest of all the provided
-   ;; namespaces and their dependency namespaces, aot-ing each
-   ;; namespace we encounter in this walk exactly once. `:reload-all`
-   ;; will re-aot encountered namespaces redundantly, potentially
-   ;; invalidating old type references (I think). Normal `require`
-   ;; will not do a deep walk over already-loaded namespaces. So
-   ;; instead we rebind the *loaded-libs* var to a ref with an empty
-   ;; set and call normal `require`, which gives the desired behavior.
-   (let [loaded-libs' (binding [*compiler-options* (get (config/config) :compiler-options {})
+   ;; _not_ aot'd if already in memory.  In other words, we want to
+   ;; walk the forest of all the provided namespaces and their
+   ;; dependency namespaces, aot-ing each namespace we encounter in
+   ;; this walk exactly once. `:reload-all` will re-aot encountered
+   ;; namespaces redundantly, potentially invalidating old type
+   ;; references (I think). Normal `require` will not do a deep walk
+   ;; over already-loaded namespaces. So instead we rebind the
+   ;; *loaded-libs* var to a ref with a set containing only our
+   ;; shipped dll namespaces, and call normal `require`, which gives
+   ;; the desired behavior.
+   (let [pns (packaged-namespaces)
+         ;; if we don't require these, clojure.test ends up in loaded-libs despite maybe
+         ;; not having been loaded yet; this breaks AOT.
+         _ (doseq [pn pns]
+             (require pn))
+         loaded-libs' (binding [*compiler-options* (get (config/config) :compiler-options {})
                                 *compile-path* path
                                 *compile-files* true
                                 arcadia.internal.compiler/*exporting?* true
-                                clojure.core/*loaded-libs* (ref #{})]
+                                clojure.core/*loaded-libs* (ref (packaged-namespaces))]
                         (doseq [ns nss]
                           (require ns)
                           (when file-callback
                             (file-callback ns)))
                         @#'clojure.core/*loaded-libs*)]
+     (UnityEngine.Debug/Log (str "aot-local loaded-libs: " (pr-str loaded-libs')))
      (dosync
        (alter @#'clojure.core/*loaded-libs* into @loaded-libs'))
      nil)))
