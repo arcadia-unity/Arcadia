@@ -488,12 +488,16 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 	{
 		if (!_fullyInitialized)
 			FullInit();
-		HookStateSystem.SetState(arcadiaState, _go, ifnInfos);
+		// Popping it out so we don't get into modifying-an-array-while-iterating territory.
+		// This does mean that if we remove a function during a run and it hasn't executed yet,
+		// it will still execute this run; the change won't be visible until next run.
+		var iteratingInfos = ifnInfos;
+		HookStateSystem.SetState(arcadiaState, _go, iteratingInfos);
 		int i = 0;
 		try {
-			for (; i < ifnInfos.Length; i++) {
+			for (; i < iteratingInfos.Length; i++) {
 				HookStateSystem.ifnInfoIndex = i;
-				Arcadia.Util.AsIFn(ifnInfos[i].fn).invoke(_go, ifnInfos[i].key);
+				Arcadia.Util.AsIFn(iteratingInfos[i].fn).invoke(_go, iteratingInfos[i].key);
 			}
 		} catch (System.Exception) {
 			PrintContext(i);
@@ -505,57 +509,81 @@ public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 
 	public void RunFunctions (object arg1)
 	{
+		// see notes for 0-arity version
 		if (!_fullyInitialized)
 			FullInit();
-		HookStateSystem.SetState(arcadiaState, _go, ifnInfos);
+		var iteratingInfos = ifnInfos;
+		HookStateSystem.SetState(arcadiaState, _go, iteratingInfos);
 		int i = 0;
-		try {
-			for (; i < ifnInfos.Length; i++) {
+		try
+		{
+			for (; i < iteratingInfos.Length; i++)
+			{
 				HookStateSystem.ifnInfoIndex = i;
-				Arcadia.Util.AsIFn(ifnInfos[i].fn).invoke(_go, ifnInfos[i].key, arg1);
+				Arcadia.Util.AsIFn(iteratingInfos[i].fn).invoke(_go, iteratingInfos[i].key, arg1);
 			}
-		} catch (System.Exception) {
+		}
+		catch (System.Exception)
+		{
 			PrintContext(i);
 			throw;
-		} finally {
+		}
+		finally
+		{
 			HookStateSystem.Clear();
 		}
 	}
 
 	public void RunFunctions (object arg1, object arg2)
 	{
+		// see notes for 0-arity version
 		if (!_fullyInitialized)
 			FullInit();
-		HookStateSystem.SetState(arcadiaState, _go, ifnInfos);
+		var iteratingInfos = ifnInfos;
+		HookStateSystem.SetState(arcadiaState, _go, iteratingInfos);
 		int i = 0;
-		try {
-			for (; i < ifnInfos.Length; i++) {
+		try
+		{
+			for (; i < iteratingInfos.Length; i++)
+			{
 				HookStateSystem.ifnInfoIndex = i;
-				Arcadia.Util.AsIFn(ifnInfos[i].fn).invoke(_go, ifnInfos[i].key, arg1, arg2);
+				Arcadia.Util.AsIFn(iteratingInfos[i].fn).invoke(_go, iteratingInfos[i].key, arg1, arg2);
 			}
-		} catch (System.Exception) {
+		}
+		catch (System.Exception)
+		{
 			PrintContext(i);
 			throw;
-		} finally {
+		}
+		finally
+		{
 			HookStateSystem.Clear();
 		}
 	}
 
 	public void RunFunctions (object arg1, object arg2, object arg3)
 	{
+		// see notes for 0-arity version
 		if (!_fullyInitialized)
 			FullInit();
-		HookStateSystem.SetState(arcadiaState, _go, ifnInfos);
+		var iteratingInfos = ifnInfos;
+		HookStateSystem.SetState(arcadiaState, _go, iteratingInfos);
 		int i = 0;
-		try {
-			for (; i < ifnInfos.Length; i++) {
+		try
+		{
+			for (; i < iteratingInfos.Length; i++)
+			{
 				HookStateSystem.ifnInfoIndex = i;
-				Arcadia.Util.AsIFn(ifnInfos[i].fn).invoke(_go, ifnInfos[i].key, arg1, arg2, arg3);
+				Arcadia.Util.AsIFn(iteratingInfos[i].fn).invoke(_go, iteratingInfos[i].key, arg1, arg2, arg3);
 			}
-		} catch (System.Exception) {
+		}
+		catch (System.Exception)
+		{
 			PrintContext(i);
 			throw;
-		} finally {
+		}
+		finally
+		{
 			HookStateSystem.Clear();
 		}
 	}
