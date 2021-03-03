@@ -2,6 +2,7 @@ using clojure.lang;
 using System;
 using System.Collections;
 using System.Net;
+using System.IO;
 using UnityEngine;
 using Arcadia.Ifrit;
 
@@ -31,6 +32,37 @@ namespace Arcadia
             }
         }
 
+        public static DirectoryInfo IndirectedClojureSourceDirectory()
+        {
+            foreach (var path in clojure.lang.RT.GetFindFilePaths())
+            {
+                var info = new DirectoryInfo(Path.Combine(path, "indirected_clojure_source"));
+                if (info.Exists)
+                {
+                    return info;
+                }
+            }
+            throw new IndirectedClojureSourceNotFoundException();
+        }
+
+        public static void SetupLoadPath()
+        {
+            FileConsole.Log("[socket repl] Entering SetupLoadPath");
+            var clojureLoadPathEnvVarName = "CLOJURE_LOAD_PATH";
+            var indirectedClojureSourceDir = IndirectedClojureSourceDirectory();
+            var oldPaths = "" + Environment.GetEnvironmentVariable(clojureLoadPathEnvVarName);
+            FileConsole.Log("[socket repl] Old Load path: " + oldPaths);
+            // writing this crusty because I'm not sure how many C# versions back we want to support
+            string newPaths = indirectedClojureSourceDir.FullName;
+            if (oldPaths != "")
+            {
+                newPaths = newPaths + Path.PathSeparator + oldPaths;
+            }
+            Environment.SetEnvironmentVariable(clojureLoadPathEnvVarName, newPaths);
+            FileConsole.Log("[socket repl] Load path:\n" + Environment.GetEnvironmentVariable(clojureLoadPathEnvVarName));
+            FileConsole.Log("[socket repl] Exiting SetupLoadPath");
+        }
+
         public void SetupIfrit()
         {
             FileConsole.Log("[socket repl] Entering SetupIfrit");
@@ -47,6 +79,7 @@ namespace Arcadia
             {
                 FileConsole.Log("[socket-repl] entering DoInit body");
                 didInit = true;
+                SetupLoadPath();
                 callbackDriverKeyword = Keyword.intern("callback-driver");
                 portKeyword = Keyword.intern("port");
                 argsKeyword = Keyword.intern("args");
@@ -126,5 +159,14 @@ namespace Arcadia
             }
         }
     };
+
+    class IndirectedClojureSourceNotFoundException: System.Exception
+    {
+        public IndirectedClojureSourceNotFoundException() : base("indirected_clojure_source folder not found")
+        {
+            
+        }
+
+    }
 
 }
