@@ -447,35 +447,37 @@
 ;; the event types you would have to make a new event type for each
 ;; new file pattern, which would lead to redundant checks and more
 ;; allocations and stuff
-(defn- file-path-filter-fn [{:keys [::event-type->listeners]}]
-  (let [^|System.String[]| ends (ArrayHelper/CountedArray (type-args System.String)
-                                  (into []
-                                    (af/comp
-                                      cat
-                                      (map ::re-filter)
-                                      (splice-if vector?)
-                                      (filter string?))
-                                    (mu/valsr event-type->listeners)))]
-    (fn [^String path]
-      (StringHelper/EndsWithAny path ends))))
+(let [vals-f (mu/cached-valsr-fn)]
+  (defn- file-path-filter-fn [{:keys [::event-type->listeners]}]
+    (let [^|System.String[]| ends (ArrayHelper/CountedArray (type-args System.String)
+                                    (into []
+                                      (af/comp
+                                        cat
+                                        (map ::re-filter)
+                                        (splice-if vector?)
+                                        (filter string?))
+                                      (vals-f event-type->listeners)))]
+      (fn [^String path]
+        (StringHelper/EndsWithAny path ends)))))
 
-(defn changes [{{:keys [::g, ::fsis], :as fg} ::file-graph,
-                 started ::started,
-                 :as watch-data}]
-  (let [infos (mu/valsr (gets watch-data ::file-graph ::fsis))
-        events (vec (keys (::event-type->listeners watch-data)))
-        fpf (file-path-filter-fn watch-data)
-        filt (fn [x]
-               (or (and (instance? FileInfo x)
-                        (let [^FileInfo x x]
-                          (fpf (.FullName x))))
-                   (instance? DirectoryInfo x)))] ;; need all directory infos for topology updating
-    (into []
-      (af/comp
-        (filter filt) ;; takes us from 30-40% CPU to 7% CPU on my computer
-        (map refresh)
-        (mapcat #(info-changes % watch-data events)))
-      infos)))
+(let [vals-f (mu/cached-valsr-fn)]
+  (defn changes [{{:keys [::g, ::fsis], :as fg} ::file-graph,
+                  started ::started,
+                  :as watch-data}]
+    (let [infos (vals-f (gets watch-data ::file-graph ::fsis))
+          events (vec (keys (::event-type->listeners watch-data)))
+          fpf (file-path-filter-fn watch-data)
+          filt (fn [x]
+                 (or (and (instance? FileInfo x)
+                          (let [^FileInfo x x]
+                            (fpf (.FullName x))))
+                     (instance? DirectoryInfo x)))] ;; need all directory infos for topology updating
+      (into []
+        (af/comp
+          (filter filt) ;; takes us from 30-40% CPU to 7% CPU on my computer
+          (map refresh)
+          (mapcat #(info-changes % watch-data events)))
+        infos))))
 
 ;; ------------------------------------------------------------
 ;; updating topology
