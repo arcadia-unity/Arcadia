@@ -209,22 +209,38 @@ namespace Arcadia
 				// Split the path, and try to infer the ns from the filename. If the ns exists, then change the current ns before evaluating
 				List<String> nsList = new List<String>();
 				Namespace fileNs = null;
+				Namespace priorNs = null;
 				try
 				{
-					var path = _request["file"].ToString();
-					string current = null;
-					while (path != null && current != "Assets")
-					{
-						current = Path.GetFileNameWithoutExtension(path);
-						nsList.Add(current);
-						path = Directory.GetParent(path).FullName;
+					// Debug.Log(string.Join(", ", _request.Value));
+					if (_request.ContainsKey("ns")) {
+						// Debug.Log("Trying to find: " + _request["ns"].ToString());
+						fileNs = Namespace.find(Symbol.create(_request["ns"].ToString()));
+						// Debug.Log("Found: " + _request["ns"].ToString());
+					} else {
+						fileNs = Namespace.find(Symbol.create(RT.CurrentNSVar.deref().ToString()));
+						Debug.Log("CurrentNSVar: " + RT.CurrentNSVar.deref().ToString());
 					}
-					nsList.Reverse();
-					nsList.RemoveAt(0);
-					// Debug.Log("Trying to find: " + string.Join(".", nsList.ToArray()));
-					fileNs = Namespace.find(Symbol.create(string.Join(".", nsList.ToArray())));
-					// Debug.Log("Found: " + string.Join(".", nsList.ToArray()));
-				} 
+
+					// I don't know how the file functionality is exactly supposed to work,
+					//   so I'll leave this here to override if the key is set.
+					//   I expect in PR review we'll fix this =)...
+					if (_request.ContainsKey("file")) {
+						var path = _request["file"].ToString();
+						string current = null;
+						while (path != null && current != "Assets")
+						{
+							current = Path.GetFileNameWithoutExtension(path);
+							nsList.Add(current);
+							path = Directory.GetParent(path).FullName;
+						}
+						nsList.Reverse();
+						nsList.RemoveAt(0);
+						// Debug.Log("Trying to find: " + string.Join(".", nsList.ToArray()));
+						fileNs = Namespace.find(Symbol.create(string.Join(".", nsList.ToArray())));
+						// Debug.Log("Found: " + string.Join(".", nsList.ToArray()));
+					}
+				}
 				catch (Exception e)
 				{ 
 					/* Whatever sent in :file was not a path. Ignore it */
