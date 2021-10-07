@@ -515,13 +515,19 @@ namespace Arcadia
 			running = false;
 		}
 
+		private static TcpListener listener;
+
 		public static void StartServer ()
 		{
 			Debug.Log("nrepl: starting");
 			
 			running = true;
 			new Thread(() => {
-				var listener = new TcpListener(IPAddress.Loopback, Port);
+				if (listener == null)
+				{
+					listener = new TcpListener(IPAddress.Loopback, Port);
+				}
+				
 				try
 				{
 					// TODO make IPAddress.Loopback configurable to allow remote connections
