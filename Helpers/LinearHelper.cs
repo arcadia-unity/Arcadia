@@ -13,6 +13,13 @@ namespace Arcadia {
             return PersistentVector.create(ang, axis);
         }
 
+        public static IPersistentVector smoothDamp(Vector3 current, Vector3 target, Vector3 currentVelocity, float smoothTime)
+        {
+            Vector3 newCurrentVelocity = currentVelocity;
+            Vector3 result = Vector3.SmoothDamp(current, target, ref newCurrentVelocity, smoothTime);
+            return PersistentVector.create(result, newCurrentVelocity);
+        }
+
 		public static Matrix4x4 matrix (
 			float a, float b, float c, float d,
 			float e, float f, float g, float h,
