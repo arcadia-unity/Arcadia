@@ -341,6 +341,17 @@ Calls to this function will be inlined if possible."})
 ;; dist
 
 ;; ------------------------------------------------------------
+;; smooth damp
+
+(definline smooth-damp
+  "Given a `Vector3` `current`, a `Vector3` `target` a `Vector3` `current-velocity` and a `float` `smooth-time`, returns a collection containing the result (`Vector3`) of smoothly changing from the current to the target over the time smooth-time and current-velocity (`Vector3`), as set by the `Vector3/SmoothDamp`.
+
+  Calls to this function will be inlined if possible."
+  [^UnityEngine.Vector3 current ^UnityEngine.Vector3 target ^UnityEngine.Vector3 current-velocity smooth-time]
+  `(Arcadia.LinearHelper/smoothDamp ~current ~target ~current-velocity ~smooth-time))
+
+
+;; ------------------------------------------------------------
 ;; Quaternions
 ;; and then there's this
 ;; inline etc this stuff when time allows
