@@ -6,7 +6,10 @@
 
 (def default-opts
   {:hide-parameters false
-   :hide-outer-exceptions true
+   :hide-outer-exceptions false
+   ;; if `true`, hides stack trace of `clojure.lang.Compiler+CompilerException` and
+   ;; other extraneous layers of nested exceptions
+   :abbreviate-junk-exception-layers true
 
    :ditto-classnames false
    :demunge-classnames true
@@ -157,12 +160,60 @@
 (defn exception-layers [e]
   (take-while some? (iterate #(.InnerException ^Exception %) e)))
 
+;; TODO: put in utils
+(defn- truncate-string
+  ([^String s, max-length]
+   (if (< max-length (.Length s))
+     (.Substring s 0 max-length)
+     s))
+  ([^String s, max-length, ^String ellipsis]
+   (if (< max-length (.Length s))
+     (str (.Substring s 0 max-length) ellipsis)
+     s)))
+
+(def opts-log (atom nil))
+
 (defn exception-str ^String [^Exception e, opts]
+  (reset! opts-log opts)
   (if (:format opts)
-    (let [es (reverse (exception-layers e))]
-      (clojure.string/join "\nvia\n"
-        (for [^Exception e (if (:hide-outer-exceptions opts) (take 1 es) es)]
-          (str (class e) ": " (.Message e) "\n"
-               ;; important that this is type-hinted, changes behavior:
-               (trace-str (StackTrace. e true) opts)))))
+    (let [es (reverse (exception-layers e))
+          es-count (count es)]
+      (->> (if (:hide-outer-exceptions opts) (take 1 es) es)
+           (map-indexed
+             (fn [i, ^Exception e]
+               (let [ex-info? (instance? clojure.lang.IExceptionInfo e)
+                     compiler-exception? (instance? clojure.lang.Compiler+CompilerException e)
+                     ;; repl thing. this should be an ex-info but isn't, my fault
+                     outer-repl-carrier-exception? (and (= i (dec es-count))
+                                                        (= "carrier" (.Message e))
+                                                        (= System.Exception (class e)))
+                     suppress-trace? (and
+                                       (:abbreviate-junk-exception-layers opts)
+                                       ;; print the innermost exception regardless
+                                       (< 0 i)
+                                       ;; is it junk? add more as they come up
+                                       (or compiler-exception?
+                                           outer-repl-carrier-exception?))
+                     message (if (and suppress-trace?
+                                      ;; this is only redundant for now
+                                      compiler-exception?)
+                               ;; compiler exceptions very cutely include the stack trace of
+                               ;; their InnerException in their message
+                               (first (clojure.string/split-lines (.Message e)))
+                               (.Message e))
+                     parts [(str (class e) ": " message)
+                            (when ex-info?
+                              "\t Data:"
+                              (binding [*print-level* 2
+                                        *print-length* 4]
+                                (truncate-string
+                                  (with-out-str (println (.Data e)))
+                                  20)))
+                            (if suppress-trace?
+                              "(StackTrace suppressed)"
+                              (trace-str (StackTrace. e true) opts))]]
+                 (->> parts
+                      (filter some?)
+                      (clojure.string/join "\n")))))
+           (clojure.string/join "\nvia\n")))
     (str e)))
