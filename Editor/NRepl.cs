@@ -1,5 +1,6 @@
 #if NET_4_6
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.IO;
@@ -11,6 +12,7 @@ using BencodeNET.Exceptions;
 using BencodeNET.Objects;
 using UnityEngine;
 using clojure.lang;
+using Microsoft.Scripting.Utils;
 
 // shim for atom proto-repl
 namespace java.io
@@ -313,8 +315,27 @@ namespace Arcadia
 			client.GetStream().Write(bytes, 0, bytes.Length);
 		}
 
-		static void HandleMessage (BDictionary message, TcpClient client)
+
+		static string getSymbolStr(BDictionary message)
 		{
+			String symbolStr = "";
+			if (message.TryGetValue("symbol", out var s))
+			{
+				symbolStr = s.ToString();
+			} else if (message.TryGetValue("sym", out var s1)) {
+				symbolStr = s1.ToString();
+			} else if (message.TryGetValue("prefix", out var s2)) {
+				symbolStr = s2.ToString();
+			}
+			return symbolStr;
+		}
+
+		static void HandleMessage (BDictionary message, TcpClient client)
+
+
+		{
+
+
 			var opValue = message["op"];
 			var opString = opValue as BString;
 			var autoCompletionSupportEnabled = RT.booleanCast(((IPersistentMap)configVar.invoke()).valAt(Keyword.intern("nrepl-auto-completion")));
@@ -395,10 +416,10 @@ namespace Arcadia
 				case "eldoc":
 				case "info":
 
-                    String symbolStr = message["symbol"].ToString();
+					var symbolStr = NRepl.getSymbolStr(message);
+					// Editors like Calva that support doc-on-hover sometimes will ask about empty strings or spaces
+					if (symbolStr == "" || symbolStr == " ") break;
 
-                    // Editors like Calva that support doc-on-hover sometimes will ask about empty strings or spaces
-					if (symbolStr == "" || symbolStr == null || symbolStr == " ") break;
 
 					IPersistentMap symbolMetadata = null;
 					try
@@ -424,15 +445,23 @@ namespace Arcadia
 							if (entry.val() != null) {
 								String keyStr = entry.key().ToString().Substring(1);
 								String keyVal = entry.val().ToString();
+
 								if (keyStr == "arglists") {
-									keyStr = "arglists-str";
+									// cider expects eldoc here in this format [["(foo)"]]
+									resultMessage["eldoc"] = new BList(((IEnumerable)entry.val()).Select(lst => new BList(((IEnumerable)lst).Select(o => o.ToString()))));
+									resultMessage["arglists-str"] = new BString(keyVal);
+								} else if (keyStr == "forms") {
+									resultMessage[keyStr] = new BList(new [] { keyVal});
+									resultMessage["forms-str"] = new BString(keyVal);
+								} else if (keyStr == "doc") {
+									resultMessage[keyStr] =  new BString(keyVal);
+									resultMessage["docstring"] = new BString(keyVal);
+								} else {
+									resultMessage[keyStr] = new BString(keyVal);
 								}
-								if (keyStr == "forms") {
-									keyStr = "forms-str";
-								}
-								resultMessage[keyStr] = new BString(keyVal);
-						    }
-					    }
+
+							}
+						}
 							SendMessage(resultMessage, client);
 					} else {
 							SendMessage(
@@ -468,7 +497,7 @@ namespace Arcadia
 
 					// Make sure to eval this in the right namespace
 					Var.pushThreadBindings(completeBindings);
-					BList completions = (BList) completeVar.invoke(message["symbol"].ToString());
+					BList completions = (BList) completeVar.invoke(getSymbolStr(message));
 					Var.popThreadBindings();
 
 					SendMessage(new BDictionary
