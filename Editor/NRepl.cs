@@ -41,7 +41,6 @@ public class GetPropertyShimFn : AFn
 	}
 }
 
-
 namespace Arcadia
 {
 	public class NRepl
@@ -103,6 +102,7 @@ namespace Arcadia
 		private static Var concatVar;
 		private static Var completeVar;
 		private static Var configVar;
+		private static Var eldocMethodsVar;
 
 		private static Namespace shimsNS;
 
@@ -133,6 +133,7 @@ namespace Arcadia
 
 			Util.require("arcadia.internal.nrepl-support");
 			completeVar = RT.var("arcadia.internal.nrepl-support", "complete");
+			// eldocMethodsVar = RT.var("arcadia.internal.nrepl-support", "eldoc-methods");
 
 			Util.require("arcadia.internal.config");
 			configVar = RT.var("arcadia.internal.config", "config");
@@ -207,7 +208,7 @@ namespace Arcadia
 				var sessionBindings = _sessions[session];
 				var outWriter = new Writer("out", _request, _client);
 				var errWriter = new Writer("err", _request, _client);
-				
+
 				// Split the path, and try to infer the ns from the filename. If the ns exists, then change the current ns before evaluating
 				List<String> nsList = new List<String>();
 				Namespace fileNs = null;
@@ -226,9 +227,9 @@ namespace Arcadia
 					// Debug.Log("Trying to find: " + string.Join(".", nsList.ToArray()));
 					fileNs = Namespace.find(Symbol.create(string.Join(".", nsList.ToArray())));
 					// Debug.Log("Found: " + string.Join(".", nsList.ToArray()));
-				} 
+				}
 				catch (Exception e)
-				{ 
+				{
 					/* Whatever sent in :file was not a path. Ignore it */
 					// Debug.Log(":file was not a valid ns");
 				}
@@ -353,7 +354,7 @@ namespace Arcadia
 						}, client);
 					break;
 				case "describe":
-					// TODO include arcadia version 
+					// TODO include arcadia version
 					var clojureVersion = (IPersistentMap)RT.var("clojure.core", "*clojure-version*").deref();
 					var clojureMajor = (int)clojureVersion.valAt(Keyword.intern("major"));
 					var clojureMinor = (int)clojureVersion.valAt(Keyword.intern("minor"));
@@ -427,9 +428,9 @@ namespace Arcadia
                         symbolMetadata = (IPersistentMap)metaVar.invoke(nsResolveVar.invoke(
                             findNsVar.invoke(symbolVar.invoke(message["ns"].ToString())),
                             symbolVar.invoke(symbolStr)));
-					} catch (TypeNotFoundException) { 
+					} catch (TypeNotFoundException) {
 							// We'll just ignore this call if the type cannot be found. This happens sometimes.
-							// TODO: One particular case when this happens is when querying info for a namespace. 
+							// TODO: One particular case when this happens is when querying info for a namespace.
 							//       That case should be handled separately (e.g., via `find-ns`?)
 						}
 
@@ -475,7 +476,7 @@ namespace Arcadia
 					break;
 				case "complete":
 
-					// When autoCompletionSupportEnabled is false, we don't advertise auto-completion support. 
+					// When autoCompletionSupportEnabled is false, we don't advertise auto-completion support.
 					// some editors seem to ignore this and request anyway, so we return an unknown op message.
 					if (!autoCompletionSupportEnabled) {
                         SendMessage(
@@ -505,7 +506,7 @@ namespace Arcadia
                             {"id", message["id"]},
                             {"session", session.ToString()},
                             {"status", new BList {"done"}},
-							{"completions", completions}
+                                                        {"completions", completions}
                         }, client);
 					break;
 				case "classpath":
@@ -521,168 +522,169 @@ namespace Arcadia
                             {"id", message["id"]},
                             {"session", session.ToString()},
                             {"status", new BList {"done"}},
-							{"classpath", classpath},
+                                                        {"classpath", classpath},
                         }, client);
-					break;
-				default:
-					SendMessage(
-						new BDictionary
-						{
-								{"id", message["id"]},
-								{"session", session.ToString()},
-								{"status", new BList {"done", "error", "unknown-op"}}
-						}, client);
-					break;
-				}
-			}
-		}
+                                        break;
+                                default:
+                                        SendMessage(
+                                                new BDictionary
+                                                {
+                                                                {"id", message["id"]},
+                                                                {"session", session.ToString()},
+                                                                {"status", new BList {"done", "error", "unknown-op"}}
+                                                }, client);
+                                        break;
+                                }
+                        }
+                }
 
-		private const int Port = 3722;
+                private const
 
-		public static void StopServer ()
-		{
-			running = false;
-		}
+                public static void StopServer ()
+                {
+                        running = false;
+                }
 
-		public static void StartServer ()
-		{
-			Debug.Log("nrepl: starting");
-			
-			running = true;
-			new Thread(() => {
-				var listener = new TcpListener(IPAddress.Loopback, Port);
-				try
-				{
-					// TODO make IPAddress.Loopback configurable to allow remote connections
-					listener.Start();
-					Debug.LogFormat("nrepl: listening on port {0}", Port);
-					while (running)
-					{
-						if (!listener.Pending())
-						{
-							Thread.Sleep(100);
-							continue;
-						}
+                public static void StartServer () {
 
-						var client = listener.AcceptTcpClient();
-						new Thread(() =>
-						{
-							Debug.LogFormat("nrepl: connected to client {0}", client.Client.RemoteEndPoint);
-							var parser = new BencodeNET.Parsing.BencodeParser();
-							var clientRunning = true;
-							var buffer = new byte[1024 * 8]; // 8k buffer
-							while (running && clientRunning)
-							{
-								// bencode needs a seekable stream to parse, so each
-								// message gets its own MemoryStream (MemoryStreams are
-								// seekable, NetworkStreams e.g. client.GetStream() are not)
-								try
-								{
-									using (var ms = new MemoryStream())
-									{
-										// message might be bigger than our buffer
-										// loop till we have the whole thing
-										var parsedMessage = false;
-										while (!parsedMessage)
-										{
-											// copy from network stream into memory stream
-											var total = client.GetStream().Read(buffer, 0, buffer.Length);
-											if (total == 0)
-											{
-												// reading zero bytes after blocking means the other end has hung up
-												clientRunning = false;
-												break;
-											}
-											ms.Write(buffer, 0, total);
-											// bencode parsing expects stream position to be 0
-											ms.Position = 0;
-											try
-											{
-												// try and parse the message and handle it
-												var obj = parser.Parse(ms);
-												parsedMessage = true;
-												var message = obj as BDictionary;
-												if (message != null)
-												{
-													try
-													{
-														HandleMessage(message, client);
-													}
-													catch (Exception e)
-													{
-														Debug.LogException(e);
-													}
-												}
-											}
-											catch (InvalidBencodeException<BDictionary> e)
-											{
-												if (Encoding.UTF8.GetString(ms.GetBuffer())
-													.Contains("2:op13:init-debugger"))
-												{
-													// hack to deal with cider sending us packets with duplicate keys
-													// BencodeNET cannot deal with duplicate keys, hence the string check
-													// the real solution is to switch to the bencode implementation that
-													// nrepl itself uses
-													parsedMessage = true;
-												}
-												else
-												{
-													// most likely an incomplete message. i kind
-													// of wish this was an EOF exception... we cannot
-													// actually tell the difference between an incomplete
-													// message and an invalid one as it stands
+                        var port = unchecked((int)((IPersistentMap)configVar.invoke()).valAt(Keyword.intern("nrepl")));
+                        Debug.Log("nrepl: starting " + port);
 
-													// seek to the end of the MemoryStream to take on more bytes
-													ms.Seek(0, SeekOrigin.End);
-												}
-											}
-										}
-									}
-								}
-								catch (SocketException e)
-								{
-									// the other end has disconnected, gracefully shutdown
-									clientRunning = false;
-								}
-								catch (IOException e)
-								{
-									// the other end has disconnected, gracefully shutdown
-									clientRunning = false;
-								}
-								catch (ObjectDisposedException e)
-								{
-									// the other end has disconnected, gracefully shutdown
-									clientRunning = false;
-								}
-								catch (Exception e)
-								{
-									Debug.LogWarningFormat("nrepl: {0}", e);
-									clientRunning = false;
-								}
-							}
-							Debug.LogFormat("nrepl: disconnected from client {0}", client.Client.RemoteEndPoint);
-							client.Close();
-							client.Dispose();
-						}).Start();
-					}
-				}
-				catch (ThreadAbortException)
-				{
-					// do nothing. this probably means the VM is being reset.
-				}
-				catch (Exception e)
-				{
-					Debug.LogException(e);
-				}
-				finally
-				{
-					Debug.LogFormat("nrepl: closing port {0}", Port);
-					listener.Stop();
-				}
-				
+                        running = true;
+                        new Thread(() => {
+                                var listener = new TcpListener(IPAddress.Loopback, port);
+                                try
+                                {
+                                        // TODO make IPAddress.Loopback configurable to allow remote connections
+                                        listener.Start();
+                                        Debug.LogFormat("nrepl: listening on port {0}", port);
+                                        while (running)
+                                        {
+                                                if (!listener.Pending())
+                                                {
+                                                        Thread.Sleep(100);
+                                                        continue;
+                                                }
 
-			}).Start();
-		}
-	}
+                                                var client = listener.AcceptTcpClient();
+                                                new Thread(() =>
+                                                {
+                                                        Debug.LogFormat("nrepl: connected to client {0}", client.Client.RemoteEndPoint);
+                                                        var parser = new BencodeNET.Parsing.BencodeParser();
+                                                        var clientRunning = true;
+                                                        var buffer = new byte[1024 * 8]; // 8k buffer
+                                                        while (running && clientRunning)
+                                                        {
+                                                                // bencode needs a seekable stream to parse, so each
+                                                                // message gets its own MemoryStream (MemoryStreams are
+                                                                // seekable, NetworkStreams e.g. client.GetStream() are not)
+                                                                try
+                                                                {
+                                                                        using (var ms = new MemoryStream())
+                                                                        {
+                                                                                // message might be bigger than our buffer
+                                                                                // loop till we have the whole thing
+                                                                                var parsedMessage = false;
+                                                                                while (!parsedMessage)
+                                                                                {
+                                                                                        // copy from network stream into memory stream
+                                                                                        var total = client.GetStream().Read(buffer, 0, buffer.Length);
+                                                                                        if (total == 0)
+                                                                                        {
+                                                                                                // reading zero bytes after blocking means the other end has hung up
+                                                                                                clientRunning = false;
+                                                                                                break;
+                                                                                        }
+                                                                                        ms.Write(buffer, 0, total);
+                                                                                        // bencode parsing expects stream position to be 0
+                                                                                        ms.Position = 0;
+                                                                                        try
+                                                                                        {
+                                                                                                // try and parse the message and handle it
+                                                                                                var obj = parser.Parse(ms);
+                                                                                                parsedMessage = true;
+                                                                                                var message = obj as BDictionary;
+                                                                                                if (message != null)
+                                                                                                {
+                                                                                                        try
+                                                                                                        {
+                                                                                                                HandleMessage(message, client);
+                                                                                                        }
+                                                                                                        catch (Exception e)
+                                                                                                        {
+                                                                                                                Debug.LogException(e);
+                                                                                                        }
+                                                                                                }
+                                                                                        }
+                                                                                        catch (InvalidBencodeException<BDictionary> e)
+                                                                                        {
+                                                                                                if (Encoding.UTF8.GetString(ms.GetBuffer())
+                                                                                                        .Contains("2:op13:init-debugger"))
+                                                                                                {
+                                                                                                        // hack to deal with cider sending us packets with duplicate keys
+                                                                                                        // BencodeNET cannot deal with duplicate keys, hence the string check
+                                                                                                        // the real solution is to switch to the bencode implementation that
+                                                                                                        // nrepl itself uses
+                                                                                                        parsedMessage = true;
+                                                                                                }
+                                                                                                else
+                                                                                                {
+                                                                                                        // most likely an incomplete message. i kind
+                                                                                                        // of wish this was an EOF exception... we cannot
+                                                                                                        // actually tell the difference between an incomplete
+                                                                                                        // message and an invalid one as it stands
+
+                                                                                                        // seek to the end of the MemoryStream to take on more bytes
+                                                                                                        ms.Seek(0, SeekOrigin.End);
+                                                                                                }
+                                                                                        }
+                                                                                }
+                                                                        }
+                                                                }
+                                                                catch (SocketException e)
+                                                                {
+                                                                        // the other end has disconnected, gracefully shutdown
+                                                                        clientRunning = false;
+                                                                }
+                                                                catch (IOException e)
+                                                                {
+                                                                        // the other end has disconnected, gracefully shutdown
+                                                                        clientRunning = false;
+                                                                }
+                                                                catch (ObjectDisposedException e)
+                                                                {
+                                                                        // the other end has disconnected, gracefully shutdown
+                                                                        clientRunning = false;
+                                                                }
+                                                                catch (Exception e)
+                                                                {
+                                                                        Debug.LogWarningFormat("nrepl: {0}", e);
+                                                                        clientRunning = false;
+                                                                }
+                                                        }
+                                                        Debug.LogFormat("nrepl: disconnected from client {0}", client.Client.RemoteEndPoint);
+                                                        client.Close();
+                                                        client.Dispose();
+                                                }).Start();
+                                        }
+                                }
+                                catch (ThreadAbortException)
+                                {
+                                        // do nothing. this probably means the VM is being reset.
+                                }
+                                catch (Exception e)
+                                {
+                                        Debug.LogException(e);
+                                }
+                                finally
+                                {
+                                        Debug.LogFormat("nrepl: closing port {0}", port);
+                                        listener.Stop();
+                                }
+
+
+                        }).Start();
+                }
+        }
 }
 #endif
