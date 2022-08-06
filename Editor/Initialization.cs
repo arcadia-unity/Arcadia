@@ -98,7 +98,7 @@ namespace Arcadia
             NRepl.StartServer();
 #endif
             StartNudge();
-            Debug.Log("Arcadia Started!");
+            //Debug.Log("Arcadia Started!");
 
             initialized = true;
         }
