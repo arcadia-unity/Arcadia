@@ -133,7 +133,7 @@ namespace Arcadia
 
 			Util.require("arcadia.internal.nrepl-support");
 			completeVar = RT.var("arcadia.internal.nrepl-support", "complete");
-			// eldocMethodsVar = RT.var("arcadia.internal.nrepl-support", "eldoc-methods");
+			eldocMethodsVar = RT.var("arcadia.internal.nrepl-support", "eldoc-methods");
 
 			Util.require("arcadia.internal.config");
 			configVar = RT.var("arcadia.internal.config", "config");
@@ -208,6 +208,7 @@ namespace Arcadia
 				var sessionBindings = _sessions[session];
 				var outWriter = new Writer("out", _request, _client);
 				var errWriter = new Writer("err", _request, _client);
+				var isPprint = _request.TryGetValue("nrepl.middleware.print/print", out _);
 
 				// Split the path, and try to infer the ns from the filename. If the ns exists, then change the current ns before evaluating
 				List<String> nsList = new List<String>();
@@ -247,7 +248,20 @@ namespace Arcadia
 				try {
 					var form = readStringVar.invoke(readStringOptions, code);
 					var result = evalVar.invoke(form);
-					var value = (string)prStrVar.invoke(result);
+					string value;
+
+					// you get ultra rect if you'd eval something enormous or infinite
+
+					if (isPprint) {
+							Util.require("clojure.pprint");
+							var writer = new StringWriter();
+							var prVar = RT.var("clojure.pprint", "pprint");
+							prVar.invoke(result, writer);
+							value = writer.ToString();
+							writer.Dispose();
+					} else {
+						value = (string)prStrVar.invoke(result);
+					}
 
 					star3Var.set(star2Var.deref());
 					star2Var.set(star1Var.deref());
@@ -421,7 +435,6 @@ namespace Arcadia
 					// Editors like Calva that support doc-on-hover sometimes will ask about empty strings or spaces
 					if (symbolStr == "" || symbolStr == " ") break;
 
-
 					IPersistentMap symbolMetadata = null;
 					try
 					{
@@ -433,6 +446,10 @@ namespace Arcadia
 							// TODO: One particular case when this happens is when querying info for a namespace.
 							//       That case should be handled separately (e.g., via `find-ns`?)
 						}
+
+					if (symbolMetadata == null) {
+						symbolMetadata =  (IPersistentMap)eldocMethodsVar.invoke(symbolStr);
+					}
 
 
 					if (symbolMetadata != null) {
@@ -538,7 +555,6 @@ namespace Arcadia
                         }
                 }
 
-                private const
 
                 public static void StopServer ()
                 {
@@ -547,7 +563,8 @@ namespace Arcadia
 
                 public static void StartServer () {
 
-                        var port = unchecked((int)((IPersistentMap)configVar.invoke()).valAt(Keyword.intern("nrepl")));
+
+                        var port = unchecked((int)(long)((IPersistentMap)configVar.invoke()).valAt(Keyword.intern("nrepl")));
                         Debug.Log("nrepl: starting " + port);
 
                         running = true;
