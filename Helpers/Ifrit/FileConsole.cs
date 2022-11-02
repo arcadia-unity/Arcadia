@@ -9,12 +9,12 @@ namespace Arcadia.Ifrit
 
         public static void Log(string format, params object[] arguments)
         {
-            var s = String.Format("[{0}] {1}", DateTime.Now.ToString(), string.Format(format, arguments));
-            using (StreamWriter sw = File.AppendText(logFilePath))
-            {
-                sw.WriteLine(s);
-            }
-            UnityEngine.Debug.Log(s);
+            //var s = String.Format("[{0}] {1}", DateTime.Now.ToString(), string.Format(format, arguments));
+            //using (StreamWriter sw = File.AppendText(logFilePath))
+            //{
+            //    sw.WriteLine(s);
+            //}
+            //UnityEngine.Debug.Log(s);
         }
     }
 }

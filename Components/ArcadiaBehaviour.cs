@@ -9,6 +9,7 @@ using Arcadia;
 [RequireComponent(typeof(ArcadiaState))]
 public class ArcadiaBehaviour : MonoBehaviour, ISerializationCallbackReceiver
 {
+
 	private static Keyword NonSerializableHooksKeyword = Keyword.intern("non-serializable-hooks");
 	private static Keyword AllowKeyword = Keyword.intern("allow");
 	private static Keyword WarningKeyword = Keyword.intern("warning");

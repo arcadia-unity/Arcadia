@@ -3,7 +3,7 @@
             [arcadia.internal.callbacks :as cb])
   (:import [UnityEngine Debug]
            [System.Collections Queue]
-           [Arcadia EditorCallbacks Callbacks Callbacks+IntervalData]))
+           [Arcadia EditorCallbacks Callbacks Callbacks+IntervalData CrossVersionSynchronizedQueue]))
 
 ;; ============================================================
 ;; normal callbacks
@@ -11,7 +11,7 @@
 ;; Queue of functions, each of which will be run and then removed from
 ;; the queue in order every time run-callbacks is called.
 (defonce ^Queue work-queue
-  (Queue/Synchronized (Queue.)))
+  (CrossVersionSynchronizedQueue. (Queue.)))
 
 (defn add-callback [f]
   (.Enqueue work-queue f))

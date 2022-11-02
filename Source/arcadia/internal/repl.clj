@@ -7,7 +7,7 @@
             [clojure.pprint :as pprint])
   (:import
     [UnityEngine Debug]
-    [Arcadia Util]
+    [Arcadia Util CrossVersionSynchronizedQueue]
     [System.IO EndOfStreamException]
     [System.Collections Queue]
     [System.Net IPEndPoint IPAddress]
@@ -194,7 +194,7 @@
       {:result result
        :env (env-map)})))
 
-(defonce work-queue (Queue/Synchronized (Queue.)))
+(defonce work-queue (CrossVersionSynchronizedQueue. (Queue.)))
 
 (defonce server-running (atom false))
 

@@ -3,8 +3,7 @@
             [arcadia.core :as ac])
   (:import [UnityEngine Debug]
            [System.Collections Queue]
-           [Arcadia PlayerCallbacks Callbacks Callbacks+IntervalData Util]))
-
+           [Arcadia PlayerCallbacks Callbacks Callbacks+IntervalData Util CrossVersionSynchronizedQueue]))
 ;; Main motivation of this namespace is for testing, but might have use
 ;; for exportable repls too.
 
@@ -51,14 +50,14 @@
 ;; Normal callbacks
 
 (defonce ^Queue update-work-queue
-  (Queue/Synchronized (Queue.)))
+  (CrossVersionSynchronizedQueue. (Queue.)))
 
 (defn add-update-callback [f]
   (callback-component)
   (.Enqueue update-work-queue f))
 
 (defonce ^Queue fixed-update-work-queue
-  (Queue/Synchronized (Queue.)))
+  (CrossVersionSynchronizedQueue. (Queue.)))
 
 (defn add-fixed-update-callback [f]
   (callback-component)
