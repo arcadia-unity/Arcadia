@@ -1,0 +1,32 @@
+
+When I connect with cider
+
+#+begin_src shell
+TypeNotFoundException: Unable to find type: cljs.core
+clojure.lang.RT.classForNameE (System.String p) (at <fb1204dbf0b848beaab1559f81f1b22c>:0)
+clojure.lang.CljCompiler.Ast.HostExpr.MaybeType (System.Object form, System.Boolean stringOk) (at <fb1204dbf0b848beaab1559f81f1b22c>:0)
+clojure.lang.Compiler.AnalyzeSymbol (clojure.lang.Symbol symbol) (at <fb1204dbf0b848beaab1559f81f1b22c>:0)
+clojure.lang.Compiler.Analyze (clojure.lang.CljCompiler.Ast.ParserContext pcontext, System.Object form, System.String name) (at <fb1204dbf0b848beaab1559f81f1b22c>:0)
+Rethrow as CompilerException: Unable to find type: cljs.core, compiling: (NO_SOURCE_PATH:0:0)
+clojure.lang.Compiler.Analyze (clojure.lang.CljCompiler.Ast.ParserContext pcontext, System.Object form, System.String name) (at <fb1204dbf0b848beaab1559f81f1b22c>:0)
+clojure.lang.Compiler.Analyze (clojure.lang.CljCompiler.Ast.ParserContext pcontext, System.Object form) (at <fb1204dbf0b848beaab1559f81f1b22c>:0)
+clojure.lang.Compiler.eval (System.Object form) (at <fb1204dbf0b848beaab1559f81f1b22c>:0)
+clojure$core$eval__22334.invokeStatic (System.Object ) (at <75aedcbf6ad14e4293bea1888c10ab1d>:0)
+clojure$core$eval__22334.invoke (System.Object ) (at <75aedcbf6ad14e4293bea1888c10ab1d>:0)
+clojure.lang.Var.invoke (System.Object arg1) (at <fb1204dbf0b848beaab1559f81f1b22c>:0)
+Arcadia.NRepl+EvalFn.invoke () (at Assets/Arcadia/Editor/NRepl.cs:316)
+arcadia$internal$callbacks$run_callbacks__4717.invokeStatic (System.Object , System.Object ) (at <20b9304908c1491892b347793d1cbf65>:0)
+arcadia$internal$callbacks$run_callbacks__4717.invoke (System.Object , System.Object ) (at <20b9304908c1491892b347793d1cbf65>:0)
+arcadia$internal$editor_callbacks$run_callbacks__4811.invokeStatic () (at <20b9304908c1491892b347793d1cbf65>:0)
+arcadia$internal$editor_callbacks$run_callbacks__4811.invoke () (at <20b9304908c1491892b347793d1cbf65>:0)
+clojure.lang.Var.invoke () (at <fb1204dbf0b848beaab1559f81f1b22c>:0)
+Arcadia.EditorCallbacks.RunCallbacks () (at Assets/Arcadia/Editor/EditorCallbacks.cs:24)
+UnityEditor.EditorApplication.Internal_CallUpdateFunctions () (at /home/bokken/buildslave/unity/build/Editor/Mono/EditorApplication.cs:200)
+#+end_src
+
+this is because cider pokes the nrepl process to check if cljs is
+available.
+Nrepl should just reply with 'no'?
+
+This is toleratable right now. Does not seem to brake anything. But
+sad for a newcommer using cider and being confused by an error.
