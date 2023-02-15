@@ -438,9 +438,9 @@ namespace Arcadia
 					IPersistentMap symbolMetadata = null;
 					try
 					{
-                        symbolMetadata = (IPersistentMap)metaVar.invoke(nsResolveVar.invoke(
-                            findNsVar.invoke(symbolVar.invoke(message["ns"].ToString())),
-                            symbolVar.invoke(symbolStr)));
+                                            symbolMetadata = (IPersistentMap)metaVar.invoke(nsResolveVar.invoke(
+                                            findNsVar.invoke(symbolVar.invoke(message["ns"].ToString())),
+                                            symbolVar.invoke(symbolStr)));
 					} catch (TypeNotFoundException) {
 							// We'll just ignore this call if the type cannot be found. This happens sometimes.
 							// TODO: One particular case when this happens is when querying info for a namespace.
