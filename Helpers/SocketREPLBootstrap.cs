@@ -47,12 +47,15 @@ namespace Arcadia
             }
         }
 
-        public int port = 37221;
         private void Awake()
         {
             DoInit();
             var addCallbackIFn = new AddCallbackFn(WorkQueue);
+            Var configVar = RT.var("arcadia.internal.config", "config");
+            var port = unchecked((int)((IPersistentMap)configVar.invoke()).valAt(Keyword.intern("socket-repl")));
             System.Console.WriteLine("[socket-repl] bootstrap awake, callback fn: {0} port: {1}, addr: {2}", addCallbackIFn, port, IPAddress.Any);
+            Debug.Log("socket: starting " + port);
+
             var optionsMap = RT.mapUniqueKeys(
                 portKeyword, port,
                 argsKeyword, RT.vector(addCallbackIFn)

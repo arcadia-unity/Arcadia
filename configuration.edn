@@ -8,8 +8,8 @@
  ;; loading on change (see :reload-on-change below) and responding to
  ;; changes in configuration.edn without a restart
  :reactive true
- 
- ;; map of https://clojuredocs.org/clojure.core/*compiler-options* 
+
+ ;; map of https://clojuredocs.org/clojure.core/*compiler-options*
  ;; Example: {:elide-meta [:doc :file :line :added :column :arglists]}
  :compiler-options {}
 
@@ -44,17 +44,17 @@
  ;; Value means:
  ;;
  ;; `true`: make default socket-repl (localhost, port 5555)
- ;; `false`: stop ALL socket repls 
+ ;; `false`: stop ALL socket repls
  ;; a map: opts for `arcadia.internal.socket-repl/server-socket`. Means at
  ;; least the specified server is running.
- ;; 
+ ;;
  ;; In the future, a non-map collection of maps (eg, a sequence of
  ;; maps) should specify several servers that should at least be
  ;; running. `true` as element should be default socket-repl.
  ;;
  ;; Only `false` stops servers; `nil` is ignored (means _at least_ no
  ;; servers are running).
- 
+
  ;; :socket-repl true
 
  ;; see https://github.com/arcadia-unity/Arcadia/wiki/Stacktraces-and-Error-Reporting
@@ -76,5 +76,7 @@
  ;; - Autocomplete keywords: Any keywords used (i.e., interned) in the project
  ;;   are also autocompleted.
  :nrepl-auto-completion true
- }
 
+
+ :nrepl 3722
+ :socket-repl 37221}
