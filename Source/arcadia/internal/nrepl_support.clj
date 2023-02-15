@@ -20,8 +20,7 @@
 
 
 (defn eldoc-methods
-  "Returns eldoc info data
-  for static class members."
+  "Returns eldoc info data for static class members."
   [symbol-str]
   (when-let
       [sym (symbol symbol-str)]
@@ -41,7 +40,6 @@
 
 ;; and now provide the doc string
 ;; by checking the assembly xml
-
 
 (comment
   (eldoc-methods "fo")
